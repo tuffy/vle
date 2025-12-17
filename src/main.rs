@@ -1,8 +1,9 @@
 fn main() -> std::io::Result<()> {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, read};
     use std::fs::File;
-    use std::io::BufReader;
+    use std::io::{BufReader, Write};
 
-    let editor = Editor {
+    let mut editor = Editor {
         line: 0,
         buffer: ropey::Rope::from_reader(BufReader::new(File::open(
             std::env::args_os().skip(1).next().unwrap(),
@@ -10,8 +11,27 @@ fn main() -> std::io::Result<()> {
     };
 
     execute_terminal(|stdout| {
-        editor.display(stdout)?;
-        std::thread::sleep(std::time::Duration::from_secs(5));
+        loop {
+            editor.display(stdout.by_ref())?;
+            match read()? {
+                Event::Key(KeyEvent {
+                    code: KeyCode::Up,
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => editor.previous_line(),
+                Event::Key(KeyEvent {
+                    code: KeyCode::Down,
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => editor.next_line(),
+                Event::Key(KeyEvent {
+                    code: KeyCode::Esc, ..
+                }) => break,
+                _ => { /* ignore other events */ }
+            }
+        }
 
         Ok(())
     })
@@ -27,7 +47,7 @@ struct Editor {
 impl Editor {
     fn display<W: std::io::Write>(&self, mut w: W) -> std::io::Result<()> {
         use crossterm::{
-            execute,
+            queue,
             {
                 cursor::{MoveTo, MoveToNextLine},
                 terminal::{Clear, ClearType, size},
@@ -36,7 +56,7 @@ impl Editor {
         use std::borrow::Cow;
         use unicode_truncate::UnicodeTruncateStr;
 
-        execute!(w, Clear(ClearType::All), MoveTo(0, 0))?;
+        queue!(w, Clear(ClearType::All), MoveTo(0, 0))?;
 
         let (cols, rows) = size()?;
 
@@ -46,12 +66,24 @@ impl Editor {
                 "{}",
                 Cow::from(line).trim_end().unicode_truncate(cols.into()).0
             )?;
-            execute!(w, MoveToNextLine(1))?;
+            queue!(w, MoveToNextLine(1))?;
         }
 
-        execute!(w, MoveTo(0, 0))?;
+        queue!(w, MoveTo(0, 0))?;
+
+        w.flush()?;
 
         Ok(())
+    }
+
+    fn previous_line(&mut self) {
+        if self.line > 0 {
+            self.line -= 1;
+        }
+    }
+
+    fn next_line(&mut self) {
+        self.line = (self.line + 1).min(self.buffer.len_lines())
     }
 }
 
