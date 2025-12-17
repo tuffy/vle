@@ -9,18 +9,23 @@ fn main() -> std::io::Result<()> {
     use std::borrow::Cow;
     use std::fs::File;
     use std::io::{BufReader, Write};
+    use unicode_truncate::UnicodeTruncateStr;
 
     let file = ropey::Rope::from_reader(BufReader::new(File::open(
         std::env::args_os().skip(1).next().unwrap(),
     )?))?;
 
     execute_terminal(|stdout| {
-        execute!(stdout, Clear(ClearType::All), MoveTo(0, 0),)?;
+        execute!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
 
-        let (_cols, rows) = size()?;
+        let (cols, rows) = size()?;
 
         for line in file.lines().take(rows.into()) {
-            write!(stdout, "{}", Cow::from(line).trim_end())?;
+            write!(
+                stdout,
+                "{}",
+                Cow::from(line).trim_end().unicode_truncate(cols.into()).0
+            )?;
             execute!(stdout, MoveToNextLine(1))?;
         }
 
