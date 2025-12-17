@@ -1,40 +1,58 @@
 fn main() -> std::io::Result<()> {
-    use crossterm::{
-        execute,
-        {
-            cursor::{MoveTo, MoveToNextLine},
-            terminal::{Clear, ClearType, size},
-        },
-    };
-    use std::borrow::Cow;
     use std::fs::File;
-    use std::io::{BufReader, Write};
-    use unicode_truncate::UnicodeTruncateStr;
+    use std::io::BufReader;
 
-    let file = ropey::Rope::from_reader(BufReader::new(File::open(
-        std::env::args_os().skip(1).next().unwrap(),
-    )?))?;
+    let editor = Editor {
+        line: 0,
+        buffer: ropey::Rope::from_reader(BufReader::new(File::open(
+            std::env::args_os().skip(1).next().unwrap(),
+        )?))?,
+    };
 
     execute_terminal(|stdout| {
-        execute!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
-
-        let (cols, rows) = size()?;
-
-        for line in file.lines().take(rows.into()) {
-            write!(
-                stdout,
-                "{}",
-                Cow::from(line).trim_end().unicode_truncate(cols.into()).0
-            )?;
-            execute!(stdout, MoveToNextLine(1))?;
-        }
-
-        execute!(stdout, MoveTo(0, 0))?;
-
+        editor.display(stdout)?;
         std::thread::sleep(std::time::Duration::from_secs(5));
 
         Ok(())
     })
+}
+
+struct Editor {
+    // FIXME - support multiple buffers, each with its own path
+    buffer: ropey::Rope,
+    // FIXME - support both line and column cursor position
+    line: usize,
+}
+
+impl Editor {
+    fn display<W: std::io::Write>(&self, mut w: W) -> std::io::Result<()> {
+        use crossterm::{
+            execute,
+            {
+                cursor::{MoveTo, MoveToNextLine},
+                terminal::{Clear, ClearType, size},
+            },
+        };
+        use std::borrow::Cow;
+        use unicode_truncate::UnicodeTruncateStr;
+
+        execute!(w, Clear(ClearType::All), MoveTo(0, 0))?;
+
+        let (cols, rows) = size()?;
+
+        for line in self.buffer.lines_at(self.line).take(rows.into()) {
+            write!(
+                w,
+                "{}",
+                Cow::from(line).trim_end().unicode_truncate(cols.into()).0
+            )?;
+            execute!(w, MoveToNextLine(1))?;
+        }
+
+        execute!(w, MoveTo(0, 0))?;
+
+        Ok(())
+    }
 }
 
 /// Sets up terminal, executes editor, and automatically cleans up afterward
