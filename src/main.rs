@@ -38,9 +38,9 @@ fn main() -> std::io::Result<()> {
 }
 
 struct Editor {
-    // FIXME - support multiple buffers, each with its own path
+    // TODO - support multiple buffers, each with its own path
     buffer: ropey::Rope,
-    // FIXME - support both line and column cursor position
+    // TODO - support both line and column cursor position
     line: usize,
 }
 
@@ -56,6 +56,14 @@ impl Editor {
         use std::borrow::Cow;
         use unicode_truncate::UnicodeTruncateStr;
 
+        fn tabs_to_spaces(s: &str) -> Cow<'_, str> {
+            if s.contains('\t') {
+                s.replace('\t', "    ").into()
+            } else {
+                s.into()
+            }
+        }
+
         queue!(w, Clear(ClearType::All), MoveTo(0, 0))?;
 
         let (cols, rows) = size()?;
@@ -64,7 +72,9 @@ impl Editor {
             write!(
                 w,
                 "{}",
-                Cow::from(line).trim_end().unicode_truncate(cols.into()).0
+                tabs_to_spaces(Cow::from(line).trim_end())
+                    .unicode_truncate(cols.into())
+                    .0
             )?;
             queue!(w, MoveToNextLine(1))?;
         }
@@ -72,6 +82,11 @@ impl Editor {
         queue!(w, MoveTo(0, 0))?;
 
         w.flush()?;
+
+        // TODO - support horizontal scrolling
+        // TODO - draw vertical scrollbar
+        // TODO - draw status bar
+        // TODO - draw help messages, by default
 
         Ok(())
     }
