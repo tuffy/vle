@@ -1,7 +1,7 @@
 fn main() -> std::io::Result<()> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, read};
     use std::fs::File;
-    use std::io::{BufReader, Write};
+    use std::io::BufReader;
 
     let mut editor = Editor {
         line: 0,
@@ -10,9 +10,10 @@ fn main() -> std::io::Result<()> {
         )?))?,
     };
 
-    execute_terminal(|stdout| {
+    execute_terminal(|terminal| {
         loop {
-            editor.display(stdout.by_ref())?;
+            editor.display(terminal)?;
+
             match read()? {
                 Event::Key(KeyEvent {
                     code: KeyCode::Up,
@@ -45,50 +46,38 @@ struct Editor {
 }
 
 impl Editor {
-    fn display<W: std::io::Write>(&self, mut w: W) -> std::io::Result<()> {
-        use crossterm::{
-            queue,
-            {
-                cursor::{MoveTo, MoveToNextLine},
-                terminal::{Clear, ClearType, size},
-            },
-        };
+    fn display(&self, term: &mut ratatui::DefaultTerminal) -> std::io::Result<()> {
+        use ratatui::{layout::Position, text::Line, widgets::Paragraph};
         use std::borrow::Cow;
-        use unicode_truncate::UnicodeTruncateStr;
 
-        fn tabs_to_spaces(s: &str) -> Cow<'_, str> {
-            if s.contains('\t') {
-                s.replace('\t', "    ").into()
+        fn tabs_to_spaces<'s, S: Into<Cow<'s, str>> + AsRef<str>>(s: S) -> Cow<'s, str> {
+            if s.as_ref().contains('\t') {
+                s.as_ref().replace('\t', "    ").into()
             } else {
                 s.into()
             }
         }
 
-        queue!(w, Clear(ClearType::All), MoveTo(0, 0))?;
-
-        let (cols, rows) = size()?;
-
-        for line in self.buffer.lines_at(self.line).take(rows.into()) {
-            write!(
-                w,
-                "{}",
-                tabs_to_spaces(Cow::from(line).trim_end())
-                    .unicode_truncate(cols.into())
-                    .0
-            )?;
-            queue!(w, MoveToNextLine(1))?;
-        }
-
-        queue!(w, MoveTo(0, 0))?;
-
-        w.flush()?;
+        term.draw(|frame| {
+            let area = frame.area();
+            frame.render_widget(
+                Paragraph::new(
+                    self.buffer
+                        .lines_at(self.line)
+                        .map(|line| Line::from(tabs_to_spaces(Cow::from(line)).into_owned()))
+                        .take(area.height.into())
+                        .collect::<Vec<_>>(),
+                ),
+                area,
+            );
+            frame.set_cursor_position(Position { x: 0, y: 0 });
+        })
+        .map(|_| ())
 
         // TODO - support horizontal scrolling
         // TODO - draw vertical scrollbar
         // TODO - draw status bar
         // TODO - draw help messages, by default
-
-        Ok(())
     }
 
     fn previous_line(&mut self) {
@@ -104,18 +93,10 @@ impl Editor {
 
 /// Sets up terminal, executes editor, and automatically cleans up afterward
 fn execute_terminal<T>(
-    f: impl FnOnce(&mut std::io::Stdout) -> std::io::Result<T>,
+    f: impl FnOnce(&mut ratatui::DefaultTerminal) -> std::io::Result<T>,
 ) -> std::io::Result<T> {
-    use crossterm::{
-        execute,
-        terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
-    };
-
-    enable_raw_mode()?;
-    let mut stdout = std::io::stdout();
-    execute!(&mut stdout, EnterAlternateScreen)?;
-    let result = f(&mut stdout)?;
-    execute!(&mut stdout, LeaveAlternateScreen)?;
-    disable_raw_mode()?;
-    Ok(result)
+    let mut term = ratatui::init();
+    let result = f(&mut term);
+    ratatui::restore();
+    result
 }
