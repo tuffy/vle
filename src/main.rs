@@ -4,6 +4,8 @@ use std::path::Path;
 fn main() -> std::io::Result<()> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, read};
 
+    // const ALT_SHIFT: KeyModifiers = KeyModifiers::ALT.union(KeyModifiers::SHIFT);
+
     let mut editor = Editor {
         buffers: std::env::args_os()
             .skip(1)
@@ -16,6 +18,7 @@ fn main() -> std::io::Result<()> {
         loop {
             editor.display(terminal)?;
 
+            // TODO - filter out Mouse motion events in a sub-loop?
             match read()? {
                 Event::Key(KeyEvent {
                     code: KeyCode::Up,
@@ -42,6 +45,36 @@ fn main() -> std::io::Result<()> {
                     ..
                 }) => editor.next_buffer(),
                 Event::Key(KeyEvent {
+                    code: KeyCode::F(1),
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => editor.to_single_layout(),
+                Event::Key(KeyEvent {
+                    code: KeyCode::F(2),
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => editor.to_horizontal_layout(),
+                Event::Key(KeyEvent {
+                    code: KeyCode::F(3),
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => editor.to_vertical_layout(),
+                Event::Key(KeyEvent {
+                    code: KeyCode::Tab,
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => editor.swap_cursor_pane(),
+                Event::Key(KeyEvent {
+                    code: KeyCode::Char('='),
+                    modifiers: KeyModifiers::ALT,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => editor.swap_pane_positions(),
+                Event::Key(KeyEvent {
                     code: KeyCode::Esc, ..
                 }) => break,
                 _ => { /* ignore other events */ }
@@ -55,7 +88,6 @@ fn main() -> std::io::Result<()> {
 struct Buffer {
     // TODO - support buffer's source as Source enum (file on disk, ssh target, etc.)
     rope: ropey::Rope,
-    line: usize,
     // TODO - support cursor's column
     // TODO - support optional text selection
     // TODO - support undo stack
@@ -69,20 +101,17 @@ impl Buffer {
 
         Ok(Self {
             rope: ropey::Rope::from_reader(BufReader::new(File::open(path)?))?,
-            line: 0,
         })
     }
 
-    fn decrement_lines(&mut self, lines: usize) {
-        self.line = self.line.checked_sub(lines).unwrap_or(0);
-    }
-
-    fn increment_lines(&mut self, lines: usize) {
-        self.line = (self.line + lines).min(self.rope.len_lines());
+    fn total_lines(&self) -> usize {
+        self.rope.len_lines()
     }
 }
 
-struct BufferWidget;
+struct BufferWidget {
+    line: usize,
+}
 
 impl StatefulWidget for BufferWidget {
     type State = Buffer;
@@ -110,7 +139,7 @@ impl StatefulWidget for BufferWidget {
         Paragraph::new(
             state
                 .rope
-                .lines_at(state.line)
+                .lines_at(self.line)
                 .map(|line| Line::from(tabs_to_spaces(Cow::from(line)).into_owned()))
                 .take(area.height.into())
                 .collect::<Vec<_>>(),
@@ -123,17 +152,86 @@ impl StatefulWidget for BufferWidget {
     }
 }
 
+type BufIndex = usize;
+type LineNum = usize;
+
+#[derive(Copy, Clone, Default)]
+struct BufferPosition {
+    index: BufIndex,
+    line: LineNum,
+}
+
+impl BufferPosition {
+    fn get_buffer<'b>(&self, buffers: &'b [Buffer]) -> Option<&'b Buffer> {
+        buffers.get(self.index)
+    }
+
+    fn decrement_lines(&mut self, lines: usize) {
+        self.line = self.line.checked_sub(lines).unwrap_or(0)
+    }
+
+    fn increment_lines(&mut self, lines: usize, max_lines: usize) {
+        self.line = (self.line + lines).min(max_lines)
+    }
+}
+
+#[derive(Default)]
+enum HorizontalPos {
+    #[default]
+    Top,
+    Bottom,
+}
+
 enum Layout {
     Single {
         // which buffer our single screen is pointing at
-        buffer: usize,
+        buffer: BufferPosition,
+    },
+    Horizontal {
+        top: BufferPosition,
+        bottom: BufferPosition,
+        which: HorizontalPos,
     },
 }
 
 impl Layout {
-    fn buffer<'b>(&self, buffers: &'b mut [Buffer]) -> Option<&'b mut Buffer> {
-        match &self {
-            Self::Single { buffer } => buffers.get_mut(*buffer),
+    fn decrement_lines(&mut self, buffers: &[Buffer], lines: usize) {
+        match self {
+            Self::Single { buffer }
+            | Self::Horizontal {
+                top: buffer,
+                which: HorizontalPos::Top,
+                ..
+            }
+            | Self::Horizontal {
+                bottom: buffer,
+                which: HorizontalPos::Bottom,
+                ..
+            } => {
+                if buffer.get_buffer(buffers).is_some() {
+                    buffer.decrement_lines(lines);
+                }
+            }
+        }
+    }
+
+    fn increment_lines(&mut self, buffers: &[Buffer], lines: usize) {
+        match self {
+            Self::Single { buffer }
+            | Self::Horizontal {
+                top: buffer,
+                which: HorizontalPos::Top,
+                ..
+            }
+            | Self::Horizontal {
+                bottom: buffer,
+                which: HorizontalPos::Bottom,
+                ..
+            } => {
+                if let Some(b) = buffer.get_buffer(buffers) {
+                    buffer.increment_lines(lines, b.total_lines());
+                }
+            }
         }
     }
 
@@ -147,8 +245,24 @@ impl Layout {
         }
 
         match self {
-            Self::Single { buffer } => {
+            Self::Single {
+                buffer: BufferPosition { index: buffer, .. },
+            } => {
                 *buffer = wrapping_dec(*buffer, total_buffers);
+            }
+            Self::Horizontal {
+                top: BufferPosition { index: top, .. },
+                which: HorizontalPos::Top,
+                ..
+            } => {
+                *top = wrapping_dec(*top, total_buffers);
+            }
+            Self::Horizontal {
+                bottom: BufferPosition { index: bottom, .. },
+                which: HorizontalPos::Bottom,
+                ..
+            } => {
+                *bottom = wrapping_dec(*bottom, total_buffers);
             }
         }
     }
@@ -159,8 +273,71 @@ impl Layout {
         }
 
         match self {
-            Self::Single { buffer } => {
+            Self::Single {
+                buffer: BufferPosition { index: buffer, .. },
+            } => {
                 *buffer = wrapping_inc(*buffer, total_buffers);
+            }
+            Self::Horizontal {
+                top: BufferPosition { index: top, .. },
+                which: HorizontalPos::Top,
+                ..
+            } => {
+                *top = wrapping_inc(*top, total_buffers);
+            }
+            Self::Horizontal {
+                bottom: BufferPosition { index: bottom, .. },
+                which: HorizontalPos::Bottom,
+                ..
+            } => {
+                *bottom = wrapping_inc(*bottom, total_buffers);
+            }
+        }
+    }
+
+    fn to_single(&mut self) {
+        match self {
+            Self::Single { .. } => { /* do nothing */ }
+            Self::Horizontal { top, .. } => {
+                *self = Self::Single { buffer: *top };
+            }
+        }
+    }
+
+    fn to_vertical(&mut self) {
+        // TODO - implement this
+    }
+
+    fn to_horizontal(&mut self) {
+        match self {
+            Self::Single { buffer } => {
+                *self = Self::Horizontal {
+                    top: *buffer,
+                    bottom: *buffer,
+                    which: HorizontalPos::default(),
+                }
+            }
+            Self::Horizontal { .. } => { /* do nothing */ }
+        }
+    }
+
+    fn swap_panes(&mut self) {
+        match self {
+            Self::Single { .. } => { /* do nothing */ }
+            Self::Horizontal { top, bottom, .. } => {
+                std::mem::swap(top, bottom);
+            }
+        }
+    }
+
+    fn swap_cursor(&mut self) {
+        match self {
+            Self::Single { .. } => { /* do nothing */ }
+            Self::Horizontal { which, .. } => {
+                *which = match which {
+                    HorizontalPos::Top => HorizontalPos::Bottom,
+                    HorizontalPos::Bottom => HorizontalPos::Top,
+                }
             }
         }
     }
@@ -168,7 +345,9 @@ impl Layout {
 
 impl Default for Layout {
     fn default() -> Self {
-        Self::Single { buffer: 0 }
+        Self::Single {
+            buffer: BufferPosition::default(),
+        }
     }
 }
 
@@ -182,9 +361,23 @@ impl StatefulWidget for &Layout {
         buffers: &mut Vec<Buffer>,
     ) {
         match self {
-            Layout::Single { buffer } => {
-                if let Some(buffer) = buffers.get_mut(*buffer) {
-                    BufferWidget.render(area, buf, buffer);
+            Layout::Single {
+                buffer: BufferPosition { index, line },
+            } => {
+                if let Some(buffer) = buffers.get_mut(*index) {
+                    BufferWidget { line: *line }.render(area, buf, buffer);
+                }
+            }
+            Layout::Horizontal { top, bottom, .. } => {
+                use ratatui::layout::{Constraint, Layout};
+
+                let [top_area, bottom_area] =
+                    Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
+                if let Some(buffer) = buffers.get_mut(top.index) {
+                    BufferWidget { line: top.line }.render(top_area, buf, buffer);
+                }
+                if let Some(buffer) = buffers.get_mut(bottom.index) {
+                    BufferWidget { line: bottom.line }.render(bottom_area, buf, buffer);
                 }
             }
         }
@@ -212,15 +405,11 @@ impl Editor {
     }
 
     fn previous_line(&mut self) {
-        if let Some(buffer) = self.layout.buffer(&mut self.buffers) {
-            buffer.decrement_lines(1)
-        }
+        self.layout.decrement_lines(&self.buffers, 1);
     }
 
     fn next_line(&mut self) {
-        if let Some(buffer) = self.layout.buffer(&mut self.buffers) {
-            buffer.increment_lines(1)
-        }
+        self.layout.increment_lines(&self.buffers, 1);
     }
 
     fn previous_buffer(&mut self) {
@@ -229,6 +418,26 @@ impl Editor {
 
     fn next_buffer(&mut self) {
         self.layout.next_buffer(self.buffers.len());
+    }
+
+    fn to_single_layout(&mut self) {
+        self.layout.to_single()
+    }
+
+    fn to_horizontal_layout(&mut self) {
+        self.layout.to_horizontal()
+    }
+
+    fn to_vertical_layout(&mut self) {
+        self.layout.to_vertical()
+    }
+
+    fn swap_cursor_pane(&mut self) {
+        self.layout.swap_cursor()
+    }
+
+    fn swap_pane_positions(&mut self) {
+        self.layout.swap_panes()
     }
 }
 
