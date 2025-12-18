@@ -247,22 +247,18 @@ impl Layout {
         match self {
             Self::Single {
                 buffer: BufferPosition { index: buffer, .. },
-            } => {
-                *buffer = wrapping_dec(*buffer, total_buffers);
             }
-            Self::Horizontal {
-                top: BufferPosition { index: top, .. },
+            | Self::Horizontal {
+                top: BufferPosition { index: buffer, .. },
                 which: HorizontalPos::Top,
                 ..
-            } => {
-                *top = wrapping_dec(*top, total_buffers);
             }
-            Self::Horizontal {
-                bottom: BufferPosition { index: bottom, .. },
+            | Self::Horizontal {
+                bottom: BufferPosition { index: buffer, .. },
                 which: HorizontalPos::Bottom,
                 ..
             } => {
-                *bottom = wrapping_dec(*bottom, total_buffers);
+                *buffer = wrapping_dec(*buffer, total_buffers);
             }
         }
     }
@@ -275,22 +271,18 @@ impl Layout {
         match self {
             Self::Single {
                 buffer: BufferPosition { index: buffer, .. },
-            } => {
-                *buffer = wrapping_inc(*buffer, total_buffers);
             }
-            Self::Horizontal {
-                top: BufferPosition { index: top, .. },
+            | Self::Horizontal {
+                top: BufferPosition { index: buffer, .. },
                 which: HorizontalPos::Top,
                 ..
-            } => {
-                *top = wrapping_inc(*top, total_buffers);
             }
-            Self::Horizontal {
-                bottom: BufferPosition { index: bottom, .. },
+            | Self::Horizontal {
+                bottom: BufferPosition { index: buffer, .. },
                 which: HorizontalPos::Bottom,
                 ..
             } => {
-                *bottom = wrapping_inc(*bottom, total_buffers);
+                *buffer = wrapping_inc(*buffer, total_buffers);
             }
         }
     }
