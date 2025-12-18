@@ -172,6 +172,25 @@ impl Default for Layout {
     }
 }
 
+impl StatefulWidget for &Layout {
+    type State = Vec<Buffer>;
+
+    fn render(
+        self,
+        area: ratatui::layout::Rect,
+        buf: &mut ratatui::buffer::Buffer,
+        buffers: &mut Vec<Buffer>,
+    ) {
+        match self {
+            Layout::Single { buffer } => {
+                if let Some(buffer) = buffers.get_mut(*buffer) {
+                    BufferWidget.render(area, buf, buffer);
+                }
+            }
+        }
+    }
+}
+
 struct Editor {
     buffers: Vec<Buffer>,
     layout: Layout,
@@ -183,9 +202,7 @@ impl Editor {
 
         term.draw(|frame| {
             let area = frame.area();
-            if let Some(buffer) = self.layout.buffer(&mut self.buffers) {
-                frame.render_stateful_widget(BufferWidget, area, buffer);
-            }
+            frame.render_stateful_widget(&self.layout, area, &mut self.buffers);
             frame.set_cursor_position(Position { x: 0, y: 0 });
         })
         .map(|_| ())
