@@ -5,7 +5,11 @@ fn main() -> std::io::Result<()> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, read};
 
     let mut editor = Editor {
-        buffer: Buffer::open(std::env::args_os().skip(1).next().unwrap())?,
+        buffers: std::env::args_os()
+            .skip(1)
+            .map(Buffer::open)
+            .collect::<Result<_, _>>()?,
+        layout: Layout::default(),
     };
 
     execute_terminal(|terminal| {
@@ -25,6 +29,18 @@ fn main() -> std::io::Result<()> {
                     kind: KeyEventKind::Press,
                     ..
                 }) => editor.next_line(),
+                Event::Key(KeyEvent {
+                    code: KeyCode::Left,
+                    modifiers: KeyModifiers::ALT,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => editor.previous_buffer(),
+                Event::Key(KeyEvent {
+                    code: KeyCode::Right,
+                    modifiers: KeyModifiers::ALT,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => editor.next_buffer(),
                 Event::Key(KeyEvent {
                     code: KeyCode::Esc, ..
                 }) => break,
@@ -107,9 +123,58 @@ impl StatefulWidget for BufferWidget {
     }
 }
 
+enum Layout {
+    Single {
+        // which buffer our single screen is pointing at
+        buffer: usize,
+    },
+}
+
+impl Layout {
+    fn buffer<'b>(&self, buffers: &'b mut [Buffer]) -> Option<&'b mut Buffer> {
+        match &self {
+            Self::Single { buffer } => buffers.get_mut(*buffer),
+        }
+    }
+
+    fn previous_buffer(&mut self, total_buffers: usize) {
+        fn wrapping_dec(value: usize, max: usize) -> usize {
+            if max > 0 {
+                value.checked_sub(1).unwrap_or(max - 1)
+            } else {
+                0
+            }
+        }
+
+        match self {
+            Self::Single { buffer } => {
+                *buffer = wrapping_dec(*buffer, total_buffers);
+            }
+        }
+    }
+
+    fn next_buffer(&mut self, total_buffers: usize) {
+        fn wrapping_inc(value: usize, max: usize) -> usize {
+            if max > 0 { (value + 1) % max } else { 0 }
+        }
+
+        match self {
+            Self::Single { buffer } => {
+                *buffer = wrapping_inc(*buffer, total_buffers);
+            }
+        }
+    }
+}
+
+impl Default for Layout {
+    fn default() -> Self {
+        Self::Single { buffer: 0 }
+    }
+}
+
 struct Editor {
-    // TODO - support multiple buffers, each with its own path
-    buffer: Buffer,
+    buffers: Vec<Buffer>,
+    layout: Layout,
 }
 
 impl Editor {
@@ -118,20 +183,35 @@ impl Editor {
 
         term.draw(|frame| {
             let area = frame.area();
-            frame.render_stateful_widget(BufferWidget, area, &mut self.buffer);
+            if let Some(buffer) = self.layout.buffer(&mut self.buffers) {
+                frame.render_stateful_widget(BufferWidget, area, buffer);
+            }
             frame.set_cursor_position(Position { x: 0, y: 0 });
         })
         .map(|_| ())
 
+        // TODO - place cursor in appropriate position in buffer
         // TODO - draw help messages, by default
     }
 
     fn previous_line(&mut self) {
-        self.buffer.decrement_lines(1)
+        if let Some(buffer) = self.layout.buffer(&mut self.buffers) {
+            buffer.decrement_lines(1)
+        }
     }
 
     fn next_line(&mut self) {
-        self.buffer.increment_lines(1)
+        if let Some(buffer) = self.layout.buffer(&mut self.buffers) {
+            buffer.increment_lines(1)
+        }
+    }
+
+    fn previous_buffer(&mut self) {
+        self.layout.previous_buffer(self.buffers.len());
+    }
+
+    fn next_buffer(&mut self) {
+        self.layout.next_buffer(self.buffers.len());
     }
 }
 
