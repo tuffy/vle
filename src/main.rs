@@ -1,3 +1,7 @@
+//! A Nano-like editor with an emphasis on modern features
+
+#![forbid(unsafe_code)]
+
 mod buffer;
 mod editor;
 
@@ -27,6 +31,18 @@ fn main() -> std::io::Result<()> {
                     kind: KeyEventKind::Press,
                     ..
                 }) => editor.viewport_down(1),
+                Event::Key(KeyEvent {
+                    code: KeyCode::PageUp,
+                    modifiers: KeyModifiers::ALT,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => editor.viewport_up(25),
+                Event::Key(KeyEvent {
+                    code: KeyCode::PageDown,
+                    modifiers: KeyModifiers::ALT,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => editor.viewport_down(25),
                 Event::Key(KeyEvent {
                     code: KeyCode::Left,
                     modifiers: KeyModifiers::ALT,
