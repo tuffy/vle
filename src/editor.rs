@@ -1,4 +1,5 @@
 use crate::buffer::BufferList;
+use crossterm::event::Event;
 use ratatui::{
     layout::{Position, Rect},
     widgets::StatefulWidget,
@@ -28,40 +29,78 @@ impl Editor {
         // TODO - draw help messages, by default
     }
 
-    pub fn viewport_up(&mut self, lines: usize) {
-        self.layout.viewport_up(lines);
-    }
+    pub fn process_event(&mut self, event: Event) {
+        use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-    pub fn viewport_down(&mut self, lines: usize) {
-        self.layout.viewport_down(lines)
-    }
-
-    pub fn previous_buffer(&mut self) {
-        self.layout.previous_buffer();
-    }
-
-    pub fn next_buffer(&mut self) {
-        self.layout.next_buffer();
-    }
-
-    pub fn single_layout(&mut self) {
-        self.layout.single_layout()
-    }
-
-    pub fn horizontal_layout(&mut self) {
-        self.layout.horizontal_layout()
-    }
-
-    pub fn vertical_layout(&mut self) {
-        self.layout.vertical_layout()
-    }
-
-    pub fn swap_cursor_pane(&mut self) {
-        self.layout.swap_cursor()
-    }
-
-    pub fn swap_pane_positions(&mut self) {
-        self.layout.swap_panes()
+        match event {
+            Event::Key(KeyEvent {
+                code: KeyCode::Up,
+                modifiers: KeyModifiers::ALT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.viewport_up(1),
+            Event::Key(KeyEvent {
+                code: KeyCode::Down,
+                modifiers: KeyModifiers::ALT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.viewport_down(1),
+            Event::Key(KeyEvent {
+                code: KeyCode::PageUp,
+                modifiers: KeyModifiers::ALT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.viewport_up(25),
+            Event::Key(KeyEvent {
+                code: KeyCode::PageDown,
+                modifiers: KeyModifiers::ALT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.viewport_down(25),
+            Event::Key(KeyEvent {
+                code: KeyCode::Left,
+                modifiers: KeyModifiers::ALT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.previous_buffer(),
+            Event::Key(KeyEvent {
+                code: KeyCode::Right,
+                modifiers: KeyModifiers::ALT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.next_buffer(),
+            Event::Key(KeyEvent {
+                code: KeyCode::F(1),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.single_layout(),
+            Event::Key(KeyEvent {
+                code: KeyCode::F(2),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.horizontal_layout(),
+            Event::Key(KeyEvent {
+                code: KeyCode::F(3),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.vertical_layout(),
+            Event::Key(KeyEvent {
+                code: KeyCode::Tab,
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.swap_cursor(),
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('='),
+                modifiers: KeyModifiers::ALT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.swap_panes(),
+            _ => { /* ignore other events */ }
+        }
     }
 }
 

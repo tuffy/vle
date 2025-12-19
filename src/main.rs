@@ -6,7 +6,7 @@ mod buffer;
 mod editor;
 
 fn main() -> std::io::Result<()> {
-    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, read};
+    use crossterm::event::{Event, KeyCode, KeyEvent, read};
     use editor::Editor;
 
     // const ALT_SHIFT: KeyModifiers = KeyModifiers::ALT.union(KeyModifiers::SHIFT);
@@ -20,75 +20,9 @@ fn main() -> std::io::Result<()> {
             // TODO - filter out Mouse motion events in a sub-loop?
             match read()? {
                 Event::Key(KeyEvent {
-                    code: KeyCode::Up,
-                    modifiers: KeyModifiers::ALT,
-                    kind: KeyEventKind::Press,
-                    ..
-                }) => editor.viewport_up(1),
-                Event::Key(KeyEvent {
-                    code: KeyCode::Down,
-                    modifiers: KeyModifiers::ALT,
-                    kind: KeyEventKind::Press,
-                    ..
-                }) => editor.viewport_down(1),
-                Event::Key(KeyEvent {
-                    code: KeyCode::PageUp,
-                    modifiers: KeyModifiers::ALT,
-                    kind: KeyEventKind::Press,
-                    ..
-                }) => editor.viewport_up(25),
-                Event::Key(KeyEvent {
-                    code: KeyCode::PageDown,
-                    modifiers: KeyModifiers::ALT,
-                    kind: KeyEventKind::Press,
-                    ..
-                }) => editor.viewport_down(25),
-                Event::Key(KeyEvent {
-                    code: KeyCode::Left,
-                    modifiers: KeyModifiers::ALT,
-                    kind: KeyEventKind::Press,
-                    ..
-                }) => editor.previous_buffer(),
-                Event::Key(KeyEvent {
-                    code: KeyCode::Right,
-                    modifiers: KeyModifiers::ALT,
-                    kind: KeyEventKind::Press,
-                    ..
-                }) => editor.next_buffer(),
-                Event::Key(KeyEvent {
-                    code: KeyCode::F(1),
-                    modifiers: KeyModifiers::NONE,
-                    kind: KeyEventKind::Press,
-                    ..
-                }) => editor.single_layout(),
-                Event::Key(KeyEvent {
-                    code: KeyCode::F(2),
-                    modifiers: KeyModifiers::NONE,
-                    kind: KeyEventKind::Press,
-                    ..
-                }) => editor.horizontal_layout(),
-                Event::Key(KeyEvent {
-                    code: KeyCode::F(3),
-                    modifiers: KeyModifiers::NONE,
-                    kind: KeyEventKind::Press,
-                    ..
-                }) => editor.vertical_layout(),
-                Event::Key(KeyEvent {
-                    code: KeyCode::Tab,
-                    modifiers: KeyModifiers::CONTROL,
-                    kind: KeyEventKind::Press,
-                    ..
-                }) => editor.swap_cursor_pane(),
-                Event::Key(KeyEvent {
-                    code: KeyCode::Char('='),
-                    modifiers: KeyModifiers::ALT,
-                    kind: KeyEventKind::Press,
-                    ..
-                }) => editor.swap_pane_positions(),
-                Event::Key(KeyEvent {
                     code: KeyCode::Esc, ..
                 }) => break,
-                _ => { /* ignore other events */ }
+                event => editor.process_event(event),
             }
         }
 
