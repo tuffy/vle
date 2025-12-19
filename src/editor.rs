@@ -32,12 +32,12 @@ impl Editor {
         // TODO - draw help messages, by default
     }
 
-    pub fn previous_line(&mut self) {
-        self.layout.decrement_lines(&self.buffers, 1);
+    pub fn viewport_up(&mut self, lines: usize) {
+        self.layout.viewport_up(&self.buffers, lines);
     }
 
-    pub fn next_line(&mut self) {
-        self.layout.increment_lines(&self.buffers, 1);
+    pub fn viewport_down(&mut self, lines: usize) {
+        self.layout.viewport_down(&self.buffers, lines);
     }
 
     pub fn previous_buffer(&mut self) {
@@ -89,7 +89,7 @@ enum Layout {
 }
 
 impl Layout {
-    fn decrement_lines(&mut self, buffers: &[Buffer], lines: usize) {
+    fn viewport_up(&mut self, buffers: &[Buffer], lines: usize) {
         match self {
             Self::Single { buffer }
             | Self::Horizontal {
@@ -103,13 +103,13 @@ impl Layout {
                 ..
             } => {
                 if buffer.get_buffer(buffers).is_some() {
-                    buffer.decrement_lines(lines);
+                    buffer.viewport_up(lines);
                 }
             }
         }
     }
 
-    fn increment_lines(&mut self, buffers: &[Buffer], lines: usize) {
+    fn viewport_down(&mut self, buffers: &[Buffer], lines: usize) {
         match self {
             Self::Single { buffer }
             | Self::Horizontal {
@@ -123,7 +123,7 @@ impl Layout {
                 ..
             } => {
                 if let Some(b) = buffer.get_buffer(buffers) {
-                    buffer.increment_lines(lines, b.total_lines());
+                    buffer.viewport_down(lines, b.total_lines());
                 }
             }
         }

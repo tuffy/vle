@@ -82,11 +82,11 @@ impl BufferPosition {
         buffers.get(self.index)
     }
 
-    pub fn decrement_lines(&mut self, lines: usize) {
+    pub fn viewport_up(&mut self, lines: usize) {
         self.line = self.line.saturating_sub(lines)
     }
 
-    pub fn increment_lines(&mut self, lines: usize, max_lines: usize) {
+    pub fn viewport_down(&mut self, lines: usize, max_lines: usize) {
         self.line = (self.line + lines).min(max_lines)
     }
 }

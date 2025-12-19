@@ -17,16 +17,16 @@ fn main() -> std::io::Result<()> {
             match read()? {
                 Event::Key(KeyEvent {
                     code: KeyCode::Up,
-                    modifiers: KeyModifiers::NONE,
+                    modifiers: KeyModifiers::ALT,
                     kind: KeyEventKind::Press,
                     ..
-                }) => editor.previous_line(),
+                }) => editor.viewport_up(1),
                 Event::Key(KeyEvent {
                     code: KeyCode::Down,
-                    modifiers: KeyModifiers::NONE,
+                    modifiers: KeyModifiers::ALT,
                     kind: KeyEventKind::Press,
                     ..
-                }) => editor.next_line(),
+                }) => editor.viewport_down(1),
                 Event::Key(KeyEvent {
                     code: KeyCode::Left,
                     modifiers: KeyModifiers::ALT,
