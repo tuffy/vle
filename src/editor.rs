@@ -89,7 +89,7 @@ enum Layout {
 }
 
 impl Layout {
-    fn viewport_up(&mut self, buffers: &[Buffer], lines: usize) {
+    fn selected_buffer_pos_mut(&mut self) -> &mut BufferPosition {
         match self {
             Self::Single { buffer }
             | Self::Horizontal {
@@ -101,84 +101,31 @@ impl Layout {
                 bottom: buffer,
                 which: HorizontalPos::Bottom,
                 ..
-            } => {
-                if buffer.get_buffer(buffers).is_some() {
-                    buffer.viewport_up(lines);
-                }
-            }
+            } => buffer,
+        }
+    }
+
+    fn viewport_up(&mut self, buffers: &[Buffer], lines: usize) {
+        let pos = self.selected_buffer_pos_mut();
+        if pos.get_buffer(buffers).is_some() {
+            pos.viewport_up(lines);
         }
     }
 
     fn viewport_down(&mut self, buffers: &[Buffer], lines: usize) {
-        match self {
-            Self::Single { buffer }
-            | Self::Horizontal {
-                top: buffer,
-                which: HorizontalPos::Top,
-                ..
-            }
-            | Self::Horizontal {
-                bottom: buffer,
-                which: HorizontalPos::Bottom,
-                ..
-            } => {
-                if let Some(b) = buffer.get_buffer(buffers) {
-                    buffer.viewport_down(lines, b.total_lines());
-                }
-            }
+        let pos = self.selected_buffer_pos_mut();
+        if let Some(b) = pos.get_buffer(buffers) {
+            pos.viewport_down(lines, b.total_lines());
         }
     }
 
     fn previous_buffer(&mut self, total_buffers: usize) {
-        fn wrapping_dec(value: usize, max: usize) -> usize {
-            if max > 0 {
-                value.checked_sub(1).unwrap_or(max - 1)
-            } else {
-                0
-            }
-        }
-
-        match self {
-            Self::Single {
-                buffer: BufferPosition { index: buffer, .. },
-            }
-            | Self::Horizontal {
-                top: BufferPosition { index: buffer, .. },
-                which: HorizontalPos::Top,
-                ..
-            }
-            | Self::Horizontal {
-                bottom: BufferPosition { index: buffer, .. },
-                which: HorizontalPos::Bottom,
-                ..
-            } => {
-                *buffer = wrapping_dec(*buffer, total_buffers);
-            }
-        }
+        self.selected_buffer_pos_mut()
+            .previous_buffer(total_buffers)
     }
 
     fn next_buffer(&mut self, total_buffers: usize) {
-        fn wrapping_inc(value: usize, max: usize) -> usize {
-            if max > 0 { (value + 1) % max } else { 0 }
-        }
-
-        match self {
-            Self::Single {
-                buffer: BufferPosition { index: buffer, .. },
-            }
-            | Self::Horizontal {
-                top: BufferPosition { index: buffer, .. },
-                which: HorizontalPos::Top,
-                ..
-            }
-            | Self::Horizontal {
-                bottom: BufferPosition { index: buffer, .. },
-                which: HorizontalPos::Bottom,
-                ..
-            } => {
-                *buffer = wrapping_inc(*buffer, total_buffers);
-            }
-        }
+        self.selected_buffer_pos_mut().next_buffer(total_buffers)
     }
 
     fn single_layout(&mut self) {
@@ -246,14 +193,15 @@ impl StatefulWidget for &Layout {
         buf: &mut ratatui::buffer::Buffer,
         buffers: &mut Vec<Buffer>,
     ) {
-        use crate::buffer::{BufferPosition, BufferWidget};
+        use crate::buffer::BufferWidget;
 
         match self {
-            Layout::Single {
-                buffer: BufferPosition { index, line },
-            } => {
-                if let Some(buffer) = buffers.get_mut(*index) {
-                    BufferWidget { line: *line }.render(area, buf, buffer);
+            Layout::Single { buffer: single } => {
+                if let Some(buffer) = single.get_buffer_mut(buffers) {
+                    BufferWidget {
+                        line: single.viewport_line(),
+                    }
+                    .render(area, buf, buffer);
                 }
             }
             Layout::Horizontal { top, bottom, .. } => {
@@ -261,11 +209,17 @@ impl StatefulWidget for &Layout {
 
                 let [top_area, bottom_area] =
                     Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
-                if let Some(buffer) = buffers.get_mut(top.index) {
-                    BufferWidget { line: top.line }.render(top_area, buf, buffer);
+                if let Some(buffer) = top.get_buffer_mut(buffers) {
+                    BufferWidget {
+                        line: top.viewport_line(),
+                    }
+                    .render(top_area, buf, buffer);
                 }
-                if let Some(buffer) = buffers.get_mut(bottom.index) {
-                    BufferWidget { line: bottom.line }.render(bottom_area, buf, buffer);
+                if let Some(buffer) = bottom.get_buffer_mut(buffers) {
+                    BufferWidget {
+                        line: bottom.viewport_line(),
+                    }
+                    .render(bottom_area, buf, buffer);
                 }
             }
         }

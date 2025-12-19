@@ -71,9 +71,9 @@ type LineNum = usize;
 
 #[derive(Copy, Clone, Default)]
 pub struct BufferPosition {
-    pub index: BufIndex,
-    pub line: LineNum,
-    // TODO - support cursor's column
+    index: BufIndex,
+    line: LineNum,
+    // TODO - support cursor's character position in rope
     // TODO - support optional text selection
 }
 
@@ -82,11 +82,41 @@ impl BufferPosition {
         buffers.get(self.index)
     }
 
+    pub fn get_buffer_mut<'b>(&self, buffers: &'b mut [Buffer]) -> Option<&'b mut Buffer> {
+        buffers.get_mut(self.index)
+    }
+
+    pub fn viewport_line(&self) -> LineNum {
+        self.line
+    }
+
     pub fn viewport_up(&mut self, lines: usize) {
         self.line = self.line.saturating_sub(lines)
     }
 
     pub fn viewport_down(&mut self, lines: usize, max_lines: usize) {
         self.line = (self.line + lines).min(max_lines)
+    }
+
+    pub fn previous_buffer(&mut self, total_buffers: usize) {
+        fn wrapping_dec(value: usize, max: usize) -> usize {
+            if max > 0 {
+                value.checked_sub(1).unwrap_or(max - 1)
+            } else {
+                0
+            }
+        }
+
+        self.index = wrapping_dec(self.index, total_buffers);
+        self.line = 0;
+    }
+
+    pub fn next_buffer(&mut self, total_buffers: usize) {
+        fn wrapping_inc(value: usize, max: usize) -> usize {
+            if max > 0 { (value + 1) % max } else { 0 }
+        }
+
+        self.index = wrapping_inc(self.index, total_buffers);
+        self.line = 0;
     }
 }
