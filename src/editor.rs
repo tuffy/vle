@@ -71,12 +71,24 @@ enum HorizontalPos {
     Bottom,
 }
 
+#[derive(Default)]
+enum VerticalPos {
+    #[default]
+    Left,
+    Right,
+}
+
 enum Layout {
     Single(BufferList),
     Horizontal {
         top: BufferList,
         bottom: BufferList,
         which: HorizontalPos,
+    },
+    Vertical {
+        left: BufferList,
+        right: BufferList,
+        which: VerticalPos,
     },
 }
 
@@ -92,6 +104,16 @@ impl Layout {
             | Self::Horizontal {
                 bottom: buffer,
                 which: HorizontalPos::Bottom,
+                ..
+            }
+            | Self::Vertical {
+                left: buffer,
+                which: VerticalPos::Left,
+                ..
+            }
+            | Self::Vertical {
+                right: buffer,
+                which: VerticalPos::Right,
                 ..
             } => buffer,
         }
@@ -130,11 +152,44 @@ impl Layout {
             } => {
                 *self = Self::Single(std::mem::take(bottom));
             }
+            Self::Vertical {
+                left,
+                which: VerticalPos::Left,
+                ..
+            } => {
+                *self = Self::Single(std::mem::take(left));
+            }
+            Self::Vertical {
+                right,
+                which: VerticalPos::Right,
+                ..
+            } => {
+                *self = Self::Single(std::mem::take(right));
+            }
         }
     }
 
     fn vertical_layout(&mut self) {
-        // TODO - implement this
+        match self {
+            Self::Single(buffer) => {
+                *self = Self::Vertical {
+                    left: buffer.clone(),
+                    right: std::mem::take(buffer),
+                    which: VerticalPos::default(),
+                }
+            }
+            Self::Horizontal { top, bottom, which } => {
+                *self = Self::Vertical {
+                    left: std::mem::take(top),
+                    right: std::mem::take(bottom),
+                    which: match which {
+                        HorizontalPos::Top => VerticalPos::Left,
+                        HorizontalPos::Bottom => VerticalPos::Right,
+                    },
+                }
+            }
+            Self::Vertical { .. } => { /* do nothing */ }
+        }
     }
 
     fn horizontal_layout(&mut self) {
@@ -147,6 +202,16 @@ impl Layout {
                 }
             }
             Self::Horizontal { .. } => { /* do nothing */ }
+            Self::Vertical { left, right, which } => {
+                *self = Self::Horizontal {
+                    top: std::mem::take(left),
+                    bottom: std::mem::take(right),
+                    which: match which {
+                        VerticalPos::Left => HorizontalPos::Top,
+                        VerticalPos::Right => HorizontalPos::Bottom,
+                    },
+                }
+            }
         }
     }
 
@@ -155,6 +220,9 @@ impl Layout {
             Self::Single(_) => { /* do nothing */ }
             Self::Horizontal { top, bottom, .. } => {
                 std::mem::swap(top, bottom);
+            }
+            Self::Vertical { left, right, .. } => {
+                std::mem::swap(left, right);
             }
         }
     }
@@ -166,7 +234,13 @@ impl Layout {
                 *which = match which {
                     HorizontalPos::Top => HorizontalPos::Bottom,
                     HorizontalPos::Bottom => HorizontalPos::Top,
-                }
+                };
+            }
+            Self::Vertical { which, .. } => {
+                *which = match which {
+                    VerticalPos::Left => VerticalPos::Right,
+                    VerticalPos::Right => VerticalPos::Left,
+                };
             }
         }
     }
@@ -201,6 +275,18 @@ impl StatefulWidget for LayoutWidget {
                 }
                 if let Some(buffer) = bottom.current_mut() {
                     BufferWidget.render(bottom_area, buf, buffer);
+                }
+            }
+            Layout::Vertical { left, right, .. } => {
+                use ratatui::layout::{Constraint, Layout};
+
+                let [left_area, right_area] =
+                    Layout::horizontal(Constraint::from_fills([1, 1])).areas(area);
+                if let Some(buffer) = left.current_mut() {
+                    BufferWidget.render(left_area, buf, buffer);
+                }
+                if let Some(buffer) = right.current_mut() {
+                    BufferWidget.render(right_area, buf, buffer);
                 }
             }
         }
