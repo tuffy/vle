@@ -1,5 +1,8 @@
 use crate::buffer::BufferList;
-use ratatui::widgets::StatefulWidget;
+use ratatui::{
+    layout::{Position, Rect},
+    widgets::StatefulWidget,
+};
 use std::path::Path;
 
 pub struct Editor {
@@ -14,12 +17,10 @@ impl Editor {
     }
 
     pub fn display(&mut self, term: &mut ratatui::DefaultTerminal) -> std::io::Result<()> {
-        use ratatui::layout::Position;
-
         term.draw(|frame| {
             let area = frame.area();
             frame.render_stateful_widget(LayoutWidget, area, &mut self.layout);
-            frame.set_cursor_position(Position { x: 0, y: 0 });
+            frame.set_cursor_position(self.layout.cursor_position(area).unwrap_or_default());
         })
         .map(|_| ())
 
@@ -241,6 +242,42 @@ impl Layout {
                     VerticalPos::Left => VerticalPos::Right,
                     VerticalPos::Right => VerticalPos::Left,
                 };
+            }
+        }
+    }
+
+    fn cursor_position(&self, area: Rect) -> Option<Position> {
+        use ratatui::layout::{Constraint, Layout};
+
+        match self {
+            Self::Single(_) => Some(Position {
+                x: area.x,
+                y: area.y,
+            }),
+            Self::Horizontal { which, .. } => {
+                let [top, bottom] = Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
+
+                match which {
+                    HorizontalPos::Top => Some(Position { x: top.x, y: top.y }),
+                    HorizontalPos::Bottom => Some(Position {
+                        x: bottom.x,
+                        y: bottom.y,
+                    }),
+                }
+            }
+            Self::Vertical { which, .. } => {
+                let [left, right] = Layout::horizontal(Constraint::from_fills([1, 1])).areas(area);
+
+                match which {
+                    VerticalPos::Left => Some(Position {
+                        x: left.x,
+                        y: left.y,
+                    }),
+                    VerticalPos::Right => Some(Position {
+                        x: right.x,
+                        y: right.y,
+                    }),
+                }
             }
         }
     }

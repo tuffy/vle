@@ -15,6 +15,7 @@ impl Buffer {
         use std::fs::File;
         use std::io::BufReader;
 
+        // TODO - if file doesn't exist, create new one
         Ok(Self {
             rope: ropey::Rope::from_reader(BufReader::new(File::open(path)?))?,
         })
