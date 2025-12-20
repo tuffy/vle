@@ -4,14 +4,14 @@ use ratatui::{
     layout::{Position, Rect},
     widgets::StatefulWidget,
 };
-use std::path::Path;
+use std::ffi::OsString;
 
 pub struct Editor {
     layout: Layout,
 }
 
 impl Editor {
-    pub fn new<P: AsRef<Path>>(buffers: impl IntoIterator<Item = P>) -> std::io::Result<Self> {
+    pub fn new(buffers: impl IntoIterator<Item = OsString>) -> std::io::Result<Self> {
         Ok(Self {
             layout: Layout::Single(BufferList::new(buffers)?),
         })

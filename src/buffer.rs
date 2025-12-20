@@ -1,27 +1,59 @@
 use ratatui::widgets::StatefulWidget;
-use std::path::Path;
+use std::ffi::OsString;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+enum Source {
+    File(PathBuf),
+}
+
+impl From<OsString> for Source {
+    fn from(s: OsString) -> Self {
+        Self::File(s.into())
+    }
+}
+
+impl std::fmt::Display for Source {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::File(pb) => pb.display().fmt(f),
+        }
+    }
+}
+
+impl Source {
+    fn read_data(&self) -> std::io::Result<ropey::Rope> {
+        use std::fs::File;
+        use std::io::BufReader;
+
+        match self {
+            Self::File(path) => {
+                // TODO - if file doesn't exist, create new rope
+                File::open(path).and_then(|f| ropey::Rope::from_reader(BufReader::new(f)))
+            }
+        }
+    }
+}
+
 /// A buffer corresponding to a file on disk (either local or remote)
-pub struct Buffer {
-    // TODO - support buffer's source as Source enum (file on disk, ssh target, etc.)
+struct Buffer {
+    source: Source,
     rope: ropey::Rope,
     // TODO - support undo stack
     // TODO - support redo stack
 }
 
 impl Buffer {
-    pub fn open<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
-        use std::fs::File;
-        use std::io::BufReader;
+    fn open(path: OsString) -> std::io::Result<Self> {
+        let source = Source::from(path);
 
-        // TODO - if file doesn't exist, create new one
         Ok(Self {
-            rope: ropey::Rope::from_reader(BufReader::new(File::open(path)?))?,
+            rope: source.read_data()?,
+            source,
         })
     }
 
-    pub fn total_lines(&self) -> usize {
+    fn total_lines(&self) -> usize {
         self.rope.len_lines()
     }
 }
@@ -65,7 +97,7 @@ pub struct BufferList {
 }
 
 impl BufferList {
-    pub fn new<P: AsRef<Path>>(paths: impl IntoIterator<Item = P>) -> std::io::Result<Self> {
+    pub fn new(paths: impl IntoIterator<Item = OsString>) -> std::io::Result<Self> {
         Ok(Self {
             buffers: paths
                 .into_iter()
