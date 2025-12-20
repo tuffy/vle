@@ -88,11 +88,45 @@ impl Editor {
                 ..
             }) => self.layout.vertical_layout(),
             Event::Key(KeyEvent {
-                code: KeyCode::Tab,
+                code: KeyCode::Left,
                 modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.layout.swap_cursor(),
+            }) => {
+                if let Layout::Vertical { which, .. } = &mut self.layout {
+                    *which = VerticalPos::Left;
+                }
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Right,
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                if let Layout::Vertical { which, .. } = &mut self.layout {
+                    *which = VerticalPos::Right;
+                }
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Up,
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                if let Layout::Horizontal { which, .. } = &mut self.layout {
+                    *which = HorizontalPos::Top;
+                }
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Down,
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                if let Layout::Horizontal { which, .. } = &mut self.layout {
+                    *which = HorizontalPos::Bottom;
+                }
+            }
             Event::Key(KeyEvent {
                 code: KeyCode::Char('='),
                 modifiers: KeyModifiers::ALT,
@@ -263,24 +297,6 @@ impl Layout {
             }
             Self::Vertical { left, right, .. } => {
                 std::mem::swap(left, right);
-            }
-        }
-    }
-
-    fn swap_cursor(&mut self) {
-        match self {
-            Self::Single(_) => { /* do nothing */ }
-            Self::Horizontal { which, .. } => {
-                *which = match which {
-                    HorizontalPos::Top => HorizontalPos::Bottom,
-                    HorizontalPos::Bottom => HorizontalPos::Top,
-                };
-            }
-            Self::Vertical { which, .. } => {
-                *which = match which {
-                    VerticalPos::Left => VerticalPos::Right,
-                    VerticalPos::Right => VerticalPos::Left,
-                };
             }
         }
     }
