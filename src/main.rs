@@ -6,7 +6,7 @@ mod buffer;
 mod editor;
 
 fn main() -> std::io::Result<()> {
-    use crossterm::event::{Event, KeyCode, KeyEvent, read};
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, read};
     use editor::Editor;
 
     // const ALT_SHIFT: KeyModifiers = KeyModifiers::ALT.union(KeyModifiers::SHIFT);
@@ -20,7 +20,9 @@ fn main() -> std::io::Result<()> {
             // TODO - filter out Mouse motion events in a sub-loop?
             match read()? {
                 Event::Key(KeyEvent {
-                    code: KeyCode::Esc, ..
+                    code: KeyCode::Char('q'),
+                    modifiers: KeyModifiers::CONTROL,
+                    ..
                 }) => break,
                 event => editor.process_event(event),
             }
