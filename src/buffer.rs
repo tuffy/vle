@@ -1,4 +1,5 @@
 use ratatui::widgets::StatefulWidget;
+use std::borrow::Cow;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -22,6 +23,12 @@ impl std::fmt::Display for Source {
 }
 
 impl Source {
+    fn name(&self) -> Cow<'_, str> {
+        match self {
+            Self::File(path) => path.to_string_lossy(),
+        }
+    }
+
     fn read_data(&self) -> std::io::Result<ropey::Rope> {
         use std::fs::File;
         use std::io::BufReader;
@@ -33,12 +40,15 @@ impl Source {
             }
         }
     }
+
+    // TODO - implement save_data() method
 }
 
 /// A buffer corresponding to a file on disk (either local or remote)
 struct Buffer {
     source: Source,
     rope: ropey::Rope,
+    // TODO - indicate whether rope has been edited since last save
     // TODO - support undo stack
     // TODO - support redo stack
 }
@@ -151,8 +161,13 @@ impl StatefulWidget for BufferWidget {
         state: &mut BufferContext,
     ) {
         use ratatui::{
+            layout::{
+                Constraint::{Length, Min},
+                Layout,
+            },
+            style::{Modifier, Style},
             text::Line,
-            widgets::{Paragraph, Widget},
+            widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Widget},
         };
         use std::borrow::Cow;
 
@@ -164,21 +179,35 @@ impl StatefulWidget for BufferWidget {
             }
         }
 
+        let [text_area, status_area] = Layout::vertical([Min(0), Length(1)]).areas(area);
+        let [text_area, scrollbar_area] = Layout::horizontal([Min(0), Length(1)]).areas(text_area);
+
+        let buffer = state.buffer.lock().unwrap();
+
         Paragraph::new(
-            state
-                .buffer
-                .lock()
-                .unwrap()
+            buffer
                 .rope
                 .lines_at(state.viewport_line)
                 .map(|line| Line::from(tabs_to_spaces(Cow::from(line)).into_owned()))
                 .take(area.height.into())
                 .collect::<Vec<_>>(),
         )
-        .render(area, buf)
+        .render(text_area, buf);
+
+        Scrollbar::new(ScrollbarOrientation::VerticalRight).render(
+            scrollbar_area,
+            buf,
+            &mut ScrollbarState::new(buffer.total_lines())
+                .viewport_content_length(text_area.height.into())
+                .position(state.viewport_line),
+        );
+
+        // TODO - display different status messages if necessary
+        // TODO - display whether source needs to be edited
+        Paragraph::new(buffer.source.name())
+            .style(Style::default().add_modifier(Modifier::REVERSED))
+            .render(status_area, buf);
 
         // TODO - support horizontal scrolling
-        // TODO - draw vertical scrollbar at right
-        // TODO - draw status bar at bottom
     }
 }
