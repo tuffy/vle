@@ -152,6 +152,26 @@ impl BufferContext {
             viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
         }
     }
+
+    fn cursor_home(&mut self) {
+        let rope = &self.buffer.try_read().unwrap().rope;
+        if let Ok(current_line) = rope.try_char_to_line(self.cursor)
+            && let Some((home, _)) = line_char_range(&rope, current_line)
+        {
+            self.cursor = home;
+            self.cursor_column = 0;
+        }
+    }
+
+    fn cursor_end(&mut self) {
+        let rope = &self.buffer.try_read().unwrap().rope;
+        if let Ok(current_line) = rope.try_char_to_line(self.cursor)
+            && let Some((_, end)) = line_char_range(&rope, current_line)
+        {
+            self.cursor_column += end - self.cursor;
+            self.cursor = end;
+        }
+    }
 }
 
 // Given line in rope, returns (start, end) of that line in characters from start of rope
@@ -276,6 +296,14 @@ impl BufferList {
 
     pub fn cursor_forward(&mut self) {
         self.update_buf(|buf| buf.cursor_forward());
+    }
+
+    pub fn cursor_home(&mut self) {
+        self.update_buf(|buf| buf.cursor_home());
+    }
+
+    pub fn cursor_end(&mut self) {
+        self.update_buf(|buf| buf.cursor_end());
     }
 }
 

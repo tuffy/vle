@@ -175,6 +175,18 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => self.layout.cursor_forward(),
+            Event::Key(KeyEvent {
+                code: KeyCode::Home,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.cursor_home(),
+            Event::Key(KeyEvent {
+                code: KeyCode::End,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.cursor_end(),
             _ => { /* ignore other events */ }
         }
     }
@@ -405,6 +417,14 @@ impl Layout {
 
     fn cursor_forward(&mut self) {
         self.selected_buffer_list_mut().cursor_forward();
+    }
+
+    fn cursor_home(&mut self) {
+        self.selected_buffer_list_mut().cursor_home();
+    }
+
+    fn cursor_end(&mut self) {
+        self.selected_buffer_list_mut().cursor_end();
     }
 }
 
