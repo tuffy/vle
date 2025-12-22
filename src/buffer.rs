@@ -109,10 +109,10 @@ impl BufferContext {
         Some((line, self.cursor.checked_sub(line_start)?))
     }
 
-    fn cursor_up(&mut self) {
+    fn cursor_up(&mut self, lines: usize) {
         let rope = &self.buffer.try_read().unwrap().rope;
         if let Ok(line) = rope.try_char_to_line(self.cursor)
-            && let Some(prev) = line.checked_sub(1)
+            && let Some(prev) = line.checked_sub(lines)
             && let Ok(prev_start) = rope.try_line_to_char(prev)
         {
             let prev_end = rope.line_to_char(line);
@@ -121,10 +121,10 @@ impl BufferContext {
         }
     }
 
-    fn cursor_down(&mut self) {
+    fn cursor_down(&mut self, lines: usize) {
         let rope = &self.buffer.try_read().unwrap().rope;
         if let Ok(line) = rope.try_char_to_line(self.cursor)
-            && let Some(next) = line.checked_add(1).filter(|l| *l < rope.len_lines())
+            && let Some(next) = line.checked_add(lines).filter(|l| *l < rope.len_lines())
             && let Ok(next_start) = rope.try_line_to_char(next)
         {
             // TODO - apply min(next_end)
@@ -210,15 +210,15 @@ impl BufferList {
             .and_then(|(row, col)| Some((row.checked_sub(buf.viewport_line)?, col)))
     }
 
-    pub fn cursor_up(&mut self) {
+    pub fn cursor_up(&mut self, lines: usize) {
         if let Some(buf) = self.current_mut() {
-            buf.cursor_up();
+            buf.cursor_up(lines);
         }
     }
 
-    pub fn cursor_down(&mut self) {
+    pub fn cursor_down(&mut self, lines: usize) {
         if let Some(buf) = self.current_mut() {
-            buf.cursor_down();
+            buf.cursor_down(lines);
         }
     }
 }

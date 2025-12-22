@@ -6,6 +6,8 @@ use ratatui::{
 };
 use std::ffi::OsString;
 
+const PAGE_SIZE: usize = 25;
+
 pub struct Editor {
     layout: Layout,
     // TODO - implement cut buffer
@@ -51,13 +53,13 @@ impl Editor {
                 modifiers: KeyModifiers::ALT,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.layout.viewport_up(25),
+            }) => self.layout.viewport_up(PAGE_SIZE),
             Event::Key(KeyEvent {
                 code: KeyCode::PageDown,
                 modifiers: KeyModifiers::ALT,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.layout.viewport_down(25),
+            }) => self.layout.viewport_down(PAGE_SIZE),
             Event::Key(KeyEvent {
                 code: KeyCode::Left,
                 modifiers: KeyModifiers::ALT,
@@ -139,13 +141,25 @@ impl Editor {
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.layout.cursor_up(),
+            }) => self.layout.cursor_up(1),
             Event::Key(KeyEvent {
                 code: KeyCode::Down,
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.layout.cursor_down(),
+            }) => self.layout.cursor_down(1),
+            Event::Key(KeyEvent {
+                code: KeyCode::PageUp,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.cursor_up(PAGE_SIZE),
+            Event::Key(KeyEvent {
+                code: KeyCode::PageDown,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.cursor_down(PAGE_SIZE),
             _ => { /* ignore other events */ }
         }
     }
@@ -362,12 +376,12 @@ impl Layout {
         }
     }
 
-    fn cursor_up(&mut self) {
-        self.selected_buffer_list_mut().cursor_up()
+    fn cursor_up(&mut self, lines: usize) {
+        self.selected_buffer_list_mut().cursor_up(lines)
     }
 
-    fn cursor_down(&mut self) {
-        self.selected_buffer_list_mut().cursor_down()
+    fn cursor_down(&mut self, lines: usize) {
+        self.selected_buffer_list_mut().cursor_down(lines)
     }
 }
 
