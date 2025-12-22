@@ -111,27 +111,73 @@ impl BufferContext {
 
     fn cursor_up(&mut self, lines: usize) {
         let rope = &self.buffer.try_read().unwrap().rope;
-        if let Ok(line) = rope.try_char_to_line(self.cursor)
-            && let Some(prev) = line.checked_sub(lines)
-            && let Ok(prev_start) = rope.try_line_to_char(prev)
-        {
-            let prev_end = rope.line_to_char(line);
-            self.cursor = (prev_start + self.cursor_column).min(prev_end);
-            self.viewport_line = self.viewport_line.min(prev);
+        if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+            let previous_line = current_line.saturating_sub(lines);
+            if let Some((prev_start, prev_end)) = line_char_range(rope, previous_line) {
+                self.cursor = (prev_start + self.cursor_column).min(prev_end);
+                viewport_follow_cursor(
+                    previous_line,
+                    &mut self.viewport_line,
+                    self.viewport_height,
+                );
+            }
         }
     }
 
     fn cursor_down(&mut self, lines: usize) {
         let rope = &self.buffer.try_read().unwrap().rope;
-        if let Ok(line) = rope.try_char_to_line(self.cursor)
-            && let Some(next) = line.checked_add(lines).filter(|l| *l < rope.len_lines())
-            && let Ok(next_start) = rope.try_line_to_char(next)
-        {
-            // TODO - apply min(next_end)
-            self.cursor = next_start + self.cursor_column;
-            if let Some(viewport_min) = (next + 1).checked_sub(self.viewport_height) {
-                self.viewport_line = self.viewport_line.max(viewport_min);
+        if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+            let next_line = (current_line + lines).min(rope.len_lines());
+            if let Some((next_start, next_end)) = line_char_range(rope, next_line) {
+                self.cursor = (next_start + self.cursor_column).min(next_end);
+                viewport_follow_cursor(next_line, &mut self.viewport_line, self.viewport_height);
             }
+        }
+    }
+
+    fn cursor_back(&mut self) {
+        let rope = &self.buffer.try_read().unwrap().rope;
+        self.cursor = self.cursor.saturating_sub(1);
+        self.cursor_column = cursor_column(&rope, self.cursor);
+        if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+            viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
+        }
+    }
+
+    fn cursor_forward(&mut self) {
+        let rope = &self.buffer.try_read().unwrap().rope;
+        self.cursor = (self.cursor + 1).min(rope.len_chars());
+        self.cursor_column = cursor_column(&rope, self.cursor);
+        if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+            viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
+        }
+    }
+}
+
+// Given line in rope, returns (start, end) of that line in characters from start of rope
+fn line_char_range(rope: &ropey::Rope, line: usize) -> Option<(usize, usize)> {
+    Some((
+        rope.try_line_to_char(line).ok()?,
+        rope.try_line_to_char(line + 1).ok()? - 1,
+    ))
+}
+
+// Given cursor position from start of rope,
+// return that cursor's column in line
+fn cursor_column(rope: &ropey::Rope, cursor: usize) -> usize {
+    rope.try_char_to_line(cursor)
+        .ok()
+        .and_then(|line| rope.try_line_to_char(line).ok())
+        .and_then(|line_start| cursor.checked_sub(line_start))
+        .unwrap_or(0)
+}
+
+fn viewport_follow_cursor(current_line: usize, viewport_line: &mut usize, viewport_height: usize) {
+    if *viewport_line > current_line {
+        *viewport_line = current_line;
+    } else if let Some(max) = current_line.checked_sub(viewport_height - 1) {
+        if *viewport_line < max {
+            *viewport_line = max;
         }
     }
 }
@@ -210,16 +256,26 @@ impl BufferList {
             .and_then(|(row, col)| Some((row.checked_sub(buf.viewport_line)?, col)))
     }
 
-    pub fn cursor_up(&mut self, lines: usize) {
+    fn update_buf(&mut self, f: impl FnOnce(&mut BufferContext)) {
         if let Some(buf) = self.current_mut() {
-            buf.cursor_up(lines);
+            f(buf);
         }
     }
 
+    pub fn cursor_up(&mut self, lines: usize) {
+        self.update_buf(|buf| buf.cursor_up(lines));
+    }
+
     pub fn cursor_down(&mut self, lines: usize) {
-        if let Some(buf) = self.current_mut() {
-            buf.cursor_down(lines);
-        }
+        self.update_buf(|buf| buf.cursor_down(lines));
+    }
+
+    pub fn cursor_back(&mut self) {
+        self.update_buf(|buf| buf.cursor_back());
+    }
+
+    pub fn cursor_forward(&mut self) {
+        self.update_buf(|buf| buf.cursor_forward());
     }
 }
 

@@ -21,6 +21,8 @@ impl Editor {
     }
 
     pub fn display(&mut self, term: &mut ratatui::DefaultTerminal) -> std::io::Result<()> {
+        // TODO - perform display differently depending on editor mode
+
         term.draw(|frame| {
             let area = frame.area();
             frame.render_stateful_widget(LayoutWidget, area, &mut self.layout);
@@ -28,12 +30,13 @@ impl Editor {
         })
         .map(|_| ())
 
-        // TODO - place cursor in appropriate position in buffer
-        // TODO - draw help messages, by default
+        // TODO - draw keybindings in two rows at screen bottom, Nano-style
     }
 
     pub fn process_event(&mut self, event: Event) {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+        // TODO - process events differently depending on editor mode
 
         match event {
             Event::Key(KeyEvent {
@@ -160,6 +163,18 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => self.layout.cursor_down(PAGE_SIZE),
+            Event::Key(KeyEvent {
+                code: KeyCode::Left,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.cursor_back(),
+            Event::Key(KeyEvent {
+                code: KeyCode::Right,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.cursor_forward(),
             _ => { /* ignore other events */ }
         }
     }
@@ -382,6 +397,14 @@ impl Layout {
 
     fn cursor_down(&mut self, lines: usize) {
         self.selected_buffer_list_mut().cursor_down(lines)
+    }
+
+    fn cursor_back(&mut self) {
+        self.selected_buffer_list_mut().cursor_back();
+    }
+
+    fn cursor_forward(&mut self) {
+        self.selected_buffer_list_mut().cursor_forward();
     }
 }
 
