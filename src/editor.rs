@@ -8,6 +8,7 @@ use std::ffi::OsString;
 
 pub struct Editor {
     layout: Layout,
+    // TODO - implement cut buffer
 }
 
 impl Editor {
@@ -304,34 +305,46 @@ impl Layout {
     fn cursor_position(&self, area: Rect) -> Option<Position> {
         use ratatui::layout::{Constraint, Layout};
 
+        fn apply_position(area: Rect, (row, col): (usize, usize)) -> Option<Position> {
+            // TODO - filter out position if outside of area
+
+            let x = col + usize::from(area.x);
+            let y = row + usize::from(area.y);
+
+            Some(Position {
+                x: u16::try_from(x).ok()?,
+                y: u16::try_from(y).ok()?,
+            })
+        }
+
         match self {
-            Self::Single(_) => Some(Position {
-                x: area.x,
-                y: area.y,
-            }),
-            Self::Horizontal { which, .. } => {
-                let [top, bottom] = Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
+            Self::Single(buf) => buf
+                .cursor_viewport_position()
+                .and_then(|pos| apply_position(area, pos)),
+            Self::Horizontal { top, bottom, which } => {
+                let [top_area, bottom_area] =
+                    Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
 
                 match which {
-                    HorizontalPos::Top => Some(Position { x: top.x, y: top.y }),
-                    HorizontalPos::Bottom => Some(Position {
-                        x: bottom.x,
-                        y: bottom.y,
-                    }),
+                    HorizontalPos::Top => top
+                        .cursor_viewport_position()
+                        .and_then(|pos| apply_position(top_area, pos)),
+                    HorizontalPos::Bottom => bottom
+                        .cursor_viewport_position()
+                        .and_then(|pos| apply_position(bottom_area, pos)),
                 }
             }
-            Self::Vertical { which, .. } => {
-                let [left, right] = Layout::horizontal(Constraint::from_fills([1, 1])).areas(area);
+            Self::Vertical { left, right, which } => {
+                let [left_area, right_area] =
+                    Layout::horizontal(Constraint::from_fills([1, 1])).areas(area);
 
                 match which {
-                    VerticalPos::Left => Some(Position {
-                        x: left.x,
-                        y: left.y,
-                    }),
-                    VerticalPos::Right => Some(Position {
-                        x: right.x,
-                        y: right.y,
-                    }),
+                    VerticalPos::Left => left
+                        .cursor_viewport_position()
+                        .and_then(|pos| apply_position(left_area, pos)),
+                    VerticalPos::Right => right
+                        .cursor_viewport_position()
+                        .and_then(|pos| apply_position(right_area, pos)),
                 }
             }
         }

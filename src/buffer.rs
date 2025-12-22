@@ -72,10 +72,18 @@ impl Buffer {
 #[derive(Clone)]
 pub struct BufferContext {
     buffer: Arc<Mutex<Buffer>>,
-    viewport_line: usize,
-    // TODO - support cursor's character position in rope
-    // TODO - support optional text selection
+    viewport_line: usize,     // viewport's start line (should be <= cursor)
+    cursor: usize,            // cursor's absolute position in rope, in characters
+    cursor_column: usize,     // cursor's desired column, in characters
+    selection: Option<usize>, // cursor's text selection anchor
 }
+
+// moving the cursor vertically should preserve the cursor column
+// even if the intervening lines are shorter
+// (moving down then back up should always round-trip back to the same
+// column, even if the next line is shorter)
+// while horizontal movement or adding text updates the column
+// to the current position
 
 impl BufferContext {
     fn viewport_up(&mut self, lines: usize) {
@@ -86,6 +94,19 @@ impl BufferContext {
         self.viewport_line =
             (self.viewport_line + lines).min(self.buffer.lock().unwrap().total_lines());
     }
+
+    /// Returns cursor position in rope as (row, col), if possible
+    ///
+    /// Both indexes start from 0
+    ///
+    /// This position is independent of the viewport position
+    fn cursor_position(&self) -> Option<(usize, usize)> {
+        let rope = &self.buffer.lock().unwrap().rope;
+        let line = rope.try_char_to_line(self.cursor).ok()?;
+        let line_start = rope.try_line_to_char(line).ok()?;
+
+        Some((line, self.cursor.checked_sub(line_start)?))
+    }
 }
 
 impl From<Buffer> for BufferContext {
@@ -93,6 +114,9 @@ impl From<Buffer> for BufferContext {
         Self {
             buffer: Arc::new(Mutex::new(buffer)),
             viewport_line: 0,
+            cursor: 0,
+            cursor_column: 0,
+            selection: None,
         }
     }
 }
@@ -115,6 +139,10 @@ impl BufferList {
                 .collect::<Result<_, _>>()?,
             current: 0,
         })
+    }
+
+    pub fn current(&self) -> Option<&BufferContext> {
+        self.buffers.get(self.current)
     }
 
     pub fn current_mut(&mut self) -> Option<&mut BufferContext> {
@@ -146,6 +174,12 @@ impl BufferList {
                 .checked_sub(1)
                 .unwrap_or(self.buffers.len() - 1);
         }
+    }
+
+    pub fn cursor_viewport_position(&self) -> Option<(usize, usize)> {
+        let buf = self.current()?;
+        buf.cursor_position()
+            .and_then(|(row, col)| Some((row.checked_sub(buf.viewport_line)?, col)))
     }
 }
 
@@ -193,6 +227,7 @@ impl StatefulWidget for BufferWidget {
                 .collect::<Vec<_>>(),
         )
         .render(text_area, buf);
+        // TODO - support horizontal scrolling if necessary
 
         Scrollbar::new(ScrollbarOrientation::VerticalRight).render(
             scrollbar_area,
@@ -207,7 +242,5 @@ impl StatefulWidget for BufferWidget {
         Paragraph::new(buffer.source.name())
             .style(Style::default().add_modifier(Modifier::REVERSED))
             .render(status_area, buf);
-
-        // TODO - support horizontal scrolling
     }
 }
