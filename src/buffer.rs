@@ -2,7 +2,7 @@ use ratatui::widgets::StatefulWidget;
 use std::borrow::Cow;
 use std::ffi::OsString;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
 enum Source {
     File(PathBuf),
@@ -71,8 +71,9 @@ impl Buffer {
 /// A buffer with additional context on a per-view basis
 #[derive(Clone)]
 pub struct BufferContext {
-    buffer: Arc<Mutex<Buffer>>,
+    buffer: Arc<RwLock<Buffer>>,
     viewport_line: usize,     // viewport's start line (should be <= cursor)
+    viewport_height: usize,   // viewport's current height in lines
     cursor: usize,            // cursor's absolute position in rope, in characters
     cursor_column: usize,     // cursor's desired column, in characters
     selection: Option<usize>, // cursor's text selection anchor
@@ -92,7 +93,7 @@ impl BufferContext {
 
     fn viewport_down(&mut self, lines: usize) {
         self.viewport_line =
-            (self.viewport_line + lines).min(self.buffer.lock().unwrap().total_lines());
+            (self.viewport_line + lines).min(self.buffer.try_read().unwrap().total_lines());
     }
 
     /// Returns cursor position in rope as (row, col), if possible
@@ -101,19 +102,46 @@ impl BufferContext {
     ///
     /// This position is independent of the viewport position
     fn cursor_position(&self) -> Option<(usize, usize)> {
-        let rope = &self.buffer.lock().unwrap().rope;
+        let rope = &self.buffer.try_read().unwrap().rope;
         let line = rope.try_char_to_line(self.cursor).ok()?;
         let line_start = rope.try_line_to_char(line).ok()?;
 
         Some((line, self.cursor.checked_sub(line_start)?))
+    }
+
+    fn cursor_up(&mut self) {
+        let rope = &self.buffer.try_read().unwrap().rope;
+        if let Ok(line) = rope.try_char_to_line(self.cursor)
+            && let Some(prev) = line.checked_sub(1)
+            && let Ok(prev_start) = rope.try_line_to_char(prev)
+        {
+            let prev_end = rope.line_to_char(line);
+            self.cursor = (prev_start + self.cursor_column).min(prev_end);
+            self.viewport_line = self.viewport_line.min(prev);
+        }
+    }
+
+    fn cursor_down(&mut self) {
+        let rope = &self.buffer.try_read().unwrap().rope;
+        if let Ok(line) = rope.try_char_to_line(self.cursor)
+            && let Some(next) = line.checked_add(1).filter(|l| *l < rope.len_lines())
+            && let Ok(next_start) = rope.try_line_to_char(next)
+        {
+            // TODO - apply min(next_end)
+            self.cursor = next_start + self.cursor_column;
+            if let Some(viewport_min) = (next + 1).checked_sub(self.viewport_height) {
+                self.viewport_line = self.viewport_line.max(viewport_min);
+            }
+        }
     }
 }
 
 impl From<Buffer> for BufferContext {
     fn from(buffer: Buffer) -> Self {
         Self {
-            buffer: Arc::new(Mutex::new(buffer)),
+            buffer: Arc::new(RwLock::new(buffer)),
             viewport_line: 0,
+            viewport_height: 0,
             cursor: 0,
             cursor_column: 0,
             selection: None,
@@ -135,7 +163,7 @@ impl BufferList {
         Ok(Self {
             buffers: paths
                 .into_iter()
-                .map(|p| Buffer::open(p).map(|b| BufferContext::from(b)))
+                .map(|p| Buffer::open(p).map(BufferContext::from))
                 .collect::<Result<_, _>>()?,
             current: 0,
         })
@@ -162,13 +190,13 @@ impl BufferList {
     }
 
     pub fn next_buffer(&mut self) {
-        if self.buffers.len() > 0 {
+        if !self.buffers.is_empty() {
             self.current = (self.current + 1) % self.buffers.len()
         }
     }
 
     pub fn previous_buffer(&mut self) {
-        if self.buffers.len() > 0 {
+        if !self.buffers.is_empty() {
             self.current = self
                 .current
                 .checked_sub(1)
@@ -180,6 +208,18 @@ impl BufferList {
         let buf = self.current()?;
         buf.cursor_position()
             .and_then(|(row, col)| Some((row.checked_sub(buf.viewport_line)?, col)))
+    }
+
+    pub fn cursor_up(&mut self) {
+        if let Some(buf) = self.current_mut() {
+            buf.cursor_up();
+        }
+    }
+
+    pub fn cursor_down(&mut self) {
+        if let Some(buf) = self.current_mut() {
+            buf.cursor_down();
+        }
     }
 }
 
@@ -216,7 +256,9 @@ impl StatefulWidget for BufferWidget {
         let [text_area, status_area] = Layout::vertical([Min(0), Length(1)]).areas(area);
         let [text_area, scrollbar_area] = Layout::horizontal([Min(0), Length(1)]).areas(text_area);
 
-        let buffer = state.buffer.lock().unwrap();
+        state.viewport_height = text_area.height.into();
+
+        let buffer = state.buffer.try_read().unwrap();
 
         Paragraph::new(
             buffer

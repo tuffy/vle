@@ -134,6 +134,18 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => self.layout.swap_panes(),
+            Event::Key(KeyEvent {
+                code: KeyCode::Up,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.cursor_up(),
+            Event::Key(KeyEvent {
+                code: KeyCode::Down,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.cursor_down(),
             _ => { /* ignore other events */ }
         }
     }
@@ -348,6 +360,14 @@ impl Layout {
                 }
             }
         }
+    }
+
+    fn cursor_up(&mut self) {
+        self.selected_buffer_list_mut().cursor_up()
+    }
+
+    fn cursor_down(&mut self) {
+        self.selected_buffer_list_mut().cursor_down()
     }
 }
 
