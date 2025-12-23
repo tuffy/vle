@@ -399,8 +399,14 @@ impl StatefulWidget for BufferWidget {
                 .take(area.height.into())
                 .collect::<Vec<_>>(),
         )
+        .scroll((
+            0,
+            cursor_column(&buffer.rope, state.cursor)
+                .saturating_sub(text_area.width.into())
+                .try_into()
+                .unwrap_or(0),
+        ))
         .render(text_area, buf);
-        // TODO - support horizontal scrolling if necessary
 
         Scrollbar::new(ScrollbarOrientation::VerticalRight).render(
             scrollbar_area,
@@ -411,7 +417,7 @@ impl StatefulWidget for BufferWidget {
         );
 
         // TODO - display different status messages if necessary
-        // TODO - display whether source needs to be edited
+        // TODO - display whether source needs to be saved
         Paragraph::new(buffer.source.name())
             .style(Style::default().add_modifier(Modifier::REVERSED))
             .render(status_area, buf);
