@@ -138,7 +138,7 @@ impl BufferContext {
     pub fn cursor_back(&mut self) {
         let rope = &self.buffer.try_read().unwrap().rope;
         self.cursor = self.cursor.saturating_sub(1);
-        self.cursor_column = cursor_column(&rope, self.cursor);
+        self.cursor_column = cursor_column(rope, self.cursor);
         if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
             viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
         }
@@ -147,7 +147,7 @@ impl BufferContext {
     pub fn cursor_forward(&mut self) {
         let rope = &self.buffer.try_read().unwrap().rope;
         self.cursor = (self.cursor + 1).min(rope.len_chars());
-        self.cursor_column = cursor_column(&rope, self.cursor);
+        self.cursor_column = cursor_column(rope, self.cursor);
         if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
             viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
         }
@@ -156,7 +156,7 @@ impl BufferContext {
     pub fn cursor_home(&mut self) {
         let rope = &self.buffer.try_read().unwrap().rope;
         if let Ok(current_line) = rope.try_char_to_line(self.cursor)
-            && let Some((home, _)) = line_char_range(&rope, current_line)
+            && let Some((home, _)) = line_char_range(rope, current_line)
         {
             self.cursor = home;
             self.cursor_column = 0;
@@ -166,7 +166,7 @@ impl BufferContext {
     pub fn cursor_end(&mut self) {
         let rope = &self.buffer.try_read().unwrap().rope;
         if let Ok(current_line) = rope.try_char_to_line(self.cursor)
-            && let Some((_, end)) = line_char_range(&rope, current_line)
+            && let Some((_, end)) = line_char_range(rope, current_line)
         {
             self.cursor_column += end - self.cursor;
             self.cursor = end;
@@ -181,6 +181,28 @@ impl BufferContext {
         rope.insert_char(self.cursor, c);
         self.cursor += 1;
         self.cursor_column += 1;
+    }
+
+    pub fn newline(&mut self) {
+        // TODO - update undo list with current state
+        // TODO - zap selection before inserting newline
+        let rope = &mut self.buffer.try_write().unwrap().rope;
+
+        let indent = line_start_to_cursor(rope, self.cursor)
+            .map(|i| i.take_while(|c| *c == ' ').count())
+            .unwrap_or(0);
+
+        rope.insert_char(self.cursor, '\n');
+        self.cursor += 1;
+        self.cursor_column = 0;
+        for _ in 0..indent {
+            rope.insert_char(self.cursor, ' ');
+            self.cursor += 1;
+            self.cursor_column += 1;
+        }
+        if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+            viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
+        }
     }
 
     pub fn backspace(&mut self) {
@@ -235,11 +257,20 @@ fn cursor_column(rope: &ropey::Rope, cursor: usize) -> usize {
 fn viewport_follow_cursor(current_line: usize, viewport_line: &mut usize, viewport_height: usize) {
     if *viewport_line > current_line {
         *viewport_line = current_line;
-    } else if let Some(max) = current_line.checked_sub(viewport_height - 1) {
-        if *viewport_line < max {
-            *viewport_line = max;
-        }
+    } else if let Some(max) = current_line.checked_sub(viewport_height - 1)
+        && *viewport_line < max
+    {
+        *viewport_line = max;
     }
+}
+
+// Returns characters from the cursor's line start
+// up to (not not including) the cursor itself
+fn line_start_to_cursor(rope: &ropey::Rope, cursor: usize) -> Option<impl Iterator<Item = char>> {
+    let line = rope.try_char_to_line(cursor).ok()?;
+    let start = rope.try_line_to_char(line).ok()?;
+    rope.get_chars_at(start)
+        .map(|iter| iter.take(cursor - start))
 }
 
 impl From<Buffer> for BufferContext {
