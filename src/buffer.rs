@@ -182,6 +182,32 @@ impl BufferContext {
         self.cursor += 1;
         self.cursor_column += 1;
     }
+
+    pub fn backspace(&mut self) {
+        let rope = &mut self.buffer.try_write().unwrap().rope;
+        if let Some(prev) = self.cursor.checked_sub(1)
+            && rope.try_remove(prev..self.cursor).is_ok()
+        {
+            // TODO - remove auto-pairing if pair is together (like "{}")
+            // TODO - update undo list with current state
+            // TODO - zap selection if present
+
+            self.cursor -= 1;
+            // we need to recalculate the cursor column altogether
+            // in case a newline has been removed
+            self.cursor_column = cursor_column(rope, self.cursor);
+        }
+    }
+
+    pub fn delete(&mut self) {
+        let rope = &mut self.buffer.try_write().unwrap().rope;
+        if rope.try_remove(self.cursor..(self.cursor + 1)).is_ok() {
+            // TODO - remove auto-pairing if pair is together (like "{}")
+            // TODO - update undo list with current state
+            // TODO - zap selection if present
+            // leave cursor position and current column unchanged
+        }
+    }
 }
 
 // Given line in rope, returns (start, end) of that line in characters from start of rope
