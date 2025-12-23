@@ -196,6 +196,10 @@ impl BufferContext {
             // we need to recalculate the cursor column altogether
             // in case a newline has been removed
             self.cursor_column = cursor_column(rope, self.cursor);
+
+            if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+                viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
+            }
         }
     }
 
