@@ -145,52 +145,55 @@ impl Editor {
             }) => self.layout.swap_panes(),
             Event::Key(KeyEvent {
                 code: KeyCode::Up,
-                modifiers: KeyModifiers::NONE,
+                modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.update_buffer(|b| b.cursor_up(1)),
+            }) => self.update_buffer(|b| b.cursor_up(1, modifiers.contains(KeyModifiers::SHIFT))),
             Event::Key(KeyEvent {
                 code: KeyCode::Down,
-                modifiers: KeyModifiers::NONE,
+                modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.update_buffer(|b| b.cursor_down(1)),
+            }) => self.update_buffer(|b| b.cursor_down(1, modifiers.contains(KeyModifiers::SHIFT))),
             Event::Key(KeyEvent {
                 code: KeyCode::PageUp,
-                modifiers: KeyModifiers::NONE,
+                modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.update_buffer(|b| b.cursor_up(PAGE_SIZE)),
+            }) => self
+                .update_buffer(|b| b.cursor_up(PAGE_SIZE, modifiers.contains(KeyModifiers::SHIFT))),
             Event::Key(KeyEvent {
                 code: KeyCode::PageDown,
-                modifiers: KeyModifiers::NONE,
+                modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.update_buffer(|b| b.cursor_down(PAGE_SIZE)),
+            }) => self.update_buffer(|b| {
+                b.cursor_down(PAGE_SIZE, modifiers.contains(KeyModifiers::SHIFT))
+            }),
             Event::Key(KeyEvent {
                 code: KeyCode::Left,
-                modifiers: KeyModifiers::NONE,
+                modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.update_buffer(|b| b.cursor_back()),
+            }) => self.update_buffer(|b| b.cursor_back(modifiers.contains(KeyModifiers::SHIFT))),
             Event::Key(KeyEvent {
                 code: KeyCode::Right,
-                modifiers: KeyModifiers::NONE,
+                modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.update_buffer(|b| b.cursor_forward()),
+            }) => self.update_buffer(|b| b.cursor_forward(modifiers.contains(KeyModifiers::SHIFT))),
             Event::Key(KeyEvent {
                 code: KeyCode::Home,
-                modifiers: KeyModifiers::NONE,
+                modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.update_buffer(|b| b.cursor_home()),
+            }) => self.update_buffer(|b| b.cursor_home(modifiers.contains(KeyModifiers::SHIFT))),
             Event::Key(KeyEvent {
                 code: KeyCode::End,
-                modifiers: KeyModifiers::NONE,
+                modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.update_buffer(|b| b.cursor_end()),
+            }) => self.update_buffer(|b| b.cursor_end(modifiers.contains(KeyModifiers::SHIFT))),
             Event::Key(KeyEvent {
                 code: KeyCode::Char(c),
                 modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,

@@ -109,11 +109,12 @@ impl BufferContext {
         Some((line, self.cursor.checked_sub(line_start)?))
     }
 
-    pub fn cursor_up(&mut self, lines: usize) {
+    pub fn cursor_up(&mut self, lines: usize, selecting: bool) {
         let rope = &self.buffer.try_read().unwrap().rope;
         if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
             let previous_line = current_line.saturating_sub(lines);
             if let Some((prev_start, prev_end)) = line_char_range(rope, previous_line) {
+                update_selection(&mut self.selection, self.cursor, selecting);
                 self.cursor = (prev_start + self.cursor_column).min(prev_end);
                 viewport_follow_cursor(
                     previous_line,
@@ -124,19 +125,21 @@ impl BufferContext {
         }
     }
 
-    pub fn cursor_down(&mut self, lines: usize) {
+    pub fn cursor_down(&mut self, lines: usize, selecting: bool) {
         let rope = &self.buffer.try_read().unwrap().rope;
         if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
             let next_line = (current_line + lines).min(rope.len_lines());
             if let Some((next_start, next_end)) = line_char_range(rope, next_line) {
+                update_selection(&mut self.selection, self.cursor, selecting);
                 self.cursor = (next_start + self.cursor_column).min(next_end);
                 viewport_follow_cursor(next_line, &mut self.viewport_line, self.viewport_height);
             }
         }
     }
 
-    pub fn cursor_back(&mut self) {
+    pub fn cursor_back(&mut self, selecting: bool) {
         let rope = &self.buffer.try_read().unwrap().rope;
+        update_selection(&mut self.selection, self.cursor, selecting);
         self.cursor = self.cursor.saturating_sub(1);
         self.cursor_column = cursor_column(rope, self.cursor);
         if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
@@ -144,8 +147,9 @@ impl BufferContext {
         }
     }
 
-    pub fn cursor_forward(&mut self) {
+    pub fn cursor_forward(&mut self, selecting: bool) {
         let rope = &self.buffer.try_read().unwrap().rope;
+        update_selection(&mut self.selection, self.cursor, selecting);
         self.cursor = (self.cursor + 1).min(rope.len_chars());
         self.cursor_column = cursor_column(rope, self.cursor);
         if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
@@ -153,21 +157,23 @@ impl BufferContext {
         }
     }
 
-    pub fn cursor_home(&mut self) {
+    pub fn cursor_home(&mut self, selecting: bool) {
         let rope = &self.buffer.try_read().unwrap().rope;
         if let Ok(current_line) = rope.try_char_to_line(self.cursor)
             && let Some((home, _)) = line_char_range(rope, current_line)
         {
+            update_selection(&mut self.selection, self.cursor, selecting);
             self.cursor = home;
             self.cursor_column = 0;
         }
     }
 
-    pub fn cursor_end(&mut self) {
+    pub fn cursor_end(&mut self, selecting: bool) {
         let rope = &self.buffer.try_read().unwrap().rope;
         if let Ok(current_line) = rope.try_char_to_line(self.cursor)
             && let Some((_, end)) = line_char_range(rope, current_line)
         {
+            update_selection(&mut self.selection, self.cursor, selecting);
             self.cursor_column += end - self.cursor;
             self.cursor = end;
         }
@@ -271,6 +277,16 @@ fn line_start_to_cursor(rope: &ropey::Rope, cursor: usize) -> Option<impl Iterat
     let start = rope.try_line_to_char(line).ok()?;
     rope.get_chars_at(start)
         .map(|iter| iter.take(cursor - start))
+}
+
+// If we move the cursor without performing a selection, clear the selection
+// If we move the cursor while performing a selection, set the selection if necessary
+fn update_selection(selection: &mut Option<usize>, cursor: usize, selecting: bool) {
+    if selecting && selection.is_none() {
+        *selection = Some(cursor);
+    } else if !selecting && selection.is_some() {
+        *selection = None
+    }
 }
 
 impl From<Buffer> for BufferContext {
