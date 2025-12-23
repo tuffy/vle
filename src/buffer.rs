@@ -189,6 +189,20 @@ impl BufferContext {
         self.cursor_column += 1;
     }
 
+    pub fn paste(&mut self, pasted: &CutBuffer) {
+        // TODO - update undo list with current state
+        // TODO - zap selection before performing paste
+        let rope = &mut self.buffer.try_write().unwrap().rope;
+        if rope.try_insert(self.cursor, &pasted.data).is_ok() {
+            self.cursor += pasted.chars_len;
+            self.cursor_column = cursor_column(rope, self.cursor);
+
+            if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+                viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
+            }
+        }
+    }
+
     pub fn newline(&mut self) {
         // TODO - update undo list with current state
         // TODO - zap selection before inserting newline
@@ -239,6 +253,17 @@ impl BufferContext {
             // TODO - zap selection if present
             // leave cursor position and current column unchanged
         }
+    }
+
+    pub fn get_selection(&mut self) -> Option<CutBuffer> {
+        let selection = self.selection.take()?;
+        let (selection_start, selection_end) = reorder(self.cursor, selection);
+        self.buffer
+            .try_read()
+            .unwrap()
+            .rope
+            .get_slice(selection_start..selection_end)
+            .map(|r| r.into())
     }
 }
 
@@ -400,10 +425,6 @@ impl StatefulWidget for BufferWidget {
             }
         }
 
-        fn reorder<T: Ord>(x: T, y: T) -> (T, T) {
-            if x <= y { (x, y) } else { (y, x) }
-        }
-
         // returns selection to be highlighted along with any
         // non-highlighted prefix or suffix
         fn highlight(
@@ -516,4 +537,22 @@ impl StatefulWidget for BufferWidget {
             }
         }
     }
+}
+
+pub struct CutBuffer {
+    data: String,
+    chars_len: usize,
+}
+
+impl From<ropey::RopeSlice<'_>> for CutBuffer {
+    fn from(slice: ropey::RopeSlice<'_>) -> Self {
+        Self {
+            data: slice.chunks().collect(),
+            chars_len: slice.len_chars(),
+        }
+    }
+}
+
+fn reorder<T: Ord>(x: T, y: T) -> (T, T) {
+    if x <= y { (x, y) } else { (y, x) }
 }

@@ -1,4 +1,4 @@
-use crate::buffer::BufferList;
+use crate::buffer::{BufferList, CutBuffer};
 use crossterm::event::Event;
 use ratatui::{
     layout::{Position, Rect},
@@ -10,13 +10,14 @@ const PAGE_SIZE: usize = 25;
 
 pub struct Editor {
     layout: Layout,
-    // TODO - implement cut buffer
+    cut_buffer: Option<CutBuffer>, // cut buffer shared globally across editor
 }
 
 impl Editor {
     pub fn new(buffers: impl IntoIterator<Item = OsString>) -> std::io::Result<Self> {
         Ok(Self {
             layout: Layout::Single(BufferList::new(buffers)?),
+            cut_buffer: None,
         })
     }
 
@@ -35,6 +36,22 @@ impl Editor {
 
     fn update_buffer(&mut self, f: impl FnOnce(&mut crate::buffer::BufferContext)) {
         self.layout.selected_buffer_list_mut().update_buf(f)
+    }
+
+    fn perform_copy(&mut self) {
+        if let Some(buffer) = self.layout.selected_buffer_list_mut().current_mut()
+            && let Some(selection) = buffer.get_selection()
+        {
+            self.cut_buffer = Some(selection);
+        }
+    }
+
+    fn perform_paste(&mut self) {
+        if let Some(cut_buffer) = &self.cut_buffer
+            && let Some(buffer) = self.layout.selected_buffer_list_mut().current_mut()
+        {
+            buffer.paste(cut_buffer);
+        }
     }
 
     pub fn process_event(&mut self, event: Event) {
@@ -218,6 +235,18 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => self.update_buffer(|b| b.newline()),
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('c'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.perform_copy(),
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('v'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.perform_paste(),
             _ => { /* ignore other events */ }
         }
     }
