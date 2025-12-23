@@ -391,6 +391,7 @@ impl StatefulWidget for BufferWidget {
 
         let buffer = state.buffer.try_read().unwrap();
 
+        // TODO - highlight selected region with inverse, if any
         Paragraph::new(
             buffer
                 .rope
@@ -417,9 +418,28 @@ impl StatefulWidget for BufferWidget {
         );
 
         // TODO - display different status messages if necessary
+        let source = Paragraph::new(buffer.source.name())
+            .style(Style::default().add_modifier(Modifier::REVERSED));
+
         // TODO - display whether source needs to be saved
-        Paragraph::new(buffer.source.name())
-            .style(Style::default().add_modifier(Modifier::REVERSED))
-            .render(status_area, buf);
+        match buffer.rope.try_char_to_line(state.cursor) {
+            Ok(line) => {
+                let line = std::num::NonZero::new(line + 1).unwrap();
+                let digits = line.ilog10() + 1;
+
+                let [source_area, line_area] =
+                    Layout::horizontal([Min(0), Length(digits.try_into().unwrap())])
+                        .areas(status_area);
+
+                source.render(source_area, buf);
+
+                Paragraph::new(line.to_string())
+                    .style(Style::default().add_modifier(Modifier::REVERSED))
+                    .render(line_area, buf);
+            }
+            Err(_) => {
+                source.render(status_area, buf);
+            }
+        }
     }
 }
