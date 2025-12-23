@@ -9,8 +9,6 @@ fn main() -> std::io::Result<()> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, read};
     use editor::Editor;
 
-    // const ALT_SHIFT: KeyModifiers = KeyModifiers::ALT.union(KeyModifiers::SHIFT);
-
     let mut editor = Editor::new(std::env::args_os().skip(1))?;
 
     execute_terminal(|terminal| {

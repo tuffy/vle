@@ -182,8 +182,10 @@ impl BufferContext {
     pub fn insert_char(&mut self, c: char) {
         // TODO - perform auto-pairing if char is pair-able
         // TODO - update undo list with current state
-        // TODO - zap selection before performing insert
         let rope = &mut self.buffer.try_write().unwrap().rope;
+        if let Some(selection) = self.selection.take() {
+            zap_selection(rope, &mut self.cursor, &mut self.cursor_column, selection);
+        }
         rope.insert_char(self.cursor, c);
         self.cursor += 1;
         self.cursor_column += 1;
@@ -191,8 +193,10 @@ impl BufferContext {
 
     pub fn paste(&mut self, pasted: &CutBuffer) {
         // TODO - update undo list with current state
-        // TODO - zap selection before performing paste
         let rope = &mut self.buffer.try_write().unwrap().rope;
+        if let Some(selection) = self.selection.take() {
+            zap_selection(rope, &mut self.cursor, &mut self.cursor_column, selection);
+        }
         if rope.try_insert(self.cursor, &pasted.data).is_ok() {
             self.cursor += pasted.chars_len;
             self.cursor_column = cursor_column(rope, self.cursor);
@@ -227,31 +231,75 @@ impl BufferContext {
 
     pub fn backspace(&mut self) {
         let rope = &mut self.buffer.try_write().unwrap().rope;
-        if let Some(prev) = self.cursor.checked_sub(1)
-            && rope.try_remove(prev..self.cursor).is_ok()
-        {
-            // TODO - remove auto-pairing if pair is together (like "{}")
-            // TODO - update undo list with current state
-            // TODO - zap selection if present
 
-            self.cursor -= 1;
-            // we need to recalculate the cursor column altogether
-            // in case a newline has been removed
-            self.cursor_column = cursor_column(rope, self.cursor);
+        match self.selection.take() {
+            None => {
+                if let Some(prev) = self.cursor.checked_sub(1)
+                    && rope.try_remove(prev..self.cursor).is_ok()
+                {
+                    // TODO - remove auto-pairing if pair is together (like "{}")
+                    // TODO - update undo list with current state
 
-            if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
-                viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
+                    self.cursor -= 1;
+                    // we need to recalculate the cursor column altogether
+                    // in case a newline has been removed
+                    self.cursor_column = cursor_column(rope, self.cursor);
+
+                    if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+                        viewport_follow_cursor(
+                            current_line,
+                            &mut self.viewport_line,
+                            self.viewport_height,
+                        );
+                    }
+                }
+            }
+            Some(current_selection) => {
+                zap_selection(
+                    rope,
+                    &mut self.cursor,
+                    &mut self.cursor_column,
+                    current_selection,
+                );
+
+                if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+                    viewport_follow_cursor(
+                        current_line,
+                        &mut self.viewport_line,
+                        self.viewport_height,
+                    );
+                }
             }
         }
     }
 
     pub fn delete(&mut self) {
         let rope = &mut self.buffer.try_write().unwrap().rope;
-        if rope.try_remove(self.cursor..(self.cursor + 1)).is_ok() {
-            // TODO - remove auto-pairing if pair is together (like "{}")
-            // TODO - update undo list with current state
-            // TODO - zap selection if present
-            // leave cursor position and current column unchanged
+
+        match self.selection.take() {
+            None => {
+                if rope.try_remove(self.cursor..(self.cursor + 1)).is_ok() {
+                    // TODO - remove auto-pairing if pair is together (like "{}")
+                    // TODO - update undo list with current state
+                    // leave cursor position and current column unchanged
+                }
+            }
+            Some(current_selection) => {
+                zap_selection(
+                    rope,
+                    &mut self.cursor,
+                    &mut self.cursor_column,
+                    current_selection,
+                );
+
+                if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+                    viewport_follow_cursor(
+                        current_line,
+                        &mut self.viewport_line,
+                        self.viewport_height,
+                    );
+                }
+            }
         }
     }
 
@@ -333,6 +381,14 @@ fn update_selection(selection: &mut Option<usize>, cursor: usize, selecting: boo
         *selection = Some(cursor);
     } else if !selecting && selection.is_some() {
         *selection = None
+    }
+}
+
+fn zap_selection(rope: &mut ropey::Rope, cursor: &mut usize, column: &mut usize, selection: usize) {
+    let (selection_start, selection_end) = reorder(*cursor, selection);
+    if rope.try_remove(selection_start..selection_end).is_ok() {
+        *cursor = selection_start;
+        *column = cursor_column(rope, *cursor);
     }
 }
 
