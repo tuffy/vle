@@ -265,6 +265,28 @@ impl BufferContext {
             .get_slice(selection_start..selection_end)
             .map(|r| r.into())
     }
+
+    pub fn take_selection(&mut self) -> Option<CutBuffer> {
+        let selection = self.selection.take()?;
+        let (selection_start, selection_end) = reorder(self.cursor, selection);
+        let rope = &mut self.buffer.try_write().unwrap().rope;
+
+        rope.get_slice(selection_start..selection_end)
+            .map(|r| r.into())
+            .inspect(|_| {
+                rope.remove(selection_start..selection_end);
+                self.cursor = selection_start;
+                self.cursor_column = cursor_column(rope, self.cursor);
+
+                if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+                    viewport_follow_cursor(
+                        current_line,
+                        &mut self.viewport_line,
+                        self.viewport_height,
+                    );
+                }
+            })
+    }
 }
 
 // Given line in rope, returns (start, end) of that line in characters from start of rope

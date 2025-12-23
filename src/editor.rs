@@ -38,6 +38,14 @@ impl Editor {
         self.layout.selected_buffer_list_mut().update_buf(f)
     }
 
+    fn perform_cut(&mut self) {
+        if let Some(buffer) = self.layout.selected_buffer_list_mut().current_mut()
+            && let Some(selection) = buffer.take_selection()
+        {
+            self.cut_buffer = Some(selection);
+        }
+    }
+
     fn perform_copy(&mut self) {
         if let Some(buffer) = self.layout.selected_buffer_list_mut().current_mut()
             && let Some(selection) = buffer.get_selection()
@@ -235,6 +243,12 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => self.update_buffer(|b| b.newline()),
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('x'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.perform_cut(),
             Event::Key(KeyEvent {
                 code: KeyCode::Char('c'),
                 modifiers: KeyModifiers::CONTROL,
