@@ -400,25 +400,84 @@ impl StatefulWidget for BufferWidget {
             }
         }
 
+        fn reorder<T: Ord>(x: T, y: T) -> (T, T) {
+            if x <= y { (x, y) } else { (y, x) }
+        }
+
+        // returns selection to be highlighted along with any
+        // non-highlighted prefix or suffix
+        fn highlight(
+            line: Cow<'_, str>,
+            (line_start, line_end): (usize, usize),
+            (selection_start, selection_end): (usize, usize),
+        ) -> Line<'_> {
+            use ratatui::text::Span;
+
+            fn pop_chars_front<'s>(s: &mut &'s str, chars: usize) -> &'s str {
+                use unicode_truncate::UnicodeTruncateStr;
+
+                let (split, _) = s.unicode_truncate(chars);
+                *s = s.split_at(split.len()).1;
+                split
+            }
+
+            if selection_end <= line_start || selection_start >= line_end {
+                Line::from(line)
+            } else {
+                let mut s = line.as_ref();
+                let mut line = vec![];
+                let prefix = pop_chars_front(&mut s, selection_start.saturating_sub(line_start));
+                line.extend((!prefix.is_empty()).then_some(Span::raw(prefix.to_string())));
+                line.push(Span::styled(
+                    pop_chars_front(&mut s, selection_end - selection_start.max(line_start))
+                        .to_string(),
+                    REVERSED,
+                ));
+                line.extend((!s.is_empty()).then_some(Span::raw(s.to_string())));
+                Line::from(line)
+            }
+        }
+
+        const REVERSED: Style = Style::new().add_modifier(Modifier::REVERSED);
+
         let [text_area, status_area] = Layout::vertical([Min(0), Length(1)]).areas(area);
         let [text_area, scrollbar_area] = Layout::horizontal([Min(0), Length(1)]).areas(text_area);
 
         state.viewport_height = text_area.height.into();
 
         let buffer = state.buffer.try_read().unwrap();
+        let rope = &buffer.rope;
 
-        // TODO - highlight selected region with inverse, if any
-        Paragraph::new(
-            buffer
-                .rope
+        Paragraph::new(match state.selection {
+            // no selection, so nothing to highlight
+            None => rope
                 .lines_at(state.viewport_line)
                 .map(|line| Line::from(tabs_to_spaces(Cow::from(line)).into_owned()))
                 .take(area.height.into())
                 .collect::<Vec<_>>(),
-        )
+            // highlight whole line, no line, or part of the line
+            Some(selection) => {
+                let (selection_start, selection_end) = reorder(state.cursor, selection);
+
+                rope.lines_at(state.viewport_line)
+                    .zip(state.viewport_line..)
+                    .map(
+                        |(line, line_number)| match line_char_range(rope, line_number) {
+                            None => Line::from(tabs_to_spaces(Cow::from(line)).into_owned()),
+                            Some((line_start, line_end)) => highlight(
+                                tabs_to_spaces(Cow::from(line)),
+                                (line_start, line_end),
+                                (selection_start, selection_end),
+                            ),
+                        },
+                    )
+                    .take(area.height.into())
+                    .collect::<Vec<_>>()
+            }
+        })
         .scroll((
             0,
-            cursor_column(&buffer.rope, state.cursor)
+            cursor_column(rope, state.cursor)
                 .saturating_sub(text_area.width.into())
                 .try_into()
                 .unwrap_or(0),
@@ -434,8 +493,7 @@ impl StatefulWidget for BufferWidget {
         );
 
         // TODO - display different status messages if necessary
-        let source = Paragraph::new(buffer.source.name())
-            .style(Style::default().add_modifier(Modifier::REVERSED));
+        let source = Paragraph::new(buffer.source.name()).style(REVERSED);
 
         // TODO - display whether source needs to be saved
         match buffer.rope.try_char_to_line(state.cursor) {
@@ -450,7 +508,7 @@ impl StatefulWidget for BufferWidget {
                 source.render(source_area, buf);
 
                 Paragraph::new(line.to_string())
-                    .style(Style::default().add_modifier(Modifier::REVERSED))
+                    .style(REVERSED)
                     .render(line_area, buf);
             }
             Err(_) => {
