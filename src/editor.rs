@@ -187,6 +187,12 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => self.layout.cursor_end(),
+            Event::Key(KeyEvent {
+                code: KeyCode::Char(c),
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.layout.insert_char(c),
             _ => { /* ignore other events */ }
         }
     }
@@ -425,6 +431,10 @@ impl Layout {
 
     fn cursor_end(&mut self) {
         self.selected_buffer_list_mut().cursor_end();
+    }
+
+    fn insert_char(&mut self, c: char) {
+        self.selected_buffer_list_mut().insert_char(c);
     }
 }
 

@@ -172,6 +172,16 @@ impl BufferContext {
             self.cursor = end;
         }
     }
+
+    fn insert_char(&mut self, c: char) {
+        // TODO - perform auto-pairing if char is pair-able
+        // TODO - update undo list with current state
+        // TODO - zap selection before performing insert
+        let rope = &mut self.buffer.try_write().unwrap().rope;
+        rope.insert_char(self.cursor, c);
+        self.cursor += 1;
+        self.cursor_column += 1;
+    }
 }
 
 // Given line in rope, returns (start, end) of that line in characters from start of rope
@@ -304,6 +314,10 @@ impl BufferList {
 
     pub fn cursor_end(&mut self) {
         self.update_buf(|buf| buf.cursor_end());
+    }
+
+    pub fn insert_char(&mut self, c: char) {
+        self.update_buf(|buf| buf.insert_char(c));
     }
 }
 
