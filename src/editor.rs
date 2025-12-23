@@ -33,6 +33,10 @@ impl Editor {
         // TODO - draw keybindings in two rows at screen bottom, Nano-style
     }
 
+    fn update_buffer(&mut self, f: impl FnOnce(&mut crate::buffer::BufferContext)) {
+        self.layout.selected_buffer_list_mut().update_buf(f)
+    }
+
     pub fn process_event(&mut self, event: Event) {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
@@ -144,55 +148,55 @@ impl Editor {
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.layout.cursor_up(1),
+            }) => self.update_buffer(|b| b.cursor_up(1)),
             Event::Key(KeyEvent {
                 code: KeyCode::Down,
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.layout.cursor_down(1),
+            }) => self.update_buffer(|b| b.cursor_down(1)),
             Event::Key(KeyEvent {
                 code: KeyCode::PageUp,
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.layout.cursor_up(PAGE_SIZE),
+            }) => self.update_buffer(|b| b.cursor_up(PAGE_SIZE)),
             Event::Key(KeyEvent {
                 code: KeyCode::PageDown,
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.layout.cursor_down(PAGE_SIZE),
+            }) => self.update_buffer(|b| b.cursor_down(PAGE_SIZE)),
             Event::Key(KeyEvent {
                 code: KeyCode::Left,
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.layout.cursor_back(),
+            }) => self.update_buffer(|b| b.cursor_back()),
             Event::Key(KeyEvent {
                 code: KeyCode::Right,
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.layout.cursor_forward(),
+            }) => self.update_buffer(|b| b.cursor_forward()),
             Event::Key(KeyEvent {
                 code: KeyCode::Home,
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.layout.cursor_home(),
+            }) => self.update_buffer(|b| b.cursor_home()),
             Event::Key(KeyEvent {
                 code: KeyCode::End,
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.layout.cursor_end(),
+            }) => self.update_buffer(|b| b.cursor_end()),
             Event::Key(KeyEvent {
                 code: KeyCode::Char(c),
                 modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.layout.insert_char(c),
+            }) => self.update_buffer(|b| b.insert_char(c)),
             _ => { /* ignore other events */ }
         }
     }
@@ -407,34 +411,6 @@ impl Layout {
                 }
             }
         }
-    }
-
-    fn cursor_up(&mut self, lines: usize) {
-        self.selected_buffer_list_mut().cursor_up(lines)
-    }
-
-    fn cursor_down(&mut self, lines: usize) {
-        self.selected_buffer_list_mut().cursor_down(lines)
-    }
-
-    fn cursor_back(&mut self) {
-        self.selected_buffer_list_mut().cursor_back();
-    }
-
-    fn cursor_forward(&mut self) {
-        self.selected_buffer_list_mut().cursor_forward();
-    }
-
-    fn cursor_home(&mut self) {
-        self.selected_buffer_list_mut().cursor_home();
-    }
-
-    fn cursor_end(&mut self) {
-        self.selected_buffer_list_mut().cursor_end();
-    }
-
-    fn insert_char(&mut self, c: char) {
-        self.selected_buffer_list_mut().insert_char(c);
     }
 }
 

@@ -109,7 +109,7 @@ impl BufferContext {
         Some((line, self.cursor.checked_sub(line_start)?))
     }
 
-    fn cursor_up(&mut self, lines: usize) {
+    pub fn cursor_up(&mut self, lines: usize) {
         let rope = &self.buffer.try_read().unwrap().rope;
         if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
             let previous_line = current_line.saturating_sub(lines);
@@ -124,7 +124,7 @@ impl BufferContext {
         }
     }
 
-    fn cursor_down(&mut self, lines: usize) {
+    pub fn cursor_down(&mut self, lines: usize) {
         let rope = &self.buffer.try_read().unwrap().rope;
         if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
             let next_line = (current_line + lines).min(rope.len_lines());
@@ -135,7 +135,7 @@ impl BufferContext {
         }
     }
 
-    fn cursor_back(&mut self) {
+    pub fn cursor_back(&mut self) {
         let rope = &self.buffer.try_read().unwrap().rope;
         self.cursor = self.cursor.saturating_sub(1);
         self.cursor_column = cursor_column(&rope, self.cursor);
@@ -144,7 +144,7 @@ impl BufferContext {
         }
     }
 
-    fn cursor_forward(&mut self) {
+    pub fn cursor_forward(&mut self) {
         let rope = &self.buffer.try_read().unwrap().rope;
         self.cursor = (self.cursor + 1).min(rope.len_chars());
         self.cursor_column = cursor_column(&rope, self.cursor);
@@ -153,7 +153,7 @@ impl BufferContext {
         }
     }
 
-    fn cursor_home(&mut self) {
+    pub fn cursor_home(&mut self) {
         let rope = &self.buffer.try_read().unwrap().rope;
         if let Ok(current_line) = rope.try_char_to_line(self.cursor)
             && let Some((home, _)) = line_char_range(&rope, current_line)
@@ -163,7 +163,7 @@ impl BufferContext {
         }
     }
 
-    fn cursor_end(&mut self) {
+    pub fn cursor_end(&mut self) {
         let rope = &self.buffer.try_read().unwrap().rope;
         if let Ok(current_line) = rope.try_char_to_line(self.cursor)
             && let Some((_, end)) = line_char_range(&rope, current_line)
@@ -173,7 +173,7 @@ impl BufferContext {
         }
     }
 
-    fn insert_char(&mut self, c: char) {
+    pub fn insert_char(&mut self, c: char) {
         // TODO - perform auto-pairing if char is pair-able
         // TODO - update undo list with current state
         // TODO - zap selection before performing insert
@@ -286,38 +286,10 @@ impl BufferList {
             .and_then(|(row, col)| Some((row.checked_sub(buf.viewport_line)?, col)))
     }
 
-    fn update_buf(&mut self, f: impl FnOnce(&mut BufferContext)) {
+    pub fn update_buf(&mut self, f: impl FnOnce(&mut BufferContext)) {
         if let Some(buf) = self.current_mut() {
             f(buf);
         }
-    }
-
-    pub fn cursor_up(&mut self, lines: usize) {
-        self.update_buf(|buf| buf.cursor_up(lines));
-    }
-
-    pub fn cursor_down(&mut self, lines: usize) {
-        self.update_buf(|buf| buf.cursor_down(lines));
-    }
-
-    pub fn cursor_back(&mut self) {
-        self.update_buf(|buf| buf.cursor_back());
-    }
-
-    pub fn cursor_forward(&mut self) {
-        self.update_buf(|buf| buf.cursor_forward());
-    }
-
-    pub fn cursor_home(&mut self) {
-        self.update_buf(|buf| buf.cursor_home());
-    }
-
-    pub fn cursor_end(&mut self) {
-        self.update_buf(|buf| buf.cursor_end());
-    }
-
-    pub fn insert_char(&mut self, c: char) {
-        self.update_buf(|buf| buf.insert_char(c));
     }
 }
 
