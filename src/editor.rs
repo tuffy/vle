@@ -313,6 +313,7 @@ impl Editor {
             }) => {
                 // close buffer anyway
                 self.layout.remove(buffer_id);
+                self.mode = EditorMode::default();
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Char('n' | 'N'),

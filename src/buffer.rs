@@ -543,6 +543,8 @@ impl StatefulWidget for BufferWidget<'_> {
         };
         use std::borrow::Cow;
 
+        // TODO - highlight syntax for non-selected lines
+
         fn tabs_to_spaces<'s, S: Into<Cow<'s, str>> + AsRef<str>>(s: S) -> Cow<'s, str> {
             if s.as_ref().contains('\t') {
                 s.as_ref().replace('\t', "    ").into()
