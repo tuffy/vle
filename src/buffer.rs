@@ -1,3 +1,4 @@
+use crate::editor::EditorMode;
 use ratatui::widgets::StatefulWidget;
 use std::borrow::Cow;
 use std::ffi::OsString;
@@ -69,6 +70,7 @@ impl Buffer {
     }
 }
 
+#[derive(Clone)]
 pub struct BufferId(Arc<RwLock<Buffer>>);
 
 /// A buffer with additional context on a per-view basis
@@ -92,6 +94,10 @@ pub struct BufferContext {
 impl BufferContext {
     pub fn id(&self) -> BufferId {
         BufferId(Arc::clone(&self.buffer))
+    }
+
+    pub fn modified(&self) -> bool {
+        self.buffer.try_read().unwrap().modified
     }
 
     fn viewport_up(&mut self, lines: usize) {
@@ -513,9 +519,11 @@ impl BufferList {
     }
 }
 
-pub struct BufferWidget;
+pub struct BufferWidget<'e> {
+    pub mode: Option<&'e EditorMode>,
+}
 
-impl StatefulWidget for BufferWidget {
+impl StatefulWidget for BufferWidget<'_> {
     type State = BufferContext;
 
     fn render(
@@ -631,27 +639,42 @@ impl StatefulWidget for BufferWidget {
                 .position(state.viewport_line),
         );
 
-        // TODO - display different status messages if necessary
-        let source = Paragraph::new(buffer.source.name()).style(REVERSED);
+        match self.mode {
+            None | Some(EditorMode::Editing) => {
+                let source = Paragraph::new(format!(
+                    "{} {}",
+                    match buffer.modified {
+                        true => '*',
+                        false => ' ',
+                    },
+                    buffer.source.name()
+                ))
+                .style(REVERSED);
 
-        // TODO - display whether source needs to be saved
-        match buffer.rope.try_char_to_line(state.cursor) {
-            Ok(line) => {
-                let line = std::num::NonZero::new(line + 1).unwrap();
-                let digits = line.ilog10() + 1;
+                match buffer.rope.try_char_to_line(state.cursor) {
+                    Ok(line) => {
+                        let line = std::num::NonZero::new(line + 1).unwrap();
+                        let digits = line.ilog10() + 1;
 
-                let [source_area, line_area] =
-                    Layout::horizontal([Min(0), Length(digits.try_into().unwrap())])
-                        .areas(status_area);
+                        let [source_area, line_area] =
+                            Layout::horizontal([Min(0), Length(digits.try_into().unwrap())])
+                                .areas(status_area);
 
-                source.render(source_area, buf);
+                        source.render(source_area, buf);
 
-                Paragraph::new(line.to_string())
-                    .style(REVERSED)
-                    .render(line_area, buf);
+                        Paragraph::new(line.to_string())
+                            .style(REVERSED)
+                            .render(line_area, buf);
+                    }
+                    Err(_) => {
+                        source.render(status_area, buf);
+                    }
+                }
             }
-            Err(_) => {
-                source.render(status_area, buf);
+            Some(EditorMode::ConfirmClose { .. }) => {
+                Paragraph::new("Unsaved changes. Really quit?")
+                    .style(REVERSED)
+                    .render(status_area, buf);
             }
         }
     }

@@ -8,8 +8,18 @@ use std::ffi::OsString;
 
 const PAGE_SIZE: usize = 25;
 
+#[derive(Default)]
+pub enum EditorMode {
+    #[default]
+    Editing, // standard editing mode
+    ConfirmClose {
+        buffer: BufferId,
+    },
+}
+
 pub struct Editor {
     layout: Layout,
+    mode: EditorMode,
     cut_buffer: Option<CutBuffer>, // cut buffer shared globally across editor
 }
 
@@ -17,6 +27,7 @@ impl Editor {
     pub fn new(buffers: impl IntoIterator<Item = OsString>) -> std::io::Result<Self> {
         Ok(Self {
             layout: Layout::Single(BufferList::new(buffers)?),
+            mode: EditorMode::default(),
             cut_buffer: None,
         })
     }
@@ -30,7 +41,7 @@ impl Editor {
 
         term.draw(|frame| {
             let area = frame.area();
-            frame.render_stateful_widget(LayoutWidget, area, &mut self.layout);
+            frame.render_stateful_widget(LayoutWidget { mode: &self.mode }, area, &mut self.layout);
             frame.set_cursor_position(self.layout.cursor_position(area).unwrap_or_default());
         })
         .map(|_| ())
@@ -67,9 +78,16 @@ impl Editor {
     }
 
     pub fn process_event(&mut self, event: Event) {
-        use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+        match &self.mode {
+            EditorMode::Editing => self.process_normal_event(event),
+            EditorMode::ConfirmClose { buffer } => {
+                self.process_confirm_close(event, buffer.clone())
+            }
+        }
+    }
 
-        // TODO - process events differently depending on editor mode
+    fn process_normal_event(&mut self, event: Event) {
+        use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
         match event {
             Event::Key(KeyEvent {
@@ -79,8 +97,11 @@ impl Editor {
                 ..
             }) => {
                 if let Some(buf) = self.layout.selected_buffer_list().current() {
-                    // TODO - if buffer has been modified, switch to confirmation mode
-                    self.layout.remove(buf.id());
+                    if buf.modified() {
+                        self.mode = EditorMode::ConfirmClose { buffer: buf.id() };
+                    } else {
+                        self.layout.remove(buf.id());
+                    }
                 }
             }
             Event::Key(KeyEvent {
@@ -276,6 +297,32 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => self.perform_paste(),
+            _ => { /* ignore other events */ }
+        }
+    }
+
+    fn process_confirm_close(&mut self, event: Event, buffer_id: BufferId) {
+        use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+        match event {
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('y' | 'Y'),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                // close buffer anyway
+                self.layout.remove(buffer_id);
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('n' | 'N'),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                // cancel close buffer
+                self.mode = EditorMode::default();
+            }
             _ => { /* ignore other events */ }
         }
     }
@@ -542,9 +589,11 @@ impl Layout {
     }
 }
 
-struct LayoutWidget;
+struct LayoutWidget<'e> {
+    mode: &'e EditorMode,
+}
 
-impl StatefulWidget for LayoutWidget {
+impl StatefulWidget for LayoutWidget<'_> {
     type State = Layout;
 
     fn render(
@@ -555,34 +604,60 @@ impl StatefulWidget for LayoutWidget {
     ) {
         use crate::buffer::BufferWidget;
 
+        let Self { mode } = self;
+
         match layout {
             Layout::Single(single) => {
                 if let Some(buffer) = single.current_mut() {
-                    BufferWidget.render(area, buf, buffer);
+                    BufferWidget { mode: Some(mode) }.render(area, buf, buffer);
                 }
             }
-            Layout::Horizontal { top, bottom, .. } => {
+            Layout::Horizontal { top, bottom, which } => {
                 use ratatui::layout::{Constraint, Layout};
 
                 let [top_area, bottom_area] =
                     Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
                 if let Some(buffer) = top.current_mut() {
-                    BufferWidget.render(top_area, buf, buffer);
+                    BufferWidget {
+                        mode: match which {
+                            HorizontalPos::Top => Some(mode),
+                            HorizontalPos::Bottom => None,
+                        },
+                    }
+                    .render(top_area, buf, buffer);
                 }
                 if let Some(buffer) = bottom.current_mut() {
-                    BufferWidget.render(bottom_area, buf, buffer);
+                    BufferWidget {
+                        mode: match which {
+                            HorizontalPos::Top => None,
+                            HorizontalPos::Bottom => Some(mode),
+                        },
+                    }
+                    .render(bottom_area, buf, buffer);
                 }
             }
-            Layout::Vertical { left, right, .. } => {
+            Layout::Vertical { left, right, which } => {
                 use ratatui::layout::{Constraint, Layout};
 
                 let [left_area, right_area] =
                     Layout::horizontal(Constraint::from_fills([1, 1])).areas(area);
                 if let Some(buffer) = left.current_mut() {
-                    BufferWidget.render(left_area, buf, buffer);
+                    BufferWidget {
+                        mode: match which {
+                            VerticalPos::Left => Some(mode),
+                            VerticalPos::Right => None,
+                        },
+                    }
+                    .render(left_area, buf, buffer);
                 }
                 if let Some(buffer) = right.current_mut() {
-                    BufferWidget.render(right_area, buf, buffer);
+                    BufferWidget {
+                        mode: match which {
+                            VerticalPos::Left => None,
+                            VerticalPos::Right => Some(mode),
+                        },
+                    }
+                    .render(right_area, buf, buffer);
                 }
             }
         }
