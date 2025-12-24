@@ -1,4 +1,4 @@
-use crate::buffer::{BufferList, CutBuffer};
+use crate::buffer::{BufferId, BufferList, CutBuffer};
 use crossterm::event::Event;
 use ratatui::{
     layout::{Position, Rect},
@@ -19,6 +19,10 @@ impl Editor {
             layout: Layout::Single(BufferList::new(buffers)?),
             cut_buffer: None,
         })
+    }
+
+    pub fn has_open_buffers(&self) -> bool {
+        self.layout.has_open_buffers()
     }
 
     pub fn display(&mut self, term: &mut ratatui::DefaultTerminal) -> std::io::Result<()> {
@@ -68,6 +72,16 @@ impl Editor {
         // TODO - process events differently depending on editor mode
 
         match event {
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('q'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                if let Some(buf) = self.layout.selected_buffer_list().current() {
+                    self.layout.remove(buf.id());
+                }
+            }
             Event::Key(KeyEvent {
                 code: KeyCode::Up,
                 modifiers: KeyModifiers::ALT,
@@ -295,6 +309,55 @@ enum Layout {
 }
 
 impl Layout {
+    fn has_open_buffers(&self) -> bool {
+        match self {
+            Self::Single(b) | Self::Horizontal { top: b, .. } | Self::Vertical { left: b, .. } => {
+                !b.is_empty()
+            }
+        }
+    }
+
+    fn remove(&mut self, buffer: BufferId) {
+        match self {
+            Self::Single(buf) => buf.remove(&buffer),
+            Self::Horizontal {
+                top: x, bottom: y, ..
+            }
+            | Self::Vertical {
+                left: x, right: y, ..
+            } => {
+                x.remove(&buffer);
+                y.remove(&buffer);
+            }
+        }
+    }
+
+    fn selected_buffer_list(&self) -> &BufferList {
+        match self {
+            Self::Single(buffer)
+            | Self::Horizontal {
+                top: buffer,
+                which: HorizontalPos::Top,
+                ..
+            }
+            | Self::Horizontal {
+                bottom: buffer,
+                which: HorizontalPos::Bottom,
+                ..
+            }
+            | Self::Vertical {
+                left: buffer,
+                which: VerticalPos::Left,
+                ..
+            }
+            | Self::Vertical {
+                right: buffer,
+                which: VerticalPos::Right,
+                ..
+            } => buffer,
+        }
+    }
+
     fn selected_buffer_list_mut(&mut self) -> &mut BufferList {
         match self {
             Self::Single(buffer)

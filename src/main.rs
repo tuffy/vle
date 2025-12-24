@@ -6,25 +6,16 @@ mod buffer;
 mod editor;
 
 fn main() -> std::io::Result<()> {
-    use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, read};
+    use crossterm::event::read;
     use editor::Editor;
 
     let mut editor = Editor::new(std::env::args_os().skip(1))?;
 
     execute_terminal(|terminal| {
-        loop {
+        while editor.has_open_buffers() {
             editor.display(terminal)?;
-
             // TODO - filter out Mouse motion events in a sub-loop?
-            // TODO - exit when only a single buffer remains
-            match read()? {
-                Event::Key(KeyEvent {
-                    code: KeyCode::Char('q'),
-                    modifiers: KeyModifiers::CONTROL,
-                    ..
-                }) => break,
-                event => editor.process_event(event),
-            }
+            editor.process_event(read()?);
         }
 
         Ok(())

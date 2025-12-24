@@ -68,6 +68,8 @@ impl Buffer {
     }
 }
 
+pub struct BufferId(Arc<RwLock<Buffer>>);
+
 /// A buffer with additional context on a per-view basis
 #[derive(Clone)]
 pub struct BufferContext {
@@ -87,6 +89,10 @@ pub struct BufferContext {
 // to the current position
 
 impl BufferContext {
+    pub fn id(&self) -> BufferId {
+        BufferId(Arc::clone(&self.buffer))
+    }
+
     fn viewport_up(&mut self, lines: usize) {
         self.viewport_line = self.viewport_line.saturating_sub(lines)
     }
@@ -423,6 +429,16 @@ impl BufferList {
                 .collect::<Result<_, _>>()?,
             current: 0,
         })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.buffers.is_empty()
+    }
+
+    pub fn remove(&mut self, buffer: &BufferId) {
+        self.buffers
+            .retain(|buf| !Arc::ptr_eq(&buf.buffer, &buffer.0));
+        self.current = self.current.min(self.buffers.len()).saturating_sub(1);
     }
 
     pub fn current(&self) -> Option<&BufferContext> {
