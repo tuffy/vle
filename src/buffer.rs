@@ -52,6 +52,7 @@ struct Buffer {
     modified: bool, // whether buffer has been modified since last save
     undo: Vec<Undo>,
     redo: Vec<BufferState>,
+    // TODO - store syntax highlighting, if any
 }
 
 impl Buffer {
@@ -612,6 +613,7 @@ impl StatefulWidget for BufferWidget<'_> {
         };
         use std::borrow::Cow;
 
+        // TODO - ensure cursor and selection are within rope
         // TODO - highlight syntax for non-selected lines
 
         fn tabs_to_spaces<'s, S: Into<Cow<'s, str>> + AsRef<str>>(s: S) -> Cow<'s, str> {
@@ -712,6 +714,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
         match self.mode {
             None | Some(EditorMode::Editing) => {
+                // TODO - display any status message
                 let source = Paragraph::new(format!(
                     "{} {}",
                     match buffer.modified {
