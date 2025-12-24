@@ -79,6 +79,7 @@ impl Editor {
                 ..
             }) => {
                 if let Some(buf) = self.layout.selected_buffer_list().current() {
+                    // TODO - if buffer has been modified, switch to confirmation mode
                     self.layout.remove(buf.id());
                 }
             }

@@ -48,9 +48,9 @@ impl Source {
 struct Buffer {
     source: Source,
     rope: ropey::Rope,
-    // TODO - indicate whether rope has been edited since last save
-    // TODO - support undo stack
-    // TODO - support redo stack
+    modified: bool, // whether buffer has been modified since last save
+                    // TODO - support undo stack
+                    // TODO - support redo stack
 }
 
 impl Buffer {
@@ -60,6 +60,7 @@ impl Buffer {
         Ok(Self {
             rope: source.read_data()?,
             source,
+            modified: false,
         })
     }
 
@@ -188,60 +189,74 @@ impl BufferContext {
     pub fn insert_char(&mut self, c: char) {
         // TODO - perform auto-pairing if char is pair-able
         // TODO - update undo list with current state
-        let rope = &mut self.buffer.try_write().unwrap().rope;
+        let mut buf = self.buffer.try_write().unwrap();
         if let Some(selection) = self.selection.take() {
-            zap_selection(rope, &mut self.cursor, &mut self.cursor_column, selection);
+            zap_selection(
+                &mut buf.rope,
+                &mut self.cursor,
+                &mut self.cursor_column,
+                selection,
+            );
         }
-        rope.insert_char(self.cursor, c);
+        buf.rope.insert_char(self.cursor, c);
+        buf.modified = true;
         self.cursor += 1;
         self.cursor_column += 1;
     }
 
     pub fn paste(&mut self, pasted: &CutBuffer) {
         // TODO - update undo list with current state
-        let rope = &mut self.buffer.try_write().unwrap().rope;
+        let mut buf = self.buffer.try_write().unwrap();
         if let Some(selection) = self.selection.take() {
-            zap_selection(rope, &mut self.cursor, &mut self.cursor_column, selection);
+            zap_selection(
+                &mut buf.rope,
+                &mut self.cursor,
+                &mut self.cursor_column,
+                selection,
+            );
+            buf.modified = true;
         }
-        if rope.try_insert(self.cursor, &pasted.data).is_ok() {
+        if buf.rope.try_insert(self.cursor, &pasted.data).is_ok() {
             self.cursor += pasted.chars_len;
-            self.cursor_column = cursor_column(rope, self.cursor);
+            self.cursor_column = cursor_column(&buf.rope, self.cursor);
 
-            if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+            if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
                 viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
             }
+            buf.modified = true;
         }
     }
 
     pub fn newline(&mut self) {
         // TODO - update undo list with current state
         // TODO - zap selection before inserting newline
-        let rope = &mut self.buffer.try_write().unwrap().rope;
+        let mut buf = self.buffer.try_write().unwrap();
 
-        let indent = line_start_to_cursor(rope, self.cursor)
+        let indent = line_start_to_cursor(&buf.rope, self.cursor)
             .map(|i| i.take_while(|c| *c == ' ').count())
             .unwrap_or(0);
 
-        rope.insert_char(self.cursor, '\n');
+        buf.rope.insert_char(self.cursor, '\n');
+        buf.modified = true;
         self.cursor += 1;
         self.cursor_column = 0;
         for _ in 0..indent {
-            rope.insert_char(self.cursor, ' ');
+            buf.rope.insert_char(self.cursor, ' ');
             self.cursor += 1;
             self.cursor_column += 1;
         }
-        if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+        if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
             viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
         }
     }
 
     pub fn backspace(&mut self) {
-        let rope = &mut self.buffer.try_write().unwrap().rope;
+        let mut buf = self.buffer.try_write().unwrap();
 
         match self.selection.take() {
             None => {
                 if let Some(prev) = self.cursor.checked_sub(1)
-                    && rope.try_remove(prev..self.cursor).is_ok()
+                    && buf.rope.try_remove(prev..self.cursor).is_ok()
                 {
                     // TODO - remove auto-pairing if pair is together (like "{}")
                     // TODO - update undo list with current state
@@ -249,62 +264,69 @@ impl BufferContext {
                     self.cursor -= 1;
                     // we need to recalculate the cursor column altogether
                     // in case a newline has been removed
-                    self.cursor_column = cursor_column(rope, self.cursor);
+                    self.cursor_column = cursor_column(&buf.rope, self.cursor);
 
-                    if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+                    if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
                         viewport_follow_cursor(
                             current_line,
                             &mut self.viewport_line,
                             self.viewport_height,
                         );
                     }
+
+                    buf.modified = true;
                 }
             }
             Some(current_selection) => {
                 zap_selection(
-                    rope,
+                    &mut buf.rope,
                     &mut self.cursor,
                     &mut self.cursor_column,
                     current_selection,
                 );
 
-                if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+                if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
                     viewport_follow_cursor(
                         current_line,
                         &mut self.viewport_line,
                         self.viewport_height,
                     );
                 }
+
+                buf.modified = true;
             }
         }
     }
 
     pub fn delete(&mut self) {
-        let rope = &mut self.buffer.try_write().unwrap().rope;
+        let buf = &mut self.buffer.try_write().unwrap();
 
         match self.selection.take() {
             None => {
-                if rope.try_remove(self.cursor..(self.cursor + 1)).is_ok() {
+                if buf.rope.try_remove(self.cursor..(self.cursor + 1)).is_ok() {
                     // TODO - remove auto-pairing if pair is together (like "{}")
                     // TODO - update undo list with current state
                     // leave cursor position and current column unchanged
+                    buf.modified = true;
                 }
             }
             Some(current_selection) => {
                 zap_selection(
-                    rope,
+                    &mut buf.rope,
                     &mut self.cursor,
                     &mut self.cursor_column,
                     current_selection,
                 );
 
-                if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+                if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
                     viewport_follow_cursor(
                         current_line,
                         &mut self.viewport_line,
                         self.viewport_height,
                     );
                 }
+
+                buf.modified = true;
             }
         }
     }
@@ -323,16 +345,18 @@ impl BufferContext {
     pub fn take_selection(&mut self) -> Option<CutBuffer> {
         let selection = self.selection.take()?;
         let (selection_start, selection_end) = reorder(self.cursor, selection);
-        let rope = &mut self.buffer.try_write().unwrap().rope;
+        let mut buf = self.buffer.try_write().unwrap();
 
-        rope.get_slice(selection_start..selection_end)
+        buf.rope
+            .get_slice(selection_start..selection_end)
             .map(|r| r.into())
             .inspect(|_| {
-                rope.remove(selection_start..selection_end);
+                buf.rope.remove(selection_start..selection_end);
+                buf.modified = true;
                 self.cursor = selection_start;
-                self.cursor_column = cursor_column(rope, self.cursor);
+                self.cursor_column = cursor_column(&buf.rope, self.cursor);
 
-                if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+                if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
                     viewport_follow_cursor(
                         current_line,
                         &mut self.viewport_line,
