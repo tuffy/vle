@@ -50,8 +50,8 @@ struct Buffer {
     source: Source,
     rope: ropey::Rope,
     modified: bool, // whether buffer has been modified since last save
-                    // TODO - support undo stack
-                    // TODO - support redo stack
+    undo: Vec<Undo>,
+    redo: Vec<BufferState>,
 }
 
 impl Buffer {
@@ -62,11 +62,24 @@ impl Buffer {
             rope: source.read_data()?,
             source,
             modified: false,
+            undo: vec![],
+            redo: vec![],
         })
     }
 
     fn total_lines(&self) -> usize {
         self.rope.len_lines()
+    }
+
+    fn log_undo(&mut self, cursor: usize, cursor_column: usize) {
+        log_undo(
+            &mut self.undo,
+            &mut self.redo,
+            &self.rope,
+            self.modified,
+            cursor,
+            cursor_column,
+        );
     }
 }
 
@@ -123,10 +136,11 @@ impl BufferContext {
     }
 
     pub fn cursor_up(&mut self, lines: usize, selecting: bool) {
-        let rope = &self.buffer.try_read().unwrap().rope;
-        if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+        let mut buf = self.buffer.try_write().unwrap();
+        if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
             let previous_line = current_line.saturating_sub(lines);
-            if let Some((prev_start, prev_end)) = line_char_range(rope, previous_line) {
+            if let Some((prev_start, prev_end)) = line_char_range(&buf.rope, previous_line) {
+                log_movement(&mut buf.undo);
                 update_selection(&mut self.selection, self.cursor, selecting);
                 self.cursor = (prev_start + self.cursor_column).min(prev_end);
                 viewport_follow_cursor(
@@ -139,10 +153,11 @@ impl BufferContext {
     }
 
     pub fn cursor_down(&mut self, lines: usize, selecting: bool) {
-        let rope = &self.buffer.try_read().unwrap().rope;
-        if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
-            let next_line = (current_line + lines).min(rope.len_lines());
-            if let Some((next_start, next_end)) = line_char_range(rope, next_line) {
+        let mut buf = self.buffer.try_write().unwrap();
+        if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
+            let next_line = (current_line + lines).min(buf.rope.len_lines());
+            if let Some((next_start, next_end)) = line_char_range(&buf.rope, next_line) {
+                log_movement(&mut buf.undo);
                 update_selection(&mut self.selection, self.cursor, selecting);
                 self.cursor = (next_start + self.cursor_column).min(next_end);
                 viewport_follow_cursor(next_line, &mut self.viewport_line, self.viewport_height);
@@ -151,30 +166,33 @@ impl BufferContext {
     }
 
     pub fn cursor_back(&mut self, selecting: bool) {
-        let rope = &self.buffer.try_read().unwrap().rope;
+        let mut buf = self.buffer.try_write().unwrap();
         update_selection(&mut self.selection, self.cursor, selecting);
         self.cursor = self.cursor.saturating_sub(1);
-        self.cursor_column = cursor_column(rope, self.cursor);
-        if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+        self.cursor_column = cursor_column(&buf.rope, self.cursor);
+        log_movement(&mut buf.undo);
+        if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
             viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
         }
     }
 
     pub fn cursor_forward(&mut self, selecting: bool) {
-        let rope = &self.buffer.try_read().unwrap().rope;
+        let mut buf = self.buffer.try_write().unwrap();
         update_selection(&mut self.selection, self.cursor, selecting);
-        self.cursor = (self.cursor + 1).min(rope.len_chars());
-        self.cursor_column = cursor_column(rope, self.cursor);
-        if let Ok(current_line) = rope.try_char_to_line(self.cursor) {
+        self.cursor = (self.cursor + 1).min(buf.rope.len_chars());
+        self.cursor_column = cursor_column(&buf.rope, self.cursor);
+        log_movement(&mut buf.undo);
+        if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
             viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
         }
     }
 
     pub fn cursor_home(&mut self, selecting: bool) {
-        let rope = &self.buffer.try_read().unwrap().rope;
-        if let Ok(current_line) = rope.try_char_to_line(self.cursor)
-            && let Some((home, _)) = line_char_range(rope, current_line)
+        let mut buf = self.buffer.try_write().unwrap();
+        if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor)
+            && let Some((home, _)) = line_char_range(&buf.rope, current_line)
         {
+            log_movement(&mut buf.undo);
             update_selection(&mut self.selection, self.cursor, selecting);
             self.cursor = home;
             self.cursor_column = 0;
@@ -182,10 +200,11 @@ impl BufferContext {
     }
 
     pub fn cursor_end(&mut self, selecting: bool) {
-        let rope = &self.buffer.try_read().unwrap().rope;
-        if let Ok(current_line) = rope.try_char_to_line(self.cursor)
-            && let Some((_, end)) = line_char_range(rope, current_line)
+        let mut buf = self.buffer.try_write().unwrap();
+        if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor)
+            && let Some((_, end)) = line_char_range(&buf.rope, current_line)
         {
+            log_movement(&mut buf.undo);
             update_selection(&mut self.selection, self.cursor, selecting);
             self.cursor_column += end - self.cursor;
             self.cursor = end;
@@ -193,9 +212,8 @@ impl BufferContext {
     }
 
     pub fn insert_char(&mut self, c: char) {
-        // TODO - perform auto-pairing if char is pair-able
-        // TODO - update undo list with current state
         let mut buf = self.buffer.try_write().unwrap();
+        buf.log_undo(self.cursor, self.cursor_column);
         if let Some(selection) = self.selection.take() {
             zap_selection(
                 &mut buf.rope,
@@ -211,8 +229,8 @@ impl BufferContext {
     }
 
     pub fn paste(&mut self, pasted: &CutBuffer) {
-        // TODO - update undo list with current state
         let mut buf = self.buffer.try_write().unwrap();
+        buf.log_undo(self.cursor, self.cursor_column);
         if let Some(selection) = self.selection.take() {
             zap_selection(
                 &mut buf.rope,
@@ -234,7 +252,6 @@ impl BufferContext {
     }
 
     pub fn newline(&mut self) {
-        // TODO - update undo list with current state
         // TODO - zap selection before inserting newline
         let mut buf = self.buffer.try_write().unwrap();
 
@@ -242,6 +259,7 @@ impl BufferContext {
             .map(|i| i.take_while(|c| *c == ' ').count())
             .unwrap_or(0);
 
+        buf.log_undo(self.cursor, self.cursor_column);
         buf.rope.insert_char(self.cursor, '\n');
         buf.modified = true;
         self.cursor += 1;
@@ -265,8 +283,7 @@ impl BufferContext {
                     && buf.rope.try_remove(prev..self.cursor).is_ok()
                 {
                     // TODO - remove auto-pairing if pair is together (like "{}")
-                    // TODO - update undo list with current state
-
+                    buf.log_undo(self.cursor, self.cursor_column);
                     self.cursor -= 1;
                     // we need to recalculate the cursor column altogether
                     // in case a newline has been removed
@@ -284,6 +301,8 @@ impl BufferContext {
                 }
             }
             Some(current_selection) => {
+                buf.log_undo(self.cursor, self.cursor_column);
+
                 zap_selection(
                     &mut buf.rope,
                     &mut self.cursor,
@@ -309,14 +328,17 @@ impl BufferContext {
 
         match self.selection.take() {
             None => {
+                buf.log_undo(self.cursor, self.cursor_column);
+
                 if buf.rope.try_remove(self.cursor..(self.cursor + 1)).is_ok() {
                     // TODO - remove auto-pairing if pair is together (like "{}")
-                    // TODO - update undo list with current state
                     // leave cursor position and current column unchanged
                     buf.modified = true;
                 }
             }
             Some(current_selection) => {
+                buf.log_undo(self.cursor, self.cursor_column);
+
                 zap_selection(
                     &mut buf.rope,
                     &mut self.cursor,
@@ -370,6 +392,53 @@ impl BufferContext {
                     );
                 }
             })
+    }
+
+    pub fn perform_undo(&mut self) {
+        let mut buf = self.buffer.try_write().unwrap();
+        match buf.undo.pop() {
+            Some(Undo { mut state, .. }) => {
+                std::mem::swap(&mut buf.rope, &mut state.rope);
+                std::mem::swap(&mut buf.modified, &mut state.modified);
+                std::mem::swap(&mut self.cursor, &mut state.cursor);
+                std::mem::swap(&mut self.cursor_column, &mut state.cursor_column);
+                buf.redo.push(state);
+                if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
+                    viewport_follow_cursor(
+                        current_line,
+                        &mut self.viewport_line,
+                        self.viewport_height,
+                    );
+                }
+                self.selection = None;
+            }
+            None => { /* TODO - display message that undo stack is empty */ }
+        }
+    }
+
+    pub fn perform_redo(&mut self) {
+        let mut buf = self.buffer.try_write().unwrap();
+        match buf.redo.pop() {
+            Some(mut state) => {
+                std::mem::swap(&mut buf.rope, &mut state.rope);
+                std::mem::swap(&mut buf.modified, &mut state.modified);
+                std::mem::swap(&mut self.cursor, &mut state.cursor);
+                std::mem::swap(&mut self.cursor_column, &mut state.cursor_column);
+                buf.undo.push(Undo {
+                    state,
+                    finished: true,
+                });
+                if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
+                    viewport_follow_cursor(
+                        current_line,
+                        &mut self.viewport_line,
+                        self.viewport_height,
+                    );
+                }
+                self.selection = None;
+            }
+            None => { /* TODO - display message that redo stack is empty */ }
+        }
     }
 }
 
@@ -693,6 +762,47 @@ impl From<ropey::RopeSlice<'_>> for CutBuffer {
             data: slice.chunks().collect(),
             chars_len: slice.len_chars(),
         }
+    }
+}
+
+/// Buffer's undo/redo state
+struct BufferState {
+    rope: ropey::Rope,
+    modified: bool,
+    cursor: usize,
+    cursor_column: usize,
+}
+
+struct Undo {
+    state: BufferState,
+    finished: bool, // whether we've done any movement since undo added
+}
+
+fn log_movement(undo: &mut [Undo]) {
+    if let Some(last) = undo.last_mut() {
+        last.finished = true;
+    }
+}
+
+fn log_undo(
+    undo: &mut Vec<Undo>,
+    redo: &mut Vec<BufferState>,
+    rope: &ropey::Rope,
+    modified: bool,
+    cursor: usize,
+    cursor_column: usize,
+) {
+    if let None | Some(Undo { finished: true, .. }) = undo.last() {
+        undo.push(Undo {
+            state: BufferState {
+                rope: rope.clone(),
+                modified,
+                cursor,
+                cursor_column,
+            },
+            finished: false,
+        });
+        redo.clear();
     }
 }
 

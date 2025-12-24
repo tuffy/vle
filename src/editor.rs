@@ -297,6 +297,18 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => self.perform_paste(),
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('z'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.update_buffer(|b| b.perform_undo()),
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('y'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.update_buffer(|b| b.perform_redo()),
             _ => { /* ignore other events */ }
         }
     }
