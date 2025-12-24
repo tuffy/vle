@@ -47,12 +47,13 @@ impl Source {
 
 /// A buffer corresponding to a file on disk (either local or remote)
 struct Buffer {
-    source: Source,
-    rope: ropey::Rope,
-    modified: bool, // whether buffer has been modified since last save
-    undo: Vec<Undo>,
-    redo: Vec<BufferState>,
-    // TODO - store syntax highlighting, if any
+    source: Source,         // the source file
+    rope: ropey::Rope,      // the data rope
+    modified: bool,         // whether buffer has been modified since last save
+    undo: Vec<Undo>,        // the undo stack
+    redo: Vec<BufferState>, // the redo stack
+    message: Option<BufferMessage>, // some user-facing message
+                            // TODO - store syntax highlighting, if any
 }
 
 impl Buffer {
@@ -65,6 +66,7 @@ impl Buffer {
             modified: false,
             undo: vec![],
             redo: vec![],
+            message: None,
         })
     }
 
@@ -278,13 +280,15 @@ impl BufferContext {
     pub fn backspace(&mut self) {
         let mut buf = self.buffer.try_write().unwrap();
 
+        buf.log_undo(self.cursor, self.cursor_column);
+
         match self.selection.take() {
             None => {
                 if let Some(prev) = self.cursor.checked_sub(1)
                     && buf.rope.try_remove(prev..self.cursor).is_ok()
                 {
                     // TODO - remove auto-pairing if pair is together (like "{}")
-                    buf.log_undo(self.cursor, self.cursor_column);
+
                     self.cursor -= 1;
                     // we need to recalculate the cursor column altogether
                     // in case a newline has been removed
@@ -302,8 +306,6 @@ impl BufferContext {
                 }
             }
             Some(current_selection) => {
-                buf.log_undo(self.cursor, self.cursor_column);
-
                 zap_selection(
                     &mut buf.rope,
                     &mut self.cursor,
@@ -326,11 +328,10 @@ impl BufferContext {
 
     pub fn delete(&mut self) {
         let buf = &mut self.buffer.try_write().unwrap();
+        buf.log_undo(self.cursor, self.cursor_column);
 
         match self.selection.take() {
             None => {
-                buf.log_undo(self.cursor, self.cursor_column);
-
                 if buf.rope.try_remove(self.cursor..(self.cursor + 1)).is_ok() {
                     // TODO - remove auto-pairing if pair is together (like "{}")
                     // leave cursor position and current column unchanged
@@ -338,8 +339,6 @@ impl BufferContext {
                 }
             }
             Some(current_selection) => {
-                buf.log_undo(self.cursor, self.cursor_column);
-
                 zap_selection(
                     &mut buf.rope,
                     &mut self.cursor,
@@ -413,7 +412,9 @@ impl BufferContext {
                 }
                 self.selection = None;
             }
-            None => { /* TODO - display message that undo stack is empty */ }
+            None => {
+                buf.message = Some(BufferMessage::Notice("nothing left to undo".into()));
+            }
         }
     }
 
@@ -438,7 +439,9 @@ impl BufferContext {
                 }
                 self.selection = None;
             }
-            None => { /* TODO - display message that redo stack is empty */ }
+            None => {
+                buf.message = Some(BufferMessage::Notice("nothing left to redo".into()));
+            }
         }
     }
 }
@@ -665,7 +668,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
         state.viewport_height = text_area.height.into();
 
-        let buffer = state.buffer.try_read().unwrap();
+        let mut buffer = state.buffer.try_write().unwrap();
         let rope = &buffer.rope;
 
         Paragraph::new(match state.selection {
@@ -704,6 +707,7 @@ impl StatefulWidget for BufferWidget<'_> {
         ))
         .render(text_area, buf);
 
+        // TODO - fix scrollbar
         Scrollbar::new(ScrollbarOrientation::VerticalRight).render(
             scrollbar_area,
             buf,
@@ -714,34 +718,44 @@ impl StatefulWidget for BufferWidget<'_> {
 
         match self.mode {
             None | Some(EditorMode::Editing) => {
-                // TODO - display any status message
-                let source = Paragraph::new(format!(
-                    "{} {}",
-                    match buffer.modified {
-                        true => '*',
-                        false => ' ',
-                    },
-                    buffer.source.name()
-                ))
-                .style(REVERSED);
+                match buffer.message.take() {
+                    None => {
+                        let source = Paragraph::new(format!(
+                            "{} {}",
+                            match buffer.modified {
+                                true => '*',
+                                false => ' ',
+                            },
+                            buffer.source.name()
+                        ))
+                        .style(REVERSED);
 
-                match buffer.rope.try_char_to_line(state.cursor) {
-                    Ok(line) => {
-                        let line = std::num::NonZero::new(line + 1).unwrap();
-                        let digits = line.ilog10() + 1;
+                        match buffer.rope.try_char_to_line(state.cursor) {
+                            Ok(line) => {
+                                let line = std::num::NonZero::new(line + 1).unwrap();
+                                let digits = line.ilog10() + 1;
 
-                        let [source_area, line_area] =
-                            Layout::horizontal([Min(0), Length(digits.try_into().unwrap())])
+                                let [source_area, line_area] = Layout::horizontal([
+                                    Min(0),
+                                    Length(digits.try_into().unwrap()),
+                                ])
                                 .areas(status_area);
 
-                        source.render(source_area, buf);
+                                source.render(source_area, buf);
 
-                        Paragraph::new(line.to_string())
-                            .style(REVERSED)
-                            .render(line_area, buf);
+                                Paragraph::new(line.to_string())
+                                    .style(REVERSED)
+                                    .render(line_area, buf);
+                            }
+                            Err(_) => {
+                                source.render(status_area, buf);
+                            }
+                        }
                     }
-                    Err(_) => {
-                        source.render(status_area, buf);
+                    Some(BufferMessage::Notice(msg)) => {
+                        Paragraph::new(msg.into_owned())
+                            .style(REVERSED)
+                            .render(status_area, buf);
                     }
                 }
             }
@@ -807,6 +821,10 @@ fn log_undo(
         });
         redo.clear();
     }
+}
+
+enum BufferMessage {
+    Notice(Cow<'static, str>),
 }
 
 fn reorder<T: Ord>(x: T, y: T) -> (T, T) {

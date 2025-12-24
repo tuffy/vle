@@ -336,25 +336,24 @@ impl Editor {
                 // cancel close buffer
                 self.mode = EditorMode::default();
             }
-            _ => { /* ignore other events */ }
-            // TODO - Ctrl-S - save buffer
-            // TODO - Ctrl-H - display help
-            // TODO - Ctrl-W - write buffer to disk with name
-            // TODO - Ctrl-O - open file into new buffer
-            // TODO - Ctrl-F - search forward for string/regex
-            // TODO - Ctrl-T - goto line
-            // TODO - Ctrl-B - search backward for string/regex
-            // TODO - Ctrl-D - next occurrence backward
-            // TODO - Ctrl-G - next occurrence forward
-            // TODO - Tab    - indent selected line(s)
-            // TODO - Shift-Tab - un-indent selected line(s)
-            // TODO - Alt-P  - whitespace display
-            // TODO - Alt-'  - select inside ''
-            // TODO - Alt-"  - select inside ""
-            // TODO - Alt-]  - select inside []
-            // TODO - Alt-}  - select inside {}
-            // TODO - Alt-)  - select inside ()
-            // TODO - Alt->  - select inside <>
+            _ => { /* ignore other events */ } // TODO - Ctrl-S - save buffer
+                                               // TODO - Ctrl-H - display help
+                                               // TODO - Ctrl-W - write buffer to disk with name
+                                               // TODO - Ctrl-O - open file into new buffer
+                                               // TODO - Ctrl-F - search forward for string/regex
+                                               // TODO - Ctrl-T - goto line
+                                               // TODO - Ctrl-B - search backward for string/regex
+                                               // TODO - Ctrl-D - next occurrence backward
+                                               // TODO - Ctrl-G - next occurrence forward
+                                               // TODO - Tab    - indent selected line(s)
+                                               // TODO - Shift-Tab - un-indent selected line(s)
+                                               // TODO - Alt-P  - whitespace display
+                                               // TODO - Alt-'  - select inside ''
+                                               // TODO - Alt-"  - select inside ""
+                                               // TODO - Alt-]  - select inside []
+                                               // TODO - Alt-}  - select inside {}
+                                               // TODO - Alt-)  - select inside ()
+                                               // TODO - Alt->  - select inside <>
         }
     }
 }
