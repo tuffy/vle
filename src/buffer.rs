@@ -42,7 +42,16 @@ impl Source {
         }
     }
 
-    // TODO - implement save_data() method
+    fn save_data(&self, data: &ropey::Rope) -> std::io::Result<()> {
+        use std::fs::File;
+        use std::io::BufWriter;
+
+        match self {
+            Self::File(path) => File::create(path)
+                .map(BufWriter::new)
+                .and_then(|f| data.write_to(f)),
+        }
+    }
 }
 
 /// A buffer corresponding to a file on disk (either local or remote)
@@ -68,6 +77,18 @@ impl Buffer {
             redo: vec![],
             message: None,
         })
+    }
+
+    fn save(&mut self) {
+        match self.source.save_data(&self.rope) {
+            Ok(()) => {
+                self.modified = false;
+                log_movement(&mut self.undo);
+            }
+            Err(err) => {
+                self.message = Some(BufferMessage::Error(err.to_string().into()));
+            }
+        }
     }
 
     fn total_lines(&self) -> usize {
@@ -114,6 +135,10 @@ impl BufferContext {
 
     pub fn modified(&self) -> bool {
         self.buffer.try_read().unwrap().modified
+    }
+
+    pub fn save(&mut self) {
+        self.buffer.try_write().unwrap().save();
     }
 
     fn viewport_up(&mut self, lines: usize) {
@@ -717,48 +742,49 @@ impl StatefulWidget for BufferWidget<'_> {
         );
 
         match self.mode {
-            None | Some(EditorMode::Editing) => {
-                match buffer.message.take() {
-                    None => {
-                        let source = Paragraph::new(format!(
-                            "{} {}",
-                            match buffer.modified {
-                                true => '*',
-                                false => ' ',
-                            },
-                            buffer.source.name()
-                        ))
-                        .style(REVERSED);
+            None | Some(EditorMode::Editing) => match buffer.message.take() {
+                None => {
+                    let source = Paragraph::new(format!(
+                        "{} {}",
+                        match buffer.modified {
+                            true => '*',
+                            false => ' ',
+                        },
+                        buffer.source.name()
+                    ))
+                    .style(REVERSED);
 
-                        match buffer.rope.try_char_to_line(state.cursor) {
-                            Ok(line) => {
-                                let line = std::num::NonZero::new(line + 1).unwrap();
-                                let digits = line.ilog10() + 1;
+                    match buffer.rope.try_char_to_line(state.cursor) {
+                        Ok(line) => {
+                            let line = std::num::NonZero::new(line + 1).unwrap();
+                            let digits = line.ilog10() + 1;
 
-                                let [source_area, line_area] = Layout::horizontal([
-                                    Min(0),
-                                    Length(digits.try_into().unwrap()),
-                                ])
-                                .areas(status_area);
+                            let [source_area, line_area] =
+                                Layout::horizontal([Min(0), Length(digits.try_into().unwrap())])
+                                    .areas(status_area);
 
-                                source.render(source_area, buf);
+                            source.render(source_area, buf);
 
-                                Paragraph::new(line.to_string())
-                                    .style(REVERSED)
-                                    .render(line_area, buf);
-                            }
-                            Err(_) => {
-                                source.render(status_area, buf);
-                            }
+                            Paragraph::new(line.to_string())
+                                .style(REVERSED)
+                                .render(line_area, buf);
+                        }
+                        Err(_) => {
+                            source.render(status_area, buf);
                         }
                     }
-                    Some(BufferMessage::Notice(msg)) => {
-                        Paragraph::new(msg.into_owned())
-                            .style(REVERSED)
-                            .render(status_area, buf);
-                    }
                 }
-            }
+                Some(BufferMessage::Notice(msg)) => {
+                    Paragraph::new(msg.into_owned())
+                        .style(REVERSED)
+                        .render(status_area, buf);
+                }
+                Some(BufferMessage::Error(msg)) => {
+                    Paragraph::new(msg.into_owned())
+                        .style(REVERSED.fg(ratatui::style::Color::Red))
+                        .render(status_area, buf);
+                }
+            },
             Some(EditorMode::ConfirmClose { .. }) => {
                 Paragraph::new("Unsaved changes. Really quit?")
                     .style(REVERSED)
@@ -825,6 +851,7 @@ fn log_undo(
 
 enum BufferMessage {
     Notice(Cow<'static, str>),
+    Error(Cow<'static, str>),
 }
 
 fn reorder<T: Ord>(x: T, y: T) -> (T, T) {
