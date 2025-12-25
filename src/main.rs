@@ -4,6 +4,7 @@
 
 mod buffer;
 mod editor;
+mod syntax;
 
 fn main() -> std::io::Result<()> {
     use crossterm::event::read;

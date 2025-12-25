@@ -1,4 +1,5 @@
 use crate::editor::EditorMode;
+use crate::syntax::Syntax;
 use ratatui::widgets::StatefulWidget;
 use std::borrow::Cow;
 use std::ffi::OsString;
@@ -30,6 +31,12 @@ impl Source {
         }
     }
 
+    fn extension(&self) -> Option<&str> {
+        match self {
+            Self::File(path) => path.extension().and_then(|s| s.to_str()),
+        }
+    }
+
     fn read_data(&self) -> std::io::Result<ropey::Rope> {
         use std::fs::File;
         use std::io::BufReader;
@@ -56,13 +63,13 @@ impl Source {
 
 /// A buffer corresponding to a file on disk (either local or remote)
 struct Buffer {
-    source: Source,         // the source file
-    rope: ropey::Rope,      // the data rope
-    modified: bool,         // whether buffer has been modified since last save
-    undo: Vec<Undo>,        // the undo stack
-    redo: Vec<BufferState>, // the redo stack
+    source: Source,                 // the source file
+    rope: ropey::Rope,              // the data rope
+    modified: bool,                 // whether buffer has been modified since last save
+    undo: Vec<Undo>,                // the undo stack
+    redo: Vec<BufferState>,         // the redo stack
     message: Option<BufferMessage>, // some user-facing message
-                            // TODO - store syntax highlighting, if any
+    syntax: Syntax,                 // the syntax highlighting to use
 }
 
 impl Buffer {
@@ -71,6 +78,7 @@ impl Buffer {
 
         Ok(Self {
             rope: source.read_data()?,
+            syntax: source.extension().map(Syntax::new).unwrap_or_default(),
             source,
             modified: false,
             undo: vec![],
@@ -630,13 +638,14 @@ impl StatefulWidget for BufferWidget<'_> {
         buf: &mut ratatui::buffer::Buffer,
         state: &mut BufferContext,
     ) {
+        use crate::syntax::Highlighter;
         use ratatui::{
             layout::{
                 Constraint::{Length, Min},
                 Layout,
             },
             style::{Modifier, Style},
-            text::Line,
+            text::{Line, Span},
             widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Widget},
         };
         use std::borrow::Cow;
@@ -653,13 +662,12 @@ impl StatefulWidget for BufferWidget<'_> {
 
         // returns selection to be highlighted along with any
         // non-highlighted prefix or suffix
-        fn highlight(
+        fn highlight<S: Highlighter>(
+            syntax: &S,
             line: Cow<'_, str>,
             (line_start, line_end): (usize, usize),
             (selection_start, selection_end): (usize, usize),
-        ) -> Line<'_> {
-            use ratatui::text::Span;
-
+        ) -> Line<'static> {
             fn pop_chars_front<'s>(s: &mut &'s str, chars: usize) -> &'s str {
                 use unicode_truncate::UnicodeTruncateStr;
 
@@ -669,20 +677,44 @@ impl StatefulWidget for BufferWidget<'_> {
             }
 
             if selection_end <= line_start || selection_start >= line_end {
-                Line::from(line)
+                Line::from(colorize(syntax, &line))
             } else {
                 let mut s = line.as_ref();
                 let mut line = vec![];
                 let prefix = pop_chars_front(&mut s, selection_start.saturating_sub(line_start));
-                line.extend((!prefix.is_empty()).then_some(Span::raw(prefix.to_string())));
+                if !prefix.is_empty() {
+                    line.extend(colorize(syntax, prefix));
+                }
                 line.push(Span::styled(
                     pop_chars_front(&mut s, selection_end - selection_start.max(line_start))
                         .to_string(),
                     REVERSED,
                 ));
-                line.extend((!s.is_empty()).then_some(Span::raw(s.to_string())));
+                if !s.is_empty() {
+                    line.extend(colorize(syntax, s));
+                }
                 Line::from(line)
             }
+        }
+
+        fn colorize<S: Highlighter>(syntax: &S, text: &str) -> Vec<Span<'static>> {
+            let mut elements = vec![];
+            let mut idx = 0;
+            for (color, range) in syntax.highlight(text) {
+                if idx < range.start {
+                    elements.push(Span::raw(text[idx..range.start].to_string()));
+                }
+                elements.push(Span::styled(
+                    text[range.clone()].to_string(),
+                    Style::default().fg(color),
+                ));
+                idx = range.end;
+            }
+            let last = &text[idx..];
+            if !last.is_empty() {
+                elements.push(Span::raw(last.to_string()));
+            }
+            elements
         }
 
         const REVERSED: Style = Style::new().add_modifier(Modifier::REVERSED);
@@ -694,6 +726,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
         let mut buffer = state.buffer.try_write().unwrap();
         let rope = &buffer.rope;
+        let syntax = &buffer.syntax;
 
         // ensure cursor hasn't been shifted outside of rope
         // (which might occur if the rope is shrunk in another buffer)
@@ -713,7 +746,7 @@ impl StatefulWidget for BufferWidget<'_> {
             // no selection, so nothing to highlight
             None => rope
                 .lines_at(state.viewport_line)
-                .map(|line| Line::from(tabs_to_spaces(Cow::from(line)).into_owned()))
+                .map(|line| Line::from(colorize(syntax, &tabs_to_spaces(Cow::from(line)))))
                 .take(area.height.into())
                 .collect::<Vec<_>>(),
             // highlight whole line, no line, or part of the line
@@ -724,8 +757,9 @@ impl StatefulWidget for BufferWidget<'_> {
                     .zip(state.viewport_line..)
                     .map(
                         |(line, line_number)| match line_char_range(rope, line_number) {
-                            None => Line::from(tabs_to_spaces(Cow::from(line)).into_owned()),
+                            None => Line::from(colorize(syntax, &tabs_to_spaces(Cow::from(line)))),
                             Some((line_start, line_end)) => highlight(
+                                syntax,
                                 tabs_to_spaces(Cow::from(line)),
                                 (line_start, line_end),
                                 (selection_start, selection_end),
