@@ -641,7 +641,6 @@ impl StatefulWidget for BufferWidget<'_> {
         };
         use std::borrow::Cow;
 
-        // TODO - ensure cursor and selection are within rope
         // TODO - highlight syntax for non-selected lines
 
         fn tabs_to_spaces<'s, S: Into<Cow<'s, str>> + AsRef<str>>(s: S) -> Cow<'s, str> {
@@ -695,6 +694,20 @@ impl StatefulWidget for BufferWidget<'_> {
 
         let mut buffer = state.buffer.try_write().unwrap();
         let rope = &buffer.rope;
+
+        // ensure cursor hasn't been shifted outside of rope
+        // (which might occur if the rope is shrunk in another buffer)
+        if state.cursor > rope.len_chars() {
+            state.cursor = rope.len_chars().saturating_sub(1);
+            if let Ok(current_line) = rope.try_char_to_line(state.cursor) {
+                viewport_follow_cursor(
+                    current_line,
+                    &mut state.viewport_line,
+                    state.viewport_height,
+                );
+            }
+            state.selection = None;
+        }
 
         Paragraph::new(match state.selection {
             // no selection, so nothing to highlight
