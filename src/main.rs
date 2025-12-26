@@ -7,10 +7,17 @@ mod editor;
 mod syntax;
 
 fn main() -> std::io::Result<()> {
+    use clap::Parser;
     use crossterm::event::read;
+    use std::ffi::OsString;
     use editor::Editor;
 
-    let mut editor = Editor::new(std::env::args_os().skip(1))?;
+    #[derive(Parser)]
+    struct Opt {
+        files: Vec<OsString>,
+    }
+
+    let mut editor = Editor::new(Opt::parse().files)?;
 
     execute_terminal(|terminal| {
         while editor.has_open_buffers() {
