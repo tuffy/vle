@@ -1,10 +1,10 @@
 [package]
-name = "micro-editor"
+name = "knead"
 version = "0.2.0"
 edition = "2024"
 
 [[bin]]
-name = "micro"
+name = "knead"
 path = "src/main.rs"
 
 [dependencies]
