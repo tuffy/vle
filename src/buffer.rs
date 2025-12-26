@@ -798,7 +798,10 @@ impl StatefulWidget for BufferWidget<'_> {
             buf,
             &mut ScrollbarState::new(buffer.total_lines())
                 .viewport_content_length(text_area.height.into())
-                .position(rope.try_char_to_line(state.cursor).unwrap_or(state.viewport_line)),
+                .position(
+                    rope.try_char_to_line(state.cursor)
+                        .unwrap_or(state.viewport_line),
+                ),
         );
 
         match self.mode {

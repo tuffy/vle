@@ -581,8 +581,9 @@ impl Layout {
         fn apply_position(area: Rect, (row, col): (usize, usize)) -> Option<Position> {
             // TODO - filter out position if outside of area
 
-            let x = col + usize::from(area.x);
-            let y = row + usize::from(area.y);
+            let x = (col + usize::from(area.x)).min((area.x + area.width).saturating_sub(1).into());
+            let y =
+                (row + usize::from(area.y)).min((area.y + area.height).saturating_sub(1).into());
 
             Some(Position {
                 x: u16::try_from(x).ok()?,
