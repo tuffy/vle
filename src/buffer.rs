@@ -191,7 +191,7 @@ impl BufferContext {
     pub fn cursor_down(&mut self, lines: usize, selecting: bool) {
         let mut buf = self.buffer.try_write().unwrap();
         if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
-            let next_line = (current_line + lines).min(buf.rope.len_lines());
+            let next_line = (current_line + lines).min(buf.rope.len_lines().saturating_sub(1));
             if let Some((next_start, next_end)) = line_char_range(&buf.rope, next_line) {
                 log_movement(&mut buf.undo);
                 update_selection(&mut self.selection, self.cursor, selecting);
