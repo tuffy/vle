@@ -292,8 +292,12 @@ impl BufferContext {
         let mut buf = self.buffer.try_write().unwrap();
 
         let (indent, all_indent) = match line_start_to_cursor(&buf.rope, self.cursor) {
-            Some(mut iter) => {
-                let indent = iter.by_ref().take_while(|c| *c == ' ').count();
+            Some(iter) => {
+                let mut iter = iter.peekable();
+                let mut indent = 0;
+                while iter.next_if(|c| *c == ' ').is_some() {
+                    indent += 1;
+                }
                 (indent, iter.next().is_none())
             }
             None => (0, false),
