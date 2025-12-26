@@ -304,7 +304,6 @@ impl BufferContext {
         // if the whole line is indent, insert newline *before* indent
         // instead of adding a fresh indentation
         if all_indent {
-            buf.message = Some(BufferMessage::Notice("all indentations...".into()));
             buf.rope.insert_char(self.cursor - indent, '\n');
             self.cursor += 1;
         } else {
