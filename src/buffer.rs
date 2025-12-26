@@ -880,7 +880,6 @@ impl StatefulWidget for BufferWidget<'_> {
         ))
         .render(text_area, buf);
 
-        // TODO - fix scrollbar
         Scrollbar::new(ScrollbarOrientation::VerticalRight).render(
             scrollbar_area,
             buf,
@@ -911,7 +910,7 @@ impl StatefulWidget for BufferWidget<'_> {
                             let digits = line.ilog10() + 1;
 
                             let [source_area, line_area] =
-                                Layout::horizontal([Min(0), Length(digits.try_into().unwrap())])
+                                Layout::horizontal([Min(0), Length((digits + 1).try_into().unwrap())])
                                     .areas(status_area);
 
                             source.render(source_area, buf);
