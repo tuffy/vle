@@ -291,20 +291,35 @@ impl BufferContext {
         // TODO - zap selection before inserting newline
         let mut buf = self.buffer.try_write().unwrap();
 
-        let indent = line_start_to_cursor(&buf.rope, self.cursor)
-            .map(|i| i.take_while(|c| *c == ' ').count())
-            .unwrap_or(0);
+        let (indent, all_indent) = match line_start_to_cursor(&buf.rope, self.cursor) {
+            Some(mut iter) => {
+                let indent = iter.by_ref().take_while(|c| *c == ' ').count();
+                (indent, iter.next().is_none())
+            }
+            None => (0, false),
+        };
 
         buf.log_undo(self.cursor, self.cursor_column);
-        buf.rope.insert_char(self.cursor, '\n');
-        buf.modified = true;
-        self.cursor += 1;
-        self.cursor_column = 0;
-        for _ in 0..indent {
-            buf.rope.insert_char(self.cursor, ' ');
+
+        // if the whole line is indent, insert newline *before* indent
+        // instead of adding a fresh indentation
+        if all_indent {
+            buf.message = Some(BufferMessage::Notice("all indentations...".into()));
+            buf.rope.insert_char(self.cursor - indent, '\n');
             self.cursor += 1;
-            self.cursor_column += 1;
+        } else {
+            buf.rope.insert_char(self.cursor, '\n');
+            self.cursor += 1;
+            self.cursor_column = 0;
+            for _ in 0..indent {
+                buf.rope.insert_char(self.cursor, ' ');
+                self.cursor += 1;
+                self.cursor_column += 1;
+            }
         }
+
+        buf.modified = true;
+
         if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
             viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
         }

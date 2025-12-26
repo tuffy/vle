@@ -9,8 +9,8 @@ mod syntax;
 fn main() -> std::io::Result<()> {
     use clap::Parser;
     use crossterm::event::read;
-    use std::ffi::OsString;
     use editor::Editor;
+    use std::ffi::OsString;
 
     #[derive(Parser)]
     struct Opt {
