@@ -6,7 +6,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
-enum Source {
+pub enum Source {
     File(PathBuf),
 }
 
@@ -31,7 +31,7 @@ impl Source {
         }
     }
 
-    fn extension(&self) -> Option<&str> {
+    pub fn extension(&self) -> Option<&str> {
         match self {
             Self::File(path) => path.extension().and_then(|s| s.to_str()),
         }
@@ -78,7 +78,7 @@ impl Buffer {
 
         Ok(Self {
             rope: source.read_data()?,
-            syntax: source.extension().map(Syntax::new).unwrap_or_default(),
+            syntax: Syntax::new(&source),
             source,
             modified: false,
             undo: vec![],

@@ -1,3 +1,4 @@
+use crate::buffer::Source;
 use ratatui::style::Color;
 
 /// Implemented for different syntax highlighters
@@ -15,9 +16,9 @@ pub enum Syntax {
 }
 
 impl Syntax {
-    pub fn new(extension: &str) -> Self {
-        match extension {
-            "rs" => Self::Rust(Rust),
+    pub fn new(source: &Source) -> Self {
+        match source.extension() {
+            Some("rs") => Self::Rust(Rust),
             _ => Self::default(),
         }
     }
