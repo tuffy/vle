@@ -89,6 +89,8 @@ impl Editor {
     fn process_normal_event(&mut self, event: Event) {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
+        const INDENT: usize = 4;
+
         match event {
             Event::Key(KeyEvent {
                 code: KeyCode::Char('q'),
@@ -315,6 +317,18 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => self.update_buffer(|b| b.save()),
+            Event::Key(KeyEvent {
+                code: KeyCode::Tab,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.update_buffer(|b| b.indent(INDENT)),
+            Event::Key(KeyEvent {
+                code: KeyCode::Tab,
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.update_buffer(|b| b.un_indent(INDENT)),
             _ => { /* ignore other events */ } // TODO - Ctrl-H - display help
                                                // TODO - Ctrl-W - write buffer to disk with name
                                                // TODO - Ctrl-O - open file into new buffer
@@ -323,8 +337,6 @@ impl Editor {
                                                // TODO - Ctrl-B - search backward for string/regex
                                                // TODO - Ctrl-D - next occurrence backward
                                                // TODO - Ctrl-G - next occurrence forward
-                                               // TODO - Tab    - indent selected line(s)
-                                               // TODO - Shift-Tab - un-indent selected line(s)
                                                // TODO - Alt-P  - whitespace display
                                                // TODO - Alt-'  - select inside ''
                                                // TODO - Alt-"  - select inside ""

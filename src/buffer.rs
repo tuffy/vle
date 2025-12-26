@@ -495,6 +495,64 @@ impl BufferContext {
             }
         }
     }
+
+    pub fn indent(&mut self, spaces: usize) {
+        let indent = std::iter::repeat_n(' ', spaces).collect::<String>();
+        let mut buf = self.buffer.try_write().unwrap();
+
+        buf.log_undo(self.cursor, self.cursor_column);
+        buf.modified = true;
+
+        for (start, _) in selected_lines(&buf.rope, self.cursor, self.selection)
+            .rev()
+            .filter(|(s, e)| e > s)
+            .collect::<Vec<_>>()
+            .into_iter()
+        {
+            buf.rope.insert(start, &indent);
+            match &mut self.selection {
+                Some(selection) => {
+                    *selection.max(&mut self.cursor) += spaces;
+                }
+                None => {
+                    self.cursor += spaces;
+                }
+            }
+        }
+    }
+
+    pub fn un_indent(&mut self, spaces: usize) {
+        let mut buf = self.buffer.try_write().unwrap();
+
+        let selected = selected_lines(&buf.rope, self.cursor, self.selection)
+            .filter(|(s, e)| e > s)
+            .collect::<Vec<_>>();
+
+        // un-indent whole selection as a unit
+        // so long as each has the proper amount of prefixed spaces
+        if selected.iter().all(|(start, _)| {
+            buf.rope
+                .chars_at(*start)
+                .take(spaces)
+                .eq(std::iter::repeat_n(' ', spaces))
+        }) {
+            buf.log_undo(self.cursor, self.cursor_column);
+            buf.modified = true;
+
+            for (start, _) in selected.into_iter().rev() {
+                buf.rope.remove(start..start + spaces);
+
+                match &mut self.selection {
+                    Some(selection) => {
+                        *selection.max(&mut self.cursor) -= spaces;
+                    }
+                    None => {
+                        self.cursor -= spaces;
+                    }
+                }
+            }
+        }
+    }
 }
 
 // Given line in rope, returns (start, end) of that line in characters from start of rope
@@ -503,6 +561,33 @@ fn line_char_range(rope: &ropey::Rope, line: usize) -> Option<(usize, usize)> {
         rope.try_line_to_char(line).ok()?,
         rope.try_line_to_char(line + 1).ok()? - 1,
     ))
+}
+
+// Iterates over position ranges of all selected lines
+//
+// If no selection, yields current line's position ranges
+fn selected_lines(
+    rope: &ropey::Rope,
+    cursor: usize,
+    selection: Option<usize>,
+) -> Box<dyn DoubleEndedIterator<Item = (usize, usize)> + '_> {
+    match selection {
+        // select current line
+        None => match rope.try_char_to_line(cursor) {
+            Ok(line) => Box::new(line_char_range(rope, line).into_iter()),
+            Err(_) => Box::new(std::iter::empty()),
+        },
+        Some(selection) => {
+            let (start, end) = reorder(cursor, selection);
+            if let Ok(start_line) = rope.try_char_to_line(start)
+                && let Ok(end_line) = rope.try_char_to_line(end)
+            {
+                Box::new((start_line..=end_line).filter_map(|l| line_char_range(rope, l)))
+            } else {
+                Box::new(std::iter::empty())
+            }
+        }
+    }
 }
 
 // Given cursor position from start of rope,
