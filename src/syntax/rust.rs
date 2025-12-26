@@ -1,0 +1,151 @@
+use logos::Logos;
+use ratatui::style::Color;
+
+#[derive(Logos, Debug)]
+#[logos(skip r"[ \t\n]+")]
+enum RustToken {
+    #[token("abstract")]
+    #[token("as")]
+    #[token("async")]
+    #[token("await")]
+    #[token("become")]
+    #[token("box")]
+    #[token("break")]
+    #[token("const")]
+    #[token("continue")]
+    #[token("crate")]
+    #[token("do")]
+    #[token("dyn")]
+    #[token("else")]
+    #[token("enum")]
+    #[token("extern")]
+    #[token("false")]
+    #[token("final")]
+    #[token("fn")]
+    #[token("for")]
+    #[token("if")]
+    #[token("impl")]
+    #[token("in")]
+    #[token("let")]
+    #[token("loop")]
+    #[token("macro")]
+    #[token("match")]
+    #[token("mod")]
+    #[token("move")]
+    #[token("mut")]
+    #[token("override")]
+    #[token("priv")]
+    #[token("pub")]
+    #[token("ref")]
+    #[token("return")]
+    #[token("self")]
+    #[token("static")]
+    #[token("struct")]
+    #[token("super")]
+    #[token("trait")]
+    #[token("true")]
+    #[token("try")]
+    #[token("type")]
+    #[token("typeof")]
+    #[token("unsafe")]
+    #[token("unsized")]
+    #[token("use")]
+    #[token("virtual")]
+    #[token("where")]
+    #[token("while")]
+    #[token("yield")]
+    Keyword,
+
+    #[regex("[[:upper:]][[:upper:][:digit:]_]+", priority = 5)]
+    Constant,
+
+    #[regex("[[:lower:]][[:lower:][:digit:]_]*")]
+    Variable,
+
+    #[regex("[[:digit:]]+")]
+    Integer,
+
+    #[regex(r#"\"([^\\\"]|\\.)*\""#)]
+    String,
+
+    #[regex("[[:lower:]_]+!")]
+    Macro,
+
+    #[regex("[[:upper:]][[:alnum:]]+")]
+    Type,
+
+    #[regex("//.*", allow_greedy = true)]
+    #[regex(r"/\*.*?\*/")]
+    Comment,
+
+    #[regex("fn [[:lower:][:digit:]_]+")]
+    Function,
+
+    #[token("~")]
+    #[token("!")]
+    #[token("@")]
+    #[token("$")]
+    #[token("%")]
+    #[token("^")]
+    #[token("&")]
+    #[token("*")]
+    #[token("(")]
+    #[token(")")]
+    #[token("-")]
+    #[token("=")]
+    #[token("+")]
+    #[token("[")]
+    #[token("]")]
+    #[token("{")]
+    #[token("}")]
+    #[token("|")]
+    #[token("\\")]
+    #[token(":")]
+    #[token(";")]
+    #[token(",")]
+    #[token(".")]
+    #[token("<")]
+    #[token(">")]
+    #[token("/")]
+    #[token("?")]
+    Punctuation,
+}
+
+impl TryFrom<RustToken> for Color {
+    type Error = ();
+
+    fn try_from(t: RustToken) -> Result<Color, ()> {
+        match t {
+            RustToken::Keyword => Ok(Color::Yellow),
+            RustToken::Constant => Ok(Color::Magenta),
+            RustToken::Macro => Ok(Color::Red),
+            RustToken::Type => Ok(Color::Magenta),
+            RustToken::Comment => Ok(Color::Blue),
+            RustToken::Function => Ok(Color::Magenta),
+            RustToken::String => Ok(Color::Green),
+            RustToken::Variable | RustToken::Integer | RustToken::Punctuation => Err(()),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Rust;
+
+impl std::fmt::Display for Rust {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        "Rust".fmt(f)
+    }
+}
+
+impl crate::syntax::Highlighter for Rust {
+    fn highlight<'s>(
+        &self,
+        s: &'s str,
+    ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
+        Box::new(
+            RustToken::lexer(s)
+                .spanned()
+                .filter_map(|(t, r)| t.ok().and_then(|t| Color::try_from(t).ok()).map(|c| (c, r))),
+        )
+    }
+}

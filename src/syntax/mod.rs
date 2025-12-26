@@ -1,10 +1,15 @@
 use crate::buffer::Source;
 use ratatui::style::Color;
 
+mod rust;
+
 /// Implemented for different syntax highlighters
 pub trait Highlighter: std::fmt::Debug + std::fmt::Display {
     /// Yields portions of the string to highlight in a particular color
-    fn highlight(&self, s: &str) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + '_>;
+    fn highlight<'s>(
+        &self,
+        s: &'s str,
+    ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's>;
 }
 
 /// Which syntax highlighting method is in use
@@ -12,20 +17,23 @@ pub trait Highlighter: std::fmt::Debug + std::fmt::Display {
 pub enum Syntax {
     #[default]
     Plain,
-    Rust(Rust),
+    Rust(rust::Rust),
 }
 
 impl Syntax {
     pub fn new(source: &Source) -> Self {
         match source.extension() {
-            Some("rs") => Self::Rust(Rust),
+            Some("rs") => Self::Rust(rust::Rust),
             _ => Self::default(),
         }
     }
 }
 
 impl Highlighter for Syntax {
-    fn highlight(&self, s: &str) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + '_> {
+    fn highlight<'s>(
+        &self,
+        s: &'s str,
+    ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
         match self {
             Self::Plain => Box::new(std::iter::empty()),
             Self::Rust(r) => r.highlight(s),
@@ -39,24 +47,5 @@ impl std::fmt::Display for Syntax {
             Self::Plain => "Plain".fmt(f),
             Self::Rust(r) => r.fmt(f),
         }
-    }
-}
-
-#[derive(Debug)]
-pub struct Rust;
-
-impl std::fmt::Display for Rust {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        "Rust".fmt(f)
-    }
-}
-
-impl Highlighter for Rust {
-    fn highlight(&self, s: &str) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + '_> {
-        Box::new(
-            s.find("match")
-                .map(|start| (Color::Blue, start..start + 5))
-                .into_iter(),
-        )
     }
 }
