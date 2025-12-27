@@ -585,6 +585,30 @@ impl BufferContext {
             }
         }
     }
+
+    pub fn select_matching_paren(&mut self) {
+        let mut buf = self.buffer.try_write().unwrap();
+
+        if let Some(new_pos) = buf.rope.get_char(self.cursor).and_then(|c| match c {
+            '(' => select_next_char::<true>(&buf.rope, self.cursor + 1, ')', Some('(')),
+            ')' => select_next_char::<false>(&buf.rope, self.cursor, '(', Some(')'))
+                .map(|c| c.saturating_sub(1)),
+            '{' => select_next_char::<true>(&buf.rope, self.cursor + 1, '}', Some('{')),
+            '}' => select_next_char::<false>(&buf.rope, self.cursor, '{', Some('}'))
+                .map(|c| c.saturating_sub(1)),
+            '[' => select_next_char::<true>(&buf.rope, self.cursor + 1, ']', Some('[')),
+            ']' => select_next_char::<false>(&buf.rope, self.cursor, '[', Some(']'))
+                .map(|c| c.saturating_sub(1)),
+            _ => None,
+        }) {
+            log_movement(&mut buf.undo);
+            self.cursor = new_pos;
+            self.selection = None;
+            if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
+                viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
+            }
+        }
+    }
 }
 
 // Given line in rope, returns (start, end) of that line in characters from start of rope

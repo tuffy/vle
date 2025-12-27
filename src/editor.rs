@@ -310,6 +310,14 @@ impl Editor {
                 ..
             }) => self.update_buffer(|b| b.un_indent(INDENT)),
             Event::Key(KeyEvent {
+                code: KeyCode::Char(']'),
+                modifiers: KeyModifiers::ALT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.update_buffer(|b| b.select_matching_paren());
+            }
+            Event::Key(KeyEvent {
                 code: KeyCode::Char('i'),
                 modifiers: KeyModifiers::ALT,
                 kind: KeyEventKind::Press,
