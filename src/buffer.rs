@@ -503,19 +503,33 @@ impl BufferContext {
         buf.log_undo(self.cursor, self.cursor_column);
         buf.modified = true;
 
-        for (start, _) in selected_lines(&buf.rope, self.cursor, self.selection)
-            .rev()
-            .filter(|(s, e)| e > s)
-            .collect::<Vec<_>>()
-            .into_iter()
-        {
-            buf.rope.insert(start, &indent);
-            match &mut self.selection {
-                Some(selection) => {
-                    *selection.max(&mut self.cursor) += spaces;
-                }
-                None => {
+        match self.selection {
+            None => {
+                if let Ok(line_start) = buf
+                    .rope
+                    .try_char_to_line(self.cursor)
+                    .and_then(|line| buf.rope.try_line_to_char(line))
+                {
+                    buf.rope.insert(line_start, &indent);
                     self.cursor += spaces;
+                }
+            }
+            selection @ Some(_) => {
+                for (start, _) in selected_lines(&buf.rope, self.cursor, selection)
+                    .rev()
+                    .filter(|(s, e)| e > s)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                {
+                    buf.rope.insert(start, &indent);
+                    match &mut self.selection {
+                        Some(selection) => {
+                            *selection.max(&mut self.cursor) += spaces;
+                        }
+                        None => {
+                            self.cursor += spaces;
+                        }
+                    }
                 }
             }
         }
