@@ -49,3 +49,24 @@ impl std::fmt::Display for Syntax {
         }
     }
 }
+
+// TODO - add cmake syntax
+// TODO - add c syntax
+// TODO - add css syntax
+// TODO - add go syntax
+// TODO - add html syntax
+// TODO - add java syntax
+// TODO - add javascript syntax
+// TODO - add json syntax
+// TODO - add lua syntax
+// TODO - add makefile syntax
+// TODO - add markdown syntax
+// TODO - add patch syntax
+// TODO - add perl syntax
+// TODO - add php syntax
+// TODO - add python syntax
+// TODO - add sh syntax
+// TODO - add sql syntax
+// TODO - add tex syntax
+// TODO - add xml syntax
+// TODO - add yaml syntax
