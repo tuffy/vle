@@ -609,6 +609,13 @@ impl BufferContext {
             }
         }
     }
+
+    pub fn center_viewport(&mut self) {
+        let rope = &self.buffer.try_read().unwrap().rope;
+        if let Ok(cursor_line) = rope.try_char_to_line(self.cursor) {
+            self.viewport_line = cursor_line.saturating_sub(self.viewport_height / 2);
+        }
+    }
 }
 
 // Given line in rope, returns (start, end) of that line in characters from start of rope

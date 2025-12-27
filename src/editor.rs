@@ -304,6 +304,12 @@ impl Editor {
                 ..
             }) => self.update_buffer(|b| b.indent(INDENT)),
             Event::Key(KeyEvent {
+                code: KeyCode::Char('l'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.update_buffer(|b| b.center_viewport()),
+            Event::Key(KeyEvent {
                 code: KeyCode::Tab,
                 modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,
