@@ -1013,6 +1013,11 @@ impl StatefulWidget for BufferWidget<'_> {
                     .style(REVERSED)
                     .render(status_area, buf);
             }
+            Some(EditorMode::SelectInside) => {
+                Paragraph::new("Select Inside")
+                    .style(REVERSED)
+                    .render(status_area, buf);
+            }
         }
     }
 }

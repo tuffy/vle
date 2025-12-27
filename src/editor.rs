@@ -15,6 +15,7 @@ pub enum EditorMode {
     ConfirmClose {
         buffer: BufferId,
     },
+    SelectInside,
 }
 
 pub struct Editor {
@@ -83,6 +84,7 @@ impl Editor {
             EditorMode::ConfirmClose { buffer } => {
                 self.process_confirm_close(event, buffer.clone())
             }
+            EditorMode::SelectInside => self.process_select_inside(event),
         }
     }
 
@@ -330,17 +332,14 @@ impl Editor {
                 ..
             }) => self.update_buffer(|b| b.un_indent(INDENT)),
             Event::Key(KeyEvent {
-                code: KeyCode::F(4),
-                modifiers: KeyModifiers::NONE,
+                code: KeyCode::Char('i'),
+                modifiers: KeyModifiers::ALT,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.update_buffer(|b| b.select_inside(('{', '}'), Some(('}', '{')))),
-            Event::Key(KeyEvent {
-                code: KeyCode::F(5),
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.update_buffer(|b| b.select_inside(('"', '"'), None)),
+            }) => {
+                self.mode = EditorMode::SelectInside;
+            }
+
             _ => { /* ignore other events */ } // TODO - Ctrl-H - display help
                                                // TODO - Ctrl-W - write buffer to disk with name
                                                // TODO - Ctrl-O - open file into new buffer
@@ -350,12 +349,6 @@ impl Editor {
                                                // TODO - Ctrl-D - next occurrence backward
                                                // TODO - Ctrl-G - next occurrence forward
                                                // TODO - Alt-P  - whitespace display
-                                               // TODO - Alt-'  - select inside ''
-                                               // TODO - Alt-"  - select inside ""
-                                               // TODO - Alt-]  - select inside []
-                                               // TODO - Alt-}  - select inside {}
-                                               // TODO - Alt-)  - select inside ()
-                                               // TODO - Alt->  - select inside <>
         }
     }
 
@@ -383,6 +376,67 @@ impl Editor {
                 self.mode = EditorMode::default();
             }
             _ => { /* ignore other events */ }
+        }
+    }
+
+    fn process_select_inside(&mut self, event: Event) {
+        use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+        match event {
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('(' | ')'),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.update_buffer(|b| b.select_inside(('(', ')'), Some((')', '('))));
+                self.mode = EditorMode::default();
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('[' | ']'),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.update_buffer(|b| b.select_inside(('[', ']'), Some((']', '['))));
+                self.mode = EditorMode::default();
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('{' | '}'),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.update_buffer(|b| b.select_inside(('{', '}'), Some(('}', '{'))));
+                self.mode = EditorMode::default();
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('"'),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.update_buffer(|b| b.select_inside(('"', '"'), None));
+                self.mode = EditorMode::default();
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('\''),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.update_buffer(|b| b.select_inside(('\'', '\''), None));
+                self.mode = EditorMode::default();
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Esc,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.mode = EditorMode::default();
+            }
+            _ => { /* do nothing */ }
         }
     }
 }
