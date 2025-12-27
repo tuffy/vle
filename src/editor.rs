@@ -16,6 +16,7 @@ pub enum EditorMode {
         buffer: BufferId,
     },
     SelectInside,
+    Split,
 }
 
 pub struct Editor {
@@ -85,6 +86,7 @@ impl Editor {
                 self.process_confirm_close(event, buffer.clone())
             }
             EditorMode::SelectInside => self.process_select_inside(event),
+            EditorMode::Split => self.process_split(event),
         }
     }
 
@@ -145,24 +147,6 @@ impl Editor {
                 ..
             }) => self.layout.next_buffer(),
             Event::Key(KeyEvent {
-                code: KeyCode::F(1),
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.layout.single_layout(),
-            Event::Key(KeyEvent {
-                code: KeyCode::F(2),
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.layout.horizontal_layout(),
-            Event::Key(KeyEvent {
-                code: KeyCode::F(3),
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.layout.vertical_layout(),
-            Event::Key(KeyEvent {
                 code: KeyCode::Left,
                 modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,
@@ -202,12 +186,6 @@ impl Editor {
                     *which = HorizontalPos::Bottom;
                 }
             }
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('='),
-                modifiers: KeyModifiers::ALT,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.layout.swap_panes(),
             Event::Key(KeyEvent {
                 code: KeyCode::Up,
                 modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
@@ -339,7 +317,14 @@ impl Editor {
             }) => {
                 self.mode = EditorMode::SelectInside;
             }
-
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('s'),
+                modifiers: KeyModifiers::ALT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.mode = EditorMode::Split;
+            }
             _ => { /* ignore other events */ } // TODO - Ctrl-H - display help
                                                // TODO - Ctrl-W - write buffer to disk with name
                                                // TODO - Ctrl-O - open file into new buffer
@@ -437,6 +422,58 @@ impl Editor {
                 self.mode = EditorMode::default();
             }
             _ => { /* do nothing */ }
+        }
+    }
+
+    fn process_split(&mut self, event: Event) {
+        use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+        match event {
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('o'),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.layout.single_layout();
+                self.mode = EditorMode::default();
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('h'),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.layout.horizontal_layout();
+                self.mode = EditorMode::default();
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('v'),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.layout.vertical_layout();
+                self.mode = EditorMode::default();
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('s'),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.layout.swap_panes();
+                self.mode = EditorMode::default();
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Esc,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.mode = EditorMode::default();
+            }
+            _ => { /* ignore other events */ }
         }
     }
 }

@@ -1018,6 +1018,11 @@ impl StatefulWidget for BufferWidget<'_> {
                     .style(REVERSED)
                     .render(status_area, buf);
             }
+            Some(EditorMode::Split) => {
+                Paragraph::new("Split Windows")
+                    .style(REVERSED)
+                    .render(status_area, buf);
+            }
         }
     }
 }
