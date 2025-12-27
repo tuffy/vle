@@ -329,6 +329,18 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => self.update_buffer(|b| b.un_indent(INDENT)),
+            Event::Key(KeyEvent {
+                code: KeyCode::F(4),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.update_buffer(|b| b.select_inside(('{', '}'), Some(('}', '{')))),
+            Event::Key(KeyEvent {
+                code: KeyCode::F(5),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.update_buffer(|b| b.select_inside(('"', '"'), None)),
             _ => { /* ignore other events */ } // TODO - Ctrl-H - display help
                                                // TODO - Ctrl-W - write buffer to disk with name
                                                // TODO - Ctrl-O - open file into new buffer

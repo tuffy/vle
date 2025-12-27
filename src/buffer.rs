@@ -553,6 +553,24 @@ impl BufferContext {
             }
         }
     }
+
+    pub fn select_inside(&mut self, (start, end): (char, char), stack: Option<(char, char)>) {
+        let buf = self.buffer.try_read().unwrap();
+        let (stack_back, stack_forward) = match stack {
+            Some((back, forward)) => (Some(back), Some(forward)),
+            None => (None, None),
+        };
+        if let (Some(start), Some(end)) = (
+            select_next_char::<false>(&buf.rope, self.cursor, start, stack_back),
+            select_next_char::<true>(&buf.rope, self.cursor, end, stack_forward),
+        ) {
+            self.selection = Some(start);
+            self.cursor = end;
+            if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
+                viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
+            }
+        }
+    }
 }
 
 // Given line in rope, returns (start, end) of that line in characters from start of rope
@@ -634,6 +652,45 @@ fn zap_selection(rope: &mut ropey::Rope, cursor: &mut usize, column: &mut usize,
     if rope.try_remove(selection_start..selection_end).is_ok() {
         *cursor = selection_start;
         *column = cursor_column(rope, *cursor);
+    }
+}
+
+fn select_next_char<const FORWARD: bool>(
+    rope: &ropey::Rope,
+    cursor: usize,
+    target: char,
+    stack: Option<char>,
+) -> Option<usize> {
+    let mut chars = rope.chars_at(cursor);
+    if !FORWARD {
+        chars.reverse();
+    }
+    match stack {
+        None => chars
+            .position(|c| c == target)
+            .map(|pos| if FORWARD { cursor + pos } else { cursor - pos }),
+        Some(stack) => {
+            let mut stacked = 0;
+            chars
+                .enumerate()
+                .filter(|(_, c)| {
+                    if *c == target {
+                        if stacked > 0 {
+                            stacked -= 1;
+                            false
+                        } else {
+                            true
+                        }
+                    } else if *c == stack {
+                        stacked += 1;
+                        true
+                    } else {
+                        true
+                    }
+                })
+                .find_map(|(idx, c)| (c == target).then_some(idx))
+                .map(|pos| if FORWARD { cursor + pos } else { cursor - pos })
+        }
     }
 }
 
@@ -909,9 +966,11 @@ impl StatefulWidget for BufferWidget<'_> {
                             let line = std::num::NonZero::new(line + 1).unwrap();
                             let digits = line.ilog10() + 1;
 
-                            let [source_area, line_area] =
-                                Layout::horizontal([Min(0), Length((digits + 1).try_into().unwrap())])
-                                    .areas(status_area);
+                            let [source_area, line_area] = Layout::horizontal([
+                                Min(0),
+                                Length((digits + 1).try_into().unwrap()),
+                            ])
+                            .areas(status_area);
 
                             source.render(source_area, buf);
 
