@@ -1,5 +1,5 @@
 use crate::{
-    buffer::{BufferId, BufferList, CutBuffer},
+    buffer::{BufferContext, BufferId, BufferList, CutBuffer},
     prompt::Prompt,
 };
 use crossterm::event::Event;
@@ -23,6 +23,16 @@ pub enum EditorMode {
     SelectLine {
         prompt: Prompt,
     },
+    PromptFind {
+        prompt: Prompt,
+        direction: FindDirection,
+    },
+}
+
+#[derive(Copy, Clone)]
+pub enum FindDirection {
+    Forward,
+    Backward,
 }
 
 pub struct Editor {
@@ -96,6 +106,14 @@ impl Editor {
             }
             EditorMode::SelectInside => self.process_select_inside(event),
             EditorMode::Split => self.process_split(event),
+            EditorMode::PromptFind { direction, prompt } => {
+                if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
+                    && let Some(new_mode) = process_prompt_find(buf, *direction, prompt, event)
+                {
+                    self.mode = new_mode;
+                }
+            }
+            // TODO - move this to its own function
             EditorMode::SelectLine { prompt } => match event {
                 Event::Key(KeyEvent {
                     code: KeyCode::Char(c @ '0'..='9'),
@@ -422,26 +440,26 @@ impl Editor {
                 };
             }
             Event::Key(KeyEvent {
-                code: KeyCode::F(1),
-                modifiers: KeyModifiers::NONE,
+                code: KeyCode::Char('f'),
+                modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                // TODO - make this dynamic search
-                self.update_buffer(|b| {
-                    b.search(true, &['s', 't', 'r', 'u', 'c', 't']);
-                });
+                self.mode = EditorMode::PromptFind {
+                    direction: FindDirection::Forward,
+                    prompt: Prompt::default(),
+                };
             }
             Event::Key(KeyEvent {
-                code: KeyCode::F(2),
-                modifiers: KeyModifiers::NONE,
+                code: KeyCode::Char('b'),
+                modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                // TODO - make this dynamic search
-                self.update_buffer(|b| {
-                    b.search(false, &['s', 't', 'r', 'u', 'c', 't']);
-                });
+                self.mode = EditorMode::PromptFind {
+                    direction: FindDirection::Backward,
+                    prompt: Prompt::default(),
+                };
             }
             _ => { /* ignore other events */ } // TODO - Ctrl-H - display help
                                                // TODO - Ctrl-W - write buffer to disk with name
@@ -592,6 +610,54 @@ impl Editor {
             }
             _ => { /* ignore other events */ }
         }
+    }
+}
+
+fn process_prompt_find(
+    buffer: &mut BufferContext,
+    direction: FindDirection,
+    prompt: &mut Prompt,
+    event: Event,
+) -> Option<EditorMode> {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+    match event {
+        Event::Key(KeyEvent {
+            code: KeyCode::Char(c),
+            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            prompt.push(c);
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Backspace,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            prompt.pop();
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Enter,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            // TODO - shift to find-toggle mode
+            // TODO - indicate whether search failed
+            buffer.search(matches!(direction, FindDirection::Forward), prompt.chars());
+            Some(EditorMode::default())
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Esc,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => Some(EditorMode::default()),
+        _ => None, // ignore other events
     }
 }
 

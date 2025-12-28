@@ -903,7 +903,7 @@ impl StatefulWidget for BufferWidget<'_> {
         buf: &mut ratatui::buffer::Buffer,
         state: &mut BufferContext,
     ) {
-        use crate::{prompt::PromptWidget, syntax::Highlighter};
+        use crate::{editor::FindDirection, prompt::PromptWidget, syntax::Highlighter};
         use ratatui::{
             layout::{
                 Constraint::{Length, Min},
@@ -1121,6 +1121,25 @@ impl StatefulWidget for BufferWidget<'_> {
                 Paragraph::new("Line : ")
                     .style(REVERSED)
                     .render(label_area, buf);
+
+                PromptWidget { prompt }.render(prompt_area, buf);
+            }
+            Some(EditorMode::PromptFind { direction, prompt }) => {
+                let [label_area, prompt_area] = Layout::horizontal([
+                    Length(match direction {
+                        FindDirection::Forward => 15,
+                        FindDirection::Backward => 16,
+                    }),
+                    Min(0),
+                ])
+                .areas(status_area);
+
+                Paragraph::new(match direction {
+                    FindDirection::Forward => "Find Forward : ",
+                    FindDirection::Backward => "Find Backward : ",
+                })
+                .style(REVERSED)
+                .render(label_area, buf);
 
                 PromptWidget { prompt }.render(prompt_area, buf);
             }
