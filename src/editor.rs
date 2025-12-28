@@ -471,12 +471,11 @@ impl Editor {
                     prompt: Prompt::default(),
                 };
             }
-            _ => { /* ignore other events */ } // TODO - Ctrl-H - display help
+            _ => { /* ignore other events */ } // TODO - Ctrl-H - toggle help display
                                                // TODO - Ctrl-W - write buffer to disk with name
                                                // TODO - Ctrl-O - open file into new buffer
-                                               // TODO - Ctrl-D - next occurrence backward
-                                               // TODO - Ctrl-G - next occurrence forward
-                                               // TODO - Alt-P  - whitespace display
+                                               // TODO - Ctrl-? - add search-and-replace mode(s)
+                                               // TODO - Alt-P  - toggle whitespace display
         }
     }
 

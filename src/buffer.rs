@@ -363,8 +363,6 @@ impl BufferContext {
                 if let Some(prev) = self.cursor.checked_sub(1)
                     && buf.rope.try_remove(prev..self.cursor).is_ok()
                 {
-                    // TODO - remove auto-pairing if pair is together (like "{}")
-
                     self.cursor -= 1;
                     // we need to recalculate the cursor column altogether
                     // in case a newline has been removed
@@ -409,7 +407,6 @@ impl BufferContext {
         match self.selection.take() {
             None => {
                 if buf.rope.try_remove(self.cursor..(self.cursor + 1)).is_ok() {
-                    // TODO - remove auto-pairing if pair is together (like "{}")
                     // leave cursor position and current column unchanged
                     buf.modified = true;
                 }
