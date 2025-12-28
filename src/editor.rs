@@ -27,6 +27,9 @@ pub enum EditorMode {
         prompt: Prompt,
         direction: FindDirection,
     },
+    SelectFind {
+        search: Vec<char>,
+    },
 }
 
 #[derive(Copy, Clone)]
@@ -109,6 +112,13 @@ impl Editor {
             EditorMode::PromptFind { direction, prompt } => {
                 if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
                     && let Some(new_mode) = process_prompt_find(buf, *direction, prompt, event)
+                {
+                    self.mode = new_mode;
+                }
+            }
+            EditorMode::SelectFind { search } => {
+                if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
+                    && let Some(new_mode) = process_select_find(buf, search, event)
                 {
                     self.mode = new_mode;
                 }
@@ -464,8 +474,6 @@ impl Editor {
             _ => { /* ignore other events */ } // TODO - Ctrl-H - display help
                                                // TODO - Ctrl-W - write buffer to disk with name
                                                // TODO - Ctrl-O - open file into new buffer
-                                               // TODO - Ctrl-F - search forward for string/regex
-                                               // TODO - Ctrl-B - search backward for string/regex
                                                // TODO - Ctrl-D - next occurrence backward
                                                // TODO - Ctrl-G - next occurrence forward
                                                // TODO - Alt-P  - whitespace display
@@ -645,14 +653,98 @@ fn process_prompt_find(
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
-        }) => {
-            // TODO - shift to find-toggle mode
-            // TODO - indicate whether search failed
-            buffer.search(matches!(direction, FindDirection::Forward), prompt.chars());
-            Some(EditorMode::default())
-        }
+        }) => match buffer.search(matches!(direction, FindDirection::Forward), prompt.chars()) {
+            true => Some(EditorMode::SelectFind {
+                search: prompt.chars().into(),
+            }),
+            false => {
+                buffer.set_error("Not Found");
+                Some(EditorMode::default())
+            }
+        },
         Event::Key(KeyEvent {
             code: KeyCode::Esc,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => Some(EditorMode::default()),
+        _ => None, // ignore other events
+    }
+}
+
+fn process_select_find(
+    buffer: &mut BufferContext,
+    search: &[char],
+    event: Event,
+) -> Option<EditorMode> {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+    match event {
+        Event::Key(KeyEvent {
+            code: KeyCode::Up,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            buffer.search(false, search);
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Down,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            buffer.search(true, search);
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Up,
+            modifiers: KeyModifiers::ALT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            buffer.viewport_up(1);
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Down,
+            modifiers: KeyModifiers::ALT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            buffer.viewport_down(1);
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::PageUp,
+            modifiers: KeyModifiers::ALT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            buffer.viewport_up(PAGE_SIZE);
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::PageDown,
+            modifiers: KeyModifiers::ALT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            buffer.viewport_down(PAGE_SIZE);
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Char('l'),
+            modifiers: KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            buffer.center_viewport();
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Enter | KeyCode::Esc,
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..

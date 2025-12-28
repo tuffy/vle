@@ -149,11 +149,11 @@ impl BufferContext {
         self.buffer.try_write().unwrap().save();
     }
 
-    fn viewport_up(&mut self, lines: usize) {
+    pub fn viewport_up(&mut self, lines: usize) {
         self.viewport_line = self.viewport_line.saturating_sub(lines)
     }
 
-    fn viewport_down(&mut self, lines: usize) {
+    pub fn viewport_down(&mut self, lines: usize) {
         self.viewport_line =
             (self.viewport_line + lines).min(self.buffer.try_read().unwrap().total_lines());
     }
@@ -676,6 +676,10 @@ impl BufferContext {
 
         true
     }
+
+    pub fn set_error<S: Into<Cow<'static, str>>>(&mut self, error: S) {
+        self.buffer.try_write().unwrap().message = Some(BufferMessage::Error(error.into()));
+    }
 }
 
 // Given line in rope, returns (start, end) of that line in characters from start of rope
@@ -1142,6 +1146,33 @@ impl StatefulWidget for BufferWidget<'_> {
                 .render(label_area, buf);
 
                 PromptWidget { prompt }.render(prompt_area, buf);
+            }
+            Some(EditorMode::SelectFind { search }) => {
+                let found = Paragraph::new(format!(
+                    "Found \"{}\"",
+                    search.iter().copied().collect::<String>()
+                ))
+                .style(REVERSED);
+
+                match buffer.rope.try_char_to_line(state.cursor) {
+                    Ok(line) => {
+                        let line = std::num::NonZero::new(line + 1).unwrap();
+                        let digits = line.ilog10() + 1;
+
+                        let [found_area, line_area] =
+                            Layout::horizontal([Min(0), Length((digits + 1).try_into().unwrap())])
+                                .areas(status_area);
+
+                        found.render(found_area, buf);
+
+                        Paragraph::new(line.to_string())
+                            .style(REVERSED)
+                            .render(line_area, buf);
+                    }
+                    Err(_) => {
+                        found.render(status_area, buf);
+                    }
+                }
             }
         }
     }
