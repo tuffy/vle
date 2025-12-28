@@ -14,6 +14,11 @@ impl Prompt {
         self.value.pop()
     }
 
+    pub fn set(&mut self, value: &[char]) {
+        self.value.clear();
+        self.value.extend(value);
+    }
+
     pub fn chars(&self) -> &[char] {
         self.value.as_slice()
     }

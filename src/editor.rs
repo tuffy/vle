@@ -26,6 +26,7 @@ pub enum EditorMode {
     PromptFind {
         prompt: Prompt,
         direction: FindDirection,
+        history_idx: usize,
     },
     SelectFind {
         search: Vec<char>,
@@ -42,6 +43,7 @@ pub struct Editor {
     layout: Layout,
     mode: EditorMode,
     cut_buffer: Option<CutBuffer>, // cut buffer shared globally across editor
+    search_history: Vec<Vec<char>>,  // search history also shared globally
 }
 
 impl Editor {
@@ -50,6 +52,7 @@ impl Editor {
             layout: Layout::Single(BufferList::new(buffers)?),
             mode: EditorMode::default(),
             cut_buffer: None,
+            search_history: vec![],
         })
     }
 
@@ -58,7 +61,7 @@ impl Editor {
     }
 
     pub fn display(&mut self, term: &mut ratatui::DefaultTerminal) -> std::io::Result<()> {
-        // TODO - perform display differently depending on editor mode
+        // TODO - display per-mode help if toggled on
 
         term.draw(|frame| {
             let area = frame.area();
@@ -66,8 +69,6 @@ impl Editor {
             frame.set_cursor_position(self.layout.cursor_position(area).unwrap_or_default());
         })
         .map(|_| ())
-
-        // TODO - draw keybindings in two rows at screen bottom, Nano-style
     }
 
     fn update_buffer(&mut self, f: impl FnOnce(&mut crate::buffer::BufferContext)) {
@@ -107,9 +108,9 @@ impl Editor {
             }
             EditorMode::SelectInside => self.process_select_inside(event),
             EditorMode::Split => self.process_split(event),
-            EditorMode::PromptFind { direction, prompt } => {
+            EditorMode::PromptFind { direction, prompt, history_idx, } => {
                 if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                    && let Some(new_mode) = process_prompt_find(buf, *direction, prompt, event)
+                    && let Some(new_mode) = process_prompt_find(buf, *direction, prompt, &mut self.search_history, history_idx, event)
                 {
                     self.mode = new_mode;
                 }
@@ -399,6 +400,7 @@ impl Editor {
                 self.mode = EditorMode::PromptFind {
                     direction: FindDirection::Forward,
                     prompt: Prompt::default(),
+                    history_idx: self.search_history.len(),
                 };
             }
             Event::Key(KeyEvent {
@@ -410,6 +412,7 @@ impl Editor {
                 self.mode = EditorMode::PromptFind {
                     direction: FindDirection::Backward,
                     prompt: Prompt::default(),
+                    history_idx: self.search_history.len(),
                 };
             }
             _ => { /* ignore other events */ } // TODO - Ctrl-H - toggle help display
@@ -565,6 +568,8 @@ fn process_prompt_find(
     buffer: &mut BufferContext,
     direction: FindDirection,
     prompt: &mut Prompt,
+    previous: &mut Vec<Vec<char>>,
+    previous_idx: &mut usize,
     event: Event,
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -593,14 +598,48 @@ fn process_prompt_find(
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
-        }) => match buffer.search(matches!(direction, FindDirection::Forward), prompt.chars()) {
-            true => Some(EditorMode::SelectFind {
-                search: prompt.chars().into(),
-            }),
-            false => {
-                buffer.set_error("Not Found");
-                Some(EditorMode::default())
+        }) => {
+            let search = prompt.chars().into_iter().copied().collect::<Vec<_>>();
+            previous.retain(|e| e != &search);
+            previous.push(search.clone());
+
+            match buffer.search(matches!(direction, FindDirection::Forward), prompt.chars()) {
+                // push new entry to top of stack, whether found or not
+
+                true => {
+                    Some(EditorMode::SelectFind {
+                        search,
+                    })
+                },
+                false => {
+                    buffer.set_error("Not Found");
+                    Some(EditorMode::default())
+                }
             }
+        },
+        Event::Key(KeyEvent {
+            code: KeyCode::Down,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            *previous_idx = (*previous_idx + 1).min(previous.len());
+            if let Some(previous_prompt) = previous.get(*previous_idx) {
+                prompt.set(previous_prompt);
+            }
+            None
+        },
+        Event::Key(KeyEvent {
+            code: KeyCode::Up,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            *previous_idx = previous_idx.saturating_sub(1);
+            if let Some(previous_prompt) = previous.get(*previous_idx) {
+                prompt.set(previous_prompt);
+            }
+            None
         },
         Event::Key(KeyEvent {
             code: KeyCode::Esc,
