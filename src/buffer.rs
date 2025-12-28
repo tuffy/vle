@@ -1125,7 +1125,9 @@ impl StatefulWidget for BufferWidget<'_> {
 
                 PromptWidget { prompt }.render(prompt_area, buf);
             }
-            Some(EditorMode::PromptFind { direction, prompt, .. }) => {
+            Some(EditorMode::PromptFind {
+                direction, prompt, ..
+            }) => {
                 let [label_area, prompt_area] = Layout::horizontal([
                     Length(match direction {
                         FindDirection::Forward => 15,

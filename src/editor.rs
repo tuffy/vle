@@ -43,7 +43,7 @@ pub struct Editor {
     layout: Layout,
     mode: EditorMode,
     cut_buffer: Option<CutBuffer>, // cut buffer shared globally across editor
-    search_history: Vec<Vec<char>>,  // search history also shared globally
+    search_history: Vec<Vec<char>>, // search history also shared globally
 }
 
 impl Editor {
@@ -108,9 +108,20 @@ impl Editor {
             }
             EditorMode::SelectInside => self.process_select_inside(event),
             EditorMode::Split => self.process_split(event),
-            EditorMode::PromptFind { direction, prompt, history_idx, } => {
+            EditorMode::PromptFind {
+                direction,
+                prompt,
+                history_idx,
+            } => {
                 if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                    && let Some(new_mode) = process_prompt_find(buf, *direction, prompt, &mut self.search_history, history_idx, event)
+                    && let Some(new_mode) = process_prompt_find(
+                        buf,
+                        *direction,
+                        prompt,
+                        &mut self.search_history,
+                        history_idx,
+                        event,
+                    )
                 {
                     self.mode = new_mode;
                 }
@@ -599,24 +610,29 @@ fn process_prompt_find(
             kind: KeyEventKind::Press,
             ..
         }) => {
+            fn first<T>(mut iter: impl Iterator<Item = T>) -> Option<T> {
+                iter.next()
+            }
+
             let search = prompt.chars().into_iter().copied().collect::<Vec<_>>();
-            previous.retain(|e| e != &search);
-            previous.push(search.clone());
+            match first(previous.extract_if(.., |e| e == &search)) {
+                Some(old_entry) => {
+                    previous.push(old_entry);
+                }
+                None => {
+                    previous.push(search.clone());
+                }
+            }
 
             match buffer.search(matches!(direction, FindDirection::Forward), prompt.chars()) {
                 // push new entry to top of stack, whether found or not
-
-                true => {
-                    Some(EditorMode::SelectFind {
-                        search,
-                    })
-                },
+                true => Some(EditorMode::SelectFind { search }),
                 false => {
                     buffer.set_error("Not Found");
                     Some(EditorMode::default())
                 }
             }
-        },
+        }
         Event::Key(KeyEvent {
             code: KeyCode::Down,
             modifiers: KeyModifiers::NONE,
@@ -628,7 +644,7 @@ fn process_prompt_find(
                 prompt.set(previous_prompt);
             }
             None
-        },
+        }
         Event::Key(KeyEvent {
             code: KeyCode::Up,
             modifiers: KeyModifiers::NONE,
@@ -640,7 +656,7 @@ fn process_prompt_find(
                 prompt.set(previous_prompt);
             }
             None
-        },
+        }
         Event::Key(KeyEvent {
             code: KeyCode::Esc,
             modifiers: KeyModifiers::NONE,
