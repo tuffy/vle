@@ -128,6 +128,28 @@ impl Editor {
                     }
                 }
                 Event::Key(KeyEvent {
+                    code: KeyCode::Home,
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => {
+                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut() {
+                        buf.select_line(0);
+                        self.mode = EditorMode::default();
+                    }
+                }
+                Event::Key(KeyEvent {
+                    code: KeyCode::End,
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => {
+                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut() {
+                        buf.select_line(buf.last_line());
+                        self.mode = EditorMode::default();
+                    }
+                }
+                Event::Key(KeyEvent {
                     code: KeyCode::Esc,
                     modifiers: KeyModifiers::NONE,
                     kind: KeyEventKind::Press,

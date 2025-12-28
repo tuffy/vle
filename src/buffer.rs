@@ -247,6 +247,15 @@ impl BufferContext {
         }
     }
 
+    pub fn last_line(&self) -> usize {
+        self.buffer
+            .try_write()
+            .unwrap()
+            .rope
+            .len_lines()
+            .saturating_sub(1)
+    }
+
     pub fn select_line(&mut self, line: usize) {
         let mut buf = self.buffer.try_write().unwrap();
         match buf.rope.try_line_to_char(line) {
