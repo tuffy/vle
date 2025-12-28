@@ -4,6 +4,7 @@
 
 mod buffer;
 mod editor;
+mod prompt;
 mod syntax;
 
 fn main() -> std::io::Result<()> {

@@ -1,4 +1,7 @@
-use crate::buffer::{BufferId, BufferList, CutBuffer};
+use crate::{
+    buffer::{BufferId, BufferList, CutBuffer},
+    prompt::Prompt,
+};
 use crossterm::event::Event;
 use ratatui::{
     layout::{Position, Rect},
@@ -17,6 +20,9 @@ pub enum EditorMode {
     },
     SelectInside,
     Split,
+    SelectLine {
+        prompt: Prompt,
+    },
 }
 
 pub struct Editor {
@@ -80,13 +86,57 @@ impl Editor {
     }
 
     pub fn process_event(&mut self, event: Event) {
-        match &self.mode {
+        use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+        match &mut self.mode {
             EditorMode::Editing => self.process_normal_event(event),
             EditorMode::ConfirmClose { buffer } => {
-                self.process_confirm_close(event, buffer.clone())
+                let buffer = buffer.clone();
+                self.process_confirm_close(event, buffer)
             }
             EditorMode::SelectInside => self.process_select_inside(event),
             EditorMode::Split => self.process_split(event),
+            EditorMode::SelectLine { prompt } => match event {
+                Event::Key(KeyEvent {
+                    code: KeyCode::Char(c @ '0'..='9'),
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => {
+                    prompt.push(c);
+                }
+                Event::Key(KeyEvent {
+                    code: KeyCode::Backspace,
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => {
+                    prompt.pop();
+                }
+                Event::Key(KeyEvent {
+                    code: KeyCode::Enter,
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => {
+                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
+                        && let Ok(line) = prompt.to_string().parse::<usize>()
+                        && let Some(line) = line.checked_sub(1)
+                    {
+                        buf.select_line(line);
+                        self.mode = EditorMode::default();
+                    }
+                }
+                Event::Key(KeyEvent {
+                    code: KeyCode::Esc,
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => {
+                    self.mode = EditorMode::default();
+                }
+                _ => { /* ignore other events */ }
+            },
         }
     }
 
@@ -339,11 +389,20 @@ impl Editor {
             }) => {
                 self.mode = EditorMode::Split;
             }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('t'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.mode = EditorMode::SelectLine {
+                    prompt: Prompt::default(),
+                };
+            }
             _ => { /* ignore other events */ } // TODO - Ctrl-H - display help
                                                // TODO - Ctrl-W - write buffer to disk with name
                                                // TODO - Ctrl-O - open file into new buffer
                                                // TODO - Ctrl-F - search forward for string/regex
-                                               // TODO - Ctrl-T - goto line
                                                // TODO - Ctrl-B - search backward for string/regex
                                                // TODO - Ctrl-D - next occurrence backward
                                                // TODO - Ctrl-G - next occurrence forward

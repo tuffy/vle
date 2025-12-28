@@ -247,6 +247,22 @@ impl BufferContext {
         }
     }
 
+    pub fn select_line(&mut self, line: usize) {
+        let mut buf = self.buffer.try_write().unwrap();
+        match buf.rope.try_line_to_char(line) {
+            Ok(cursor) => {
+                log_movement(&mut buf.undo);
+                self.cursor_column = 0;
+                self.cursor = cursor;
+                self.selection = None;
+                viewport_follow_cursor(line, &mut self.viewport_line, self.viewport_height);
+            }
+            Err(_) => {
+                buf.message = Some(BufferMessage::Error("invalid line".into()));
+            }
+        }
+    }
+
     pub fn insert_char(&mut self, c: char) {
         let mut buf = self.buffer.try_write().unwrap();
         buf.log_undo(self.cursor, self.cursor_column);
@@ -843,7 +859,7 @@ impl StatefulWidget for BufferWidget<'_> {
         buf: &mut ratatui::buffer::Buffer,
         state: &mut BufferContext,
     ) {
-        use crate::syntax::Highlighter;
+        use crate::{prompt::PromptWidget, syntax::Highlighter};
         use ratatui::{
             layout::{
                 Constraint::{Length, Min},
@@ -1053,6 +1069,16 @@ impl StatefulWidget for BufferWidget<'_> {
                 Paragraph::new("Split Windows")
                     .style(REVERSED)
                     .render(status_area, buf);
+            }
+            Some(EditorMode::SelectLine { prompt }) => {
+                let [label_area, prompt_area] =
+                    Layout::horizontal([Length(7), Min(0)]).areas(status_area);
+
+                Paragraph::new("Line : ")
+                    .style(REVERSED)
+                    .render(label_area, buf);
+
+                PromptWidget { prompt }.render(prompt_area, buf);
             }
         }
     }
