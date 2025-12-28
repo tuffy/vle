@@ -641,6 +641,41 @@ impl BufferContext {
             self.viewport_line = cursor_line.saturating_sub(self.viewport_height / 2);
         }
     }
+
+    // returns true if search term found
+    pub fn search(&mut self, forward: bool, term: &[char]) -> bool {
+        let buf = &mut self.buffer.try_write().unwrap();
+        let found = match forward {
+            true => match (self.cursor..buf.rope.len_chars()).skip(1).find(|idx| {
+                buf.rope
+                    .chars_at(*idx)
+                    .take(term.len())
+                    .eq(term.iter().copied())
+            }) {
+                Some(idx) => idx,
+                None => return false,
+            },
+            false => match (0..self.cursor).rev().find(|idx| {
+                buf.rope
+                    .chars_at(*idx)
+                    .take(term.len())
+                    .eq(term.iter().copied())
+            }) {
+                Some(idx) => idx,
+                None => return false,
+            },
+        };
+
+        self.cursor = found;
+        self.selection = None;
+        self.cursor_column = cursor_column(&buf.rope, self.cursor);
+        log_movement(&mut buf.undo);
+        if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
+            viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
+        }
+
+        true
+    }
 }
 
 // Given line in rope, returns (start, end) of that line in characters from start of rope

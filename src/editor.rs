@@ -421,6 +421,28 @@ impl Editor {
                     prompt: Prompt::default(),
                 };
             }
+            Event::Key(KeyEvent {
+                code: KeyCode::F(1),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                // TODO - make this dynamic search
+                self.update_buffer(|b| {
+                    b.search(true, &['s', 't', 'r', 'u', 'c', 't']);
+                });
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::F(2),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                // TODO - make this dynamic search
+                self.update_buffer(|b| {
+                    b.search(false, &['s', 't', 'r', 'u', 'c', 't']);
+                });
+            }
             _ => { /* ignore other events */ } // TODO - Ctrl-H - display help
                                                // TODO - Ctrl-W - write buffer to disk with name
                                                // TODO - Ctrl-O - open file into new buffer
