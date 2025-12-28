@@ -99,8 +99,6 @@ impl Editor {
     }
 
     pub fn process_event(&mut self, event: Event) {
-        use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-
         match &mut self.mode {
             EditorMode::Editing => self.process_normal_event(event),
             EditorMode::ConfirmClose { buffer } => {
@@ -123,70 +121,13 @@ impl Editor {
                     self.mode = new_mode;
                 }
             }
-            // TODO - move this to its own function
-            EditorMode::SelectLine { prompt } => match event {
-                Event::Key(KeyEvent {
-                    code: KeyCode::Char(c @ '0'..='9'),
-                    modifiers: KeyModifiers::NONE,
-                    kind: KeyEventKind::Press,
-                    ..
-                }) => {
-                    prompt.push(c);
+            EditorMode::SelectLine { prompt } => {
+                if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
+                    && let Some(new_mode) = process_select_line(buf, prompt, event)
+                {
+                    self.mode = new_mode;
                 }
-                Event::Key(KeyEvent {
-                    code: KeyCode::Backspace,
-                    modifiers: KeyModifiers::NONE,
-                    kind: KeyEventKind::Press,
-                    ..
-                }) => {
-                    prompt.pop();
-                }
-                Event::Key(KeyEvent {
-                    code: KeyCode::Enter,
-                    modifiers: KeyModifiers::NONE,
-                    kind: KeyEventKind::Press,
-                    ..
-                }) => {
-                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                        && let Ok(line) = prompt.to_string().parse::<usize>()
-                        && let Some(line) = line.checked_sub(1)
-                    {
-                        buf.select_line(line);
-                        self.mode = EditorMode::default();
-                    }
-                }
-                Event::Key(KeyEvent {
-                    code: KeyCode::Home,
-                    modifiers: KeyModifiers::NONE,
-                    kind: KeyEventKind::Press,
-                    ..
-                }) => {
-                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut() {
-                        buf.select_line(0);
-                        self.mode = EditorMode::default();
-                    }
-                }
-                Event::Key(KeyEvent {
-                    code: KeyCode::End,
-                    modifiers: KeyModifiers::NONE,
-                    kind: KeyEventKind::Press,
-                    ..
-                }) => {
-                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut() {
-                        buf.select_line(buf.last_line());
-                        self.mode = EditorMode::default();
-                    }
-                }
-                Event::Key(KeyEvent {
-                    code: KeyCode::Esc,
-                    modifiers: KeyModifiers::NONE,
-                    kind: KeyEventKind::Press,
-                    ..
-                }) => {
-                    self.mode = EditorMode::default();
-                }
-                _ => { /* ignore other events */ }
-            },
+            }
         }
     }
 
@@ -668,6 +609,78 @@ fn process_prompt_find(
             ..
         }) => Some(EditorMode::default()),
         _ => None, // ignore other events
+    }
+}
+
+fn process_select_line(
+    buffer: &mut BufferContext,
+    prompt: &mut Prompt,
+    event: Event,
+) -> Option<EditorMode> {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+    match event {
+        Event::Key(KeyEvent {
+            code: KeyCode::Char(c @ '0'..='9'),
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            prompt.push(c);
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Backspace,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            prompt.pop();
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Enter,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            if let Ok(line) = prompt.to_string().parse::<usize>()
+                && let Some(line) = line.checked_sub(1)
+            {
+                buffer.select_line(line);
+                Some(EditorMode::default())
+            } else {
+                None
+            }
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Home,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            buffer.select_line(0);
+            Some(EditorMode::default())
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::End,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            buffer.select_line(buffer.last_line());
+            Some(EditorMode::default())
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Esc,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => Some(EditorMode::default()),
+        _ => {
+            /* ignore other events */
+            None
+        }
     }
 }
 
