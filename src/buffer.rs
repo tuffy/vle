@@ -823,43 +823,7 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
-        // returns selection to be highlighted along with any
-        // non-highlighted prefix or suffix
-        fn highlight<S: Highlighter>(
-            syntax: &S,
-            line: Cow<'_, str>,
-            (line_start, line_end): (usize, usize),
-            (selection_start, selection_end): (usize, usize),
-        ) -> Line<'static> {
-            fn pop_chars_front<'s>(s: &mut &'s str, chars: usize) -> &'s str {
-                use unicode_truncate::UnicodeTruncateStr;
-
-                let (split, _) = s.unicode_truncate(chars);
-                *s = s.split_at(split.len()).1;
-                split
-            }
-
-            if selection_end <= line_start || selection_start >= line_end {
-                Line::from(colorize(syntax, &line))
-            } else {
-                let mut s = line.as_ref();
-                let mut line = vec![];
-                let prefix = pop_chars_front(&mut s, selection_start.saturating_sub(line_start));
-                if !prefix.is_empty() {
-                    line.extend(colorize(syntax, prefix));
-                }
-                line.push(Span::styled(
-                    pop_chars_front(&mut s, selection_end - selection_start.max(line_start))
-                        .to_string(),
-                    REVERSED,
-                ));
-                if !s.is_empty() {
-                    line.extend(colorize(syntax, s));
-                }
-                Line::from(line)
-            }
-        }
-
+        // Colorize syntax of the given text
         fn colorize<S: Highlighter>(syntax: &S, text: &str) -> Vec<Span<'static>> {
             let mut elements = vec![];
             let mut idx = 0;
@@ -878,6 +842,77 @@ impl StatefulWidget for BufferWidget<'_> {
                 elements.push(Span::raw(last.to_string()));
             }
             elements
+        }
+
+        // Takes syntax-colorized line of text and returns
+        // portion highlighted, if necessary
+        fn highlight(
+            colorized: Vec<Span<'static>>,
+            (line_start, line_end): (usize, usize),
+            (selection_start, selection_end): (usize, usize),
+        ) -> Line<'static> {
+            if selection_end <= line_start || selection_start >= line_end {
+                colorized.into()
+            } else {
+                use std::collections::VecDeque;
+
+                fn extract(
+                    colorized: &mut VecDeque<Span<'static>>,
+                    mut characters: usize,
+                    output: &mut Vec<Span<'static>>,
+                    map: impl Fn(Span<'static>) -> Span<'static>,
+                ) {
+                    use unicode_truncate::UnicodeTruncateStr;
+
+                    while characters > 0 {
+                        let Some(span) = colorized.pop_front() else {
+                            return;
+                        };
+                        let span_width = span.width();
+                        if span_width <= characters {
+                            characters -= span_width;
+                            output.push(map(span));
+                        } else {
+                            let mut s = span.content.into_owned();
+                            let (split, _) = s.unicode_truncate(characters);
+                            let suffix = s.split_off(split.len());
+                            colorized.push_front(Span {
+                                style: span.style,
+                                content: suffix.into(),
+                            });
+                            output.push(map(Span {
+                                style: span.style,
+                                content: s.into(),
+                            }));
+                            return;
+                        }
+                    }
+                }
+
+                let mut colorized = VecDeque::from(colorized);
+                let mut highlighted = vec![];
+
+                // output selection_start - line_start characters verbatim
+                extract(
+                    &mut colorized,
+                    selection_start.saturating_sub(line_start),
+                    &mut highlighted,
+                    |span| span,
+                );
+
+                // output selection_end - selection_start characters highlighted
+                extract(
+                    &mut colorized,
+                    selection_end - selection_start.max(line_start),
+                    &mut highlighted,
+                    |span| span.style(REVERSED),
+                );
+
+                // output the remaining characters verbatim
+                highlighted.extend(colorized);
+
+                highlighted.into()
+            }
         }
 
         const REVERSED: Style = Style::new().add_modifier(Modifier::REVERSED);
@@ -920,8 +955,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         |(line, line_number)| match line_char_range(rope, line_number) {
                             None => Line::from(colorize(syntax, &tabs_to_spaces(Cow::from(line)))),
                             Some((line_start, line_end)) => highlight(
-                                syntax,
-                                tabs_to_spaces(Cow::from(line)),
+                                colorize(syntax, &tabs_to_spaces(Cow::from(line))),
                                 (line_start, line_end),
                                 (selection_start, selection_end),
                             ),
