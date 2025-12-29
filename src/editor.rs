@@ -564,6 +564,28 @@ fn process_prompt_find(
 
     match event {
         Event::Key(KeyEvent {
+            code: KeyCode::Char('f'),
+            modifiers: KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press,
+            ..
+        }) => Some(EditorMode::PromptFind {
+            prompt: std::mem::take(prompt),
+            direction: FindDirection::Forward,
+            history_idx: std::mem::take(previous_idx),
+            cache: std::mem::take(cache),
+        }),
+        Event::Key(KeyEvent {
+            code: KeyCode::Char('b'),
+            modifiers: KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press,
+            ..
+        }) => Some(EditorMode::PromptFind {
+            prompt: std::mem::take(prompt),
+            direction: FindDirection::Backward,
+            history_idx: std::mem::take(previous_idx),
+            cache: std::mem::take(cache),
+        }),
+        Event::Key(KeyEvent {
             code: KeyCode::Char(c),
             modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
             kind: KeyEventKind::Press,
