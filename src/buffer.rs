@@ -891,7 +891,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
 
                 let mut colorized = VecDeque::from(colorized);
-                let mut highlighted = vec![];
+                let mut highlighted = Vec::with_capacity(colorized.len());
 
                 // output selection_start - line_start characters verbatim
                 extract(

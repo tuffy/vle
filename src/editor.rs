@@ -417,8 +417,7 @@ impl Editor {
             }
             _ => { /* ignore other events */ } // TODO - Ctrl-W - write buffer to disk with name
                                                // TODO - Ctrl-O - open file into new buffer
-                                               // TODO - Ctrl-? - add search-and-replace mode(s)
-                                               // TODO - Alt-P  - toggle whitespace display
+                                               // TODO - Ctrl-R - add search-and-replace mode(s)
         }
     }
 
