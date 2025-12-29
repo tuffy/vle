@@ -343,7 +343,7 @@ impl Editor {
                 ..
             }) => self.update_buffer(|b| b.un_indent(INDENT)),
             Event::Key(KeyEvent {
-                code: KeyCode::Char(']'),
+                code: KeyCode::Enter,
                 modifiers: KeyModifiers::ALT,
                 kind: KeyEventKind::Press,
                 ..
