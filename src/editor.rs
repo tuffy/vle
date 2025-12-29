@@ -168,30 +168,6 @@ impl Editor {
                 }
             }
             Event::Key(KeyEvent {
-                code: KeyCode::Up,
-                modifiers: KeyModifiers::ALT,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.layout.viewport_up(1),
-            Event::Key(KeyEvent {
-                code: KeyCode::Down,
-                modifiers: KeyModifiers::ALT,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.layout.viewport_down(1),
-            Event::Key(KeyEvent {
-                code: KeyCode::PageUp,
-                modifiers: KeyModifiers::ALT,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.layout.viewport_up(PAGE_SIZE),
-            Event::Key(KeyEvent {
-                code: KeyCode::PageDown,
-                modifiers: KeyModifiers::ALT,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.layout.viewport_down(PAGE_SIZE),
-            Event::Key(KeyEvent {
                 code: KeyCode::Left,
                 modifiers: KeyModifiers::ALT,
                 kind: KeyEventKind::Press,
@@ -360,12 +336,6 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => self.update_buffer(|b| b.indent(INDENT)),
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('l'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.update_buffer(|b| b.center_viewport()),
             Event::Key(KeyEvent {
                 code: KeyCode::Tab,
                 modifiers: KeyModifiers::CONTROL,
@@ -807,51 +777,6 @@ fn process_select_find(
             None
         }
         Event::Key(KeyEvent {
-            code: KeyCode::Up,
-            modifiers: KeyModifiers::ALT,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            buffer.viewport_up(1);
-            None
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::Down,
-            modifiers: KeyModifiers::ALT,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            buffer.viewport_down(1);
-            None
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::PageUp,
-            modifiers: KeyModifiers::ALT,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            buffer.viewport_up(PAGE_SIZE);
-            None
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::PageDown,
-            modifiers: KeyModifiers::ALT,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            buffer.viewport_down(PAGE_SIZE);
-            None
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::Char('l'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            buffer.center_viewport();
-            None
-        }
-        Event::Key(KeyEvent {
             code: KeyCode::Enter | KeyCode::Esc,
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
@@ -963,14 +888,6 @@ impl Layout {
                 ..
             } => buffer,
         }
-    }
-
-    fn viewport_up(&mut self, lines: usize) {
-        self.selected_buffer_list_mut().viewport_up(lines);
-    }
-
-    fn viewport_down(&mut self, lines: usize) {
-        self.selected_buffer_list_mut().viewport_down(lines);
     }
 
     fn previous_buffer(&mut self) {

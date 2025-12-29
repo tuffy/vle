@@ -120,11 +120,10 @@ pub struct BufferId(Arc<RwLock<Buffer>>);
 #[derive(Clone)]
 pub struct BufferContext {
     buffer: Arc<RwLock<Buffer>>,
-    viewport_line: usize,     // viewport's start line (should be <= cursor)
-    viewport_height: usize,   // viewport's current height in lines
-    cursor: usize,            // cursor's absolute position in rope, in characters
-    cursor_column: usize,     // cursor's desired column, in characters
-    selection: Option<usize>, // cursor's text selection anchor
+    viewport_height: usize,         // viewport's current height in lines
+    cursor: usize,                  // cursor's absolute position in rope, in characters
+    cursor_column: usize,           // cursor's desired column, in characters
+    selection: Option<usize>,       // cursor's text selection anchor
     message: Option<BufferMessage>, // some user-facing message
 }
 
@@ -148,15 +147,6 @@ impl BufferContext {
         self.buffer.try_write().unwrap().save(&mut self.message);
     }
 
-    pub fn viewport_up(&mut self, lines: usize) {
-        self.viewport_line = self.viewport_line.saturating_sub(lines)
-    }
-
-    pub fn viewport_down(&mut self, lines: usize) {
-        self.viewport_line =
-            (self.viewport_line + lines).min(self.buffer.try_read().unwrap().total_lines());
-    }
-
     /// Returns cursor position in rope as (row, col), if possible
     ///
     /// Both indexes start from 0
@@ -178,11 +168,6 @@ impl BufferContext {
                 log_movement(&mut buf.undo);
                 update_selection(&mut self.selection, self.cursor, selecting);
                 self.cursor = (prev_start + self.cursor_column).min(prev_end);
-                viewport_follow_cursor(
-                    previous_line,
-                    &mut self.viewport_line,
-                    self.viewport_height,
-                );
             }
         }
     }
@@ -195,7 +180,6 @@ impl BufferContext {
                 log_movement(&mut buf.undo);
                 update_selection(&mut self.selection, self.cursor, selecting);
                 self.cursor = (next_start + self.cursor_column).min(next_end);
-                viewport_follow_cursor(next_line, &mut self.viewport_line, self.viewport_height);
             }
         }
     }
@@ -206,9 +190,6 @@ impl BufferContext {
         self.cursor = self.cursor.saturating_sub(1);
         self.cursor_column = cursor_column(&buf.rope, self.cursor);
         log_movement(&mut buf.undo);
-        if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
-            viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
-        }
     }
 
     pub fn cursor_forward(&mut self, selecting: bool) {
@@ -217,9 +198,6 @@ impl BufferContext {
         self.cursor = (self.cursor + 1).min(buf.rope.len_chars());
         self.cursor_column = cursor_column(&buf.rope, self.cursor);
         log_movement(&mut buf.undo);
-        if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
-            viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
-        }
     }
 
     pub fn cursor_home(&mut self, selecting: bool) {
@@ -263,7 +241,6 @@ impl BufferContext {
                 self.cursor_column = 0;
                 self.cursor = cursor;
                 self.selection = None;
-                viewport_follow_cursor(line, &mut self.viewport_line, self.viewport_height);
             }
             Err(_) => {
                 self.message = Some(BufferMessage::Error("invalid line".into()));
@@ -303,10 +280,6 @@ impl BufferContext {
         if buf.rope.try_insert(self.cursor, &pasted.data).is_ok() {
             self.cursor += pasted.chars_len;
             self.cursor_column = cursor_column(&buf.rope, self.cursor);
-
-            if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
-                viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
-            }
             buf.modified = true;
         }
     }
@@ -344,12 +317,7 @@ impl BufferContext {
                 self.cursor_column += 1;
             }
         }
-
         buf.modified = true;
-
-        if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
-            viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
-        }
     }
 
     pub fn backspace(&mut self) {
@@ -366,15 +334,6 @@ impl BufferContext {
                     // we need to recalculate the cursor column altogether
                     // in case a newline has been removed
                     self.cursor_column = cursor_column(&buf.rope, self.cursor);
-
-                    if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
-                        viewport_follow_cursor(
-                            current_line,
-                            &mut self.viewport_line,
-                            self.viewport_height,
-                        );
-                    }
-
                     buf.modified = true;
                 }
             }
@@ -385,15 +344,6 @@ impl BufferContext {
                     &mut self.cursor_column,
                     current_selection,
                 );
-
-                if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
-                    viewport_follow_cursor(
-                        current_line,
-                        &mut self.viewport_line,
-                        self.viewport_height,
-                    );
-                }
-
                 buf.modified = true;
             }
         }
@@ -417,15 +367,6 @@ impl BufferContext {
                     &mut self.cursor_column,
                     current_selection,
                 );
-
-                if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
-                    viewport_follow_cursor(
-                        current_line,
-                        &mut self.viewport_line,
-                        self.viewport_height,
-                    );
-                }
-
                 buf.modified = true;
             }
         }
@@ -455,14 +396,6 @@ impl BufferContext {
                 buf.modified = true;
                 self.cursor = selection_start;
                 self.cursor_column = cursor_column(&buf.rope, self.cursor);
-
-                if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
-                    viewport_follow_cursor(
-                        current_line,
-                        &mut self.viewport_line,
-                        self.viewport_height,
-                    );
-                }
             })
     }
 
@@ -475,13 +408,6 @@ impl BufferContext {
                 std::mem::swap(&mut self.cursor, &mut state.cursor);
                 std::mem::swap(&mut self.cursor_column, &mut state.cursor_column);
                 buf.redo.push(state);
-                if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
-                    viewport_follow_cursor(
-                        current_line,
-                        &mut self.viewport_line,
-                        self.viewport_height,
-                    );
-                }
                 self.selection = None;
             }
             None => {
@@ -502,13 +428,6 @@ impl BufferContext {
                     state,
                     finished: true,
                 });
-                if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
-                    viewport_follow_cursor(
-                        current_line,
-                        &mut self.viewport_line,
-                        self.viewport_height,
-                    );
-                }
                 self.selection = None;
             }
             None => {
@@ -601,9 +520,6 @@ impl BufferContext {
         ) {
             self.selection = Some(start);
             self.cursor = end;
-            if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
-                viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
-            }
         }
     }
 
@@ -625,16 +541,6 @@ impl BufferContext {
             log_movement(&mut buf.undo);
             self.cursor = new_pos;
             self.selection = None;
-            if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
-                viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
-            }
-        }
-    }
-
-    pub fn center_viewport(&mut self) {
-        let rope = &self.buffer.try_read().unwrap().rope;
-        if let Ok(cursor_line) = rope.try_char_to_line(self.cursor) {
-            self.viewport_line = cursor_line.saturating_sub(self.viewport_height / 2);
         }
     }
 
@@ -669,9 +575,6 @@ impl BufferContext {
         self.selection = None;
         self.cursor_column = cursor_column(&buf.rope, self.cursor);
         log_movement(&mut buf.undo);
-        if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
-            viewport_follow_cursor(current_line, &mut self.viewport_line, self.viewport_height);
-        }
 
         true
     }
@@ -724,16 +627,6 @@ fn cursor_column(rope: &ropey::Rope, cursor: usize) -> usize {
         .and_then(|line| rope.try_line_to_char(line).ok())
         .and_then(|line_start| cursor.checked_sub(line_start))
         .unwrap_or(0)
-}
-
-fn viewport_follow_cursor(current_line: usize, viewport_line: &mut usize, viewport_height: usize) {
-    if *viewport_line > current_line {
-        *viewport_line = current_line;
-    } else if let Some(max) = current_line.checked_sub(viewport_height - 1)
-        && *viewport_line < max
-    {
-        *viewport_line = max;
-    }
 }
 
 // Returns characters from the cursor's line start
@@ -806,7 +699,6 @@ impl From<Buffer> for BufferContext {
     fn from(buffer: Buffer) -> Self {
         Self {
             buffer: Arc::new(RwLock::new(buffer)),
-            viewport_line: 0,
             viewport_height: 0,
             cursor: 0,
             cursor_column: 0,
@@ -854,18 +746,6 @@ impl BufferList {
         self.buffers.get_mut(self.current)
     }
 
-    pub fn viewport_up(&mut self, lines: usize) {
-        if let Some(buf) = self.current_mut() {
-            buf.viewport_up(lines);
-        }
-    }
-
-    pub fn viewport_down(&mut self, lines: usize) {
-        if let Some(buf) = self.current_mut() {
-            buf.viewport_down(lines);
-        }
-    }
-
     pub fn next_buffer(&mut self) {
         if !self.buffers.is_empty() {
             self.current = (self.current + 1) % self.buffers.len()
@@ -881,10 +761,14 @@ impl BufferList {
         }
     }
 
+    /// Returns cursor's position relative to the viewport as (row, col)
+    ///
+    /// The cursor should be centered in the viewport unless
+    /// at the very beginning of the file.
     pub fn cursor_viewport_position(&self) -> Option<(usize, usize)> {
         let buf = self.current()?;
         buf.cursor_position()
-            .and_then(|(row, col)| Some((row.checked_sub(buf.viewport_line)?, col)))
+            .map(|(row, col)| ((buf.viewport_height / 2).min(row), col))
     }
 
     pub fn update_buf(&mut self, f: impl FnOnce(&mut BufferContext)) {
@@ -999,20 +883,18 @@ impl StatefulWidget for BufferWidget<'_> {
         // (which might occur if the rope is shrunk in another buffer)
         if state.cursor > rope.len_chars() {
             state.cursor = rope.len_chars().saturating_sub(1);
-            if let Ok(current_line) = rope.try_char_to_line(state.cursor) {
-                viewport_follow_cursor(
-                    current_line,
-                    &mut state.viewport_line,
-                    state.viewport_height,
-                );
-            }
             state.selection = None;
         }
+
+        let viewport_line: usize = rope
+            .try_char_to_line(state.cursor)
+            .map(|line| line.saturating_sub(state.viewport_height / 2))
+            .unwrap_or(0);
 
         Paragraph::new(match state.selection {
             // no selection, so nothing to highlight
             None => rope
-                .lines_at(state.viewport_line)
+                .lines_at(viewport_line)
                 .map(|line| Line::from(colorize(syntax, &tabs_to_spaces(Cow::from(line)))))
                 .take(area.height.into())
                 .collect::<Vec<_>>(),
@@ -1020,8 +902,8 @@ impl StatefulWidget for BufferWidget<'_> {
             Some(selection) => {
                 let (selection_start, selection_end) = reorder(state.cursor, selection);
 
-                rope.lines_at(state.viewport_line)
-                    .zip(state.viewport_line..)
+                rope.lines_at(viewport_line)
+                    .zip(viewport_line..)
                     .map(
                         |(line, line_number)| match line_char_range(rope, line_number) {
                             None => Line::from(colorize(syntax, &tabs_to_spaces(Cow::from(line)))),
@@ -1051,10 +933,7 @@ impl StatefulWidget for BufferWidget<'_> {
             buf,
             &mut ScrollbarState::new(buffer.total_lines())
                 .viewport_content_length(text_area.height.into())
-                .position(
-                    rope.try_char_to_line(state.cursor)
-                        .unwrap_or(state.viewport_line),
-                ),
+                .position(rope.try_char_to_line(state.cursor).unwrap_or(viewport_line)),
         );
 
         match self.mode {
