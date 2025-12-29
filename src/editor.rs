@@ -113,6 +113,7 @@ impl Editor {
             }) => {
                 self.mode = EditorMode::default();
             }
+            // TODO - F1 - toggle help display
             event => match &mut self.mode {
                 EditorMode::Editing => self.process_normal_event(event),
                 EditorMode::ConfirmClose { buffer } => {
@@ -414,8 +415,7 @@ impl Editor {
                     cache: String::default(),
                 };
             }
-            _ => { /* ignore other events */ } // TODO - Ctrl-H - toggle help display
-                                               // TODO - Ctrl-W - write buffer to disk with name
+            _ => { /* ignore other events */ } // TODO - Ctrl-W - write buffer to disk with name
                                                // TODO - Ctrl-O - open file into new buffer
                                                // TODO - Ctrl-? - add search-and-replace mode(s)
                                                // TODO - Alt-P  - toggle whitespace display

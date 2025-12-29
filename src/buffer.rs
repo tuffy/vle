@@ -392,6 +392,7 @@ impl BufferContext {
             .get_slice(selection_start..selection_end)
             .map(|r| r.into())
             .inspect(|_| {
+                buf.log_undo(self.cursor, self.cursor_column);
                 buf.rope.remove(selection_start..selection_end);
                 buf.modified = true;
                 self.cursor = selection_start;
