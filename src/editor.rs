@@ -27,9 +27,11 @@ pub enum EditorMode {
         prompt: Prompt,
         direction: FindDirection,
         history_idx: usize,
+        cache: String,
     },
     SelectFind {
         search: Vec<char>,
+        cache: String,
     },
 }
 
@@ -112,6 +114,7 @@ impl Editor {
                 direction,
                 prompt,
                 history_idx,
+                cache,
             } => {
                 if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
                     && let Some(new_mode) = process_prompt_find(
@@ -121,14 +124,15 @@ impl Editor {
                         &mut self.search_history,
                         history_idx,
                         event,
+                        cache,
                     )
                 {
                     self.mode = new_mode;
                 }
             }
-            EditorMode::SelectFind { search } => {
+            EditorMode::SelectFind { search, cache } => {
                 if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                    && let Some(new_mode) = process_select_find(buf, search, event)
+                    && let Some(new_mode) = process_select_find(buf, search, event, cache)
                 {
                     self.mode = new_mode;
                 }
@@ -412,6 +416,7 @@ impl Editor {
                     direction: FindDirection::Forward,
                     prompt: Prompt::default(),
                     history_idx: self.search_history.len(),
+                    cache: String::default(),
                 };
             }
             Event::Key(KeyEvent {
@@ -424,6 +429,7 @@ impl Editor {
                     direction: FindDirection::Backward,
                     prompt: Prompt::default(),
                     history_idx: self.search_history.len(),
+                    cache: String::default(),
                 };
             }
             _ => { /* ignore other events */ } // TODO - Ctrl-H - toggle help display
@@ -582,6 +588,7 @@ fn process_prompt_find(
     previous: &mut Vec<Vec<char>>,
     previous_idx: &mut usize,
     event: Event,
+    cache: &mut String,
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
@@ -614,7 +621,7 @@ fn process_prompt_find(
                 iter.next()
             }
 
-            let search = prompt.chars().into_iter().copied().collect::<Vec<_>>();
+            let search = prompt.chars().to_vec();
             match first(previous.extract_if(.., |e| e == &search)) {
                 Some(old_entry) => {
                     previous.push(old_entry);
@@ -624,9 +631,16 @@ fn process_prompt_find(
                 }
             }
 
-            match buffer.search(matches!(direction, FindDirection::Forward), prompt.chars()) {
+            match buffer.search(
+                matches!(direction, FindDirection::Forward),
+                prompt.chars(),
+                cache,
+            ) {
                 // push new entry to top of stack, whether found or not
-                true => Some(EditorMode::SelectFind { search }),
+                true => Some(EditorMode::SelectFind {
+                    search,
+                    cache: String::default(),
+                }),
                 false => {
                     buffer.set_error("Not Found");
                     Some(EditorMode::default())
@@ -743,6 +757,7 @@ fn process_select_find(
     buffer: &mut BufferContext,
     search: &[char],
     event: Event,
+    cache: &mut String,
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
@@ -753,7 +768,7 @@ fn process_select_find(
             kind: KeyEventKind::Press,
             ..
         }) => {
-            buffer.search(false, search);
+            buffer.search(false, search, cache);
             None
         }
         Event::Key(KeyEvent {
@@ -762,7 +777,7 @@ fn process_select_find(
             kind: KeyEventKind::Press,
             ..
         }) => {
-            buffer.search(true, search);
+            buffer.search(true, search, cache);
             None
         }
         Event::Key(KeyEvent {

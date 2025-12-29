@@ -640,27 +640,30 @@ impl BufferContext {
     }
 
     // returns true if search term found
-    pub fn search(&mut self, forward: bool, term: &[char]) -> bool {
+    pub fn search(&mut self, forward: bool, term: &[char], cache: &mut String) -> bool {
         let buf = &mut self.buffer.try_write().unwrap();
+        if cache.len() != buf.rope.len_bytes() {
+            *cache = buf.rope.chunks().collect();
+        }
         let found = match forward {
-            true => match (self.cursor..buf.rope.len_chars()).skip(1).find(|idx| {
-                buf.rope
-                    .chars_at(*idx)
-                    .take(term.len())
-                    .eq(term.iter().copied())
-            }) {
-                Some(idx) => idx,
-                None => return false,
-            },
-            false => match (0..self.cursor).rev().find(|idx| {
-                buf.rope
-                    .chars_at(*idx)
-                    .take(term.len())
-                    .eq(term.iter().copied())
-            }) {
-                Some(idx) => idx,
-                None => return false,
-            },
+            true => {
+                let Ok(byte_start) = buf.rope.try_char_to_byte(self.cursor + 1) else {
+                    return false;
+                };
+                match cache[byte_start..].find(&term.iter().collect::<String>()) {
+                    Some(found_offset) => buf.rope.byte_to_char(byte_start + found_offset),
+                    None => return false,
+                }
+            }
+            false => {
+                let Ok(byte_start) = buf.rope.try_char_to_byte(self.cursor) else {
+                    return false;
+                };
+                match cache[0..byte_start].rfind(&term.iter().collect::<String>()) {
+                    Some(found_offset) => buf.rope.byte_to_char(found_offset),
+                    None => return false,
+                }
+            }
         };
 
         self.cursor = found;
@@ -1146,7 +1149,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
                 PromptWidget { prompt }.render(prompt_area, buf);
             }
-            Some(EditorMode::SelectFind { search }) => {
+            Some(EditorMode::SelectFind { search, .. }) => {
                 let found = Paragraph::new(format!(
                     "Found \"{}\"",
                     search.iter().copied().collect::<String>()
