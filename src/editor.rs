@@ -168,14 +168,14 @@ impl Editor {
                 }
             }
             Event::Key(KeyEvent {
-                code: KeyCode::Left,
-                modifiers: KeyModifiers::ALT,
+                code: KeyCode::PageUp,
+                modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,
                 ..
             }) => self.layout.previous_buffer(),
             Event::Key(KeyEvent {
-                code: KeyCode::Right,
-                modifiers: KeyModifiers::ALT,
+                code: KeyCode::PageDown,
+                modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,
                 ..
             }) => self.layout.next_buffer(),
