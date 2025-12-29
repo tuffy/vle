@@ -639,7 +639,7 @@ impl BufferContext {
     }
 
     // returns true if search term found
-    pub fn search(&mut self, forward: bool, term: &[char], cache: &mut String) -> bool {
+    pub fn search(&mut self, forward: bool, term: &str, cache: &mut String) -> bool {
         let buf = &mut self.buffer.try_write().unwrap();
         if cache.len() != buf.rope.len_bytes() {
             *cache = buf.rope.chunks().collect();
@@ -649,7 +649,7 @@ impl BufferContext {
                 let Ok(byte_start) = buf.rope.try_char_to_byte(self.cursor + 1) else {
                     return false;
                 };
-                match cache[byte_start..].find(&term.iter().collect::<String>()) {
+                match cache[byte_start..].find(term) {
                     Some(found_offset) => buf.rope.byte_to_char(byte_start + found_offset),
                     None => return false,
                 }
@@ -658,7 +658,7 @@ impl BufferContext {
                 let Ok(byte_start) = buf.rope.try_char_to_byte(self.cursor) else {
                     return false;
                 };
-                match cache[0..byte_start].rfind(&term.iter().collect::<String>()) {
+                match cache[0..byte_start].rfind(term) {
                     Some(found_offset) => buf.rope.byte_to_char(found_offset),
                     None => return false,
                 }
@@ -1150,11 +1150,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 PromptWidget { prompt }.render(prompt_area, buf);
             }
             Some(EditorMode::SelectFind { search, .. }) => {
-                let found = Paragraph::new(format!(
-                    "Found \"{}\"",
-                    search.iter().copied().collect::<String>()
-                ))
-                .style(REVERSED);
+                let found = Paragraph::new(format!("Found \"{search}\"")).style(REVERSED);
 
                 match buffer.rope.try_char_to_line(state.cursor) {
                     Ok(line) => {

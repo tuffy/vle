@@ -30,7 +30,7 @@ pub enum EditorMode {
         cache: String,
     },
     SelectFind {
-        search: Vec<char>,
+        search: String,
         cache: String,
     },
 }
@@ -631,14 +631,16 @@ fn process_prompt_find(
                 }
             }
 
+            let search_string = prompt.chars().iter().copied().collect::<String>();
+
             match buffer.search(
                 matches!(direction, FindDirection::Forward),
-                prompt.chars(),
+                &search_string,
                 cache,
             ) {
                 // push new entry to top of stack, whether found or not
                 true => Some(EditorMode::SelectFind {
-                    search,
+                    search: search_string,
                     cache: std::mem::take(cache),
                 }),
                 false => {
@@ -757,7 +759,7 @@ fn process_select_line(
 
 fn process_select_find(
     buffer: &mut BufferContext,
-    search: &[char],
+    search: &str,
     event: Event,
     cache: &mut String,
 ) -> Option<EditorMode> {
