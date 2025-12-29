@@ -102,48 +102,60 @@ impl Editor {
     }
 
     pub fn process_event(&mut self, event: Event) {
-        match &mut self.mode {
-            EditorMode::Editing => self.process_normal_event(event),
-            EditorMode::ConfirmClose { buffer } => {
-                let buffer = buffer.clone();
-                self.process_confirm_close(event, buffer)
+        use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+        match event {
+            Event::Key(KeyEvent {
+                code: KeyCode::Esc,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.mode = EditorMode::default();
             }
-            EditorMode::SelectInside => self.process_select_inside(event),
-            EditorMode::Split => self.process_split(event),
-            EditorMode::PromptFind {
-                direction,
-                prompt,
-                history_idx,
-                cache,
-            } => {
-                if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                    && let Some(new_mode) = process_prompt_find(
-                        buf,
-                        *direction,
-                        prompt,
-                        &mut self.search_history,
-                        history_idx,
-                        event,
-                        cache,
-                    )
-                {
-                    self.mode = new_mode;
+            event => match &mut self.mode {
+                EditorMode::Editing => self.process_normal_event(event),
+                EditorMode::ConfirmClose { buffer } => {
+                    let buffer = buffer.clone();
+                    self.process_confirm_close(event, buffer)
                 }
-            }
-            EditorMode::SelectFind { search, cache } => {
-                if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                    && let Some(new_mode) = process_select_find(buf, search, event, cache)
-                {
-                    self.mode = new_mode;
+                EditorMode::SelectInside => self.process_select_inside(event),
+                EditorMode::Split => self.process_split(event),
+                EditorMode::PromptFind {
+                    direction,
+                    prompt,
+                    history_idx,
+                    cache,
+                } => {
+                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
+                        && let Some(new_mode) = process_prompt_find(
+                            buf,
+                            *direction,
+                            prompt,
+                            &mut self.search_history,
+                            history_idx,
+                            event,
+                            cache,
+                        )
+                    {
+                        self.mode = new_mode;
+                    }
                 }
-            }
-            EditorMode::SelectLine { prompt } => {
-                if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                    && let Some(new_mode) = process_select_line(buf, prompt, event)
-                {
-                    self.mode = new_mode;
+                EditorMode::SelectFind { search, cache } => {
+                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
+                        && let Some(new_mode) = process_select_find(buf, search, event, cache)
+                    {
+                        self.mode = new_mode;
+                    }
                 }
-            }
+                EditorMode::SelectLine { prompt } => {
+                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
+                        && let Some(new_mode) = process_select_line(buf, prompt, event)
+                    {
+                        self.mode = new_mode;
+                    }
+                }
+            },
         }
     }
 
@@ -486,14 +498,6 @@ impl Editor {
                 self.update_buffer(|b| b.select_inside(('\'', '\''), None));
                 self.mode = EditorMode::default();
             }
-            Event::Key(KeyEvent {
-                code: KeyCode::Esc,
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
-                self.mode = EditorMode::default();
-            }
             _ => { /* do nothing */ }
         }
     }
@@ -536,14 +540,6 @@ impl Editor {
                 ..
             }) => {
                 self.layout.swap_panes();
-                self.mode = EditorMode::default();
-            }
-            Event::Key(KeyEvent {
-                code: KeyCode::Esc,
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
                 self.mode = EditorMode::default();
             }
             _ => { /* ignore other events */ }
@@ -667,12 +663,6 @@ fn process_prompt_find(
             }
             None
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Esc,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => Some(EditorMode::default()),
         _ => None, // ignore other events
     }
 }
@@ -736,12 +726,6 @@ fn process_select_line(
             buffer.select_line(buffer.last_line());
             Some(EditorMode::default())
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Esc,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => Some(EditorMode::default()),
         _ => {
             /* ignore other events */
             None
@@ -799,7 +783,7 @@ fn process_select_find(
             None
         }
         Event::Key(KeyEvent {
-            code: KeyCode::Enter | KeyCode::Esc,
+            code: KeyCode::Enter,
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
