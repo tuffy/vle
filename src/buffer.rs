@@ -399,6 +399,10 @@ impl BufferContext {
             })
     }
 
+    pub fn clear_selection(&mut self) {
+        self.selection = None;
+    }
+
     pub fn perform_undo(&mut self) {
         let mut buf = self.buffer.try_write().unwrap();
         match buf.undo.pop() {
@@ -550,13 +554,20 @@ impl BufferContext {
         if cache.len() != buf.rope.len_bytes() {
             *cache = buf.rope.chunks().collect();
         }
-        let found = match forward {
+
+        (self.cursor, self.selection) = match forward {
             true => {
                 let Ok(byte_start) = buf.rope.try_char_to_byte(self.cursor + 1) else {
                     return false;
                 };
                 match cache[byte_start..].find(term) {
-                    Some(found_offset) => buf.rope.byte_to_char(byte_start + found_offset),
+                    Some(found_offset) => (
+                        buf.rope.byte_to_char(byte_start + found_offset),
+                        Some(
+                            buf.rope
+                                .byte_to_char(byte_start + found_offset + term.len()),
+                        ),
+                    ),
                     None => return false,
                 }
             }
@@ -565,14 +576,15 @@ impl BufferContext {
                     return false;
                 };
                 match cache[0..byte_start].rfind(term) {
-                    Some(found_offset) => buf.rope.byte_to_char(found_offset),
+                    Some(found_offset) => (
+                        buf.rope.byte_to_char(found_offset),
+                        Some(buf.rope.byte_to_char(found_offset + term.len())),
+                    ),
                     None => return false,
                 }
             }
         };
 
-        self.cursor = found;
-        self.selection = None;
         self.cursor_column = cursor_column(&buf.rope, self.cursor);
         log_movement(&mut buf.undo);
 

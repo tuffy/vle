@@ -781,7 +781,10 @@ fn process_select_find(
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
-        }) => Some(EditorMode::default()),
+        }) => {
+            buffer.clear_selection();
+            Some(EditorMode::default())
+        }
         _ => None, // ignore other events
     }
 }
