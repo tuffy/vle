@@ -63,13 +63,12 @@ impl Source {
 
 /// A buffer corresponding to a file on disk (either local or remote)
 struct Buffer {
-    source: Source,                 // the source file
-    rope: ropey::Rope,              // the data rope
-    modified: bool,                 // whether buffer has been modified since last save
-    undo: Vec<Undo>,                // the undo stack
-    redo: Vec<BufferState>,         // the redo stack
-    message: Option<BufferMessage>, // some user-facing message
-    syntax: Syntax,                 // the syntax highlighting to use
+    source: Source,         // the source file
+    rope: ropey::Rope,      // the data rope
+    modified: bool,         // whether buffer has been modified since last save
+    undo: Vec<Undo>,        // the undo stack
+    redo: Vec<BufferState>, // the redo stack
+    syntax: Syntax,         // the syntax highlighting to use
 }
 
 impl Buffer {
@@ -83,18 +82,17 @@ impl Buffer {
             modified: false,
             undo: vec![],
             redo: vec![],
-            message: None,
         })
     }
 
-    fn save(&mut self) {
+    fn save(&mut self, message: &mut Option<BufferMessage>) {
         match self.source.save_data(&self.rope) {
             Ok(()) => {
                 self.modified = false;
                 log_movement(&mut self.undo);
             }
             Err(err) => {
-                self.message = Some(BufferMessage::Error(err.to_string().into()));
+                *message = Some(BufferMessage::Error(err.to_string().into()));
             }
         }
     }
@@ -127,6 +125,7 @@ pub struct BufferContext {
     cursor: usize,            // cursor's absolute position in rope, in characters
     cursor_column: usize,     // cursor's desired column, in characters
     selection: Option<usize>, // cursor's text selection anchor
+    message: Option<BufferMessage>, // some user-facing message
 }
 
 // moving the cursor vertically should preserve the cursor column
@@ -146,7 +145,7 @@ impl BufferContext {
     }
 
     pub fn save(&mut self) {
-        self.buffer.try_write().unwrap().save();
+        self.buffer.try_write().unwrap().save(&mut self.message);
     }
 
     pub fn viewport_up(&mut self, lines: usize) {
@@ -267,7 +266,7 @@ impl BufferContext {
                 viewport_follow_cursor(line, &mut self.viewport_line, self.viewport_height);
             }
             Err(_) => {
-                buf.message = Some(BufferMessage::Error("invalid line".into()));
+                self.message = Some(BufferMessage::Error("invalid line".into()));
             }
         }
     }
@@ -486,7 +485,7 @@ impl BufferContext {
                 self.selection = None;
             }
             None => {
-                buf.message = Some(BufferMessage::Notice("nothing left to undo".into()));
+                self.message = Some(BufferMessage::Notice("nothing left to undo".into()));
             }
         }
     }
@@ -513,7 +512,7 @@ impl BufferContext {
                 self.selection = None;
             }
             None => {
-                buf.message = Some(BufferMessage::Notice("nothing left to redo".into()));
+                self.message = Some(BufferMessage::Notice("nothing left to redo".into()));
             }
         }
     }
@@ -678,7 +677,7 @@ impl BufferContext {
     }
 
     pub fn set_error<S: Into<Cow<'static, str>>>(&mut self, error: S) {
-        self.buffer.try_write().unwrap().message = Some(BufferMessage::Error(error.into()));
+        self.message = Some(BufferMessage::Error(error.into()));
     }
 }
 
@@ -812,6 +811,7 @@ impl From<Buffer> for BufferContext {
             cursor: 0,
             cursor_column: 0,
             selection: None,
+            message: None,
         }
     }
 }
@@ -991,7 +991,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
         state.viewport_height = text_area.height.into();
 
-        let mut buffer = state.buffer.try_write().unwrap();
+        let buffer = state.buffer.try_read().unwrap();
         let rope = &buffer.rope;
         let syntax = &buffer.syntax;
 
@@ -1058,7 +1058,7 @@ impl StatefulWidget for BufferWidget<'_> {
         );
 
         match self.mode {
-            None | Some(EditorMode::Editing) => match buffer.message.take() {
+            None | Some(EditorMode::Editing) => match state.message.take() {
                 None => {
                     let source = Paragraph::new(format!(
                         "{} {}",
@@ -1235,6 +1235,7 @@ fn log_undo(
     }
 }
 
+#[derive(Clone)]
 enum BufferMessage {
     Notice(Cow<'static, str>),
     Error(Cow<'static, str>),
