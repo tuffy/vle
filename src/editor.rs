@@ -350,30 +350,30 @@ impl Editor {
                 ..
             }) => self.update_buffer(|b| b.indent(INDENT)),
             Event::Key(KeyEvent {
-                code: KeyCode::Tab,
-                modifiers: KeyModifiers::CONTROL,
+                code: KeyCode::BackTab,
+                modifiers: KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
                 ..
             }) => self.update_buffer(|b| b.un_indent(INDENT)),
             Event::Key(KeyEvent {
-                code: KeyCode::Enter,
-                modifiers: KeyModifiers::ALT,
+                code: KeyCode::Char('p'),
+                modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,
                 ..
             }) => {
                 self.update_buffer(|b| b.select_matching_paren());
             }
             Event::Key(KeyEvent {
-                code: KeyCode::Char('i'),
-                modifiers: KeyModifiers::ALT,
+                code: KeyCode::Char('e'),
+                modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,
                 ..
             }) => {
                 self.mode = EditorMode::SelectInside;
             }
             Event::Key(KeyEvent {
-                code: KeyCode::Char('s'),
-                modifiers: KeyModifiers::ALT,
+                code: KeyCode::Char('l'),
+                modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,
                 ..
             }) => {
