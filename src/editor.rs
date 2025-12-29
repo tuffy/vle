@@ -26,7 +26,7 @@ pub enum EditorMode {
     PromptFind {
         prompt: Prompt,
         direction: FindDirection,
-        history_idx: usize,
+        history_idx: Option<usize>,
         cache: String,
     },
     SelectFind {
@@ -415,7 +415,7 @@ impl Editor {
                 self.mode = EditorMode::PromptFind {
                     direction: FindDirection::Forward,
                     prompt: Prompt::default(),
-                    history_idx: self.search_history.len(),
+                    history_idx: None,
                     cache: String::default(),
                 };
             }
@@ -428,7 +428,7 @@ impl Editor {
                 self.mode = EditorMode::PromptFind {
                     direction: FindDirection::Backward,
                     prompt: Prompt::default(),
-                    history_idx: self.search_history.len(),
+                    history_idx: None,
                     cache: String::default(),
                 };
             }
@@ -586,7 +586,7 @@ fn process_prompt_find(
     direction: FindDirection,
     prompt: &mut Prompt,
     previous: &mut Vec<Vec<char>>,
-    previous_idx: &mut usize,
+    previous_idx: &mut Option<usize>,
     event: Event,
     cache: &mut String,
 ) -> Option<EditorMode> {
@@ -653,6 +653,7 @@ fn process_prompt_find(
             kind: KeyEventKind::Press,
             ..
         }) => {
+            let previous_idx = previous_idx.get_or_insert(previous.len());
             *previous_idx = (*previous_idx + 1).min(previous.len());
             if let Some(previous_prompt) = previous.get(*previous_idx) {
                 prompt.set(previous_prompt);
@@ -665,6 +666,7 @@ fn process_prompt_find(
             kind: KeyEventKind::Press,
             ..
         }) => {
+            let previous_idx = previous_idx.get_or_insert(previous.len());
             *previous_idx = previous_idx.saturating_sub(1);
             if let Some(previous_prompt) = previous.get(*previous_idx) {
                 prompt.set(previous_prompt);
@@ -762,6 +764,28 @@ fn process_select_find(
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
     match event {
+        Event::Key(KeyEvent {
+            code: KeyCode::Char('f'),
+            modifiers: KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press,
+            ..
+        }) => Some(EditorMode::PromptFind {
+            direction: FindDirection::Forward,
+            prompt: Prompt::default(),
+            history_idx: None,
+            cache: std::mem::take(cache),
+        }),
+        Event::Key(KeyEvent {
+            code: KeyCode::Char('b'),
+            modifiers: KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press,
+            ..
+        }) => Some(EditorMode::PromptFind {
+            direction: FindDirection::Backward,
+            prompt: Prompt::default(),
+            history_idx: None,
+            cache: std::mem::take(cache),
+        }),
         Event::Key(KeyEvent {
             code: KeyCode::Up,
             modifiers: KeyModifiers::NONE,
