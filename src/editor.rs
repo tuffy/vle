@@ -639,7 +639,7 @@ fn process_prompt_find(
                 // push new entry to top of stack, whether found or not
                 true => Some(EditorMode::SelectFind {
                     search,
-                    cache: String::default(),
+                    cache: std::mem::take(cache),
                 }),
                 false => {
                     buffer.set_error("Not Found");
