@@ -147,6 +147,14 @@ impl BufferContext {
         self.buffer.try_write().unwrap().save(&mut self.message);
     }
 
+    pub fn set_selection(&mut self, start: usize, end: usize) {
+        assert!(end >= start);
+        let buf = self.buffer.try_read().unwrap();
+        self.cursor = start;
+        self.selection = Some(end);
+        self.cursor_column = cursor_column(&buf.rope, self.cursor);
+    }
+
     /// Returns cursor position in rope as (row, col), if possible
     ///
     /// Both indexes start from 0
