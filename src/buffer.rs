@@ -42,10 +42,11 @@ impl Source {
         use std::io::BufReader;
 
         match self {
-            Self::File(path) => {
-                // TODO - if file doesn't exist, create new rope
-                File::open(path).and_then(|f| ropey::Rope::from_reader(BufReader::new(f)))
-            }
+            Self::File(path) => match File::open(path) {
+                Ok(f) => ropey::Rope::from_reader(BufReader::new(f)),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(ropey::Rope::default()),
+                Err(e) => Err(e),
+            },
         }
     }
 
