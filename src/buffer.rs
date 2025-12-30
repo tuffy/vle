@@ -166,8 +166,18 @@ impl BufferContext {
         let line = rope.try_char_to_line(self.cursor).ok()?;
         let line_start = rope.try_line_to_char(line).ok()?;
 
-        // TODO - account for tabs between line_start and cursor
-        Some((line, self.cursor.checked_sub(line_start)?))
+        // TODO - make spaces-per-tab configurable
+
+        Some((
+            line,
+            rope.chars_at(line_start)
+                .take(self.cursor.checked_sub(line_start)?)
+                .map(|c| match c {
+                    '\t' => 4,
+                    _ => 1,
+                })
+                .sum()
+        ))
     }
 
     pub fn cursor_up(&mut self, lines: usize, selecting: bool) {
@@ -864,12 +874,17 @@ impl StatefulWidget for BufferWidget<'_> {
         };
         use std::borrow::Cow;
 
-        fn tabs_to_spaces<'s, S: Into<Cow<'s, str>> + AsRef<str>>(s: S) -> Cow<'s, str> {
-            if s.as_ref().contains('\t') {
-                s.as_ref().replace('\t', "    ").into()
-            } else {
-                s.into()
+        // TODO - make spaces-per-tab configurable
+
+        fn widen_tabs(mut input: Line<'static>) -> Line<'static> {
+            fn tabs_to_spaces(s: &mut Cow<'static, str>) {
+                if s.as_ref().contains('\t') {
+                    *s = Cow::Owned(s.as_ref().replace('\t', "    "));
+                }
             }
+
+            input.spans.iter_mut().for_each(|s| tabs_to_spaces(&mut s.content));
+            input
         }
 
         // Colorize syntax of the given text
@@ -991,7 +1006,8 @@ impl StatefulWidget for BufferWidget<'_> {
             // no selection, so nothing to highlight
             None => rope
                 .lines_at(viewport_line)
-                .map(|line| Line::from(colorize(syntax, &tabs_to_spaces(Cow::from(line)))))
+                .map(|line| Line::from(colorize(syntax, &Cow::from(line))))
+                .map(widen_tabs)
                 .take(area.height.into())
                 .collect::<Vec<_>>(),
             // highlight whole line, no line, or part of the line
@@ -1002,14 +1018,15 @@ impl StatefulWidget for BufferWidget<'_> {
                     .zip(viewport_line..)
                     .map(
                         |(line, line_number)| match line_char_range(rope, line_number) {
-                            None => Line::from(colorize(syntax, &tabs_to_spaces(Cow::from(line)))),
+                            None => Line::from(colorize(syntax, &Cow::from(line))),
                             Some((line_start, line_end)) => highlight_selection(
-                                colorize(syntax, &tabs_to_spaces(Cow::from(line))),
+                                colorize(syntax, &Cow::from(line)),
                                 (line_start, line_end),
                                 (selection_start, selection_end),
                             ),
                         },
                     )
+                    .map(widen_tabs)
                     .take(area.height.into())
                     .collect::<Vec<_>>()
             }
@@ -1119,7 +1136,7 @@ impl StatefulWidget for BufferWidget<'_> {
             }
             Some(EditorMode::ReplaceWith { with, matches, .. }) => {
                 let matches = match matches.len() {
-                    1 => format!("(1 match) "),
+                    1 => "(1 match) ".to_string(),
                     matches => format!("({matches} matches) "),
                 };
 
