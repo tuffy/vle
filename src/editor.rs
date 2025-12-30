@@ -761,8 +761,6 @@ fn process_replace_with(
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-    // TODO - display matches in buffer widget
-
     match event {
         Event::Key(KeyEvent {
             code: KeyCode::Char(c),

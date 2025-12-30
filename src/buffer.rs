@@ -1116,15 +1116,29 @@ impl StatefulWidget for BufferWidget<'_> {
 
                 PromptWidget { prompt: replace }.render(prompt_area, buf);
             }
-            Some(EditorMode::ReplaceWith { with, .. }) => {
-                let [label_area, prompt_area] =
-                    Layout::horizontal([Length(15), Min(0)]).areas(status_area);
+            Some(EditorMode::ReplaceWith { with, matches, .. }) => {
+                let matches = match matches.len() {
+                    1 => format!("(1 match) "),
+                    matches => format!("({matches} matches) "),
+                };
+
+                // our labal is ASCII, so its width is easy to calculate
+                let [label_area, prompt_area, matches_area] = Layout::horizontal([
+                    Length(15),
+                    Min(0),
+                    Length(matches.len().try_into().unwrap()),
+                ])
+                .areas(status_area);
 
                 Paragraph::new("Replace With : ")
                     .style(REVERSED)
                     .render(label_area, buf);
 
                 PromptWidget { prompt: with }.render(prompt_area, buf);
+
+                Paragraph::new(matches)
+                    .style(REVERSED)
+                    .render(matches_area, buf);
             }
         }
     }
