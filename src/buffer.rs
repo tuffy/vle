@@ -400,10 +400,6 @@ impl BufferContext {
             })
     }
 
-    pub fn clear_selection(&mut self) {
-        self.selection = None;
-    }
-
     pub fn perform_undo(&mut self) {
         let mut buf = self.buffer.try_write().unwrap();
         match buf.undo.pop() {
@@ -590,10 +586,6 @@ impl BufferContext {
         log_movement(&mut buf.undo);
 
         true
-    }
-
-    pub fn set_error<S: Into<Cow<'static, str>>>(&mut self, error: S) {
-        self.message = Some(BufferMessage::Error(error.into()));
     }
 }
 
@@ -804,7 +796,7 @@ impl StatefulWidget for BufferWidget<'_> {
         buf: &mut ratatui::buffer::Buffer,
         state: &mut BufferContext,
     ) {
-        use crate::{editor::FindDirection, prompt::PromptWidget, syntax::Highlighter};
+        use crate::{prompt::PromptWidget, syntax::Highlighter};
         use ratatui::{
             layout::{
                 Constraint::{Length, Min},
@@ -1049,49 +1041,15 @@ impl StatefulWidget for BufferWidget<'_> {
 
                 PromptWidget { prompt }.render(prompt_area, buf);
             }
-            Some(EditorMode::PromptFind {
-                direction, prompt, ..
-            }) => {
-                let [label_area, prompt_area] = Layout::horizontal([
-                    Length(match direction {
-                        FindDirection::Forward => 15,
-                        FindDirection::Backward => 16,
-                    }),
-                    Min(0),
-                ])
-                .areas(status_area);
+            Some(EditorMode::Find { prompt, .. }) => {
+                let [label_area, prompt_area] =
+                    Layout::horizontal([Length(7), Min(0)]).areas(status_area);
 
-                Paragraph::new(match direction {
-                    FindDirection::Forward => "Find Forward : ",
-                    FindDirection::Backward => "Find Backward : ",
-                })
-                .style(REVERSED)
-                .render(label_area, buf);
+                Paragraph::new("Find : ")
+                    .style(REVERSED)
+                    .render(label_area, buf);
 
                 PromptWidget { prompt }.render(prompt_area, buf);
-            }
-            Some(EditorMode::SelectFind { search, .. }) => {
-                let found = Paragraph::new(format!("Found \"{search}\"")).style(REVERSED);
-
-                match buffer.rope.try_char_to_line(state.cursor) {
-                    Ok(line) => {
-                        let line = std::num::NonZero::new(line + 1).unwrap();
-                        let digits = line.ilog10() + 1;
-
-                        let [found_area, line_area] =
-                            Layout::horizontal([Min(0), Length((digits + 1).try_into().unwrap())])
-                                .areas(status_area);
-
-                        found.render(found_area, buf);
-
-                        Paragraph::new(line.to_string())
-                            .style(REVERSED)
-                            .render(line_area, buf);
-                    }
-                    Err(_) => {
-                        found.render(status_area, buf);
-                    }
-                }
             }
         }
     }

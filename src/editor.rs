@@ -14,7 +14,7 @@ const PAGE_SIZE: usize = 25;
 #[derive(Default)]
 pub enum EditorMode {
     #[default]
-    Editing, // standard editing mode
+    Editing,
     ConfirmClose {
         buffer: BufferId,
     },
@@ -22,29 +22,16 @@ pub enum EditorMode {
     SelectLine {
         prompt: Prompt,
     },
-    PromptFind {
+    Find {
         prompt: Prompt,
-        direction: FindDirection,
-        history_idx: Option<usize>,
         cache: String,
     },
-    SelectFind {
-        search: String,
-        cache: String,
-    },
-}
-
-#[derive(Copy, Clone)]
-pub enum FindDirection {
-    Forward,
-    Backward,
 }
 
 pub struct Editor {
     layout: Layout,
     mode: EditorMode,
     cut_buffer: Option<CutBuffer>, // cut buffer shared globally across editor
-    search_history: Vec<Vec<char>>, // search history also shared globally
 }
 
 impl Editor {
@@ -53,7 +40,6 @@ impl Editor {
             layout: Layout::Single(BufferList::new(buffers)?),
             mode: EditorMode::default(),
             cut_buffer: None,
-            search_history: vec![],
         })
     }
 
@@ -120,38 +106,16 @@ impl Editor {
                     self.process_confirm_close(event, buffer)
                 }
                 EditorMode::SelectInside => self.process_select_inside(event),
-                EditorMode::PromptFind {
-                    direction,
-                    prompt,
-                    history_idx,
-                    cache,
-                } => {
-                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                        && let Some(new_mode) = process_prompt_find(
-                            buf,
-                            *direction,
-                            prompt,
-                            &mut self.search_history,
-                            history_idx,
-                            event,
-                            cache,
-                        )
-                    {
-                        self.mode = new_mode;
-                    }
-                }
-                EditorMode::SelectFind { search, cache } => {
-                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                        && let Some(new_mode) = process_select_find(buf, search, event, cache)
-                    {
-                        self.mode = new_mode;
-                    }
-                }
                 EditorMode::SelectLine { prompt } => {
                     if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
                         && let Some(new_mode) = process_select_line(buf, prompt, event)
                     {
                         self.mode = new_mode;
+                    }
+                }
+                EditorMode::Find { prompt, cache } => {
+                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut() {
+                        process_find(buf, prompt, event, cache)
                     }
                 }
             },
@@ -479,23 +443,8 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                self.mode = EditorMode::PromptFind {
-                    direction: FindDirection::Forward,
+                self.mode = EditorMode::Find {
                     prompt: Prompt::default(),
-                    history_idx: None,
-                    cache: String::default(),
-                };
-            }
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('b'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
-                self.mode = EditorMode::PromptFind {
-                    direction: FindDirection::Backward,
-                    prompt: Prompt::default(),
-                    history_idx: None,
                     cache: String::default(),
                 };
             }
@@ -586,126 +535,6 @@ impl Editor {
     }
 }
 
-fn process_prompt_find(
-    buffer: &mut BufferContext,
-    direction: FindDirection,
-    prompt: &mut Prompt,
-    previous: &mut Vec<Vec<char>>,
-    previous_idx: &mut Option<usize>,
-    event: Event,
-    cache: &mut String,
-) -> Option<EditorMode> {
-    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-
-    match event {
-        Event::Key(KeyEvent {
-            code: KeyCode::Char('f'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            ..
-        }) => Some(EditorMode::PromptFind {
-            prompt: std::mem::take(prompt),
-            direction: FindDirection::Forward,
-            history_idx: std::mem::take(previous_idx),
-            cache: std::mem::take(cache),
-        }),
-        Event::Key(KeyEvent {
-            code: KeyCode::Char('b'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            ..
-        }) => Some(EditorMode::PromptFind {
-            prompt: std::mem::take(prompt),
-            direction: FindDirection::Backward,
-            history_idx: std::mem::take(previous_idx),
-            cache: std::mem::take(cache),
-        }),
-        Event::Key(KeyEvent {
-            code: KeyCode::Char(c),
-            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            prompt.push(c);
-            None
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::Backspace,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            prompt.pop();
-            None
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::Enter,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            fn first<T>(mut iter: impl Iterator<Item = T>) -> Option<T> {
-                iter.next()
-            }
-
-            let search = prompt.chars().to_vec();
-            match first(previous.extract_if(.., |e| e == &search)) {
-                Some(old_entry) => {
-                    previous.push(old_entry);
-                }
-                None => {
-                    previous.push(search.clone());
-                }
-            }
-
-            let search_string = prompt.chars().iter().copied().collect::<String>();
-
-            match buffer.search(
-                matches!(direction, FindDirection::Forward),
-                &search_string,
-                cache,
-            ) {
-                // push new entry to top of stack, whether found or not
-                true => Some(EditorMode::SelectFind {
-                    search: search_string,
-                    cache: std::mem::take(cache),
-                }),
-                false => {
-                    buffer.set_error("Not Found");
-                    Some(EditorMode::default())
-                }
-            }
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::Down,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            let previous_idx = previous_idx.get_or_insert(previous.len());
-            *previous_idx = (*previous_idx + 1).min(previous.len());
-            if let Some(previous_prompt) = previous.get(*previous_idx) {
-                prompt.set(previous_prompt);
-            }
-            None
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::Up,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            let previous_idx = previous_idx.get_or_insert(previous.len());
-            *previous_idx = previous_idx.saturating_sub(1);
-            if let Some(previous_prompt) = previous.get(*previous_idx) {
-                prompt.set(previous_prompt);
-            }
-            None
-        }
-        _ => None, // ignore other events
-    }
-}
-
 fn process_select_line(
     buffer: &mut BufferContext,
     prompt: &mut Prompt,
@@ -772,65 +601,63 @@ fn process_select_line(
     }
 }
 
-fn process_select_find(
-    buffer: &mut BufferContext,
-    search: &str,
-    event: Event,
-    cache: &mut String,
-) -> Option<EditorMode> {
+fn process_find(buffer: &mut BufferContext, prompt: &mut Prompt, event: Event, cache: &mut String) {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
     match event {
+        Event::Key(KeyEvent {
+            code: KeyCode::Char(c),
+            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            prompt.push(c);
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Backspace,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            prompt.pop();
+        }
+        Event::Key(KeyEvent {
+            code: code @ KeyCode::Up | code @ KeyCode::Down | code @ KeyCode::Enter,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            buffer.search(
+                matches!(code, KeyCode::Down | KeyCode::Enter),
+                &prompt.chars().iter().collect::<String>(),
+                cache,
+            );
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Home,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            buffer.select_line(0);
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::End,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            buffer.select_line(buffer.last_line());
+        }
         Event::Key(KeyEvent {
             code: KeyCode::Char('f'),
             modifiers: KeyModifiers::CONTROL,
             kind: KeyEventKind::Press,
             ..
-        }) => Some(EditorMode::PromptFind {
-            direction: FindDirection::Forward,
-            prompt: Prompt::default(),
-            history_idx: None,
-            cache: std::mem::take(cache),
-        }),
-        Event::Key(KeyEvent {
-            code: KeyCode::Char('b'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            ..
-        }) => Some(EditorMode::PromptFind {
-            direction: FindDirection::Backward,
-            prompt: Prompt::default(),
-            history_idx: None,
-            cache: std::mem::take(cache),
-        }),
-        Event::Key(KeyEvent {
-            code: KeyCode::Up,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
         }) => {
-            buffer.search(false, search, cache);
-            None
+            prompt.set(&[]);
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Down,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            buffer.search(true, search, cache);
-            None
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::Enter,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            buffer.clear_selection();
-            Some(EditorMode::default())
-        }
-        _ => None, // ignore other events
+        _ => { /* ignore other events */ }
     }
 }
 
