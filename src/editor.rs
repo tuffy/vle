@@ -19,7 +19,6 @@ pub enum EditorMode {
         buffer: BufferId,
     },
     SelectInside,
-    Split,
     SelectLine {
         prompt: Prompt,
     },
@@ -121,7 +120,6 @@ impl Editor {
                     self.process_confirm_close(event, buffer)
                 }
                 EditorMode::SelectInside => self.process_select_inside(event),
-                EditorMode::Split => self.process_split(event),
                 EditorMode::PromptFind {
                     direction,
                     prompt,
@@ -197,39 +195,133 @@ impl Editor {
                 modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,
                 ..
-            }) => {
-                if let Layout::Vertical { which, .. } = &mut self.layout {
+            }) => match &mut self.layout {
+                Layout::Vertical { which, .. } => {
                     *which = VerticalPos::Left;
                 }
-            }
+                Layout::Single(buffer) => {
+                    self.layout = Layout::Vertical {
+                        left: buffer.clone(),
+                        right: std::mem::take(buffer),
+                        which: VerticalPos::Left,
+                    };
+                }
+                Layout::Horizontal { top, bottom, .. } => {
+                    self.layout = Layout::Vertical {
+                        left: std::mem::take(top),
+                        right: std::mem::take(bottom),
+                        which: VerticalPos::Left,
+                    };
+                }
+            },
             Event::Key(KeyEvent {
                 code: KeyCode::Right,
                 modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,
                 ..
-            }) => {
-                if let Layout::Vertical { which, .. } = &mut self.layout {
+            }) => match &mut self.layout {
+                Layout::Vertical { which, .. } => {
                     *which = VerticalPos::Right;
                 }
-            }
+                Layout::Single(buffer) => {
+                    self.layout = Layout::Vertical {
+                        left: buffer.clone(),
+                        right: std::mem::take(buffer),
+                        which: VerticalPos::Right,
+                    };
+                }
+                Layout::Horizontal { top, bottom, .. } => {
+                    self.layout = Layout::Vertical {
+                        left: std::mem::take(top),
+                        right: std::mem::take(bottom),
+                        which: VerticalPos::Right,
+                    };
+                }
+            },
             Event::Key(KeyEvent {
                 code: KeyCode::Up,
                 modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,
                 ..
-            }) => {
-                if let Layout::Horizontal { which, .. } = &mut self.layout {
+            }) => match &mut self.layout {
+                Layout::Horizontal { which, .. } => {
                     *which = HorizontalPos::Top;
                 }
-            }
+                Layout::Single(buffer) => {
+                    self.layout = Layout::Horizontal {
+                        top: buffer.clone(),
+                        bottom: std::mem::take(buffer),
+                        which: HorizontalPos::Top,
+                    }
+                }
+                Layout::Vertical { left, right, .. } => {
+                    self.layout = Layout::Horizontal {
+                        top: std::mem::take(left),
+                        bottom: std::mem::take(right),
+                        which: HorizontalPos::Top,
+                    }
+                }
+            },
             Event::Key(KeyEvent {
                 code: KeyCode::Down,
                 modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,
                 ..
-            }) => {
-                if let Layout::Horizontal { which, .. } = &mut self.layout {
+            }) => match &mut self.layout {
+                Layout::Horizontal { which, .. } => {
                     *which = HorizontalPos::Bottom;
+                }
+                Layout::Single(buffer) => {
+                    self.layout = Layout::Horizontal {
+                        top: buffer.clone(),
+                        bottom: std::mem::take(buffer),
+                        which: HorizontalPos::Bottom,
+                    }
+                }
+                Layout::Vertical { left, right, .. } => {
+                    self.layout = Layout::Horizontal {
+                        top: std::mem::take(left),
+                        bottom: std::mem::take(right),
+                        which: HorizontalPos::Bottom,
+                    }
+                }
+            },
+            Event::Key(KeyEvent {
+                code: KeyCode::F(10),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                match &mut self.layout {
+                    Layout::Single(_) => { /* do nothing */ }
+                    Layout::Horizontal {
+                        top,
+                        which: HorizontalPos::Top,
+                        ..
+                    } => {
+                        self.layout = Layout::Single(std::mem::take(top));
+                    }
+                    Layout::Horizontal {
+                        bottom,
+                        which: HorizontalPos::Bottom,
+                        ..
+                    } => {
+                        self.layout = Layout::Single(std::mem::take(bottom));
+                    }
+                    Layout::Vertical {
+                        left,
+                        which: VerticalPos::Left,
+                        ..
+                    } => {
+                        self.layout = Layout::Single(std::mem::take(left));
+                    }
+                    Layout::Vertical {
+                        right,
+                        which: VerticalPos::Right,
+                        ..
+                    } => {
+                        self.layout = Layout::Single(std::mem::take(right));
+                    }
                 }
             }
             Event::Key(KeyEvent {
@@ -372,14 +464,6 @@ impl Editor {
                 self.mode = EditorMode::SelectInside;
             }
             Event::Key(KeyEvent {
-                code: KeyCode::Char('l'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
-                self.mode = EditorMode::Split;
-            }
-            Event::Key(KeyEvent {
                 code: KeyCode::Char('t'),
                 modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,
@@ -498,50 +582,6 @@ impl Editor {
                 self.mode = EditorMode::default();
             }
             _ => { /* do nothing */ }
-        }
-    }
-
-    fn process_split(&mut self, event: Event) {
-        use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-
-        match event {
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('o'),
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
-                self.layout.single_layout();
-                self.mode = EditorMode::default();
-            }
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('h'),
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
-                self.layout.horizontal_layout();
-                self.mode = EditorMode::default();
-            }
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('v'),
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
-                self.layout.vertical_layout();
-                self.mode = EditorMode::default();
-            }
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('s'),
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
-                self.layout.swap_panes();
-                self.mode = EditorMode::default();
-            }
-            _ => { /* ignore other events */ }
         }
     }
 }
@@ -904,98 +944,6 @@ impl Layout {
 
     fn next_buffer(&mut self) {
         self.selected_buffer_list_mut().next_buffer()
-    }
-
-    fn single_layout(&mut self) {
-        match self {
-            Self::Single(_) => { /* do nothing */ }
-            Self::Horizontal {
-                top,
-                which: HorizontalPos::Top,
-                ..
-            } => {
-                *self = Self::Single(std::mem::take(top));
-            }
-            Self::Horizontal {
-                bottom,
-                which: HorizontalPos::Bottom,
-                ..
-            } => {
-                *self = Self::Single(std::mem::take(bottom));
-            }
-            Self::Vertical {
-                left,
-                which: VerticalPos::Left,
-                ..
-            } => {
-                *self = Self::Single(std::mem::take(left));
-            }
-            Self::Vertical {
-                right,
-                which: VerticalPos::Right,
-                ..
-            } => {
-                *self = Self::Single(std::mem::take(right));
-            }
-        }
-    }
-
-    fn vertical_layout(&mut self) {
-        match self {
-            Self::Single(buffer) => {
-                *self = Self::Vertical {
-                    left: buffer.clone(),
-                    right: std::mem::take(buffer),
-                    which: VerticalPos::default(),
-                }
-            }
-            Self::Horizontal { top, bottom, which } => {
-                *self = Self::Vertical {
-                    left: std::mem::take(top),
-                    right: std::mem::take(bottom),
-                    which: match which {
-                        HorizontalPos::Top => VerticalPos::Left,
-                        HorizontalPos::Bottom => VerticalPos::Right,
-                    },
-                }
-            }
-            Self::Vertical { .. } => { /* do nothing */ }
-        }
-    }
-
-    fn horizontal_layout(&mut self) {
-        match self {
-            Self::Single(buffer) => {
-                *self = Self::Horizontal {
-                    top: buffer.clone(),
-                    bottom: std::mem::take(buffer),
-                    which: HorizontalPos::default(),
-                }
-            }
-            Self::Horizontal { .. } => { /* do nothing */ }
-            Self::Vertical { left, right, which } => {
-                *self = Self::Horizontal {
-                    top: std::mem::take(left),
-                    bottom: std::mem::take(right),
-                    which: match which {
-                        VerticalPos::Left => HorizontalPos::Top,
-                        VerticalPos::Right => HorizontalPos::Bottom,
-                    },
-                }
-            }
-        }
-    }
-
-    fn swap_panes(&mut self) {
-        match self {
-            Self::Single(_) => { /* do nothing */ }
-            Self::Horizontal { top, bottom, .. } => {
-                std::mem::swap(top, bottom);
-            }
-            Self::Vertical { left, right, .. } => {
-                std::mem::swap(left, right);
-            }
-        }
     }
 
     fn cursor_position(&self, area: Rect) -> Option<Position> {

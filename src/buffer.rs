@@ -1039,11 +1039,6 @@ impl StatefulWidget for BufferWidget<'_> {
                     .style(REVERSED)
                     .render(status_area, buf);
             }
-            Some(EditorMode::Split) => {
-                Paragraph::new("Split Windows")
-                    .style(REVERSED)
-                    .render(status_area, buf);
-            }
             Some(EditorMode::SelectLine { prompt }) => {
                 let [label_area, prompt_area] =
                     Layout::horizontal([Length(7), Min(0)]).areas(status_area);
