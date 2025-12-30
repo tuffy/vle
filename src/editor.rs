@@ -152,8 +152,6 @@ impl Editor {
     fn process_normal_event(&mut self, event: Event) {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-        const INDENT: usize = 4;
-
         match event {
             Event::Key(KeyEvent {
                 code: KeyCode::Char('q'),
@@ -431,13 +429,13 @@ impl Editor {
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.update_buffer(|b| b.indent(INDENT)),
+            }) => self.update_buffer(|b| b.indent()),
             Event::Key(KeyEvent {
                 code: KeyCode::BackTab,
                 modifiers: KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.update_buffer(|b| b.un_indent(INDENT)),
+            }) => self.update_buffer(|b| b.un_indent()),
             Event::Key(KeyEvent {
                 code: KeyCode::Char('p'),
                 modifiers: KeyModifiers::CONTROL,

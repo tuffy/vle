@@ -10,6 +10,12 @@ pub trait Highlighter: std::fmt::Debug + std::fmt::Display {
         &self,
         s: &'s str,
     ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's>;
+
+    /// Returns true if the format requires actual tabs instead of spaces
+    /// (pretty sure this only applies to Makefiles)
+    fn tabs_required(&self) -> bool {
+        false
+    }
 }
 
 /// Which syntax highlighting method is in use
@@ -37,6 +43,13 @@ impl Highlighter for Syntax {
         match self {
             Self::Plain => Box::new(std::iter::empty()),
             Self::Rust(r) => r.highlight(s),
+        }
+    }
+
+    fn tabs_required(&self) -> bool {
+        match self {
+            Self::Plain => false,
+            Self::Rust(r) => r.tabs_required(),
         }
     }
 }

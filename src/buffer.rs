@@ -121,6 +121,8 @@ pub struct BufferId(Arc<RwLock<Buffer>>);
 #[derive(Clone)]
 pub struct BufferContext {
     buffer: Arc<RwLock<Buffer>>,
+    tabs_required: bool,            // whether the format demands actual tabs
+    tab_substitution: String,       // spaces to substitute for tabs
     viewport_height: usize,         // viewport's current height in lines
     cursor: usize,                  // cursor's absolute position in rope, in characters
     cursor_column: usize,           // cursor's desired column, in characters
@@ -165,18 +167,17 @@ impl BufferContext {
         let rope = &self.buffer.try_read().unwrap().rope;
         let line = rope.try_char_to_line(self.cursor).ok()?;
         let line_start = rope.try_line_to_char(line).ok()?;
-
-        // TODO - make spaces-per-tab configurable
+        let spaces_per_tab = self.tab_substitution.len();
 
         Some((
             line,
             rope.chars_at(line_start)
                 .take(self.cursor.checked_sub(line_start)?)
                 .map(|c| match c {
-                    '\t' => 4,
+                    '\t' => spaces_per_tab,
                     _ => 1,
                 })
-                .sum()
+                .sum(),
         ))
     }
 
@@ -457,8 +458,11 @@ impl BufferContext {
         }
     }
 
-    pub fn indent(&mut self, spaces: usize) {
-        let indent = std::iter::repeat_n(' ', spaces).collect::<String>();
+    pub fn indent(&mut self) {
+        let indent = match self.tabs_required {
+            false => self.tab_substitution.as_str(),
+            true => "\t",
+        };
         let mut buf = self.buffer.try_write().unwrap();
 
         buf.log_undo(self.cursor, self.cursor_column);
@@ -472,7 +476,7 @@ impl BufferContext {
                     .and_then(|line| buf.rope.try_line_to_char(line))
                 {
                     buf.rope.insert(line_start, &indent);
-                    self.cursor += spaces;
+                    self.cursor += indent.len();
                 }
             }
             selection @ Some(_) => {
@@ -485,10 +489,10 @@ impl BufferContext {
                     buf.rope.insert(start, &indent);
                     match &mut self.selection {
                         Some(selection) => {
-                            *selection.max(&mut self.cursor) += spaces;
+                            *selection.max(&mut self.cursor) += indent.len();
                         }
                         None => {
-                            self.cursor += spaces;
+                            self.cursor += indent.len();
                         }
                     }
                 }
@@ -496,7 +500,11 @@ impl BufferContext {
         }
     }
 
-    pub fn un_indent(&mut self, spaces: usize) {
+    pub fn un_indent(&mut self) {
+        let indent = match self.tabs_required {
+            false => self.tab_substitution.as_str(),
+            true => "\t",
+        };
         let mut buf = self.buffer.try_write().unwrap();
 
         let selected = selected_lines(&buf.rope, self.cursor, self.selection)
@@ -508,21 +516,21 @@ impl BufferContext {
         if selected.iter().all(|(start, _)| {
             buf.rope
                 .chars_at(*start)
-                .take(spaces)
-                .eq(std::iter::repeat_n(' ', spaces))
+                .take(indent.len())
+                .eq(indent.chars())
         }) {
             buf.log_undo(self.cursor, self.cursor_column);
             buf.modified = true;
 
             for (start, _) in selected.into_iter().rev() {
-                buf.rope.remove(start..start + spaces);
+                buf.rope.remove(start..start + indent.len());
 
                 match &mut self.selection {
                     Some(selection) => {
-                        *selection.max(&mut self.cursor) -= spaces;
+                        *selection.max(&mut self.cursor) -= indent.len();
                     }
                     None => {
-                        self.cursor -= spaces;
+                        self.cursor -= indent.len();
                     }
                 }
             }
@@ -767,7 +775,14 @@ fn select_next_char<const FORWARD: bool>(
 
 impl From<Buffer> for BufferContext {
     fn from(buffer: Buffer) -> Self {
+        use crate::syntax::Highlighter;
+
+        // TODO - make this configurable
+        const SPACES_PER_TAB: usize = 4;
+
         Self {
+            tab_substitution: std::iter::repeat(' ').take(SPACES_PER_TAB).collect(),
+            tabs_required: buffer.syntax.tabs_required(),
             buffer: Arc::new(RwLock::new(buffer)),
             viewport_height: 0,
             cursor: 0,
@@ -874,16 +889,17 @@ impl StatefulWidget for BufferWidget<'_> {
         };
         use std::borrow::Cow;
 
-        // TODO - make spaces-per-tab configurable
-
-        fn widen_tabs(mut input: Line<'static>) -> Line<'static> {
-            fn tabs_to_spaces(s: &mut Cow<'static, str>) {
+        fn widen_tabs(mut input: Line<'static>, tab_substitution: &str) -> Line<'static> {
+            fn tabs_to_spaces(s: &mut Cow<'static, str>, tab_substitution: &str) {
                 if s.as_ref().contains('\t') {
-                    *s = Cow::Owned(s.as_ref().replace('\t', "    "));
+                    *s = Cow::Owned(s.as_ref().replace('\t', tab_substitution));
                 }
             }
 
-            input.spans.iter_mut().for_each(|s| tabs_to_spaces(&mut s.content));
+            input
+                .spans
+                .iter_mut()
+                .for_each(|s| tabs_to_spaces(&mut s.content, tab_substitution));
             input
         }
 
@@ -1007,7 +1023,7 @@ impl StatefulWidget for BufferWidget<'_> {
             None => rope
                 .lines_at(viewport_line)
                 .map(|line| Line::from(colorize(syntax, &Cow::from(line))))
-                .map(widen_tabs)
+                .map(|line| widen_tabs(line, &state.tab_substitution))
                 .take(area.height.into())
                 .collect::<Vec<_>>(),
             // highlight whole line, no line, or part of the line
@@ -1026,7 +1042,7 @@ impl StatefulWidget for BufferWidget<'_> {
                             ),
                         },
                     )
-                    .map(widen_tabs)
+                    .map(|line| widen_tabs(line, &state.tab_substitution))
                     .take(area.height.into())
                     .collect::<Vec<_>>()
             }
