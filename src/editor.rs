@@ -26,6 +26,13 @@ pub enum EditorMode {
         prompt: Prompt,
         cache: String,
     },
+    Replace {
+        replace: Prompt,
+    },
+    ReplaceWith {
+        with: Prompt,
+        matches: Vec<(usize, usize)>,
+    },
 }
 
 pub struct Editor {
@@ -116,6 +123,20 @@ impl Editor {
                 EditorMode::Find { prompt, cache } => {
                     if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut() {
                         process_find(buf, prompt, event, cache)
+                    }
+                }
+                EditorMode::Replace { replace } => {
+                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
+                        && let Some(new_mode) = process_replace(buf, replace, event)
+                    {
+                        self.mode = new_mode;
+                    }
+                }
+                EditorMode::ReplaceWith { with, matches } => {
+                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
+                        && let Some(new_mode) = process_replace_with(buf, with, matches, event)
+                    {
+                        self.mode = new_mode;
                     }
                 }
             },
@@ -448,9 +469,18 @@ impl Editor {
                     cache: String::default(),
                 };
             }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('r'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.mode = EditorMode::Replace {
+                    replace: Prompt::default(),
+                };
+            }
             _ => { /* ignore other events */ } // TODO - Ctrl-W - write buffer to disk with name
                                                // TODO - Ctrl-O - open file into new buffer
-                                               // TODO - Ctrl-R - add search-and-replace mode(s)
         }
     }
 
@@ -595,8 +625,7 @@ fn process_select_line(
             Some(EditorMode::default())
         }
         _ => {
-            /* ignore other events */
-            None
+            None // ignore other events
         }
     }
 }
@@ -658,6 +687,104 @@ fn process_find(buffer: &mut BufferContext, prompt: &mut Prompt, event: Event, c
             prompt.set(&[]);
         }
         _ => { /* ignore other events */ }
+    }
+}
+
+// range is in characters, *not* bytes
+fn process_replace(
+    buffer: &mut BufferContext,
+    prompt: &mut Prompt,
+    event: Event,
+) -> Option<EditorMode> {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+    match event {
+        Event::Key(KeyEvent {
+            code: KeyCode::Char(c),
+            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            prompt.push(c);
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Backspace,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            prompt.pop();
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Enter,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            let matches = buffer.matches(&prompt.to_string());
+            Some(match matches.is_empty() {
+                true => {
+                    buffer.set_error("Not Found");
+                    EditorMode::default()
+                }
+                false => EditorMode::ReplaceWith {
+                    with: Prompt::default(),
+                    matches,
+                },
+            })
+        }
+        _ => {
+            None // ignore other events
+        }
+    }
+}
+
+// ranges in matches should be in increasing order
+fn process_replace_with(
+    buffer: &mut BufferContext,
+    prompt: &mut Prompt,
+    matches: &[(usize, usize)],
+    event: Event,
+) -> Option<EditorMode> {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+    // TODO - display matches in buffer widget
+    // TODO - allow selection of matches with arrow keys
+    // TODO - allow culling of matches with Delete key
+
+    match event {
+        Event::Key(KeyEvent {
+            code: KeyCode::Char(c),
+            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            prompt.push(c);
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Backspace,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            prompt.pop();
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Enter,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            buffer.replace(matches, &prompt.to_string());
+            Some(EditorMode::default())
+        }
+        _ => {
+            None // ignore other events
+        }
     }
 }
 

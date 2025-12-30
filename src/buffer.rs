@@ -157,6 +157,7 @@ impl BufferContext {
         let line = rope.try_char_to_line(self.cursor).ok()?;
         let line_start = rope.try_line_to_char(line).ok()?;
 
+        // TODO - account for tabs between line_start and cursor
         Some((line, self.cursor.checked_sub(line_start)?))
     }
 
@@ -587,6 +588,51 @@ impl BufferContext {
 
         true
     }
+
+    /// Given search term, returns all match ranges as characters
+    /// If selection is active, matches are restricted to selection
+    pub fn matches(&self, term: &str) -> Vec<(usize, usize)> {
+        let rope = &self.buffer.try_read().unwrap().rope;
+
+        // combine rope or rope slice into unified String
+        let (whole, byte_offset) = match self.selection {
+            None => (rope.chunks().collect::<String>(), 0),
+            Some(selection) => {
+                let (start, end) = reorder(self.cursor, selection);
+                (
+                    rope.slice(start..end).chunks().collect(),
+                    rope.char_to_byte(start),
+                )
+            }
+        };
+
+        // get byte ranges of matches and convert them to character offsets
+        whole
+            .match_indices(term)
+            .map(|(start_byte, s)| (byte_offset + start_byte, byte_offset + start_byte + s.len()))
+            .filter_map(|(s, e)| {
+                Some((
+                    rope.try_char_to_byte(s).ok()?,
+                    rope.try_char_to_byte(e).ok()?,
+                ))
+            })
+            .collect()
+    }
+
+    pub fn replace(&mut self, ranges: &[(usize, usize)], to: &str) {
+        let mut buf = self.buffer.try_write().unwrap();
+        buf.log_undo(self.cursor, self.cursor_column);
+        buf.modified = true;
+        for (s, e) in ranges.iter().rev() {
+            let _ = buf.rope.try_remove(s..e);
+            let _ = buf.rope.try_insert(*s, to);
+        }
+        self.selection = None;
+    }
+
+    pub fn set_error<S: Into<Cow<'static, str>>>(&mut self, err: S) {
+        self.message = Some(BufferMessage::Error(err.into()))
+    }
 }
 
 // Given line in rope, returns (start, end) of that line in characters from start of rope
@@ -724,6 +770,7 @@ pub struct BufferList {
 
 impl BufferList {
     pub fn new(paths: impl IntoIterator<Item = OsString>) -> std::io::Result<Self> {
+        // TODO - if buffers are empty, open an unnamed scratch buffer
         Ok(Self {
             buffers: paths
                 .into_iter()
@@ -839,7 +886,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
         // Takes syntax-colorized line of text and returns
         // portion highlighted, if necessary
-        fn highlight(
+        fn highlight_selection(
             colorized: Vec<Span<'static>>,
             (line_start, line_end): (usize, usize),
             (selection_start, selection_end): (usize, usize),
@@ -947,7 +994,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     .map(
                         |(line, line_number)| match line_char_range(rope, line_number) {
                             None => Line::from(colorize(syntax, &tabs_to_spaces(Cow::from(line)))),
-                            Some((line_start, line_end)) => highlight(
+                            Some((line_start, line_end)) => highlight_selection(
                                 colorize(syntax, &tabs_to_spaces(Cow::from(line))),
                                 (line_start, line_end),
                                 (selection_start, selection_end),
@@ -1050,6 +1097,26 @@ impl StatefulWidget for BufferWidget<'_> {
                     .render(label_area, buf);
 
                 PromptWidget { prompt }.render(prompt_area, buf);
+            }
+            Some(EditorMode::Replace { replace, .. }) => {
+                let [label_area, prompt_area] =
+                    Layout::horizontal([Length(10), Min(0)]).areas(status_area);
+
+                Paragraph::new("Replace : ")
+                    .style(REVERSED)
+                    .render(label_area, buf);
+
+                PromptWidget { prompt: replace }.render(prompt_area, buf);
+            }
+            Some(EditorMode::ReplaceWith { with, .. }) => {
+                let [label_area, prompt_area] =
+                    Layout::horizontal([Length(15), Min(0)]).areas(status_area);
+
+                Paragraph::new("Replace With : ")
+                    .style(REVERSED)
+                    .render(label_area, buf);
+
+                PromptWidget { prompt: with }.render(prompt_area, buf);
             }
         }
     }
