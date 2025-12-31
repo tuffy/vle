@@ -1148,98 +1148,71 @@ impl StatefulWidget for BufferWidget<'_> {
 
         let buffer = state.buffer.try_read().unwrap();
 
-        let status_area = {
-            match self.mode {
-                Some(EditorMode::Browse {
-                    state, dir_entries, ..
-                }) => {
-                    use ratatui::widgets::List;
+        let [text_area, status_area] = Layout::vertical([Min(0), Length(1)]).areas(area);
+        let [text_area, scrollbar_area] = Layout::horizontal([Min(0), Length(1)]).areas(text_area);
 
-                    let [list_area, status_area] =
-                        Layout::vertical([Min(0), Length(1)]).areas(area);
+        state.viewport_height = text_area.height.into();
 
-                    StatefulWidget::render(
-                        List::new(dir_entries.as_slice()).highlight_style(REVERSED),
-                        list_area,
-                        buf,
-                        state,
-                    );
+        let rope = &buffer.rope;
+        let syntax = &buffer.syntax;
 
-                    status_area
-                }
-                _ => {
-                    let [text_area, status_area] =
-                        Layout::vertical([Min(0), Length(1)]).areas(area);
-                    let [text_area, scrollbar_area] =
-                        Layout::horizontal([Min(0), Length(1)]).areas(text_area);
+        // ensure cursor hasn't been shifted outside of rope
+        // (which might occur if the rope is shrunk in another buffer)
+        if state.cursor > rope.len_chars() {
+            state.cursor = rope.len_chars().saturating_sub(1);
+            state.selection = None;
+        }
 
-                    state.viewport_height = text_area.height.into();
+        let viewport_line: usize = rope
+            .try_char_to_line(state.cursor)
+            .map(|line| line.saturating_sub(state.viewport_height / 2))
+            .unwrap_or(0);
 
-                    let rope = &buffer.rope;
-                    let syntax = &buffer.syntax;
+        Paragraph::new(match state.selection {
+            // no selection, so nothing to highlight
+            None => rope
+                .lines_at(viewport_line)
+                .map(|line| Line::from(colorize(syntax, Cow::from(line))))
+                .map(|line| widen_tabs(line, &state.tab_substitution))
+                .take(area.height.into())
+                .collect::<Vec<_>>(),
+            // highlight whole line, no line, or part of the line
+            Some(selection) => {
+                let (selection_start, selection_end) = reorder(state.cursor, selection);
 
-                    // ensure cursor hasn't been shifted outside of rope
-                    // (which might occur if the rope is shrunk in another buffer)
-                    if state.cursor > rope.len_chars() {
-                        state.cursor = rope.len_chars().saturating_sub(1);
-                        state.selection = None;
-                    }
-
-                    let viewport_line: usize = rope
-                        .try_char_to_line(state.cursor)
-                        .map(|line| line.saturating_sub(state.viewport_height / 2))
-                        .unwrap_or(0);
-
-                    Paragraph::new(match state.selection {
-                        // no selection, so nothing to highlight
-                        None => rope
-                            .lines_at(viewport_line)
-                            .map(|line| Line::from(colorize(syntax, Cow::from(line))))
-                            .map(|line| widen_tabs(line, &state.tab_substitution))
-                            .take(area.height.into())
-                            .collect::<Vec<_>>(),
-                        // highlight whole line, no line, or part of the line
-                        Some(selection) => {
-                            let (selection_start, selection_end) = reorder(state.cursor, selection);
-
-                            rope.lines_at(viewport_line)
-                                .zip(viewport_line..)
-                                .map(|(line, line_number)| {
-                                    match line_char_range(rope, line_number) {
-                                        None => Line::from(colorize(syntax, Cow::from(line))),
-                                        Some((line_start, line_end)) => highlight_selection(
-                                            colorize(syntax, Cow::from(line)),
-                                            (line_start, line_end),
-                                            (selection_start, selection_end),
-                                        ),
-                                    }
-                                })
-                                .map(|line| widen_tabs(line, &state.tab_substitution))
-                                .take(area.height.into())
-                                .collect::<Vec<_>>()
-                        }
-                    })
-                    .scroll((
-                        0,
-                        cursor_column(rope, state.cursor)
-                            .saturating_sub(text_area.width.into())
-                            .try_into()
-                            .unwrap_or(0),
-                    ))
-                    .render(text_area, buf);
-
-                    Scrollbar::new(ScrollbarOrientation::VerticalRight).render(
-                        scrollbar_area,
-                        buf,
-                        &mut ScrollbarState::new(buffer.total_lines())
-                            .viewport_content_length(text_area.height.into())
-                            .position(rope.try_char_to_line(state.cursor).unwrap_or(viewport_line)),
-                    );
-
-                    status_area
-                }
+                rope.lines_at(viewport_line)
+                    .zip(viewport_line..)
+                    .map(
+                        |(line, line_number)| match line_char_range(rope, line_number) {
+                            None => Line::from(colorize(syntax, Cow::from(line))),
+                            Some((line_start, line_end)) => highlight_selection(
+                                colorize(syntax, Cow::from(line)),
+                                (line_start, line_end),
+                                (selection_start, selection_end),
+                            ),
+                        },
+                    )
+                    .map(|line| widen_tabs(line, &state.tab_substitution))
+                    .take(area.height.into())
+                    .collect::<Vec<_>>()
             }
-        };
+        })
+        .scroll((
+            0,
+            cursor_column(rope, state.cursor)
+                .saturating_sub(text_area.width.into())
+                .try_into()
+                .unwrap_or(0),
+        ))
+        .render(text_area, buf);
+
+        Scrollbar::new(ScrollbarOrientation::VerticalRight).render(
+            scrollbar_area,
+            buf,
+            &mut ScrollbarState::new(buffer.total_lines())
+                .viewport_content_length(text_area.height.into())
+                .position(rope.try_char_to_line(state.cursor).unwrap_or(viewport_line)),
+        );
 
         match state.message.take() {
             Some(BufferMessage::Notice(msg)) => {
@@ -1315,11 +1288,6 @@ impl StatefulWidget for BufferWidget<'_> {
                         .render(label_area, buf);
 
                     PromptWidget { prompt }.render(prompt_area, buf);
-                }
-                Some(EditorMode::Browse { .. }) => {
-                    Paragraph::new("Select File")
-                        .style(REVERSED)
-                        .render(status_area, buf);
                 }
                 Some(EditorMode::Find { prompt, .. }) => {
                     let [label_area, prompt_area] =
