@@ -5,9 +5,10 @@ use crate::{
 use crossterm::event::Event;
 use ratatui::{
     layout::{Position, Rect},
-    widgets::StatefulWidget,
+    widgets::{ListState, StatefulWidget},
 };
 use std::ffi::OsString;
+use std::path::{Path, PathBuf};
 
 const PAGE_SIZE: usize = 25;
 
@@ -37,6 +38,58 @@ pub enum EditorMode {
     Open {
         prompt: Prompt,
     },
+    Browse {
+        state: ListState,
+        base: PathBuf,
+        dir_entries: Vec<DirEntry>,
+    },
+}
+
+pub struct DirEntry {
+    name: String,
+    path: PathBuf,
+    is_dir: bool,
+}
+
+impl DirEntry {
+    fn read_dir(path: &Path) -> std::io::Result<Vec<DirEntry>> {
+        path.read_dir()?
+            .map(|e| {
+                e.and_then(|e| {
+                    let is_dir = e.metadata()?.is_dir();
+                    let name = e
+                        .file_name()
+                        .into_string()
+                        .unwrap_or_else(|s| s.to_string_lossy().into_owned());
+                    Ok(DirEntry {
+                        name: if is_dir { format!("{name}/") } else { name },
+                        path: e.path(),
+                        is_dir,
+                    })
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(|mut entries| {
+                entries.sort_by(|x, y| x.path.cmp(&y.path));
+                if let Some(parent) = path.parent() {
+                    entries.insert(
+                        0,
+                        DirEntry {
+                            name: "../".to_string(),
+                            path: parent.to_path_buf(),
+                            is_dir: true,
+                        },
+                    );
+                }
+                entries
+            })
+    }
+}
+
+impl<'e> From<&'e DirEntry> for ratatui::text::Text<'e> {
+    fn from(e: &'e DirEntry) -> Self {
+        Self::from(e.name.as_str())
+    }
 }
 
 pub struct Editor {
@@ -63,7 +116,13 @@ impl Editor {
 
         term.draw(|frame| {
             let area = frame.area();
-            frame.render_stateful_widget(LayoutWidget { mode: &self.mode }, area, &mut self.layout);
+            frame.render_stateful_widget(
+                LayoutWidget {
+                    mode: &mut self.mode,
+                },
+                area,
+                &mut self.layout,
+            );
             frame.set_cursor_position(self.layout.cursor_position(area).unwrap_or_default());
         })
         .map(|_| ())
@@ -126,6 +185,17 @@ impl Editor {
                 }
                 EditorMode::Open { prompt } => {
                     if let Some(new_mode) = process_open_file(&mut self.layout, prompt, event) {
+                        self.mode = new_mode;
+                    }
+                }
+                EditorMode::Browse {
+                    state,
+                    base,
+                    dir_entries,
+                } => {
+                    if let Some(new_mode) =
+                        process_browse(&mut self.layout, state, base, dir_entries, event)
+                    {
                         self.mode = new_mode;
                     }
                 }
@@ -652,13 +722,10 @@ fn process_select_line(
     }
 }
 
-// TODO - need set of buffers to assign opened file to, if necessary
 fn process_open_file(layout: &mut Layout, prompt: &mut Prompt, event: Event) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
     // TODO - support tab completion
-    // TODO - support interactive with a tree view
-    // TODO - enter key attempts to open file
     match event {
         Event::Key(KeyEvent {
             code: KeyCode::Char(c),
@@ -687,6 +754,142 @@ fn process_open_file(layout: &mut Layout, prompt: &mut Prompt, event: Event) -> 
             .add(prompt.to_string().into())
             .map(|()| EditorMode::default())
             .ok(),
+        Event::Key(KeyEvent {
+            code: KeyCode::Char('b'),
+            modifiers: KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            match std::env::current_dir() {
+                Ok(cwd) => match DirEntry::read_dir(&cwd) {
+                    Ok(dir_entries) => Some(EditorMode::Browse {
+                        base: cwd,
+                        state: ListState::default(),
+                        dir_entries,
+                    }),
+                    Err(err) => {
+                        // unable to read directory entries
+                        if let Some(buf) = layout.selected_buffer_list_mut().current_mut() {
+                            buf.set_error(err.to_string());
+                        }
+                        Some(EditorMode::default())
+                    }
+                },
+                Err(err) => {
+                    // unable to get cwd while attempting to browse
+                    if let Some(buf) = layout.selected_buffer_list_mut().current_mut() {
+                        buf.set_error(err.to_string());
+                    }
+                    Some(EditorMode::default())
+                }
+            }
+        }
+        _ => None, // ignore other events
+    }
+}
+
+fn process_browse(
+    layout: &mut Layout,
+    state: &mut ListState,
+    base: &Path,
+    dir_entries: &mut Vec<DirEntry>,
+    event: Event,
+) -> Option<EditorMode> {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+    const PAGE_SIZE: u16 = 5;
+
+    match event {
+        Event::Key(KeyEvent {
+            code: KeyCode::Up,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            state.select_previous();
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Down,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            state.select_next();
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::PageUp,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            state.scroll_up_by(PAGE_SIZE);
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::PageDown,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            state.scroll_down_by(PAGE_SIZE);
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Home,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            state.select_first();
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::End,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            state.select_last();
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Enter,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            match state.selected().and_then(|idx| dir_entries.get(idx)) {
+                Some(DirEntry {
+                    path, is_dir: true, ..
+                }) => match DirEntry::read_dir(path) {
+                    Ok(subdir) => {
+                        *dir_entries = subdir;
+                        state.select(None);
+                        None
+                    }
+                    Err(err) => {
+                        if let Some(buffer) = layout.selected_buffer_list_mut().current_mut() {
+                            buffer.set_error(err.to_string());
+                        }
+                        None
+                    }
+                },
+                Some(DirEntry {
+                    path,
+                    is_dir: false,
+                    ..
+                }) => layout
+                    .add(match path.strip_prefix(base) {
+                        Ok(prefix) => prefix.as_os_str().to_owned(),
+                        Err(_) => path.into(),
+                    })
+                    .map(|()| EditorMode::default())
+                    .ok(),
+                _ => None, // ignore un-selected file
+            }
+        }
         _ => None, // ignore other events
     }
 }
@@ -1079,7 +1282,7 @@ impl Layout {
 }
 
 struct LayoutWidget<'e> {
-    mode: &'e EditorMode,
+    mode: &'e mut EditorMode,
 }
 
 impl StatefulWidget for LayoutWidget<'_> {
