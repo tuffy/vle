@@ -1135,32 +1135,32 @@ impl Layout {
     }
 
     fn add(&mut self, path: OsString) -> Result<(), ()> {
-        // TODO - if buffer is already open, just switch to it
-
-        match BufferContext::open(path) {
-            Ok(buffer) => match self {
-                Self::Single(b) => {
-                    b.push(buffer, true);
-                    Ok(())
+        self.selected_buffer_list_mut()
+            .select_by_name(&path)
+            .or_else(|()| match BufferContext::open(path) {
+                Ok(buffer) => match self {
+                    Self::Single(b) => {
+                        b.push(buffer, true);
+                        Ok(())
+                    }
+                    Self::Horizontal { top, bottom, which } => {
+                        top.push(buffer.clone(), matches!(which, HorizontalPos::Top));
+                        bottom.push(buffer, matches!(which, HorizontalPos::Bottom));
+                        Ok(())
+                    }
+                    Self::Vertical { left, right, which } => {
+                        left.push(buffer.clone(), matches!(which, VerticalPos::Left));
+                        right.push(buffer, matches!(which, VerticalPos::Right));
+                        Ok(())
+                    }
+                },
+                Err(err) => {
+                    if let Some(buf) = self.selected_buffer_list_mut().current_mut() {
+                        buf.set_error(err.to_string());
+                    }
+                    Err(())
                 }
-                Self::Horizontal { top, bottom, which } => {
-                    top.push(buffer.clone(), matches!(which, HorizontalPos::Top));
-                    bottom.push(buffer, matches!(which, HorizontalPos::Bottom));
-                    Ok(())
-                }
-                Self::Vertical { left, right, which } => {
-                    left.push(buffer.clone(), matches!(which, VerticalPos::Left));
-                    right.push(buffer, matches!(which, VerticalPos::Right));
-                    Ok(())
-                }
-            },
-            Err(err) => {
-                if let Some(buf) = self.selected_buffer_list_mut().current_mut() {
-                    buf.set_error(err.to_string());
-                }
-                Err(())
-            }
-        }
+            })
     }
 
     fn remove(&mut self, buffer: BufferId) {

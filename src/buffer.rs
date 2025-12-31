@@ -2,7 +2,7 @@ use crate::editor::EditorMode;
 use crate::syntax::Syntax;
 use ratatui::widgets::StatefulWidget;
 use std::borrow::Cow;
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
@@ -25,6 +25,12 @@ impl std::fmt::Display for Source {
 }
 
 impl Source {
+    fn source_str(&self) -> &OsStr {
+        match self {
+            Self::File(pb) => pb.as_os_str(),
+        }
+    }
+
     fn name(&self) -> Cow<'_, str> {
         match self {
             Self::File(path) => path.to_string_lossy(),
@@ -153,6 +159,10 @@ struct Buffer {
 }
 
 impl Buffer {
+    fn source_str(&self) -> &OsStr {
+        self.source.source_str()
+    }
+
     fn open(path: OsString) -> std::io::Result<Self> {
         let source = Source::from(path);
 
@@ -956,6 +966,22 @@ impl BufferList {
     pub fn update_buf(&mut self, f: impl FnOnce(&mut BufferContext)) {
         if let Some(buf) = self.current_mut() {
             f(buf);
+        }
+    }
+
+    /// Attempts to select buffer by file name
+    /// Returns Ok on success, Err on failure
+    pub fn select_by_name(&mut self, name: &OsStr) -> Result<(), ()> {
+        match self
+            .buffers
+            .iter()
+            .position(|buf| buf.buffer.try_read().unwrap().source_str() == name)
+        {
+            Some(idx) => {
+                self.current = idx;
+                Ok(())
+            }
+            None => Err(()),
         }
     }
 }
