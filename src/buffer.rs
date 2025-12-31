@@ -31,6 +31,12 @@ impl Source {
         }
     }
 
+    pub fn file_name(&self) -> Option<Cow<'_, str>> {
+        match self {
+            Self::File(path) => path.file_name().map(|s| s.to_string_lossy()),
+        }
+    }
+
     pub fn extension(&self) -> Option<&str> {
         match self {
             Self::File(path) => path.extension().and_then(|s| s.to_str()),

@@ -1,6 +1,7 @@
 use crate::buffer::Source;
 use ratatui::style::Color;
 
+mod makefile;
 mod rust;
 
 /// Implemented for different syntax highlighters
@@ -24,11 +25,19 @@ pub enum Syntax {
     #[default]
     Plain,
     Rust(rust::Rust),
+    Makefile(makefile::Makefile),
 }
 
 impl Syntax {
     pub fn new(source: &Source) -> Self {
         match source.extension() {
+            None => match source.file_name() {
+                Some(file_name) => match file_name.as_ref() {
+                    "Makefile" | "makefile" => Self::Makefile(makefile::Makefile),
+                    _ => Self::default(),
+                },
+                None => Self::default(),
+            },
             Some("rs") => Self::Rust(rust::Rust),
             _ => Self::default(),
         }
@@ -43,6 +52,7 @@ impl Highlighter for Syntax {
         match self {
             Self::Plain => Box::new(std::iter::empty()),
             Self::Rust(r) => r.highlight(s),
+            Self::Makefile(m) => m.highlight(s),
         }
     }
 
@@ -50,6 +60,7 @@ impl Highlighter for Syntax {
         match self {
             Self::Plain => false,
             Self::Rust(r) => r.tabs_required(),
+            Self::Makefile(m) => m.tabs_required(),
         }
     }
 }
@@ -59,6 +70,7 @@ impl std::fmt::Display for Syntax {
         match self {
             Self::Plain => "Plain".fmt(f),
             Self::Rust(r) => r.fmt(f),
+            Self::Makefile(m) => m.fmt(f),
         }
     }
 }
@@ -72,7 +84,6 @@ impl std::fmt::Display for Syntax {
 // TODO - add javascript syntax
 // TODO - add json syntax
 // TODO - add lua syntax
-// TODO - add makefile syntax
 // TODO - add markdown syntax
 // TODO - add patch syntax
 // TODO - add perl syntax
