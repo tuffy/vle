@@ -967,8 +967,8 @@ impl StatefulWidget for BufferWidget<'_> {
         };
         use std::borrow::Cow;
 
-        fn widen_tabs(mut input: Line<'static>, tab_substitution: &str) -> Line<'static> {
-            fn tabs_to_spaces(s: &mut Cow<'static, str>, tab_substitution: &str) {
+        fn widen_tabs<'l>(mut input: Line<'l>, tab_substitution: &str) -> Line<'l> {
+            fn tabs_to_spaces(s: &mut Cow<'_, str>, tab_substitution: &str) {
                 if s.as_ref().contains('\t') {
                     *s = Cow::Owned(s.as_ref().replace('\t', tab_substitution));
                 }
@@ -982,43 +982,70 @@ impl StatefulWidget for BufferWidget<'_> {
         }
 
         // Colorize syntax of the given text
-        fn colorize<S: Highlighter>(syntax: &S, text: &str) -> Vec<Span<'static>> {
-            let mut elements = vec![];
-            let mut idx = 0;
-            for (color, range) in syntax.highlight(text) {
-                if idx < range.start {
-                    elements.push(Span::raw(text[idx..range.start].to_string()));
+        fn colorize<'s, S: Highlighter>(syntax: &S, text: Cow<'s, str>) -> Vec<Span<'s>> {
+            fn colorize_str<'s, S: Highlighter>(syntax: &S, text: &'s str) -> Vec<Span<'s>> {
+                let mut elements = vec![];
+                let mut idx = 0;
+                for (color, range) in syntax.highlight(text) {
+                    if idx < range.start {
+                        elements.push(Span::raw(&text[idx..range.start]));
+                    }
+                    elements.push(Span::styled(
+                        &text[range.clone()],
+                        Style::default().fg(color),
+                    ));
+                    idx = range.end;
                 }
-                elements.push(Span::styled(
-                    text[range.clone()].to_string(),
-                    Style::default().fg(color),
-                ));
-                idx = range.end;
+                let last = &text[idx..];
+                if !last.is_empty() {
+                    elements.push(Span::raw(last));
+                }
+                elements
             }
-            let last = &text[idx..];
-            if !last.is_empty() {
-                elements.push(Span::raw(last.to_string()));
+
+            fn colorize_string<S: Highlighter>(syntax: &S, text: String) -> Vec<Span<'static>> {
+                let mut elements = vec![];
+                let mut idx = 0;
+                for (color, range) in syntax.highlight(&text) {
+                    if idx < range.start {
+                        elements.push(Span::raw(text[idx..range.start].to_string()));
+                    }
+                    elements.push(Span::styled(
+                        text[range.clone()].to_string(),
+                        Style::default().fg(color),
+                    ));
+                    idx = range.end;
+                }
+                let last = text[idx..].to_string();
+                if !last.is_empty() {
+                    elements.push(Span::raw(last));
+                }
+                elements
             }
-            elements
+
+            match text {
+                Cow::Borrowed(s) => colorize_str(syntax, s),
+                Cow::Owned(s) => colorize_string(syntax, s),
+            }
         }
 
         // Takes syntax-colorized line of text and returns
         // portion highlighted, if necessary
-        fn highlight_selection(
-            colorized: Vec<Span<'static>>,
+        fn highlight_selection<'s>(
+            colorized: Vec<Span<'s>>,
             (line_start, line_end): (usize, usize),
             (selection_start, selection_end): (usize, usize),
-        ) -> Line<'static> {
+        ) -> Line<'s> {
             if selection_end <= line_start || selection_start >= line_end {
                 colorized.into()
             } else {
                 use std::collections::VecDeque;
 
-                fn extract(
-                    colorized: &mut VecDeque<Span<'static>>,
+                fn extract<'s>(
+                    colorized: &mut VecDeque<Span<'s>>,
                     mut characters: usize,
-                    output: &mut Vec<Span<'static>>,
-                    map: impl Fn(Span<'static>) -> Span<'static>,
+                    output: &mut Vec<Span<'s>>,
+                    map: impl Fn(Span<'s>) -> Span<'s>,
                 ) {
                     use unicode_truncate::UnicodeTruncateStr;
 
@@ -1100,7 +1127,7 @@ impl StatefulWidget for BufferWidget<'_> {
             // no selection, so nothing to highlight
             None => rope
                 .lines_at(viewport_line)
-                .map(|line| Line::from(colorize(syntax, &Cow::from(line))))
+                .map(|line| Line::from(colorize(syntax, Cow::from(line))))
                 .map(|line| widen_tabs(line, &state.tab_substitution))
                 .take(area.height.into())
                 .collect::<Vec<_>>(),
@@ -1112,9 +1139,9 @@ impl StatefulWidget for BufferWidget<'_> {
                     .zip(viewport_line..)
                     .map(
                         |(line, line_number)| match line_char_range(rope, line_number) {
-                            None => Line::from(colorize(syntax, &Cow::from(line))),
+                            None => Line::from(colorize(syntax, Cow::from(line))),
                             Some((line_start, line_end)) => highlight_selection(
-                                colorize(syntax, &Cow::from(line)),
+                                colorize(syntax, Cow::from(line)),
                                 (line_start, line_end),
                                 (selection_start, selection_end),
                             ),
