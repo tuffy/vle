@@ -1135,6 +1135,8 @@ impl Layout {
     }
 
     fn add(&mut self, path: OsString) -> Result<(), ()> {
+        // TODO - if buffer is already open, just switch to it
+
         match BufferContext::open(path) {
             Ok(buffer) => match self {
                 Self::Single(b) => {
@@ -1152,7 +1154,12 @@ impl Layout {
                     Ok(())
                 }
             },
-            Err(_) => todo!(),
+            Err(err) => {
+                if let Some(buf) = self.selected_buffer_list_mut().current_mut() {
+                    buf.set_error(err.to_string());
+                }
+                Err(())
+            }
         }
     }
 
