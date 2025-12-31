@@ -2,6 +2,7 @@ use crate::buffer::Source;
 use ratatui::style::Color;
 
 mod makefile;
+mod python;
 mod rust;
 
 /// Implemented for different syntax highlighters
@@ -25,6 +26,7 @@ pub enum Syntax {
     #[default]
     Plain,
     Rust(rust::Rust),
+    Python(python::Python),
     Makefile(makefile::Makefile),
 }
 
@@ -39,6 +41,7 @@ impl Syntax {
                 None => Self::default(),
             },
             Some("rs") => Self::Rust(rust::Rust),
+            Some("py") => Self::Python(python::Python),
             _ => Self::default(),
         }
     }
@@ -52,6 +55,7 @@ impl Highlighter for Syntax {
         match self {
             Self::Plain => Box::new(std::iter::empty()),
             Self::Rust(r) => r.highlight(s),
+            Self::Python(p) => p.highlight(s),
             Self::Makefile(m) => m.highlight(s),
         }
     }
@@ -60,6 +64,7 @@ impl Highlighter for Syntax {
         match self {
             Self::Plain => false,
             Self::Rust(r) => r.tabs_required(),
+            Self::Python(p) => p.tabs_required(),
             Self::Makefile(m) => m.tabs_required(),
         }
     }
@@ -70,6 +75,7 @@ impl std::fmt::Display for Syntax {
         match self {
             Self::Plain => "Plain".fmt(f),
             Self::Rust(r) => r.fmt(f),
+            Self::Python(p) => p.fmt(f),
             Self::Makefile(m) => m.fmt(f),
         }
     }
@@ -88,7 +94,6 @@ impl std::fmt::Display for Syntax {
 // TODO - add patch syntax
 // TODO - add perl syntax
 // TODO - add php syntax
-// TODO - add python syntax
 // TODO - add sh syntax
 // TODO - add sql syntax
 // TODO - add tex syntax
