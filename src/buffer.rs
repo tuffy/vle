@@ -475,7 +475,7 @@ impl BufferContext {
                     .try_char_to_line(self.cursor)
                     .and_then(|line| buf.rope.try_line_to_char(line))
                 {
-                    buf.rope.insert(line_start, &indent);
+                    buf.rope.insert(line_start, indent);
                     self.cursor += indent.len();
                 }
             }
@@ -486,7 +486,7 @@ impl BufferContext {
                     .collect::<Vec<_>>()
                     .into_iter()
                 {
-                    buf.rope.insert(start, &indent);
+                    buf.rope.insert(start, indent);
                     match &mut self.selection {
                         Some(selection) => {
                             *selection.max(&mut self.cursor) += indent.len();
@@ -777,11 +777,13 @@ impl From<Buffer> for BufferContext {
     fn from(buffer: Buffer) -> Self {
         use crate::syntax::Highlighter;
 
-        // TODO - make this configurable
-        const SPACES_PER_TAB: usize = 4;
+        let spaces_per_tab: usize = std::env::var("VLE_SPACES_PER_TAB")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(4);
 
         Self {
-            tab_substitution: std::iter::repeat(' ').take(SPACES_PER_TAB).collect(),
+            tab_substitution: std::iter::repeat_n(' ', spaces_per_tab).collect(),
             tabs_required: buffer.syntax.tabs_required(),
             buffer: Arc::new(RwLock::new(buffer)),
             viewport_height: 0,
