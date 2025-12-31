@@ -232,6 +232,10 @@ impl BufferContext {
         self.buffer.try_read().unwrap().modified()
     }
 
+    pub fn open(path: OsString) -> std::io::Result<Self> {
+        Buffer::open(path).map(|b| b.into())
+    }
+
     pub fn save(&mut self) {
         self.buffer.try_write().unwrap().save(&mut self.message);
     }
@@ -902,6 +906,15 @@ impl BufferList {
         self.buffers.is_empty()
     }
 
+    pub fn push(&mut self, buffer: BufferContext, select: bool) {
+        self.buffers.push(buffer);
+        if select {
+            // must always be at least one buffer present,
+            // so this cannot fail
+            self.current = self.buffers.len() - 1;
+        }
+    }
+
     pub fn remove(&mut self, buffer: &BufferId) {
         self.buffers
             .retain(|buf| !Arc::ptr_eq(&buf.buffer, &buffer.0));
@@ -1236,6 +1249,16 @@ impl StatefulWidget for BufferWidget<'_> {
                     Layout::horizontal([Length(7), Min(0)]).areas(status_area);
 
                 Paragraph::new("Line : ")
+                    .style(REVERSED)
+                    .render(label_area, buf);
+
+                PromptWidget { prompt }.render(prompt_area, buf);
+            }
+            Some(EditorMode::Open { prompt }) => {
+                let [label_area, prompt_area] =
+                    Layout::horizontal([Length(12), Min(0)]).areas(status_area);
+
+                Paragraph::new("Open File : ")
                     .style(REVERSED)
                     .render(label_area, buf);
 

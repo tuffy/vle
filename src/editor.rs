@@ -34,6 +34,9 @@ pub enum EditorMode {
         matches: Vec<(usize, usize)>,
         match_idx: usize,
     },
+    Open {
+        prompt: Prompt,
+    },
 }
 
 pub struct Editor {
@@ -118,6 +121,11 @@ impl Editor {
                     if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
                         && let Some(new_mode) = process_select_line(buf, prompt, event)
                     {
+                        self.mode = new_mode;
+                    }
+                }
+                EditorMode::Open { prompt } => {
+                    if let Some(new_mode) = process_open_file(&mut self.layout, prompt, event) {
                         self.mode = new_mode;
                     }
                 }
@@ -483,8 +491,17 @@ impl Editor {
                     replace: Prompt::default(),
                 };
             }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('o'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.mode = EditorMode::Open {
+                    prompt: Prompt::default(),
+                };
+            }
             _ => { /* ignore other events */ } // TODO - Ctrl-W - write buffer to disk with name
-                                               // TODO - Ctrl-O - open file into new buffer
                                                // TODO - Ctrl-? - reload file from disk
         }
     }
@@ -632,6 +649,45 @@ fn process_select_line(
         _ => {
             None // ignore other events
         }
+    }
+}
+
+// TODO - need set of buffers to assign opened file to, if necessary
+fn process_open_file(layout: &mut Layout, prompt: &mut Prompt, event: Event) -> Option<EditorMode> {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+    // TODO - support tab completion
+    // TODO - support interactive with a tree view
+    // TODO - enter key attempts to open file
+    match event {
+        Event::Key(KeyEvent {
+            code: KeyCode::Char(c),
+            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            prompt.push(c);
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Backspace,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            prompt.pop();
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Enter,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => layout
+            .add(prompt.to_string().into())
+            .map(|()| EditorMode::default())
+            .ok(),
+        _ => None, // ignore other events
     }
 }
 
@@ -872,6 +928,28 @@ impl Layout {
             Self::Single(b) | Self::Horizontal { top: b, .. } | Self::Vertical { left: b, .. } => {
                 !b.is_empty()
             }
+        }
+    }
+
+    fn add(&mut self, path: OsString) -> Result<(), ()> {
+        match BufferContext::open(path) {
+            Ok(buffer) => match self {
+                Self::Single(b) => {
+                    b.push(buffer, true);
+                    Ok(())
+                }
+                Self::Horizontal { top, bottom, which } => {
+                    top.push(buffer.clone(), matches!(which, HorizontalPos::Top));
+                    bottom.push(buffer, matches!(which, HorizontalPos::Bottom));
+                    Ok(())
+                }
+                Self::Vertical { left, right, which } => {
+                    left.push(buffer.clone(), matches!(which, VerticalPos::Left));
+                    right.push(buffer, matches!(which, VerticalPos::Right));
+                    Ok(())
+                }
+            },
+            Err(_) => todo!(),
         }
     }
 
