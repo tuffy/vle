@@ -1215,9 +1215,19 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         };
 
-        match self.mode {
-            None | Some(EditorMode::Editing) => match state.message.take() {
-                None => {
+        match state.message.take() {
+            Some(BufferMessage::Notice(msg)) => {
+                Paragraph::new(msg.into_owned())
+                    .style(REVERSED)
+                    .render(status_area, buf);
+            }
+            Some(BufferMessage::Error(msg)) => {
+                Paragraph::new(msg.into_owned())
+                    .style(REVERSED.fg(ratatui::style::Color::Red))
+                    .render(status_area, buf);
+            }
+            None => match self.mode {
+                None | Some(EditorMode::Editing) => {
                     let source = Paragraph::new(format!(
                         "{} {}",
                         match buffer.modified() {
@@ -1250,96 +1260,86 @@ impl StatefulWidget for BufferWidget<'_> {
                         }
                     }
                 }
-                Some(BufferMessage::Notice(msg)) => {
-                    Paragraph::new(msg.into_owned())
+                Some(EditorMode::ConfirmClose { .. }) => {
+                    Paragraph::new("Unsaved changes. Really quit?")
                         .style(REVERSED)
                         .render(status_area, buf);
                 }
-                Some(BufferMessage::Error(msg)) => {
-                    Paragraph::new(msg.into_owned())
-                        .style(REVERSED.fg(ratatui::style::Color::Red))
+                Some(EditorMode::SelectInside) => {
+                    Paragraph::new("Select Inside")
+                        .style(REVERSED)
                         .render(status_area, buf);
                 }
+                Some(EditorMode::SelectLine { prompt }) => {
+                    let [label_area, prompt_area] =
+                        Layout::horizontal([Length(7), Min(0)]).areas(status_area);
+
+                    Paragraph::new("Line : ")
+                        .style(REVERSED)
+                        .render(label_area, buf);
+
+                    PromptWidget { prompt }.render(prompt_area, buf);
+                }
+                Some(EditorMode::Open { prompt }) => {
+                    let [label_area, prompt_area] =
+                        Layout::horizontal([Length(12), Min(0)]).areas(status_area);
+
+                    Paragraph::new("Open File : ")
+                        .style(REVERSED)
+                        .render(label_area, buf);
+
+                    PromptWidget { prompt }.render(prompt_area, buf);
+                }
+                Some(EditorMode::Browse { .. }) => {
+                    Paragraph::new("Select File")
+                        .style(REVERSED)
+                        .render(status_area, buf);
+                }
+                Some(EditorMode::Find { prompt, .. }) => {
+                    let [label_area, prompt_area] =
+                        Layout::horizontal([Length(7), Min(0)]).areas(status_area);
+
+                    Paragraph::new("Find : ")
+                        .style(REVERSED)
+                        .render(label_area, buf);
+
+                    PromptWidget { prompt }.render(prompt_area, buf);
+                }
+                Some(EditorMode::Replace { replace, .. }) => {
+                    let [label_area, prompt_area] =
+                        Layout::horizontal([Length(10), Min(0)]).areas(status_area);
+
+                    Paragraph::new("Replace : ")
+                        .style(REVERSED)
+                        .render(label_area, buf);
+
+                    PromptWidget { prompt: replace }.render(prompt_area, buf);
+                }
+                Some(EditorMode::ReplaceWith { with, matches, .. }) => {
+                    let matches = match matches.len() {
+                        1 => "(1 match) ".to_string(),
+                        matches => format!("({matches} matches) "),
+                    };
+
+                    // our labal is ASCII, so its width is easy to calculate
+                    let [label_area, prompt_area, matches_area] = Layout::horizontal([
+                        Length(15),
+                        Min(0),
+                        Length(matches.len().try_into().unwrap()),
+                    ])
+                    .areas(status_area);
+
+                    Paragraph::new("Replace With : ")
+                        .style(REVERSED)
+                        .render(label_area, buf);
+
+                    PromptWidget { prompt: with }.render(prompt_area, buf);
+
+                    Paragraph::new(matches)
+                        .style(REVERSED)
+                        .render(matches_area, buf);
+                }
             },
-            Some(EditorMode::ConfirmClose { .. }) => {
-                Paragraph::new("Unsaved changes. Really quit?")
-                    .style(REVERSED)
-                    .render(status_area, buf);
-            }
-            Some(EditorMode::SelectInside) => {
-                Paragraph::new("Select Inside")
-                    .style(REVERSED)
-                    .render(status_area, buf);
-            }
-            Some(EditorMode::SelectLine { prompt }) => {
-                let [label_area, prompt_area] =
-                    Layout::horizontal([Length(7), Min(0)]).areas(status_area);
-
-                Paragraph::new("Line : ")
-                    .style(REVERSED)
-                    .render(label_area, buf);
-
-                PromptWidget { prompt }.render(prompt_area, buf);
-            }
-            Some(EditorMode::Open { prompt }) => {
-                let [label_area, prompt_area] =
-                    Layout::horizontal([Length(12), Min(0)]).areas(status_area);
-
-                Paragraph::new("Open File : ")
-                    .style(REVERSED)
-                    .render(label_area, buf);
-
-                PromptWidget { prompt }.render(prompt_area, buf);
-            }
-            Some(EditorMode::Browse { .. }) => {
-                Paragraph::new("Select File")
-                    .style(REVERSED)
-                    .render(status_area, buf);
-            }
-            Some(EditorMode::Find { prompt, .. }) => {
-                let [label_area, prompt_area] =
-                    Layout::horizontal([Length(7), Min(0)]).areas(status_area);
-
-                Paragraph::new("Find : ")
-                    .style(REVERSED)
-                    .render(label_area, buf);
-
-                PromptWidget { prompt }.render(prompt_area, buf);
-            }
-            Some(EditorMode::Replace { replace, .. }) => {
-                let [label_area, prompt_area] =
-                    Layout::horizontal([Length(10), Min(0)]).areas(status_area);
-
-                Paragraph::new("Replace : ")
-                    .style(REVERSED)
-                    .render(label_area, buf);
-
-                PromptWidget { prompt: replace }.render(prompt_area, buf);
-            }
-            Some(EditorMode::ReplaceWith { with, matches, .. }) => {
-                let matches = match matches.len() {
-                    1 => "(1 match) ".to_string(),
-                    matches => format!("({matches} matches) "),
-                };
-
-                // our labal is ASCII, so its width is easy to calculate
-                let [label_area, prompt_area, matches_area] = Layout::horizontal([
-                    Length(15),
-                    Min(0),
-                    Length(matches.len().try_into().unwrap()),
-                ])
-                .areas(status_area);
-
-                Paragraph::new("Replace With : ")
-                    .style(REVERSED)
-                    .render(label_area, buf);
-
-                PromptWidget { prompt: with }.render(prompt_area, buf);
-
-                Paragraph::new(matches)
-                    .style(REVERSED)
-                    .render(matches_area, buf);
-            }
         }
     }
 }
