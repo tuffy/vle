@@ -62,11 +62,85 @@ impl Source {
     }
 }
 
+mod private {
+    pub struct Rope {
+        rope: ropey::Rope,  // the primary data rope
+        saved: ropey::Rope, // the rope's contents on disk
+        modified: bool,     // whether the rope has been modified
+    }
+
+    impl From<ropey::Rope> for Rope {
+        fn from(rope: ropey::Rope) -> Self {
+            Self {
+                saved: rope.clone(),
+                rope,
+                modified: false,
+            }
+        }
+    }
+
+    impl Rope {
+        /// Whether the rope has been modified
+        pub fn modified(&self) -> bool {
+            self.modified
+        }
+
+        /// Tag rope as having been saved successfully
+        pub fn save(&mut self) {
+            self.saved = self.rope.clone();
+            self.modified = false;
+        }
+
+        pub fn get_mut(&mut self) -> RopeHandle<'_> {
+            RopeHandle {
+                rope: &mut self.rope,
+                saved: &mut self.saved,
+                modified: &mut self.modified,
+            }
+        }
+    }
+
+    impl std::ops::Deref for Rope {
+        type Target = ropey::Rope;
+
+        fn deref(&self) -> &ropey::Rope {
+            &self.rope
+        }
+    }
+
+    pub struct RopeHandle<'r> {
+        rope: &'r mut ropey::Rope,
+        saved: &'r mut ropey::Rope,
+        modified: &'r mut bool,
+    }
+
+    impl std::ops::Deref for RopeHandle<'_> {
+        type Target = ropey::Rope;
+
+        fn deref(&self) -> &ropey::Rope {
+            self.rope
+        }
+    }
+
+    impl std::ops::DerefMut for RopeHandle<'_> {
+        fn deref_mut(&mut self) -> &mut ropey::Rope {
+            self.rope
+        }
+    }
+
+    impl std::ops::Drop for RopeHandle<'_> {
+        fn drop(&mut self) {
+            // log whether the rope value has been changed
+            // from the version that exists on disk
+            *self.modified = self.rope != self.saved;
+        }
+    }
+}
+
 /// A buffer corresponding to a file on disk (either local or remote)
 struct Buffer {
     source: Source,         // the source file
-    rope: ropey::Rope,      // the data rope
-    modified: bool,         // whether buffer has been modified since last save
+    rope: private::Rope,    // the data rope
     undo: Vec<Undo>,        // the undo stack
     redo: Vec<BufferState>, // the redo stack
     syntax: Syntax,         // the syntax highlighting to use
@@ -77,10 +151,9 @@ impl Buffer {
         let source = Source::from(path);
 
         Ok(Self {
-            rope: source.read_data()?,
+            rope: source.read_data()?.into(),
             syntax: Syntax::new(&source),
             source,
-            modified: false,
             undo: vec![],
             redo: vec![],
         })
@@ -89,7 +162,7 @@ impl Buffer {
     fn save(&mut self, message: &mut Option<BufferMessage>) {
         match self.source.save_data(&self.rope) {
             Ok(()) => {
-                self.modified = false;
+                self.rope.save();
                 log_movement(&mut self.undo);
             }
             Err(err) => {
@@ -102,15 +175,22 @@ impl Buffer {
         self.rope.len_lines()
     }
 
+    pub fn modified(&self) -> bool {
+        self.rope.modified()
+    }
+
     fn log_undo(&mut self, cursor: usize, cursor_column: usize) {
-        log_undo(
-            &mut self.undo,
-            &mut self.redo,
-            &self.rope,
-            self.modified,
-            cursor,
-            cursor_column,
-        );
+        if let None | Some(Undo { finished: true, .. }) = self.undo.last() {
+            self.undo.push(Undo {
+                state: BufferState {
+                    rope: self.rope.clone(),
+                    cursor,
+                    cursor_column,
+                },
+                finished: false,
+            });
+            self.redo.clear();
+        }
     }
 }
 
@@ -143,7 +223,7 @@ impl BufferContext {
     }
 
     pub fn modified(&self) -> bool {
-        self.buffer.try_read().unwrap().modified
+        self.buffer.try_read().unwrap().modified()
     }
 
     pub fn save(&mut self) {
@@ -272,16 +352,16 @@ impl BufferContext {
     pub fn insert_char(&mut self, c: char) {
         let mut buf = self.buffer.try_write().unwrap();
         buf.log_undo(self.cursor, self.cursor_column);
+        let mut rope = buf.rope.get_mut();
         if let Some(selection) = self.selection.take() {
             zap_selection(
-                &mut buf.rope,
+                &mut rope,
                 &mut self.cursor,
                 &mut self.cursor_column,
                 selection,
             );
         }
-        buf.rope.insert_char(self.cursor, c);
-        buf.modified = true;
+        rope.insert_char(self.cursor, c);
         self.cursor += 1;
         self.cursor_column += 1;
     }
@@ -289,19 +369,18 @@ impl BufferContext {
     pub fn paste(&mut self, pasted: &CutBuffer) {
         let mut buf = self.buffer.try_write().unwrap();
         buf.log_undo(self.cursor, self.cursor_column);
+        let mut rope = buf.rope.get_mut();
         if let Some(selection) = self.selection.take() {
             zap_selection(
-                &mut buf.rope,
+                &mut rope,
                 &mut self.cursor,
                 &mut self.cursor_column,
                 selection,
             );
-            buf.modified = true;
         }
-        if buf.rope.try_insert(self.cursor, &pasted.data).is_ok() {
+        if rope.try_insert(self.cursor, &pasted.data).is_ok() {
             self.cursor += pasted.chars_len;
-            self.cursor_column = cursor_column(&buf.rope, self.cursor);
-            buf.modified = true;
+            self.cursor_column = cursor_column(&rope, self.cursor);
         }
     }
 
@@ -322,50 +401,49 @@ impl BufferContext {
         };
 
         buf.log_undo(self.cursor, self.cursor_column);
+        let mut rope = buf.rope.get_mut();
 
         // if the whole line is indent, insert newline *before* indent
         // instead of adding a fresh indentation
         if all_indent {
-            buf.rope.insert_char(self.cursor - indent, '\n');
+            rope.insert_char(self.cursor - indent, '\n');
             self.cursor += 1;
         } else {
-            buf.rope.insert_char(self.cursor, '\n');
+            rope.insert_char(self.cursor, '\n');
             self.cursor += 1;
             self.cursor_column = 0;
             for _ in 0..indent {
-                buf.rope.insert_char(self.cursor, ' ');
+                rope.insert_char(self.cursor, ' ');
                 self.cursor += 1;
                 self.cursor_column += 1;
             }
         }
-        buf.modified = true;
     }
 
     pub fn backspace(&mut self) {
         let mut buf = self.buffer.try_write().unwrap();
 
         buf.log_undo(self.cursor, self.cursor_column);
+        let mut rope = buf.rope.get_mut();
 
         match self.selection.take() {
             None => {
                 if let Some(prev) = self.cursor.checked_sub(1)
-                    && buf.rope.try_remove(prev..self.cursor).is_ok()
+                    && rope.try_remove(prev..self.cursor).is_ok()
                 {
                     self.cursor -= 1;
-                    // we need to recalculate the cursor column altogether
+                    // we need to recalculate the cursor column
                     // in case a newline has been removed
-                    self.cursor_column = cursor_column(&buf.rope, self.cursor);
-                    buf.modified = true;
+                    self.cursor_column = cursor_column(&rope, self.cursor);
                 }
             }
             Some(current_selection) => {
                 zap_selection(
-                    &mut buf.rope,
+                    &mut rope,
                     &mut self.cursor,
                     &mut self.cursor_column,
                     current_selection,
                 );
-                buf.modified = true;
             }
         }
     }
@@ -373,22 +451,20 @@ impl BufferContext {
     pub fn delete(&mut self) {
         let buf = &mut self.buffer.try_write().unwrap();
         buf.log_undo(self.cursor, self.cursor_column);
+        let mut rope = buf.rope.get_mut();
 
         match self.selection.take() {
             None => {
-                if buf.rope.try_remove(self.cursor..(self.cursor + 1)).is_ok() {
-                    // leave cursor position and current column unchanged
-                    buf.modified = true;
-                }
+                let _ = rope.try_remove(self.cursor..(self.cursor + 1));
+                // leave cursor position and current column unchanged
             }
             Some(current_selection) => {
                 zap_selection(
-                    &mut buf.rope,
+                    &mut rope,
                     &mut self.cursor,
                     &mut self.cursor_column,
                     current_selection,
                 );
-                buf.modified = true;
             }
         }
     }
@@ -408,16 +484,15 @@ impl BufferContext {
         let selection = self.selection.take()?;
         let (selection_start, selection_end) = reorder(self.cursor, selection);
         let mut buf = self.buffer.try_write().unwrap();
+        buf.log_undo(self.cursor, self.cursor_column);
+        let mut rope = buf.rope.get_mut();
 
-        buf.rope
-            .get_slice(selection_start..selection_end)
+        rope.get_slice(selection_start..selection_end)
             .map(|r| r.into())
             .inspect(|_| {
-                buf.log_undo(self.cursor, self.cursor_column);
-                buf.rope.remove(selection_start..selection_end);
-                buf.modified = true;
+                rope.remove(selection_start..selection_end);
                 self.cursor = selection_start;
-                self.cursor_column = cursor_column(&buf.rope, self.cursor);
+                self.cursor_column = cursor_column(&rope, self.cursor);
             })
     }
 
@@ -425,8 +500,8 @@ impl BufferContext {
         let mut buf = self.buffer.try_write().unwrap();
         match buf.undo.pop() {
             Some(Undo { mut state, .. }) => {
-                std::mem::swap(&mut buf.rope, &mut state.rope);
-                std::mem::swap(&mut buf.modified, &mut state.modified);
+                use std::ops::DerefMut;
+                std::mem::swap(buf.rope.get_mut().deref_mut(), &mut state.rope);
                 std::mem::swap(&mut self.cursor, &mut state.cursor);
                 std::mem::swap(&mut self.cursor_column, &mut state.cursor_column);
                 buf.redo.push(state);
@@ -442,8 +517,8 @@ impl BufferContext {
         let mut buf = self.buffer.try_write().unwrap();
         match buf.redo.pop() {
             Some(mut state) => {
-                std::mem::swap(&mut buf.rope, &mut state.rope);
-                std::mem::swap(&mut buf.modified, &mut state.modified);
+                use std::ops::DerefMut;
+                std::mem::swap(buf.rope.get_mut().deref_mut(), &mut state.rope);
                 std::mem::swap(&mut self.cursor, &mut state.cursor);
                 std::mem::swap(&mut self.cursor_column, &mut state.cursor_column);
                 buf.undo.push(Undo {
@@ -466,27 +541,27 @@ impl BufferContext {
         let mut buf = self.buffer.try_write().unwrap();
 
         buf.log_undo(self.cursor, self.cursor_column);
-        buf.modified = true;
 
         match self.selection {
             None => {
-                if let Ok(line_start) = buf
-                    .rope
+                let mut rope = buf.rope.get_mut();
+                if let Ok(line_start) = rope
                     .try_char_to_line(self.cursor)
-                    .and_then(|line| buf.rope.try_line_to_char(line))
+                    .and_then(|line| rope.try_line_to_char(line))
                 {
-                    buf.rope.insert(line_start, indent);
+                    rope.insert(line_start, indent);
                     self.cursor += indent.len();
                 }
             }
             selection @ Some(_) => {
-                for (start, _) in selected_lines(&buf.rope, self.cursor, selection)
+                let mut rope = buf.rope.get_mut();
+                for (start, _) in selected_lines(&rope, self.cursor, selection)
                     .rev()
                     .filter(|(s, e)| e > s)
                     .collect::<Vec<_>>()
                     .into_iter()
                 {
-                    buf.rope.insert(start, indent);
+                    rope.insert(start, indent);
                     match &mut self.selection {
                         Some(selection) => {
                             *selection.max(&mut self.cursor) += indent.len();
@@ -515,15 +590,16 @@ impl BufferContext {
         // so long as each has the proper amount of prefixed spaces
         if selected.iter().all(|(start, _)| {
             buf.rope
+                .get_mut()
                 .chars_at(*start)
                 .take(indent.len())
                 .eq(indent.chars())
         }) {
             buf.log_undo(self.cursor, self.cursor_column);
-            buf.modified = true;
+            let mut rope = buf.rope.get_mut();
 
             for (start, _) in selected.into_iter().rev() {
-                buf.rope.remove(start..start + indent.len());
+                rope.remove(start..start + indent.len());
 
                 match &mut self.selection {
                     Some(selection) => {
@@ -649,10 +725,10 @@ impl BufferContext {
     pub fn replace(&mut self, ranges: &[(usize, usize)], to: &str) {
         let mut buf = self.buffer.try_write().unwrap();
         buf.log_undo(self.cursor, self.cursor_column);
-        buf.modified = true;
+        let mut rope = buf.rope.get_mut();
         for (s, e) in ranges.iter().rev() {
-            let _ = buf.rope.try_remove(s..e);
-            let _ = buf.rope.try_insert(*s, to);
+            let _ = rope.try_remove(s..e);
+            let _ = rope.try_insert(*s, to);
         }
         self.selection = None;
     }
@@ -1071,7 +1147,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 None => {
                     let source = Paragraph::new(format!(
                         "{} {}",
-                        match buffer.modified {
+                        match buffer.modified() {
                             true => '*',
                             false => ' ',
                         },
@@ -1197,7 +1273,6 @@ impl From<ropey::RopeSlice<'_>> for CutBuffer {
 /// Buffer's undo/redo state
 struct BufferState {
     rope: ropey::Rope,
-    modified: bool,
     cursor: usize,
     cursor_column: usize,
 }
@@ -1210,28 +1285,6 @@ struct Undo {
 fn log_movement(undo: &mut [Undo]) {
     if let Some(last) = undo.last_mut() {
         last.finished = true;
-    }
-}
-
-fn log_undo(
-    undo: &mut Vec<Undo>,
-    redo: &mut Vec<BufferState>,
-    rope: &ropey::Rope,
-    modified: bool,
-    cursor: usize,
-    cursor_column: usize,
-) {
-    if let None | Some(Undo { finished: true, .. }) = undo.last() {
-        undo.push(Undo {
-            state: BufferState {
-                rope: rope.clone(),
-                modified,
-                cursor,
-                cursor_column,
-            },
-            finished: false,
-        });
-        redo.clear();
     }
 }
 
