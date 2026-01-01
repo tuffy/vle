@@ -574,22 +574,19 @@ impl BufferContext {
             }
             selection @ Some(_) => {
                 let mut rope = buf.rope.get_mut();
-                for (start, _) in selected_lines(&rope, self.cursor, selection)
-                    .rev()
-                    .filter(|(s, e)| e > s)
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                {
-                    rope.insert(start, indent);
-                    match &mut self.selection {
-                        Some(selection) => {
-                            *selection.max(&mut self.cursor) += indent.len();
-                        }
-                        None => {
-                            self.cursor += indent.len();
-                        }
-                    }
+                let indent_lines = selected_lines(&rope, self.cursor, selection)
+                    .filter(|l| l.end > l.start)
+                    .collect::<Vec<_>>();
+
+                for SelectedLine { start, .. } in indent_lines.iter().rev() {
+                    rope.insert(*start, indent);
                 }
+
+                self.selection = indent_lines.first().map(|l| l.start);
+                self.cursor = indent_lines
+                    .last()
+                    .map(|l| l.end + (indent.len() * indent_lines.len()))
+                    .unwrap_or(0);
             }
         }
     }
@@ -601,32 +598,52 @@ impl BufferContext {
         };
         let mut buf = self.buffer.try_write().unwrap();
 
-        let selected = selected_lines(&buf.rope, self.cursor, self.selection)
-            .filter(|(s, e)| e > s)
-            .collect::<Vec<_>>();
+        match self.selection {
+            None => {
+                if let Some(line_start) = buf
+                    .rope
+                    .try_char_to_line(self.cursor)
+                    .ok()
+                    .and_then(|line| buf.rope.try_line_to_char(line).ok())
+                    && buf
+                        .rope
+                        .chars_at(line_start)
+                        .take(indent.len())
+                        .eq(indent.chars())
+                {
+                    buf.log_undo(self.cursor, self.cursor_column);
+                    let mut rope = buf.rope.get_mut();
+                    rope.remove(line_start..line_start + indent.len());
+                    self.cursor = line_start;
+                    self.cursor_column = 0;
+                }
+            }
+            selection @ Some(_) => {
+                let unindent_lines = selected_lines(&buf.rope, self.cursor, selection)
+                    .filter(|l| l.end > l.start)
+                    .collect::<Vec<_>>();
 
-        // un-indent whole selection as a unit
-        // so long as each has the proper amount of prefixed spaces
-        if selected.iter().all(|(start, _)| {
-            buf.rope
-                .get_mut()
-                .chars_at(*start)
-                .take(indent.len())
-                .eq(indent.chars())
-        }) {
-            buf.log_undo(self.cursor, self.cursor_column);
-            let mut rope = buf.rope.get_mut();
+                // un-indent whole selection as a unit
+                // so long as each non-empty line has the proper amount
+                // of prefixed spaces
+                if unindent_lines.iter().all(|SelectedLine { start, .. }| {
+                    buf.rope
+                        .chars_at(*start)
+                        .take(indent.len())
+                        .eq(indent.chars())
+                }) {
+                    buf.log_undo(self.cursor, self.cursor_column);
+                    let mut rope = buf.rope.get_mut();
 
-            for (start, _) in selected.into_iter().rev() {
-                rope.remove(start..start + indent.len());
-
-                match &mut self.selection {
-                    Some(selection) => {
-                        *selection.max(&mut self.cursor) -= indent.len();
+                    for line in unindent_lines.iter().rev() {
+                        rope.remove(line.start..line.start + indent.len());
                     }
-                    None => {
-                        self.cursor -= indent.len();
-                    }
+
+                    self.selection = unindent_lines.first().map(|l| l.start);
+                    self.cursor = unindent_lines
+                        .last()
+                        .map(|l| l.end - (unindent_lines.len() * indent.len()))
+                        .unwrap_or(0);
                 }
             }
         }
@@ -765,6 +782,11 @@ fn line_char_range(rope: &ropey::Rope, line: usize) -> Option<(usize, usize)> {
     ))
 }
 
+struct SelectedLine {
+    start: usize,
+    end: usize,
+}
+
 // Iterates over position ranges of all selected lines
 //
 // If no selection, yields current line's position ranges
@@ -772,11 +794,15 @@ fn selected_lines(
     rope: &ropey::Rope,
     cursor: usize,
     selection: Option<usize>,
-) -> Box<dyn DoubleEndedIterator<Item = (usize, usize)> + '_> {
+) -> Box<dyn DoubleEndedIterator<Item = SelectedLine> + '_> {
     match selection {
         // select current line
         None => match rope.try_char_to_line(cursor) {
-            Ok(line) => Box::new(line_char_range(rope, line).into_iter()),
+            Ok(line) => Box::new(
+                line_char_range(&rope, line)
+                    .map(|(start, end)| SelectedLine { start, end })
+                    .into_iter(),
+            ),
             Err(_) => Box::new(std::iter::empty()),
         },
         Some(selection) => {
@@ -784,7 +810,9 @@ fn selected_lines(
             if let Ok(start_line) = rope.try_char_to_line(start)
                 && let Ok(end_line) = rope.try_char_to_line(end)
             {
-                Box::new((start_line..=end_line).filter_map(|l| line_char_range(rope, l)))
+                Box::new((start_line..=end_line).filter_map(move |line| {
+                    line_char_range(&rope, line).map(|(start, end)| SelectedLine { start, end })
+                }))
             } else {
                 Box::new(std::iter::empty())
             }
