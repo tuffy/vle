@@ -1087,11 +1087,17 @@ impl StatefulWidget for BufferWidget<'_> {
                 Constraint::{Length, Min},
                 Layout,
             },
-            style::{Modifier, Style},
+            style::{Color, Modifier, Style},
             text::{Line, Span},
             widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Widget},
         };
         use std::borrow::Cow;
+
+        const EDITING: Style = Style::new().add_modifier(Modifier::REVERSED);
+        const ERROR: Style = Style::new().fg(Color::Red).add_modifier(Modifier::REVERSED);
+        const PROMPTING: Style = Style::new()
+            .fg(Color::Blue)
+            .add_modifier(Modifier::REVERSED);
 
         fn widen_tabs<'l>(mut input: Line<'l>, tab_substitution: &str) -> Line<'l> {
             fn tabs_to_spaces(s: &mut Cow<'_, str>, tab_substitution: &str) {
@@ -1216,7 +1222,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     &mut colorized,
                     selection_end - selection_start.max(line_start),
                     &mut highlighted,
-                    |span| span.style(REVERSED),
+                    |span| span.style(EDITING),
                 );
 
                 // output the remaining characters verbatim
@@ -1225,8 +1231,6 @@ impl StatefulWidget for BufferWidget<'_> {
                 highlighted.into()
             }
         }
-
-        const REVERSED: Style = Style::new().add_modifier(Modifier::REVERSED);
 
         let buffer = state.buffer.try_read().unwrap();
 
@@ -1299,12 +1303,12 @@ impl StatefulWidget for BufferWidget<'_> {
         match state.message.take() {
             Some(BufferMessage::Notice(msg)) => {
                 Paragraph::new(msg.into_owned())
-                    .style(REVERSED)
+                    .style(EDITING)
                     .render(status_area, buf);
             }
             Some(BufferMessage::Error(msg)) => {
                 Paragraph::new(msg.into_owned())
-                    .style(REVERSED.fg(ratatui::style::Color::Red))
+                    .style(ERROR)
                     .render(status_area, buf);
             }
             None => match self.mode {
@@ -1317,7 +1321,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         },
                         buffer.source.name()
                     ))
-                    .style(REVERSED);
+                    .style(EDITING);
 
                     match buffer.rope.try_char_to_line(state.cursor) {
                         Ok(line) => {
@@ -1333,7 +1337,7 @@ impl StatefulWidget for BufferWidget<'_> {
                             source.render(source_area, buf);
 
                             Paragraph::new(line.to_string())
-                                .style(REVERSED)
+                                .style(EDITING)
                                 .render(line_area, buf);
                         }
                         Err(_) => {
@@ -1343,12 +1347,12 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
                 Some(EditorMode::ConfirmClose { .. }) => {
                     Paragraph::new("Unsaved changes. Really quit?")
-                        .style(REVERSED)
+                        .style(PROMPTING)
                         .render(status_area, buf);
                 }
                 Some(EditorMode::SelectInside) => {
                     Paragraph::new("Select Inside")
-                        .style(REVERSED)
+                        .style(PROMPTING)
                         .render(status_area, buf);
                 }
                 Some(EditorMode::SelectLine { prompt }) => {
@@ -1356,7 +1360,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         Layout::horizontal([Length(7), Min(0)]).areas(status_area);
 
                     Paragraph::new("Line : ")
-                        .style(REVERSED)
+                        .style(PROMPTING)
                         .render(label_area, buf);
 
                     PromptWidget { prompt }.render(prompt_area, buf);
@@ -1366,7 +1370,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         Layout::horizontal([Length(12), Min(0)]).areas(status_area);
 
                     Paragraph::new("Open File : ")
-                        .style(REVERSED)
+                        .style(PROMPTING)
                         .render(label_area, buf);
 
                     PromptWidget { prompt }.render(prompt_area, buf);
@@ -1376,7 +1380,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         Layout::horizontal([Length(7), Min(0)]).areas(status_area);
 
                     Paragraph::new("Find : ")
-                        .style(REVERSED)
+                        .style(PROMPTING)
                         .render(label_area, buf);
 
                     PromptWidget { prompt }.render(prompt_area, buf);
@@ -1386,7 +1390,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         Layout::horizontal([Length(10), Min(0)]).areas(status_area);
 
                     Paragraph::new("Replace : ")
-                        .style(REVERSED)
+                        .style(PROMPTING)
                         .render(label_area, buf);
 
                     PromptWidget { prompt: replace }.render(prompt_area, buf);
@@ -1406,13 +1410,13 @@ impl StatefulWidget for BufferWidget<'_> {
                     .areas(status_area);
 
                     Paragraph::new("Replace With : ")
-                        .style(REVERSED)
+                        .style(PROMPTING)
                         .render(label_area, buf);
 
                     PromptWidget { prompt: with }.render(prompt_area, buf);
 
                     Paragraph::new(matches)
-                        .style(REVERSED)
+                        .style(PROMPTING)
                         .render(matches_area, buf);
                 }
             },

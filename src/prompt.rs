@@ -37,10 +37,14 @@ pub struct PromptWidget<'p> {
 
 impl Widget for PromptWidget<'_> {
     fn render(self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
-        use ratatui::style::{Modifier, Style};
+        use ratatui::style::{Color, Modifier, Style};
 
         ratatui::widgets::Paragraph::new(self.prompt.to_string())
-            .style(Style::new().add_modifier(Modifier::REVERSED))
+            .style(
+                Style::new()
+                    .fg(Color::Blue)
+                    .add_modifier(Modifier::REVERSED),
+            )
             .render(area, buf)
     }
 }
