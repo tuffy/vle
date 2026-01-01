@@ -209,12 +209,19 @@ impl Editor {
                         which: VerticalPos::Left,
                     };
                 }
-                Layout::Horizontal { top, bottom, .. } => {
-                    self.layout = Layout::Vertical {
-                        left: std::mem::take(top),
-                        right: std::mem::take(bottom),
-                        which: VerticalPos::Left,
-                    };
+                Layout::Horizontal {
+                    top,
+                    which: HorizontalPos::Top,
+                    ..
+                } => {
+                    self.layout = Layout::Single(std::mem::take(top));
+                }
+                Layout::Horizontal {
+                    bottom,
+                    which: HorizontalPos::Bottom,
+                    ..
+                } => {
+                    self.layout = Layout::Single(std::mem::take(bottom));
                 }
             },
             Event::Key(KeyEvent {
@@ -257,12 +264,19 @@ impl Editor {
                         which: HorizontalPos::Top,
                     }
                 }
-                Layout::Vertical { left, right, .. } => {
-                    self.layout = Layout::Horizontal {
-                        top: std::mem::take(left),
-                        bottom: std::mem::take(right),
-                        which: HorizontalPos::Top,
-                    }
+                Layout::Vertical {
+                    left,
+                    which: VerticalPos::Left,
+                    ..
+                } => {
+                    self.layout = Layout::Single(std::mem::take(left));
+                }
+                Layout::Vertical {
+                    right,
+                    which: VerticalPos::Right,
+                    ..
+                } => {
+                    self.layout = Layout::Single(std::mem::take(right));
                 }
             },
             Event::Key(KeyEvent {
@@ -281,52 +295,21 @@ impl Editor {
                         which: HorizontalPos::Bottom,
                     }
                 }
-                Layout::Vertical { left, right, .. } => {
-                    self.layout = Layout::Horizontal {
-                        top: std::mem::take(left),
-                        bottom: std::mem::take(right),
-                        which: HorizontalPos::Bottom,
-                    }
+                Layout::Vertical {
+                    left,
+                    which: VerticalPos::Left,
+                    ..
+                } => {
+                    self.layout = Layout::Single(std::mem::take(left));
+                }
+                Layout::Vertical {
+                    right,
+                    which: VerticalPos::Right,
+                    ..
+                } => {
+                    self.layout = Layout::Single(std::mem::take(right));
                 }
             },
-            Event::Key(KeyEvent {
-                code: KeyCode::F(10),
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
-                match &mut self.layout {
-                    Layout::Single(_) => { /* do nothing */ }
-                    Layout::Horizontal {
-                        top,
-                        which: HorizontalPos::Top,
-                        ..
-                    } => {
-                        self.layout = Layout::Single(std::mem::take(top));
-                    }
-                    Layout::Horizontal {
-                        bottom,
-                        which: HorizontalPos::Bottom,
-                        ..
-                    } => {
-                        self.layout = Layout::Single(std::mem::take(bottom));
-                    }
-                    Layout::Vertical {
-                        left,
-                        which: VerticalPos::Left,
-                        ..
-                    } => {
-                        self.layout = Layout::Single(std::mem::take(left));
-                    }
-                    Layout::Vertical {
-                        right,
-                        which: VerticalPos::Right,
-                        ..
-                    } => {
-                        self.layout = Layout::Single(std::mem::take(right));
-                    }
-                }
-            }
             Event::Key(KeyEvent {
                 code: KeyCode::Up,
                 modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
