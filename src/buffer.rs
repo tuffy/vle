@@ -1089,7 +1089,10 @@ impl StatefulWidget for BufferWidget<'_> {
             },
             style::{Color, Modifier, Style},
             text::{Line, Span},
-            widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Widget},
+            widgets::{
+                Block, BorderType, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+                Widget,
+            },
         };
         use std::borrow::Cow;
 
@@ -1233,26 +1236,41 @@ impl StatefulWidget for BufferWidget<'_> {
         }
 
         let buffer = state.buffer.try_read().unwrap();
-
-        let [text_area, status_area] = Layout::vertical([Min(0), Length(1)]).areas(area);
-        let [text_area, scrollbar_area] = Layout::horizontal([Min(0), Length(1)]).areas(text_area);
-
-        state.viewport_height = text_area.height.into();
-
         let rope = &buffer.rope;
         let syntax = &buffer.syntax;
 
-        // ensure cursor hasn't been shifted outside of rope
-        // (which might occur if the rope is shrunk in another buffer)
-        if state.cursor > rope.len_chars() {
-            state.cursor = rope.len_chars().saturating_sub(1);
-            state.selection = None;
-        }
+        let block = Block::bordered()
+            .border_type(if self.mode.is_some() {
+                BorderType::Thick
+            } else {
+                BorderType::Plain
+            })
+            .title_top(
+                Line::from(buffer.source.name()).style(if buffer.modified() {
+                    Modifier::BOLD
+                } else {
+                    Modifier::empty()
+                }),
+            )
+            .title_bottom(
+                Line::from(match buffer.rope.try_char_to_line(state.cursor) {
+                    Ok(line) => (line + 1).to_string(),
+                    Err(_) => "???".to_string(),
+                })
+                .centered(),
+            );
+
+        let [text_area, scrollbar_area] =
+            Layout::horizontal([Min(0), Length(1)]).areas(block.inner(area));
+
+        block.render(area, buf);
 
         let viewport_line: usize = rope
             .try_char_to_line(state.cursor)
             .map(|line| line.saturating_sub(state.viewport_height / 2))
             .unwrap_or(0);
+
+        state.viewport_height = text_area.height.into();
 
         Paragraph::new(match state.selection {
             // no selection, so nothing to highlight
@@ -1299,128 +1317,6 @@ impl StatefulWidget for BufferWidget<'_> {
                 .viewport_content_length(text_area.height.into())
                 .position(rope.try_char_to_line(state.cursor).unwrap_or(viewport_line)),
         );
-
-        match state.message.take() {
-            Some(BufferMessage::Notice(msg)) => {
-                Paragraph::new(msg.into_owned())
-                    .style(EDITING)
-                    .render(status_area, buf);
-            }
-            Some(BufferMessage::Error(msg)) => {
-                Paragraph::new(msg.into_owned())
-                    .style(ERROR)
-                    .render(status_area, buf);
-            }
-            None => match self.mode {
-                None | Some(EditorMode::Editing) => {
-                    let source = Paragraph::new(format!(
-                        "{} {}",
-                        match buffer.modified() {
-                            true => '*',
-                            false => ' ',
-                        },
-                        buffer.source.name()
-                    ))
-                    .style(EDITING);
-
-                    match buffer.rope.try_char_to_line(state.cursor) {
-                        Ok(line) => {
-                            let line = std::num::NonZero::new(line + 1).unwrap();
-                            let digits = line.ilog10() + 1;
-
-                            let [source_area, line_area] = Layout::horizontal([
-                                Min(0),
-                                Length((digits + 1).try_into().unwrap()),
-                            ])
-                            .areas(status_area);
-
-                            source.render(source_area, buf);
-
-                            Paragraph::new(line.to_string())
-                                .style(EDITING)
-                                .render(line_area, buf);
-                        }
-                        Err(_) => {
-                            source.render(status_area, buf);
-                        }
-                    }
-                }
-                Some(EditorMode::ConfirmClose { .. }) => {
-                    Paragraph::new("Unsaved changes. Really quit?")
-                        .style(PROMPTING)
-                        .render(status_area, buf);
-                }
-                Some(EditorMode::SelectInside) => {
-                    Paragraph::new("Select Inside")
-                        .style(PROMPTING)
-                        .render(status_area, buf);
-                }
-                Some(EditorMode::SelectLine { prompt }) => {
-                    let [label_area, prompt_area] =
-                        Layout::horizontal([Length(7), Min(0)]).areas(status_area);
-
-                    Paragraph::new("Line : ")
-                        .style(PROMPTING)
-                        .render(label_area, buf);
-
-                    PromptWidget { prompt }.render(prompt_area, buf);
-                }
-                Some(EditorMode::Open { prompt }) => {
-                    let [label_area, prompt_area] =
-                        Layout::horizontal([Length(12), Min(0)]).areas(status_area);
-
-                    Paragraph::new("Open File : ")
-                        .style(PROMPTING)
-                        .render(label_area, buf);
-
-                    PromptWidget { prompt }.render(prompt_area, buf);
-                }
-                Some(EditorMode::Find { prompt, .. }) => {
-                    let [label_area, prompt_area] =
-                        Layout::horizontal([Length(7), Min(0)]).areas(status_area);
-
-                    Paragraph::new("Find : ")
-                        .style(PROMPTING)
-                        .render(label_area, buf);
-
-                    PromptWidget { prompt }.render(prompt_area, buf);
-                }
-                Some(EditorMode::Replace { replace, .. }) => {
-                    let [label_area, prompt_area] =
-                        Layout::horizontal([Length(10), Min(0)]).areas(status_area);
-
-                    Paragraph::new("Replace : ")
-                        .style(PROMPTING)
-                        .render(label_area, buf);
-
-                    PromptWidget { prompt: replace }.render(prompt_area, buf);
-                }
-                Some(EditorMode::ReplaceWith { with, matches, .. }) => {
-                    let matches = match matches.len() {
-                        1 => "(1 match) ".to_string(),
-                        matches => format!("({matches} matches) "),
-                    };
-
-                    // our labal is ASCII, so its width is easy to calculate
-                    let [label_area, prompt_area, matches_area] = Layout::horizontal([
-                        Length(15),
-                        Min(0),
-                        Length(matches.len().try_into().unwrap()),
-                    ])
-                    .areas(status_area);
-
-                    Paragraph::new("Replace With : ")
-                        .style(PROMPTING)
-                        .render(label_area, buf);
-
-                    PromptWidget { prompt: with }.render(prompt_area, buf);
-
-                    Paragraph::new(matches)
-                        .style(PROMPTING)
-                        .render(matches_area, buf);
-                }
-            },
-        }
     }
 }
 

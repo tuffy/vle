@@ -1046,12 +1046,21 @@ impl Layout {
     fn cursor_position(&self, area: Rect) -> Option<Position> {
         use ratatui::layout::{Constraint, Layout};
 
+        // generate a duplicate of our existing block layout
+        // and then apply cursor's position to it
         fn apply_position(area: Rect, (row, col): (usize, usize)) -> Option<Position> {
-            // TODO - filter out position if outside of area
+            use ratatui::{
+                layout::Constraint::{Length, Min},
+                widgets::Block,
+            };
 
-            let x = (col + usize::from(area.x)).min((area.x + area.width).saturating_sub(1).into());
-            let y =
-                (row + usize::from(area.y)).min((area.y + area.height).saturating_sub(1).into());
+            let [text_area, _] =
+                Layout::horizontal([Min(0), Length(1)]).areas(Block::bordered().inner(area));
+
+            // TODO - apply position to any opened dialog box
+
+            let x = (col + usize::from(text_area.x)).min((text_area.x + text_area.width).into());
+            let y = (row + usize::from(text_area.y)).min((text_area.y + text_area.height).into());
 
             Some(Position {
                 x: u16::try_from(x).ok()?,
