@@ -1112,7 +1112,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 Constraint::{Length, Min},
                 Layout,
             },
-            style::{Modifier, Style},
+            style::{Color, Modifier, Style},
             text::{Line, Span},
             widgets::{
                 Block, BorderType, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
@@ -1266,13 +1266,11 @@ impl StatefulWidget for BufferWidget<'_> {
             } else {
                 BorderType::Plain
             })
-            .title_top(
-                Line::from(buffer.source.name()).style(if buffer.modified() {
-                    Modifier::BOLD
-                } else {
-                    Modifier::empty()
-                }),
-            )
+            .title_top(if buffer.modified() {
+                Line::from(buffer.source.name()).style(Style::default().fg(Color::Blue))
+            } else {
+                Line::from(buffer.source.name())
+            })
             .title_bottom(
                 Line::from(match buffer.rope.try_char_to_line(state.cursor) {
                     Ok(line) => (line + 1).to_string(),
