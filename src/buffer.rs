@@ -685,6 +685,60 @@ impl BufferContext {
         }
     }
 
+    pub fn select_whole_lines(&mut self) {
+        let buf = &mut self.buffer.try_write().unwrap();
+        let rope = &buf.rope;
+
+        match self.selection {
+            None => {
+                // no selection, so select current line instead
+
+                if let Some((start, end)) = rope
+                    .try_char_to_line(self.cursor)
+                    .ok()
+                    .and_then(|line| line_char_range(rope, line))
+                {
+                    self.selection = Some(start);
+                    self.cursor = end;
+                    self.cursor_column = cursor_column(rope, self.cursor);
+                    log_movement(&mut buf.undo);
+                }
+            }
+            Some(selection) => {
+                // widen start and end of selection to line boundaries
+                if selection < self.cursor {
+                    // selection to start of line, cursor to end of line
+                    if let Some(start) = rope
+                        .try_char_to_line(selection)
+                        .ok()
+                        .and_then(|line| rope.try_line_to_char(line).ok())
+                        && let Some(end) = rope
+                            .try_char_to_line(self.cursor)
+                            .ok()
+                            .and_then(|line| rope.try_line_to_char(line + 1).ok())
+                    {
+                        self.selection = Some(start);
+                        self.cursor = end - 1;
+                    }
+                } else {
+                    // cursor to start of line, selection to end of line
+                    if let Some(start) = rope
+                        .try_char_to_line(self.cursor)
+                        .ok()
+                        .and_then(|line| rope.try_line_to_char(line).ok())
+                        && let Some(end) = rope
+                            .try_char_to_line(selection)
+                            .ok()
+                            .and_then(|line| rope.try_line_to_char(line + 1).ok())
+                    {
+                        self.cursor = start;
+                        self.selection = Some(end - 1);
+                    }
+                }
+            }
+        }
+    }
+
     // returns true if search term found
     pub fn search(&mut self, forward: bool, term: &str, cache: &mut String) -> bool {
         let buf = &mut self.buffer.try_write().unwrap();
@@ -799,7 +853,7 @@ fn selected_lines(
         // select current line
         None => match rope.try_char_to_line(cursor) {
             Ok(line) => Box::new(
-                line_char_range(&rope, line)
+                line_char_range(rope, line)
                     .map(|(start, end)| SelectedLine { start, end })
                     .into_iter(),
             ),
@@ -811,7 +865,7 @@ fn selected_lines(
                 && let Ok(end_line) = rope.try_char_to_line(end)
             {
                 Box::new((start_line..=end_line).filter_map(move |line| {
-                    line_char_range(&rope, line).map(|(start, end)| SelectedLine { start, end })
+                    line_char_range(rope, line).map(|(start, end)| SelectedLine { start, end })
                 }))
             } else {
                 Box::new(std::iter::empty())

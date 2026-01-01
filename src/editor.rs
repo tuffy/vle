@@ -403,6 +403,12 @@ impl Editor {
                 ..
             }) => self.update_buffer(|b| b.newline()),
             Event::Key(KeyEvent {
+                code: KeyCode::Char('w'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.update_buffer(|b| b.select_whole_lines()),
+            Event::Key(KeyEvent {
                 code: KeyCode::Char('x'),
                 modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,
@@ -507,8 +513,7 @@ impl Editor {
                     prompt: Prompt::default(),
                 };
             }
-            _ => { /* ignore other events */ } // TODO - Ctrl-W - write buffer to disk with name
-                                               // TODO - Ctrl-? - reload file from disk
+            _ => { /* ignore other events */ }
         }
     }
 
