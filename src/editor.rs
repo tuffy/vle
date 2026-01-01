@@ -544,8 +544,6 @@ impl Editor {
     fn process_select_inside(&mut self, event: Event) {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-        // TODO - support < >
-
         match event {
             Event::Key(KeyEvent {
                 code: KeyCode::Char('(' | ')'),
@@ -572,6 +570,15 @@ impl Editor {
                 ..
             }) => {
                 self.update_buffer(|b| b.select_inside(('{', '}'), Some(('}', '{'))));
+                self.mode = EditorMode::default();
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('<' | '>'),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.update_buffer(|b| b.select_inside(('<', '>'), Some(('>', '<'))));
                 self.mode = EditorMode::default();
             }
             Event::Key(KeyEvent {

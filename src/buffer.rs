@@ -689,8 +689,6 @@ impl BufferContext {
     pub fn select_matching_paren(&mut self) {
         let mut buf = self.buffer.try_write().unwrap();
 
-        // TODO - support < >
-
         if let Some(new_pos) = buf.rope.get_char(self.cursor).and_then(|c| match c {
             '(' => select_next_char::<true>(&buf.rope, self.cursor + 1, ')', Some('(')),
             ')' => select_next_char::<false>(&buf.rope, self.cursor, '(', Some(')'))
@@ -700,6 +698,9 @@ impl BufferContext {
                 .map(|c| c.saturating_sub(1)),
             '[' => select_next_char::<true>(&buf.rope, self.cursor + 1, ']', Some('[')),
             ']' => select_next_char::<false>(&buf.rope, self.cursor, '[', Some(']'))
+                .map(|c| c.saturating_sub(1)),
+            '<' => select_next_char::<true>(&buf.rope, self.cursor + 1, '>', Some('<')),
+            '>' => select_next_char::<false>(&buf.rope, self.cursor, '<', Some('>'))
                 .map(|c| c.saturating_sub(1)),
             _ => None,
         }) {
