@@ -664,8 +664,32 @@ impl BufferContext {
         }
     }
 
+    pub fn cursor_to_selection_start(&mut self) {
+        let mut buf = self.buffer.try_write().unwrap();
+        if let Some(selection) = &mut self.selection
+            && self.cursor > *selection
+        {
+            std::mem::swap(selection, &mut self.cursor);
+            self.cursor_column = cursor_column(&buf.rope, self.cursor);
+            log_movement(&mut buf.undo);
+        }
+    }
+
+    pub fn cursor_to_selection_end(&mut self) {
+        let mut buf = self.buffer.try_write().unwrap();
+        if let Some(selection) = &mut self.selection
+            && self.cursor < *selection
+        {
+            std::mem::swap(selection, &mut self.cursor);
+            self.cursor_column = cursor_column(&buf.rope, self.cursor);
+            log_movement(&mut buf.undo);
+        }
+    }
+
     pub fn select_matching_paren(&mut self) {
         let mut buf = self.buffer.try_write().unwrap();
+
+        // TODO - support < >
 
         if let Some(new_pos) = buf.rope.get_char(self.cursor).and_then(|c| match c {
             '(' => select_next_char::<true>(&buf.rope, self.cursor + 1, ')', Some('(')),

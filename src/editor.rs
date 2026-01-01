@@ -338,6 +338,20 @@ impl Editor {
                 b.cursor_down(PAGE_SIZE, modifiers.contains(KeyModifiers::SHIFT))
             }),
             Event::Key(KeyEvent {
+                code: KeyCode::Home,
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.update_buffer(|b| b.cursor_to_selection_start()),
+            Event::Key(KeyEvent {
+                code: KeyCode::End,
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.update_buffer(|b| {
+                b.cursor_to_selection_end();
+            }),
+            Event::Key(KeyEvent {
                 code: KeyCode::Left,
                 modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
@@ -529,6 +543,8 @@ impl Editor {
 
     fn process_select_inside(&mut self, event: Event) {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+        // TODO - support < >
 
         match event {
             Event::Key(KeyEvent {
