@@ -1,5 +1,3 @@
-use ratatui::widgets::Widget;
-
 #[derive(Default)]
 pub struct Prompt {
     value: Vec<char>,
@@ -27,24 +25,5 @@ impl Prompt {
 impl std::fmt::Display for Prompt {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         self.value.iter().try_for_each(|c| c.fmt(f))
-    }
-}
-
-#[derive(Copy, Clone)]
-pub struct PromptWidget<'p> {
-    pub prompt: &'p Prompt,
-}
-
-impl Widget for PromptWidget<'_> {
-    fn render(self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
-        use ratatui::style::{Color, Modifier, Style};
-
-        ratatui::widgets::Paragraph::new(self.prompt.to_string())
-            .style(
-                Style::new()
-                    .fg(Color::Blue)
-                    .add_modifier(Modifier::REVERSED),
-            )
-            .render(area, buf)
     }
 }

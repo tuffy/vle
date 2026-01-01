@@ -1081,13 +1081,13 @@ impl StatefulWidget for BufferWidget<'_> {
         buf: &mut ratatui::buffer::Buffer,
         state: &mut BufferContext,
     ) {
-        use crate::{prompt::PromptWidget, syntax::Highlighter};
+        use crate::syntax::Highlighter;
         use ratatui::{
             layout::{
                 Constraint::{Length, Min},
                 Layout,
             },
-            style::{Color, Modifier, Style},
+            style::{Modifier, Style},
             text::{Line, Span},
             widgets::{
                 Block, BorderType, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
@@ -1097,10 +1097,6 @@ impl StatefulWidget for BufferWidget<'_> {
         use std::borrow::Cow;
 
         const EDITING: Style = Style::new().add_modifier(Modifier::REVERSED);
-        const ERROR: Style = Style::new().fg(Color::Red).add_modifier(Modifier::REVERSED);
-        const PROMPTING: Style = Style::new()
-            .fg(Color::Blue)
-            .add_modifier(Modifier::REVERSED);
 
         fn widen_tabs<'l>(mut input: Line<'l>, tab_substitution: &str) -> Line<'l> {
             fn tabs_to_spaces(s: &mut Cow<'_, str>, tab_substitution: &str) {
@@ -1317,7 +1313,102 @@ impl StatefulWidget for BufferWidget<'_> {
                 .viewport_content_length(text_area.height.into())
                 .position(rope.try_char_to_line(state.cursor).unwrap_or(viewport_line)),
         );
+
+        match self.mode {
+            None | Some(EditorMode::Editing) => { /* no dialog to display */ }
+            Some(EditorMode::ConfirmClose { .. }) => {
+                render_confirmation(text_area, buf, "Unsaved changes. Really quit?");
+            }
+            Some(EditorMode::SelectInside) => {
+                render_confirmation(text_area, buf, "Select Inside");
+            }
+            Some(EditorMode::SelectLine { prompt }) => {
+                render_prompt(text_area, buf, "Line", prompt);
+            }
+            Some(EditorMode::Open { prompt }) => {
+                render_prompt(text_area, buf, "Open File", prompt);
+            }
+            Some(EditorMode::Find { prompt, .. }) => {
+                render_prompt(text_area, buf, "Find", prompt);
+            }
+            Some(EditorMode::Replace { replace, .. }) => {
+                render_prompt(text_area, buf, "Replace", replace);
+            }
+            Some(EditorMode::ReplaceWith { with, .. }) => {
+                render_prompt(text_area, buf, "Replace With", with);
+            }
+        }
+
+        if let Some(message) = state.message.take() {
+            render_message(text_area, buf, message);
+        }
     }
+}
+
+// Given whole outer area and width of dialog in characters,
+// returns sub-area for dialog box - including border
+pub fn dialog_area(area: ratatui::layout::Rect, width: u16) -> ratatui::layout::Rect {
+    use ratatui::layout::{
+        Constraint::{Length, Min, Ratio},
+        Layout,
+    };
+
+    let [_, dialog, _] = Layout::horizontal([Min(0), Length(width + 2), Min(0)]).areas(area);
+    let [_, dialog] = Layout::vertical([Ratio(2, 3), Ratio(1, 3)]).areas(dialog);
+    let [dialog, _] = Layout::vertical([Length(3), Min(0)]).areas(dialog);
+    dialog
+}
+
+fn render_confirmation(
+    area: ratatui::layout::Rect,
+    buf: &mut ratatui::buffer::Buffer,
+    label: &str,
+) {
+    use ratatui::widgets::{Block, BorderType, Paragraph, Widget};
+    use unicode_width::UnicodeWidthStr;
+
+    let dialog_area = dialog_area(area, label.width().try_into().unwrap_or(u16::MAX));
+    ratatui::widgets::Clear.render(dialog_area, buf);
+    Paragraph::new(label)
+        .block(Block::bordered().border_type(BorderType::Double))
+        .render(dialog_area, buf);
+}
+
+fn render_prompt(
+    area: ratatui::layout::Rect,
+    buf: &mut ratatui::buffer::Buffer,
+    label: &str,
+    prompt: &crate::prompt::Prompt,
+) {
+    render_confirmation(area, buf, &format!("{} : {}", label, prompt));
+}
+
+fn render_message(
+    area: ratatui::layout::Rect,
+    buf: &mut ratatui::buffer::Buffer,
+    message: BufferMessage,
+) {
+    use ratatui::{
+        layout::{
+            Constraint::{Length, Min},
+            Layout,
+        },
+        style::{Color, Style},
+        widgets::{Block, BorderType, Paragraph, Widget},
+    };
+    use unicode_width::UnicodeWidthStr;
+
+    let width = message.as_str().width().try_into().unwrap_or(u16::MAX);
+    let [_, dialog_area, _] = Layout::horizontal([Min(0), Length(width + 2), Min(0)]).areas(area);
+    let [_, dialog_area, _] = Layout::vertical([Min(0), Length(3), Min(0)]).areas(dialog_area);
+    // FIXME - color error dialogs in red
+    Paragraph::new(message.as_str())
+        .style(match message {
+            BufferMessage::Notice(_) => Style::default(),
+            BufferMessage::Error(_) => Style::default().fg(Color::Red),
+        })
+        .block(Block::bordered().border_type(BorderType::Double))
+        .render(dialog_area, buf);
 }
 
 pub struct CutBuffer {
@@ -1356,6 +1447,14 @@ fn log_movement(undo: &mut [Undo]) {
 enum BufferMessage {
     Notice(Cow<'static, str>),
     Error(Cow<'static, str>),
+}
+
+impl BufferMessage {
+    fn as_str(&self) -> &str {
+        match self {
+            Self::Notice(s) | Self::Error(s) => s.as_ref(),
+        }
+    }
 }
 
 fn reorder<T: Ord>(x: T, y: T) -> (T, T) {
