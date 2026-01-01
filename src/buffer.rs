@@ -1370,7 +1370,7 @@ fn render_confirmation(
     let dialog_area = dialog_area(area, label.width().try_into().unwrap_or(u16::MAX));
     ratatui::widgets::Clear.render(dialog_area, buf);
     Paragraph::new(label)
-        .block(Block::bordered().border_type(BorderType::Double))
+        .block(Block::bordered().border_type(BorderType::Rounded))
         .render(dialog_area, buf);
 }
 
@@ -1407,7 +1407,7 @@ fn render_message(
             BufferMessage::Notice(_) => Style::default(),
             BufferMessage::Error(_) => Style::default().fg(Color::Red),
         })
-        .block(Block::bordered().border_type(BorderType::Double))
+        .block(Block::bordered().border_type(BorderType::Rounded))
         .render(dialog_area, buf);
 }
 
