@@ -385,7 +385,7 @@ impl Editor {
             key!(CONTROL, 'y') => self.update_buffer(|b| b.perform_redo()),
             key!(CONTROL, 's') => self.update_buffer(|b| b.save()),
             key!(Tab) => self.update_buffer(|b| b.indent()),
-            key!(BackTab) => self.update_buffer(|b| b.un_indent()),
+            key!(SHIFT, BackTab) => self.update_buffer(|b| b.un_indent()),
             key!(CONTROL, 'p') => self.update_buffer(|b| b.select_matching_paren()),
             key!(CONTROL, 'e') => {
                 self.mode = EditorMode::SelectInside;
