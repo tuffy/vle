@@ -830,8 +830,8 @@ impl BufferContext {
             .map(|(start_byte, s)| (byte_offset + start_byte, byte_offset + start_byte + s.len()))
             .filter_map(|(s, e)| {
                 Some((
-                    rope.try_char_to_byte(s).ok()?,
-                    rope.try_char_to_byte(e).ok()?,
+                    rope.try_byte_to_char(s).ok()?,
+                    rope.try_byte_to_char(e).ok()?,
                 ))
             })
             .collect()
