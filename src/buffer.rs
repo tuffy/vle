@@ -2,9 +2,10 @@ use crate::editor::EditorMode;
 use crate::syntax::Syntax;
 use ratatui::widgets::StatefulWidget;
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::rc::Rc;
 
 pub enum Source {
     File(PathBuf),
@@ -211,12 +212,12 @@ impl Buffer {
 }
 
 #[derive(Clone)]
-pub struct BufferId(Arc<RwLock<Buffer>>);
+pub struct BufferId(Rc<RefCell<Buffer>>);
 
 /// A buffer with additional context on a per-view basis
 #[derive(Clone)]
 pub struct BufferContext {
-    buffer: Arc<RwLock<Buffer>>,
+    buffer: Rc<RefCell<Buffer>>,
     tabs_required: bool,            // whether the format demands actual tabs
     tab_substitution: String,       // spaces to substitute for tabs
     viewport_height: usize,         // viewport's current height in lines
@@ -235,11 +236,11 @@ pub struct BufferContext {
 
 impl BufferContext {
     pub fn id(&self) -> BufferId {
-        BufferId(Arc::clone(&self.buffer))
+        BufferId(Rc::clone(&self.buffer))
     }
 
     pub fn modified(&self) -> bool {
-        self.buffer.try_read().unwrap().modified()
+        self.buffer.borrow().modified()
     }
 
     pub fn open(path: OsString) -> std::io::Result<Self> {
@@ -247,12 +248,12 @@ impl BufferContext {
     }
 
     pub fn save(&mut self) {
-        self.buffer.try_write().unwrap().save(&mut self.message);
+        self.buffer.borrow_mut().save(&mut self.message);
     }
 
     pub fn set_selection(&mut self, start: usize, end: usize) {
         assert!(end >= start);
-        let buf = self.buffer.try_read().unwrap();
+        let buf = self.buffer.borrow();
         self.cursor = start;
         self.selection = Some(end);
         self.cursor_column = cursor_column(&buf.rope, self.cursor);
@@ -264,7 +265,7 @@ impl BufferContext {
     ///
     /// This position is independent of the viewport position
     fn cursor_position(&self) -> Option<(usize, usize)> {
-        let rope = &self.buffer.try_read().unwrap().rope;
+        let rope = &self.buffer.borrow().rope;
         let line = rope.try_char_to_line(self.cursor).ok()?;
         let line_start = rope.try_line_to_char(line).ok()?;
         let spaces_per_tab = self.tab_substitution.len();
@@ -282,7 +283,7 @@ impl BufferContext {
     }
 
     pub fn cursor_up(&mut self, lines: usize, selecting: bool) {
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
         if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
             let previous_line = current_line.saturating_sub(lines);
             if let Some((prev_start, prev_end)) = line_char_range(&buf.rope, previous_line) {
@@ -294,7 +295,7 @@ impl BufferContext {
     }
 
     pub fn cursor_down(&mut self, lines: usize, selecting: bool) {
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
         if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
             let next_line = (current_line + lines).min(buf.rope.len_lines().saturating_sub(1));
             if let Some((next_start, next_end)) = line_char_range(&buf.rope, next_line) {
@@ -306,7 +307,7 @@ impl BufferContext {
     }
 
     pub fn cursor_back(&mut self, selecting: bool) {
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
         update_selection(&mut self.selection, self.cursor, selecting);
         self.cursor = self.cursor.saturating_sub(1);
         self.cursor_column = cursor_column(&buf.rope, self.cursor);
@@ -314,7 +315,7 @@ impl BufferContext {
     }
 
     pub fn cursor_forward(&mut self, selecting: bool) {
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
         update_selection(&mut self.selection, self.cursor, selecting);
         self.cursor = (self.cursor + 1).min(buf.rope.len_chars());
         self.cursor_column = cursor_column(&buf.rope, self.cursor);
@@ -322,7 +323,7 @@ impl BufferContext {
     }
 
     pub fn cursor_home(&mut self, selecting: bool) {
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
         if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor)
             && let Some((home, _)) = line_char_range(&buf.rope, current_line)
         {
@@ -334,7 +335,7 @@ impl BufferContext {
     }
 
     pub fn cursor_end(&mut self, selecting: bool) {
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
         if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor)
             && let Some((_, end)) = line_char_range(&buf.rope, current_line)
         {
@@ -346,16 +347,11 @@ impl BufferContext {
     }
 
     pub fn last_line(&self) -> usize {
-        self.buffer
-            .try_write()
-            .unwrap()
-            .rope
-            .len_lines()
-            .saturating_sub(1)
+        self.buffer.borrow_mut().rope.len_lines().saturating_sub(1)
     }
 
     pub fn select_line(&mut self, line: usize) {
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
         match buf.rope.try_line_to_char(line) {
             Ok(cursor) => {
                 log_movement(&mut buf.undo);
@@ -370,7 +366,7 @@ impl BufferContext {
     }
 
     pub fn insert_char(&mut self, c: char) {
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
         if let Some(selection) = self.selection.take() {
@@ -387,7 +383,7 @@ impl BufferContext {
     }
 
     pub fn paste(&mut self, pasted: &CutBuffer) {
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
         if let Some(selection) = self.selection.take() {
@@ -405,7 +401,7 @@ impl BufferContext {
     }
 
     pub fn newline(&mut self) {
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
 
         let (indent, all_indent) = match line_start_to_cursor(&buf.rope, self.cursor) {
             Some(iter) => {
@@ -440,7 +436,7 @@ impl BufferContext {
     }
 
     pub fn backspace(&mut self) {
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
 
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
@@ -468,7 +464,7 @@ impl BufferContext {
     }
 
     pub fn delete(&mut self) {
-        let buf = &mut self.buffer.try_write().unwrap();
+        let buf = &mut self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
 
@@ -492,8 +488,7 @@ impl BufferContext {
         let selection = self.selection.take()?;
         let (selection_start, selection_end) = reorder(self.cursor, selection);
         self.buffer
-            .try_read()
-            .unwrap()
+            .borrow()
             .rope
             .get_slice(selection_start..selection_end)
             .map(|r| r.into())
@@ -502,7 +497,7 @@ impl BufferContext {
     pub fn take_selection(&mut self) -> Option<CutBuffer> {
         let selection = self.selection.take()?;
         let (selection_start, selection_end) = reorder(self.cursor, selection);
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
 
@@ -516,7 +511,7 @@ impl BufferContext {
     }
 
     pub fn perform_undo(&mut self) {
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
         match buf.undo.pop() {
             Some(Undo { mut state, .. }) => {
                 use std::ops::DerefMut;
@@ -533,7 +528,7 @@ impl BufferContext {
     }
 
     pub fn perform_redo(&mut self) {
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
         match buf.redo.pop() {
             Some(mut state) => {
                 use std::ops::DerefMut;
@@ -557,7 +552,7 @@ impl BufferContext {
             false => self.tab_substitution.as_str(),
             true => "\t",
         };
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
 
         buf.log_undo(self.cursor, self.cursor_column);
 
@@ -596,7 +591,7 @@ impl BufferContext {
             false => self.tab_substitution.as_str(),
             true => "\t",
         };
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
 
         match self.selection {
             None => {
@@ -650,7 +645,7 @@ impl BufferContext {
     }
 
     pub fn select_inside(&mut self, (start, end): (char, char), stack: Option<(char, char)>) {
-        let buf = self.buffer.try_read().unwrap();
+        let buf = self.buffer.borrow();
         let (stack_back, stack_forward) = match stack {
             Some((back, forward)) => (Some(back), Some(forward)),
             None => (None, None),
@@ -665,7 +660,7 @@ impl BufferContext {
     }
 
     pub fn cursor_to_selection_start(&mut self) {
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
         if let Some(selection) = &mut self.selection
             && self.cursor > *selection
         {
@@ -676,7 +671,7 @@ impl BufferContext {
     }
 
     pub fn cursor_to_selection_end(&mut self) {
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
         if let Some(selection) = &mut self.selection
             && self.cursor < *selection
         {
@@ -687,7 +682,7 @@ impl BufferContext {
     }
 
     pub fn select_matching_paren(&mut self) {
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
 
         if let Some(new_pos) = buf.rope.get_char(self.cursor).and_then(|c| match c {
             '(' => select_next_char::<true>(&buf.rope, self.cursor + 1, ')', Some('(')),
@@ -711,7 +706,7 @@ impl BufferContext {
     }
 
     pub fn select_whole_lines(&mut self) {
-        let buf = &mut self.buffer.try_write().unwrap();
+        let buf = &mut self.buffer.borrow_mut();
         let rope = &buf.rope;
 
         match self.selection {
@@ -766,7 +761,7 @@ impl BufferContext {
 
     // returns true if search term found
     pub fn search(&mut self, forward: bool, term: &str, cache: &mut String) -> bool {
-        let buf = &mut self.buffer.try_write().unwrap();
+        let buf = &mut self.buffer.borrow_mut();
         if cache.len() != buf.rope.len_bytes() {
             *cache = buf.rope.chunks().collect();
         }
@@ -810,7 +805,7 @@ impl BufferContext {
     /// Given search term, returns all match ranges as characters
     /// If selection is active, matches are restricted to selection
     pub fn matches(&self, term: &str) -> Vec<(usize, usize)> {
-        let rope = &self.buffer.try_read().unwrap().rope;
+        let rope = &self.buffer.borrow().rope;
 
         // combine rope or rope slice into unified String
         let (whole, byte_offset) = match self.selection {
@@ -838,7 +833,7 @@ impl BufferContext {
     }
 
     pub fn replace(&mut self, ranges: &[(usize, usize)], to: &str) {
-        let mut buf = self.buffer.try_write().unwrap();
+        let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
         for (s, e) in ranges.iter().rev() {
@@ -987,7 +982,7 @@ impl From<Buffer> for BufferContext {
         Self {
             tab_substitution: std::iter::repeat_n(' ', spaces_per_tab).collect(),
             tabs_required: buffer.syntax.tabs_required(),
-            buffer: Arc::new(RwLock::new(buffer)),
+            buffer: Rc::new(RefCell::new(buffer)),
             viewport_height: 0,
             cursor: 0,
             cursor_column: 0,
@@ -1033,7 +1028,7 @@ impl BufferList {
 
     pub fn remove(&mut self, buffer: &BufferId) {
         self.buffers
-            .retain(|buf| !Arc::ptr_eq(&buf.buffer, &buffer.0));
+            .retain(|buf| !Rc::ptr_eq(&buf.buffer, &buffer.0));
         self.current = self.current.min(self.buffers.len()).saturating_sub(1);
     }
 
@@ -1082,7 +1077,7 @@ impl BufferList {
         match self
             .buffers
             .iter()
-            .position(|buf| buf.buffer.try_read().unwrap().source_str() == name)
+            .position(|buf| buf.buffer.borrow().source_str() == name)
         {
             Some(idx) => {
                 self.current = idx;
@@ -1366,7 +1361,7 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
-        let buffer = state.buffer.try_read().unwrap();
+        let buffer = state.buffer.borrow();
         let rope = &buffer.rope;
         let syntax = &buffer.syntax;
 
