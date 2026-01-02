@@ -1094,7 +1094,7 @@ impl BufferList {
 }
 
 pub struct BufferWidget<'e> {
-    pub mode: Option<&'e mut EditorMode>,
+    pub mode: Option<&'e EditorMode>,
 }
 
 impl StatefulWidget for BufferWidget<'_> {
@@ -1120,8 +1120,12 @@ impl StatefulWidget for BufferWidget<'_> {
             },
         };
         use std::borrow::Cow;
+        use std::collections::VecDeque;
 
         const EDITING: Style = Style::new().add_modifier(Modifier::REVERSED);
+        const HIGHLIGHTED: Style = Style::new()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::REVERSED);
 
         fn widen_tabs<'l>(mut input: Line<'l>, tab_substitution: &str) -> Line<'l> {
             fn tabs_to_spaces(s: &mut Cow<'_, str>, tab_substitution: &str) {
@@ -1185,7 +1189,146 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
-        // TODO - highlight search-and-replace candidates
+        fn extract<'s>(
+            colorized: &mut VecDeque<Span<'s>>,
+            mut characters: usize,
+            output: &mut Vec<Span<'s>>,
+            map: impl Fn(Span<'s>) -> Span<'s>,
+        ) {
+            use unicode_truncate::UnicodeTruncateStr;
+
+            while characters > 0 {
+                let Some(span) = colorized.pop_front() else {
+                    return;
+                };
+                let span_width = span.width();
+                if span_width <= characters {
+                    characters -= span_width;
+                    output.push(map(span));
+                } else {
+                    let mut s = span.content.into_owned();
+                    let (split, _) = s.unicode_truncate(characters);
+                    let suffix = s.split_off(split.len());
+                    colorized.push_front(Span {
+                        style: span.style,
+                        content: suffix.into(),
+                    });
+                    output.push(map(Span {
+                        style: span.style,
+                        content: s.into(),
+                    }));
+                    return;
+                }
+            }
+        }
+
+        // Takes syntaxed-colorized line of text along with
+        // highlighted match ranges (in ascending order)
+        // and returns text in those ranges highlighted in blue
+        fn highlight_matches<'s>(
+            colorized: Vec<Span<'s>>,
+            (line_start, line_end): (usize, usize),
+            matches: &mut VecDeque<(usize, usize)>,
+        ) -> Vec<Span<'s>> {
+            // A trivial abstraction to make working
+            // simultaneously with both line and matche ranges
+            // more intuitive.
+            struct IntRange {
+                start: usize,
+                end: usize,
+            }
+
+            impl From<(usize, usize)> for IntRange {
+                #[inline]
+                fn from((start, end): (usize, usize)) -> Self {
+                    Self { start, end }
+                }
+            }
+
+            impl From<IntRange> for (usize, usize) {
+                #[inline]
+                fn from(IntRange { start, end }: IntRange) -> Self {
+                    (start, end)
+                }
+            }
+
+            impl IntRange {
+                #[inline]
+                fn is_empty(&self) -> bool {
+                    self.start == self.end
+                }
+
+                #[inline]
+                fn remaining(&self) -> usize {
+                    self.end - self.start
+                }
+
+                #[inline]
+                fn take(&mut self, requested: usize) -> usize {
+                    let to_extract = requested.min(self.remaining());
+                    self.start += to_extract;
+                    to_extract
+                }
+
+                #[inline]
+                fn take_both(&mut self, other: &mut Self, requested: usize) -> usize {
+                    let to_extract = requested.min(self.remaining().min(other.remaining()));
+                    self.start += to_extract;
+                    other.start += to_extract;
+                    to_extract
+                }
+            }
+
+            let mut colorized = VecDeque::from(colorized);
+            let mut highlighted = Vec::with_capacity(colorized.len());
+            let mut line_range = IntRange {
+                start: line_start,
+                end: line_end,
+            };
+
+            while !line_range.is_empty() {
+                let Some(mut match_range) = matches.pop_front().map(IntRange::from) else {
+                    // if there's no remaining matches,
+                    // there's nothing left to highlight
+                    highlighted.extend(colorized);
+                    return highlighted;
+                };
+
+                // if match ending is before start of line, just drop it
+                if match_range.end < line_range.start {
+                    continue;
+                }
+                // if match starts before start of line,
+                // bump match range start up accordingly
+                if match_range.start < line_range.start {
+                    match_range.start = line_range.start;
+                }
+
+                // output line_start to match_start verbatim
+                extract(
+                    &mut colorized,
+                    line_range.take(match_range.start - line_range.start),
+                    &mut highlighted,
+                    |span| span,
+                );
+
+                // output as much of highlighted match as possible
+                extract(
+                    &mut colorized,
+                    match_range.take_both(&mut line_range, match_range.remaining()),
+                    &mut highlighted,
+                    |span| span.style(HIGHLIGHTED),
+                );
+
+                // push any remaining partial match back into VecDeque
+                if !match_range.is_empty() {
+                    matches.push_front(match_range.into());
+                }
+            }
+
+            highlighted.extend(colorized);
+            highlighted
+        }
 
         // Takes syntax-colorized line of text and returns
         // portion highlighted, if necessary
@@ -1197,45 +1340,10 @@ impl StatefulWidget for BufferWidget<'_> {
             if selection_end <= line_start || selection_start >= line_end {
                 colorized.into()
             } else {
-                use std::collections::VecDeque;
-
-                fn extract<'s>(
-                    colorized: &mut VecDeque<Span<'s>>,
-                    mut characters: usize,
-                    output: &mut Vec<Span<'s>>,
-                    map: impl Fn(Span<'s>) -> Span<'s>,
-                ) {
-                    use unicode_truncate::UnicodeTruncateStr;
-
-                    while characters > 0 {
-                        let Some(span) = colorized.pop_front() else {
-                            return;
-                        };
-                        let span_width = span.width();
-                        if span_width <= characters {
-                            characters -= span_width;
-                            output.push(map(span));
-                        } else {
-                            let mut s = span.content.into_owned();
-                            let (split, _) = s.unicode_truncate(characters);
-                            let suffix = s.split_off(split.len());
-                            colorized.push_front(Span {
-                                style: span.style,
-                                content: suffix.into(),
-                            });
-                            output.push(map(Span {
-                                style: span.style,
-                                content: s.into(),
-                            }));
-                            return;
-                        }
-                    }
-                }
-
                 let mut colorized = VecDeque::from(colorized);
                 let mut highlighted = Vec::with_capacity(colorized.len());
 
-                // output selection_start - line_start characters verbatim
+                // output line_start to selection_start characters verbatim
                 extract(
                     &mut colorized,
                     selection_start.saturating_sub(line_start),
@@ -1243,7 +1351,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     |span| span,
                 );
 
-                // output selection_end - selection_start characters highlighted
+                // output selection_start to selection_end characters highlighted
                 extract(
                     &mut colorized,
                     selection_end - selection_start.max(line_start),
@@ -1251,7 +1359,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     |span| span.style(EDITING),
                 );
 
-                // output the remaining characters verbatim
+                // output any remaining characters verbatim
                 highlighted.extend(colorized);
 
                 highlighted.into()
@@ -1293,33 +1401,84 @@ impl StatefulWidget for BufferWidget<'_> {
 
         state.viewport_height = text_area.height.into();
 
-        Paragraph::new(match state.selection {
-            // no selection, so nothing to highlight
-            None => rope
-                .lines_at(viewport_line)
-                .map(|line| Line::from(colorize(syntax, Cow::from(line))))
-                .map(|line| widen_tabs(line, &state.tab_substitution))
-                .take(area.height.into())
-                .collect::<Vec<_>>(),
-            // highlight whole line, no line, or part of the line
-            Some(selection) => {
-                let (selection_start, selection_end) = reorder(state.cursor, selection);
+        Paragraph::new(match self.mode {
+            Some(EditorMode::ReplaceWith { matches, .. }) => {
+                let mut matches = matches.iter().copied().collect();
+                match state.selection {
+                    // no selection, so highlight matches only
+                    None => rope
+                        .lines_at(viewport_line)
+                        .zip(viewport_line..)
+                        .map(
+                            |(line, line_number)| match line_char_range(rope, line_number) {
+                                None => Line::from(colorize(syntax, Cow::from(line))),
+                                Some((line_start, line_end)) => highlight_matches(
+                                    colorize(syntax, Cow::from(line)),
+                                    (line_start, line_end),
+                                    &mut matches,
+                                )
+                                .into(),
+                            },
+                        )
+                        .map(|line| widen_tabs(line, &state.tab_substitution))
+                        .take(area.height.into())
+                        .collect::<Vec<_>>(),
+                    // highlight both matches *and* selection
+                    Some(selection) => {
+                        let (selection_start, selection_end) = reorder(state.cursor, selection);
 
-                rope.lines_at(viewport_line)
-                    .zip(viewport_line..)
-                    .map(
-                        |(line, line_number)| match line_char_range(rope, line_number) {
-                            None => Line::from(colorize(syntax, Cow::from(line))),
-                            Some((line_start, line_end)) => highlight_selection(
-                                colorize(syntax, Cow::from(line)),
-                                (line_start, line_end),
-                                (selection_start, selection_end),
-                            ),
-                        },
-                    )
-                    .map(|line| widen_tabs(line, &state.tab_substitution))
-                    .take(area.height.into())
-                    .collect::<Vec<_>>()
+                        rope.lines_at(viewport_line)
+                            .zip(viewport_line..)
+                            .map(
+                                |(line, line_number)| match line_char_range(rope, line_number) {
+                                    None => Line::from(colorize(syntax, Cow::from(line))),
+                                    Some((line_start, line_end)) => highlight_selection(
+                                        highlight_matches(
+                                            colorize(syntax, Cow::from(line)),
+                                            (line_start, line_end),
+                                            &mut matches,
+                                        ),
+                                        (line_start, line_end),
+                                        (selection_start, selection_end),
+                                    ),
+                                },
+                            )
+                            .map(|line| widen_tabs(line, &state.tab_substitution))
+                            .take(area.height.into())
+                            .collect::<Vec<_>>()
+                    }
+                }
+            }
+            _ => {
+                match state.selection {
+                    // no selection, so nothing to highlight
+                    None => rope
+                        .lines_at(viewport_line)
+                        .map(|line| Line::from(colorize(syntax, Cow::from(line))))
+                        .map(|line| widen_tabs(line, &state.tab_substitution))
+                        .take(area.height.into())
+                        .collect::<Vec<_>>(),
+                    // highlight whole line, no line, or part of the line
+                    Some(selection) => {
+                        let (selection_start, selection_end) = reorder(state.cursor, selection);
+
+                        rope.lines_at(viewport_line)
+                            .zip(viewport_line..)
+                            .map(
+                                |(line, line_number)| match line_char_range(rope, line_number) {
+                                    None => Line::from(colorize(syntax, Cow::from(line))),
+                                    Some((line_start, line_end)) => highlight_selection(
+                                        colorize(syntax, Cow::from(line)),
+                                        (line_start, line_end),
+                                        (selection_start, selection_end),
+                                    ),
+                                },
+                            )
+                            .map(|line| widen_tabs(line, &state.tab_substitution))
+                            .take(area.height.into())
+                            .collect::<Vec<_>>()
+                    }
+                }
             }
         })
         .scroll((
