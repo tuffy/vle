@@ -14,6 +14,8 @@ fn main() -> std::io::Result<()> {
     use std::ffi::OsString;
 
     #[derive(Parser)]
+    #[command(version)]
+    #[command(about = "Very Little Editor")]
     struct Opt {
         files: Vec<OsString>,
     }
