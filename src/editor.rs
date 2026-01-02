@@ -39,6 +39,41 @@ pub enum EditorMode {
     },
 }
 
+macro_rules! key {
+    ($code:ident) => {
+        Event::Key(KeyEvent {
+            code: KeyCode::$code,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        })
+    };
+    ($modifier:ident, $code:ident) => {
+        Event::Key(KeyEvent {
+            code: KeyCode::$code,
+            modifiers: KeyModifiers::$modifier,
+            kind: KeyEventKind::Press,
+            ..
+        })
+    };
+    ($code:literal) => {
+        Event::Key(KeyEvent {
+            code: KeyCode::Char($code),
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        })
+    };
+    ($modifier:ident, $code:literal) => {
+        Event::Key(KeyEvent {
+            code: KeyCode::Char($code),
+            modifiers: KeyModifiers::$modifier,
+            kind: KeyEventKind::Press,
+            ..
+        })
+    };
+}
+
 pub struct Editor {
     layout: Layout,
     mode: EditorMode,
@@ -107,12 +142,7 @@ impl Editor {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
         match event {
-            Event::Key(KeyEvent {
-                code: KeyCode::Esc,
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
+            key!(Esc) => {
                 self.mode = EditorMode::default();
             }
             // TODO - F1 - toggle help display
@@ -158,9 +188,8 @@ impl Editor {
                     {
                         self.mode = new_mode;
                     }
-                }
-                // TODO - mass comment/un-comment functionality
-                // TODO - import data from external program
+                } // TODO - mass comment/un-comment functionality
+                  // TODO - import data from external program
             },
         }
     }
@@ -169,12 +198,7 @@ impl Editor {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
         match event {
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('q'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
+            key!(CONTROL, 'q') => {
                 if let Some(buf) = self.layout.selected_buffer_list().current() {
                     if buf.modified() {
                         self.mode = EditorMode::ConfirmClose { buffer: buf.id() };
@@ -183,24 +207,9 @@ impl Editor {
                     }
                 }
             }
-            Event::Key(KeyEvent {
-                code: KeyCode::PageUp,
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.layout.previous_buffer(),
-            Event::Key(KeyEvent {
-                code: KeyCode::PageDown,
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.layout.next_buffer(),
-            Event::Key(KeyEvent {
-                code: KeyCode::Left,
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => match &mut self.layout {
+            key!(CONTROL, PageUp) => self.layout.previous_buffer(),
+            key!(CONTROL, PageDown) => self.layout.next_buffer(),
+            key!(CONTROL, Left) => match &mut self.layout {
                 Layout::Vertical { which, .. } => {
                     *which = VerticalPos::Left;
                 }
@@ -226,12 +235,7 @@ impl Editor {
                     self.layout = Layout::Single(std::mem::take(bottom));
                 }
             },
-            Event::Key(KeyEvent {
-                code: KeyCode::Right,
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => match &mut self.layout {
+            key!(CONTROL, Right) => match &mut self.layout {
                 Layout::Vertical { which, .. } => {
                     *which = VerticalPos::Right;
                 }
@@ -257,12 +261,7 @@ impl Editor {
                     self.layout = Layout::Single(std::mem::take(bottom));
                 }
             },
-            Event::Key(KeyEvent {
-                code: KeyCode::Up,
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => match &mut self.layout {
+            key!(CONTROL, Up) => match &mut self.layout {
                 Layout::Horizontal { which, .. } => {
                     *which = HorizontalPos::Top;
                 }
@@ -288,12 +287,7 @@ impl Editor {
                     self.layout = Layout::Single(std::mem::take(right));
                 }
             },
-            Event::Key(KeyEvent {
-                code: KeyCode::Down,
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => match &mut self.layout {
+            key!(CONTROL, Down) => match &mut self.layout {
                 Layout::Horizontal { which, .. } => {
                     *which = HorizontalPos::Bottom;
                 }
@@ -346,18 +340,8 @@ impl Editor {
             }) => self.update_buffer(|b| {
                 b.cursor_down(PAGE_SIZE, modifiers.contains(KeyModifiers::SHIFT))
             }),
-            Event::Key(KeyEvent {
-                code: KeyCode::Home,
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.update_buffer(|b| b.cursor_to_selection_start()),
-            Event::Key(KeyEvent {
-                code: KeyCode::End,
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.update_buffer(|b| {
+            key!(CONTROL, Home) => self.update_buffer(|b| b.cursor_to_selection_start()),
+            key!(CONTROL, End) => self.update_buffer(|b| {
                 b.cursor_to_selection_end();
             }),
             Event::Key(KeyEvent {
@@ -390,131 +374,39 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => self.update_buffer(|b| b.insert_char(c)),
-            Event::Key(KeyEvent {
-                code: KeyCode::Backspace,
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.update_buffer(|b| b.backspace()),
-            Event::Key(KeyEvent {
-                code: KeyCode::Delete,
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.update_buffer(|b| b.delete()),
-            Event::Key(KeyEvent {
-                code: KeyCode::Enter,
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.update_buffer(|b| b.newline()),
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('w'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.update_buffer(|b| b.select_whole_lines()),
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('x'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.perform_cut(),
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('c'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.perform_copy(),
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('v'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.perform_paste(),
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('z'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.update_buffer(|b| b.perform_undo()),
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('y'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.update_buffer(|b| b.perform_redo()),
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('s'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.update_buffer(|b| b.save()),
-            Event::Key(KeyEvent {
-                code: KeyCode::Tab,
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.update_buffer(|b| b.indent()),
-            Event::Key(KeyEvent {
-                code: KeyCode::BackTab,
-                modifiers: KeyModifiers::SHIFT,
-                kind: KeyEventKind::Press,
-                ..
-            }) => self.update_buffer(|b| b.un_indent()),
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('p'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
-                self.update_buffer(|b| b.select_matching_paren());
-            }
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('e'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
+            key!(Backspace) => self.update_buffer(|b| b.backspace()),
+            key!(Delete) => self.update_buffer(|b| b.delete()),
+            key!(Enter) => self.update_buffer(|b| b.newline()),
+            key!(CONTROL, 'w') => self.update_buffer(|b| b.select_whole_lines()),
+            key!(CONTROL, 'x') => self.perform_cut(),
+            key!(CONTROL, 'c') => self.perform_copy(),
+            key!(CONTROL, 'v') => self.perform_paste(),
+            key!(CONTROL, 'z') => self.update_buffer(|b| b.perform_undo()),
+            key!(CONTROL, 'y') => self.update_buffer(|b| b.perform_redo()),
+            key!(CONTROL, 's') => self.update_buffer(|b| b.save()),
+            key!(Tab) => self.update_buffer(|b| b.indent()),
+            key!(BackTab) => self.update_buffer(|b| b.un_indent()),
+            key!(CONTROL, 'p') => self.update_buffer(|b| b.select_matching_paren()),
+            key!(CONTROL, 'e') => {
                 self.mode = EditorMode::SelectInside;
             }
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('t'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
+            key!(CONTROL, 't') => {
                 self.mode = EditorMode::SelectLine {
                     prompt: Prompt::default(),
                 };
             }
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('f'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
+            key!(CONTROL, 'f') => {
                 self.mode = EditorMode::Find {
                     prompt: Prompt::default(),
                     cache: String::default(),
                 };
             }
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('r'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
+            key!(CONTROL, 'r') => {
                 self.mode = EditorMode::Replace {
                     replace: Prompt::default(),
                 };
             }
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('o'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
+            key!(CONTROL, 'o') => {
                 self.mode = EditorMode::Open {
                     prompt: Prompt::default(),
                 };
@@ -527,22 +419,12 @@ impl Editor {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
         match event {
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('y' | 'Y'),
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
+            key!('y') => {
                 // close buffer anyway
                 self.layout.remove(buffer_id);
                 self.mode = EditorMode::default();
             }
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('n' | 'N'),
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
+            key!('n') => {
                 // cancel close buffer
                 self.mode = EditorMode::default();
             }
@@ -590,21 +472,11 @@ impl Editor {
                 self.update_buffer(|b| b.select_inside(('<', '>'), Some(('>', '<'))));
                 self.mode = EditorMode::default();
             }
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('"'),
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
+            key!('"') => {
                 self.update_buffer(|b| b.select_inside(('"', '"'), None));
                 self.mode = EditorMode::default();
             }
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('\''),
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
+            key!('\'') => {
                 self.update_buffer(|b| b.select_inside(('\'', '\''), None));
                 self.mode = EditorMode::default();
             }
@@ -630,21 +502,11 @@ fn process_select_line(
             prompt.push(c);
             None
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Backspace,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
+        key!(Backspace) => {
             prompt.pop();
             None
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Enter,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
+        key!(Enter) => {
             if let Ok(line) = prompt.to_string().parse::<usize>()
                 && let Some(line) = line.checked_sub(1)
             {
@@ -654,21 +516,11 @@ fn process_select_line(
                 None
             }
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Home,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
+        key!(Home) => {
             buffer.select_line(0);
             Some(EditorMode::default())
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::End,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
+        key!(End) => {
             buffer.select_line(buffer.last_line());
             Some(EditorMode::default())
         }
@@ -692,21 +544,11 @@ fn process_open_file(layout: &mut Layout, prompt: &mut Prompt, event: Event) -> 
             prompt.push(c);
             None
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Backspace,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
+        key!(Backspace) => {
             prompt.pop();
             None
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Enter,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => layout
+        key!(Enter) => layout
             .add(prompt.to_string().into())
             .map(|()| EditorMode::default())
             .ok(),
@@ -726,12 +568,7 @@ fn process_find(buffer: &mut BufferContext, prompt: &mut Prompt, event: Event, c
         }) => {
             prompt.push(c);
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Backspace,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
+        key!(Backspace) => {
             prompt.pop();
         }
         Event::Key(KeyEvent {
@@ -746,28 +583,13 @@ fn process_find(buffer: &mut BufferContext, prompt: &mut Prompt, event: Event, c
                 cache,
             );
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Home,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
+        key!(Home) => {
             buffer.select_line(0);
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::End,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
+        key!(End) => {
             buffer.select_line(buffer.last_line());
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Char('f'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
+        key!(CONTROL, 'f') => {
             prompt.set(&[]);
         }
         _ => { /* ignore other events */ }
@@ -792,21 +614,11 @@ fn process_replace(
             prompt.push(c);
             None
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Backspace,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
+        key!(Backspace) => {
             prompt.pop();
             None
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Enter,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
+        key!(Enter) => {
             let matches = buffer.matches(&prompt.to_string());
             Some(match matches.first() {
                 None => {
@@ -849,45 +661,25 @@ fn process_replace_with(
             prompt.push(c);
             None
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Backspace,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
+        key!(Backspace) => {
             prompt.pop();
             None
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Up,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
+        key!(Up) => {
             *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
             if let Some((s, e)) = matches.get(*match_idx) {
                 buffer.set_selection(*s, *e);
             }
             None
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Down,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
+        key!(Down) => {
             *match_idx = (*match_idx + 1) % matches.len();
             if let Some((s, e)) = matches.get(*match_idx) {
                 buffer.set_selection(*s, *e);
             }
             None
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Delete,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
+        key!(Delete) => {
             if *match_idx < matches.len() {
                 matches.remove(*match_idx);
             }
@@ -902,12 +694,7 @@ fn process_replace_with(
                 }
             }
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Enter,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
+        key!(Enter) => {
             buffer.replace(matches, &prompt.to_string());
             Some(EditorMode::default())
         }
