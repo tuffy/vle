@@ -159,6 +159,8 @@ impl Editor {
                         self.mode = new_mode;
                     }
                 }
+                // TODO - mass comment/un-comment functionality
+                // TODO - import data from external program
             },
         }
     }
@@ -240,12 +242,19 @@ impl Editor {
                         which: VerticalPos::Right,
                     };
                 }
-                Layout::Horizontal { top, bottom, .. } => {
-                    self.layout = Layout::Vertical {
-                        left: std::mem::take(top),
-                        right: std::mem::take(bottom),
-                        which: VerticalPos::Right,
-                    };
+                Layout::Horizontal {
+                    top,
+                    which: HorizontalPos::Top,
+                    ..
+                } => {
+                    self.layout = Layout::Single(std::mem::take(top));
+                }
+                Layout::Horizontal {
+                    bottom,
+                    which: HorizontalPos::Bottom,
+                    ..
+                } => {
+                    self.layout = Layout::Single(std::mem::take(bottom));
                 }
             },
             Event::Key(KeyEvent {

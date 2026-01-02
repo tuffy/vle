@@ -1185,6 +1185,8 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
+        // TODO - highlight search-and-replace candidates
+
         // Takes syntax-colorized line of text and returns
         // portion highlighted, if necessary
         fn highlight_selection<'s>(
@@ -1424,7 +1426,7 @@ fn render_message(
     let width = message.as_str().width().try_into().unwrap_or(u16::MAX);
     let [_, dialog_area, _] = Layout::horizontal([Min(0), Length(width + 2), Min(0)]).areas(area);
     let [_, dialog_area, _] = Layout::vertical([Min(0), Length(3), Min(0)]).areas(dialog_area);
-    // FIXME - color error dialogs in red
+
     Paragraph::new(message.as_str())
         .style(match message {
             BufferMessage::Notice(_) => Style::default(),
