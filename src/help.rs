@@ -202,7 +202,7 @@ pub static REPLACE_WITH: &[Keybinding] = &[
     },
     Keybinding {
         modifier: None,
-        keys: &["Enter", DOWN],
+        keys: &["Enter"],
         action: "Replace Marked Strings",
     },
 ];
