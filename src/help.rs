@@ -76,7 +76,6 @@ pub fn field_widths(keybindings: &[Keybinding]) -> [usize; 4] {
     )
 }
 
-// TODO - replace with arrows
 static UP: &str = "\u{2191}";
 static DOWN: &str = "\u{2193}";
 

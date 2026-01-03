@@ -1563,7 +1563,6 @@ fn render_confirmation(
     };
     use unicode_width::UnicodeWidthStr;
 
-    // TODO - calculate width using max of label.width() and keybindings
     let dialog_area = dialog_area(
         area,
         label
