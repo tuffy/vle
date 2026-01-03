@@ -11,15 +11,6 @@ impl Prompt {
     pub fn pop(&mut self) -> Option<char> {
         self.value.pop()
     }
-
-    pub fn set(&mut self, value: &[char]) {
-        self.value.clear();
-        self.value.extend(value);
-    }
-
-    pub fn chars(&self) -> &[char] {
-        self.value.as_slice()
-    }
 }
 
 impl std::fmt::Display for Prompt {

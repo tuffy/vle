@@ -252,6 +252,10 @@ impl BufferContext {
         self.buffer.borrow_mut().save(&mut self.message);
     }
 
+    pub fn get_cursor(&self) -> usize {
+        self.cursor
+    }
+
     pub fn set_selection(&mut self, start: usize, end: usize) {
         assert!(end >= start);
         let buf = self.buffer.borrow();
@@ -760,49 +764,6 @@ impl BufferContext {
         }
     }
 
-    // returns true if search term found
-    pub fn search(&mut self, forward: bool, term: &str, cache: &mut String) -> bool {
-        let buf = &mut self.buffer.borrow_mut();
-        if cache.len() != buf.rope.len_bytes() {
-            *cache = buf.rope.chunks().collect();
-        }
-
-        (self.cursor, self.selection) = match forward {
-            true => {
-                let Ok(byte_start) = buf.rope.try_char_to_byte(self.cursor + 1) else {
-                    return false;
-                };
-                match cache[byte_start..].find(term) {
-                    Some(found_offset) => (
-                        buf.rope.byte_to_char(byte_start + found_offset),
-                        Some(
-                            buf.rope
-                                .byte_to_char(byte_start + found_offset + term.len()),
-                        ),
-                    ),
-                    None => return false,
-                }
-            }
-            false => {
-                let Ok(byte_start) = buf.rope.try_char_to_byte(self.cursor) else {
-                    return false;
-                };
-                match cache[0..byte_start].rfind(term) {
-                    Some(found_offset) => (
-                        buf.rope.byte_to_char(found_offset),
-                        Some(buf.rope.byte_to_char(found_offset + term.len())),
-                    ),
-                    None => return false,
-                }
-            }
-        };
-
-        self.cursor_column = cursor_column(&buf.rope, self.cursor);
-        log_movement(&mut buf.undo);
-
-        true
-    }
-
     /// Given search term, returns all match ranges as characters
     /// If selection is active, matches are restricted to selection
     pub fn matches(&self, term: &str) -> Vec<(usize, usize)> {
@@ -1104,6 +1065,7 @@ impl StatefulWidget for BufferWidget<'_> {
     ) {
         use crate::help::{
             CONFIRM_CLOSE, FIND, OPEN_FILE, REPLACE, REPLACE_WITH, SELECT_INSIDE, SELECT_LINE,
+            SELECT_MATCHES,
         };
         use crate::syntax::Highlighter;
         use ratatui::{
@@ -1401,7 +1363,7 @@ impl StatefulWidget for BufferWidget<'_> {
         state.viewport_height = text_area.height.into();
 
         Paragraph::new(match self.mode {
-            Some(EditorMode::ReplaceWith { matches, .. }) => {
+            Some(EditorMode::ReplaceWith { matches, .. } | EditorMode::SelectMatches { matches, .. }) => {
                 let mut matches = matches.iter().copied().collect();
                 match state.selection {
                     // no selection, so highlight matches only
@@ -1518,6 +1480,9 @@ impl StatefulWidget for BufferWidget<'_> {
             }
             Some(EditorMode::Find { prompt, .. }) => {
                 render_prompt(text_area, buf, "Find", prompt, FIND);
+            }
+            Some(EditorMode::SelectMatches { .. }) => {
+                render_confirmation(text_area, buf, "Select Match", SELECT_MATCHES);
             }
             Some(EditorMode::Replace { replace, .. }) => {
                 render_prompt(text_area, buf, "Replace", replace, REPLACE);

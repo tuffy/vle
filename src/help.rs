@@ -149,12 +149,13 @@ pub static OPEN_FILE: &[Keybinding] = &[Keybinding {
     action: "Select File",
 }];
 
-pub static FIND: &[Keybinding] = &[
-    Keybinding {
-        modifier: None,
-        keys: &[DOWN, "Enter"],
-        action: "Select Next Match",
-    },
+pub static FIND: &[Keybinding] = &[Keybinding {
+    modifier: None,
+    keys: &["Enter"],
+    action: "Select All Matches",
+}];
+
+pub static SELECT_MATCHES: &[Keybinding] = &[
     Keybinding {
         modifier: None,
         keys: &[UP],
@@ -162,18 +163,13 @@ pub static FIND: &[Keybinding] = &[
     },
     Keybinding {
         modifier: None,
-        keys: &["Home"],
-        action: "Select First Line",
+        keys: &[DOWN],
+        action: "Select Next Match",
     },
     Keybinding {
         modifier: None,
-        keys: &["End"],
-        action: "Select Last Line",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["F"],
-        action: "Perform New Search",
+        keys: &["Backspace"],
+        action: "Remove Match",
     },
 ];
 

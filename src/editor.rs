@@ -24,7 +24,10 @@ pub enum EditorMode {
     },
     Find {
         prompt: Prompt,
-        cache: String,
+    },
+    SelectMatches {
+        matches: Vec<(usize, usize)>,
+        match_idx: Option<usize>,
     },
     Replace {
         replace: Prompt,
@@ -165,9 +168,19 @@ impl Editor {
                         self.mode = new_mode;
                     }
                 }
-                EditorMode::Find { prompt, cache } => {
-                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut() {
-                        process_find(buf, prompt, event, cache)
+                EditorMode::Find { prompt } => {
+                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
+                        && let Some(new_mode) = process_find(buf, prompt, event)
+                    {
+                        self.mode = new_mode;
+                    }
+                }
+                EditorMode::SelectMatches { matches, match_idx } => {
+                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
+                        && let Some(new_mode) =
+                            process_select_matches(buf, matches, match_idx, event)
+                    {
+                        self.mode = new_mode;
                     }
                 }
                 EditorMode::Replace { replace } => {
@@ -398,7 +411,6 @@ impl Editor {
             key!(CONTROL, 'f') => {
                 self.mode = EditorMode::Find {
                     prompt: Prompt::default(),
-                    cache: String::default(),
                 };
             }
             key!(CONTROL, 'r') => {
@@ -553,7 +565,11 @@ fn process_open_file(layout: &mut Layout, prompt: &mut Prompt, event: Event) -> 
     }
 }
 
-fn process_find(buffer: &mut BufferContext, prompt: &mut Prompt, event: Event, cache: &mut String) {
+fn process_find(
+    buffer: &mut BufferContext,
+    prompt: &mut Prompt,
+    event: Event,
+) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
     match event {
@@ -564,32 +580,98 @@ fn process_find(buffer: &mut BufferContext, prompt: &mut Prompt, event: Event, c
             ..
         }) => {
             prompt.push(c);
+            None
         }
         key!(Backspace) => {
             prompt.pop();
+            None
         }
+        key!(Enter) => {
+            let matches = buffer.matches(&prompt.to_string());
+            Some(if matches.is_empty() {
+                buffer.set_error("Not Found");
+                EditorMode::default()
+            } else {
+                EditorMode::SelectMatches {
+                    matches,
+                    match_idx: None,
+                }
+            })
+        }
+        _ => None, // ignore other events
+    }
+}
+
+fn process_select_matches(
+    buffer: &mut BufferContext,
+    matches: &mut Vec<(usize, usize)>,
+    match_idx: &mut Option<usize>,
+    event: Event,
+) -> Option<EditorMode> {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+    match event {
+        key!(Up) => match match_idx {
+            Some(match_idx) => {
+                *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
+                if let Some((s, e)) = matches.get(*match_idx) {
+                    buffer.set_selection(*s, *e);
+                }
+                None
+            }
+            None => {
+                let cursor = buffer.get_cursor();
+                let (idx, (s, e)) = matches
+                    .iter()
+                    .enumerate()
+                    .rfind(|(_, (s, _))| *s < cursor)?;
+                *match_idx = Some(idx);
+                buffer.set_selection(*s, *e);
+                None
+            }
+        },
+        key!(Down) => match match_idx {
+            Some(match_idx) => {
+                *match_idx = (*match_idx + 1) % matches.len();
+                if let Some((s, e)) = matches.get(*match_idx) {
+                    buffer.set_selection(*s, *e);
+                }
+                None
+            }
+            None => {
+                let cursor = buffer.get_cursor();
+                let (idx, (s, e)) = matches
+                    .iter()
+                    .enumerate()
+                    .find(|(_, (s, _))| *s > cursor)?;
+                *match_idx = Some(idx);
+                buffer.set_selection(*s, *e);
+                None
+            }
+        },
         Event::Key(KeyEvent {
-            code: code @ KeyCode::Up | code @ KeyCode::Down | code @ KeyCode::Enter,
+            code: KeyCode::Backspace | KeyCode::Delete,
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
         }) => {
-            buffer.search(
-                matches!(code, KeyCode::Down | KeyCode::Enter),
-                &prompt.chars().iter().collect::<String>(),
-                cache,
-            );
+            let match_idx = match_idx.as_mut()?;
+
+            if *match_idx < matches.len() {
+                matches.remove(*match_idx);
+            }
+            match matches.len().checked_sub(1) {
+                None => Some(EditorMode::default()),
+                Some(new_max) => {
+                    *match_idx = (*match_idx).min(new_max);
+                    if let Some((s, e)) = matches.get(*match_idx) {
+                        buffer.set_selection(*s, *e);
+                    }
+                    None
+                }
+            }
         }
-        key!(Home) => {
-            buffer.select_line(0);
-        }
-        key!(End) => {
-            buffer.select_line(buffer.last_line());
-        }
-        key!(CONTROL, 'f') => {
-            prompt.set(&[]);
-        }
-        _ => { /* ignore other events */ }
+        _ => None, // ignore other events
     }
 }
 
