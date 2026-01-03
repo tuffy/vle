@@ -499,6 +499,10 @@ impl BufferContext {
             .map(|r| r.into())
     }
 
+    pub fn clear_selection(&mut self) {
+        self.selection = None;
+    }
+
     pub fn take_selection(&mut self) -> Option<CutBuffer> {
         let selection = self.selection.take()?;
         let (selection_start, selection_end) = reorder(self.cursor, selection);
@@ -1363,7 +1367,9 @@ impl StatefulWidget for BufferWidget<'_> {
         state.viewport_height = text_area.height.into();
 
         Paragraph::new(match self.mode {
-            Some(EditorMode::ReplaceWith { matches, .. } | EditorMode::SelectMatches { matches, .. }) => {
+            Some(
+                EditorMode::ReplaceWith { matches, .. } | EditorMode::SelectMatches { matches, .. },
+            ) => {
                 let mut matches = matches.iter().copied().collect();
                 match state.selection {
                     // no selection, so highlight matches only

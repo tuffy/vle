@@ -611,7 +611,12 @@ fn process_select_matches(
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
     match event {
-        key!(Up) => match match_idx {
+        Event::Key(KeyEvent {
+            code: KeyCode::Left | KeyCode::Up,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => match match_idx {
             Some(match_idx) => {
                 *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
                 if let Some((s, e)) = matches.get(*match_idx) {
@@ -630,7 +635,12 @@ fn process_select_matches(
                 None
             }
         },
-        key!(Down) => match match_idx {
+        Event::Key(KeyEvent {
+            code: KeyCode::Down | KeyCode::Right,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => match match_idx {
             Some(match_idx) => {
                 *match_idx = (*match_idx + 1) % matches.len();
                 if let Some((s, e)) = matches.get(*match_idx) {
@@ -640,10 +650,7 @@ fn process_select_matches(
             }
             None => {
                 let cursor = buffer.get_cursor();
-                let (idx, (s, e)) = matches
-                    .iter()
-                    .enumerate()
-                    .find(|(_, (s, _))| *s > cursor)?;
+                let (idx, (s, e)) = matches.iter().enumerate().find(|(_, (s, _))| *s > cursor)?;
                 *match_idx = Some(idx);
                 buffer.set_selection(*s, *e);
                 None
@@ -670,6 +677,17 @@ fn process_select_matches(
                     None
                 }
             }
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Char('f' | 'F'),
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            buffer.clear_selection();
+            Some(EditorMode::Find {
+                prompt: Prompt::default(),
+            })
         }
         _ => None, // ignore other events
     }

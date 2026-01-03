@@ -78,6 +78,8 @@ pub fn field_widths(keybindings: &[Keybinding]) -> [usize; 4] {
 
 static UP: &str = "\u{2191}";
 static DOWN: &str = "\u{2193}";
+static LEFT: &str = "\u{2190}";
+static RIGHT: &str = "\u{2192}";
 
 pub static CONFIRM_CLOSE: &[Keybinding] = &[
     Keybinding {
@@ -158,18 +160,23 @@ pub static FIND: &[Keybinding] = &[Keybinding {
 pub static SELECT_MATCHES: &[Keybinding] = &[
     Keybinding {
         modifier: None,
-        keys: &[UP],
+        keys: &[UP, LEFT],
         action: "Select Previous Match",
     },
     Keybinding {
         modifier: None,
-        keys: &[DOWN],
+        keys: &[DOWN, RIGHT],
         action: "Select Next Match",
     },
     Keybinding {
         modifier: None,
         keys: &["Backspace"],
         action: "Remove Match",
+    },
+    Keybinding {
+        modifier: None,
+        keys: &["F"],
+        action: "Perform New Find",
     },
 ];
 
