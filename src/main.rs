@@ -4,6 +4,7 @@
 
 mod buffer;
 mod editor;
+mod help;
 mod prompt;
 mod syntax;
 

@@ -1,4 +1,5 @@
 use crate::editor::EditorMode;
+use crate::help::Keybinding;
 use crate::syntax::Syntax;
 use ratatui::widgets::StatefulWidget;
 use std::borrow::Cow;
@@ -1101,6 +1102,9 @@ impl StatefulWidget for BufferWidget<'_> {
         buf: &mut ratatui::buffer::Buffer,
         state: &mut BufferContext,
     ) {
+        use crate::help::{
+            CONFIRM_CLOSE, FIND, OPEN_FILE, REPLACE, REPLACE_WITH, SELECT_INSIDE, SELECT_LINE,
+        };
         use crate::syntax::Highlighter;
         use ratatui::{
             layout::{
@@ -1496,25 +1500,30 @@ impl StatefulWidget for BufferWidget<'_> {
         match self.mode {
             None | Some(EditorMode::Editing) => { /* no dialog to display */ }
             Some(EditorMode::ConfirmClose { .. }) => {
-                render_confirmation(text_area, buf, "Unsaved changes. Really quit?");
+                render_confirmation(
+                    text_area,
+                    buf,
+                    "Unsaved changes. Really quit?",
+                    CONFIRM_CLOSE,
+                );
             }
             Some(EditorMode::SelectInside) => {
-                render_confirmation(text_area, buf, "Select Inside");
+                render_confirmation(text_area, buf, "Select Inside", SELECT_INSIDE);
             }
             Some(EditorMode::SelectLine { prompt }) => {
-                render_prompt(text_area, buf, "Line", prompt);
+                render_prompt(text_area, buf, "Line", prompt, SELECT_LINE);
             }
             Some(EditorMode::Open { prompt }) => {
-                render_prompt(text_area, buf, "Open File", prompt);
+                render_prompt(text_area, buf, "Open File", prompt, OPEN_FILE);
             }
             Some(EditorMode::Find { prompt, .. }) => {
-                render_prompt(text_area, buf, "Find", prompt);
+                render_prompt(text_area, buf, "Find", prompt, FIND);
             }
             Some(EditorMode::Replace { replace, .. }) => {
-                render_prompt(text_area, buf, "Replace", replace);
+                render_prompt(text_area, buf, "Replace", replace, REPLACE);
             }
             Some(EditorMode::ReplaceWith { with, .. }) => {
-                render_prompt(text_area, buf, "Replace With", with);
+                render_prompt(text_area, buf, "Replace With", with, REPLACE_WITH);
             }
         }
 
@@ -1526,7 +1535,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
 // Given whole outer area and width of dialog in characters,
 // returns sub-area for dialog box - including border
-pub fn dialog_area(area: ratatui::layout::Rect, width: u16) -> ratatui::layout::Rect {
+pub fn dialog_area(area: ratatui::layout::Rect, width: u16, height: u16) -> ratatui::layout::Rect {
     use ratatui::layout::{
         Constraint::{Length, Min, Ratio},
         Layout,
@@ -1534,7 +1543,7 @@ pub fn dialog_area(area: ratatui::layout::Rect, width: u16) -> ratatui::layout::
 
     let [_, dialog, _] = Layout::horizontal([Min(0), Length(width + 2), Min(0)]).areas(area);
     let [_, dialog] = Layout::vertical([Ratio(2, 3), Ratio(1, 3)]).areas(dialog);
-    let [dialog, _] = Layout::vertical([Length(3), Min(0)]).areas(dialog);
+    let [dialog, _] = Layout::vertical([Length(height + 2), Min(0)]).areas(dialog);
     dialog
 }
 
@@ -1542,15 +1551,33 @@ fn render_confirmation(
     area: ratatui::layout::Rect,
     buf: &mut ratatui::buffer::Buffer,
     label: &str,
+    keybindings: &[Keybinding],
 ) {
-    use ratatui::widgets::{Block, BorderType, Paragraph, Widget};
+    use crate::help::{field_widths, help_message};
+    use ratatui::{
+        layout::{
+            Constraint::{Length, Min},
+            Layout,
+        },
+        widgets::{Block, BorderType, Paragraph, Widget},
+    };
     use unicode_width::UnicodeWidthStr;
 
-    let dialog_area = dialog_area(area, label.width().try_into().unwrap_or(u16::MAX));
+    // TODO - calculate width using max of label.width() and keybindings
+    let dialog_area = dialog_area(
+        area,
+        label
+            .width()
+            .max(field_widths(keybindings).into_iter().sum()) as u16,
+        (keybindings.len() + 1) as u16,
+    );
+    let block = Block::bordered().border_type(BorderType::Rounded);
+    let [prompt_area, keybindings_area] =
+        Layout::vertical([Length(1), Min(0)]).areas(block.inner(dialog_area));
     ratatui::widgets::Clear.render(dialog_area, buf);
-    Paragraph::new(label)
-        .block(Block::bordered().border_type(BorderType::Rounded))
-        .render(dialog_area, buf);
+    block.render(dialog_area, buf);
+    Paragraph::new(label).render(prompt_area, buf);
+    help_message(keybindings).render(keybindings_area, buf);
 }
 
 fn render_prompt(
@@ -1558,8 +1585,9 @@ fn render_prompt(
     buf: &mut ratatui::buffer::Buffer,
     label: &str,
     prompt: &crate::prompt::Prompt,
+    keybindings: &[Keybinding],
 ) {
-    render_confirmation(area, buf, &format!("{} : {}", label, prompt));
+    render_confirmation(area, buf, &format!("{} : {}", label, prompt), keybindings);
 }
 
 fn render_message(
