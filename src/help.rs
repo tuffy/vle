@@ -174,7 +174,7 @@ pub static SELECT_MATCHES: &[Keybinding] = &[
         action: "Remove Match",
     },
     Keybinding {
-        modifier: None,
+        modifier: Some("Ctrl"),
         keys: &["F"],
         action: "Perform New Find",
     },

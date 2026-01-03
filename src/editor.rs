@@ -678,12 +678,7 @@ fn process_select_matches(
                 }
             }
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::Char('f' | 'F'),
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
+        key!(CONTROL, 'f') => {
             buffer.clear_selection();
             Some(EditorMode::Find {
                 prompt: Prompt::default(),
