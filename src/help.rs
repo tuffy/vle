@@ -175,36 +175,35 @@ pub static SELECT_MATCHES: &[Keybinding] = &[
     },
     Keybinding {
         modifier: Some("Ctrl"),
+        keys: &["R"],
+        action: "Replace Matches",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
         keys: &["F"],
         action: "Perform New Find",
-    },
-];
-
-pub static REPLACE: &[Keybinding] = &[Keybinding {
-    modifier: None,
-    keys: &["Enter"],
-    action: "Select String to Replace",
-}];
-
-pub static REPLACE_WITH: &[Keybinding] = &[
-    Keybinding {
-        modifier: None,
-        keys: &[DOWN],
-        action: "Select Next Match",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &[UP],
-        action: "Select Previous Match",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["Del"],
-        action: "Deselect Marked Match",
     },
     Keybinding {
         modifier: None,
         keys: &["Enter"],
-        action: "Replace Marked Strings",
+        action: "Finish Find",
+    },
+];
+
+pub static REPLACE_MATCHES: &[Keybinding] = &[
+    Keybinding {
+        modifier: None,
+        keys: &[UP, LEFT],
+        action: "Select Previous Match",
+    },
+    Keybinding {
+        modifier: None,
+        keys: &[DOWN, RIGHT],
+        action: "Select Next Match",
+    },
+    Keybinding {
+        modifier: None,
+        keys: &["Enter"],
+        action: "Finish Replacement",
     },
 ];

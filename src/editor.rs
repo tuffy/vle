@@ -29,13 +29,9 @@ pub enum EditorMode {
         matches: Vec<(usize, usize)>,
         match_idx: Option<usize>,
     },
-    Replace {
-        replace: Prompt,
-    },
-    ReplaceWith {
-        with: Prompt,
+    ReplaceMatches {
         matches: Vec<(usize, usize)>,
-        match_idx: usize,
+        match_idx: Option<usize>,
     },
     Open {
         prompt: Prompt,
@@ -183,26 +179,14 @@ impl Editor {
                         self.mode = new_mode;
                     }
                 }
-                EditorMode::Replace { replace } => {
+                EditorMode::ReplaceMatches { matches, match_idx } => {
                     if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                        && let Some(new_mode) = process_replace(buf, replace, event)
+                        && let Some(new_mode) =
+                            process_replace_matches(buf, matches, match_idx, event)
                     {
                         self.mode = new_mode;
                     }
                 }
-                EditorMode::ReplaceWith {
-                    with,
-                    matches,
-                    match_idx,
-                } => {
-                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                        && let Some(new_mode) =
-                            process_replace_with(buf, with, matches, match_idx, event)
-                    {
-                        self.mode = new_mode;
-                    }
-                } // TODO - mass comment/un-comment functionality
-                  // TODO - import data from external program
             },
         }
     }
@@ -413,11 +397,6 @@ impl Editor {
                     prompt: Prompt::default(),
                 };
             }
-            key!(CONTROL, 'r') => {
-                self.mode = EditorMode::Replace {
-                    replace: Prompt::default(),
-                };
-            }
             key!(CONTROL, 'o') => {
                 self.mode = EditorMode::Open {
                     prompt: Prompt::default(),
@@ -592,6 +571,7 @@ fn process_find(
                 buffer.set_error("Not Found");
                 EditorMode::default()
             } else {
+                buffer.clear_selection();
                 EditorMode::SelectMatches {
                     matches,
                     match_idx: None,
@@ -684,14 +664,28 @@ fn process_select_matches(
                 prompt: Prompt::default(),
             })
         }
+        key!(CONTROL, 'r') => {
+            buffer.clear_matches(matches);
+            if let Some((cursor, _)) = match_idx.and_then(|idx| matches.get(idx)) {
+                buffer.set_cursor(*cursor);
+            }
+            Some(EditorMode::ReplaceMatches {
+                matches: std::mem::take(matches)
+                    .into_iter()
+                    .map(|(s, _)| (s, s))
+                    .collect(),
+                match_idx: std::mem::take(match_idx),
+            })
+        }
+        key!(Enter) => Some(EditorMode::default()),
         _ => None, // ignore other events
     }
 }
 
-// range is in characters, *not* bytes
-fn process_replace(
+fn process_replace_matches(
     buffer: &mut BufferContext,
-    prompt: &mut Prompt,
+    matches: &mut [(usize, usize)],
+    match_idx: &mut Option<usize>,
     event: Event,
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -703,96 +697,66 @@ fn process_replace(
             kind: KeyEventKind::Press,
             ..
         }) => {
-            prompt.push(c);
+            buffer.multi_insert_char(matches, c);
+            if let Some((_, cursor)) = match_idx.and_then(|idx| matches.get(idx)) {
+                buffer.set_cursor(*cursor);
+            }
             None
         }
         key!(Backspace) => {
-            prompt.pop();
+            buffer.multi_backspace(matches);
+            if let Some((_, cursor)) = match_idx.and_then(|idx| matches.get(idx)) {
+                buffer.set_cursor(*cursor);
+            }
             None
         }
-        key!(Enter) => {
-            let matches = buffer.matches(&prompt.to_string());
-            Some(match matches.first() {
-                None => {
-                    buffer.set_error("Not Found");
-                    EditorMode::default()
-                }
-                Some((s, e)) => {
-                    buffer.set_selection(*s, *e);
-                    EditorMode::ReplaceWith {
-                        with: Prompt::default(),
-                        matches,
-                        match_idx: 0,
-                    }
-                }
-            })
-        }
-        _ => {
-            None // ignore other events
-        }
-    }
-}
-
-// ranges in matches should be in increasing order
-fn process_replace_with(
-    buffer: &mut BufferContext,
-    prompt: &mut Prompt,
-    matches: &mut Vec<(usize, usize)>,
-    match_idx: &mut usize,
-    event: Event,
-) -> Option<EditorMode> {
-    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-
-    match event {
+        key!(Enter) => Some(EditorMode::default()),
         Event::Key(KeyEvent {
-            code: KeyCode::Char(c),
-            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            code: KeyCode::Left | KeyCode::Up,
+            modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
-        }) => {
-            prompt.push(c);
-            None
-        }
-        key!(Backspace) => {
-            prompt.pop();
-            None
-        }
-        key!(Up) => {
-            *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
-            if let Some((s, e)) = matches.get(*match_idx) {
-                buffer.set_selection(*s, *e);
-            }
-            None
-        }
-        key!(Down) => {
-            *match_idx = (*match_idx + 1) % matches.len();
-            if let Some((s, e)) = matches.get(*match_idx) {
-                buffer.set_selection(*s, *e);
-            }
-            None
-        }
-        key!(Delete) => {
-            if *match_idx < matches.len() {
-                matches.remove(*match_idx);
-            }
-            match matches.len().checked_sub(1) {
-                None => Some(EditorMode::default()),
-                Some(new_max) => {
-                    *match_idx = (*match_idx).min(new_max);
-                    if let Some((s, e)) = matches.get(*match_idx) {
-                        buffer.set_selection(*s, *e);
-                    }
-                    None
+        }) => match match_idx {
+            Some(match_idx) => {
+                *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
+                if let Some((_, e)) = matches.get(*match_idx) {
+                    buffer.set_cursor(*e);
                 }
+                None
             }
-        }
-        key!(Enter) => {
-            buffer.replace(matches, &prompt.to_string());
-            Some(EditorMode::default())
-        }
-        _ => {
-            None // ignore other events
-        }
+            None => {
+                let cursor = buffer.get_cursor();
+                let (idx, (_, e)) = matches
+                    .iter()
+                    .enumerate()
+                    .rfind(|(_, (s, _))| *s < cursor)?;
+                *match_idx = Some(idx);
+                buffer.set_cursor(*e);
+                None
+            }
+        },
+        Event::Key(KeyEvent {
+            code: KeyCode::Down | KeyCode::Right,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => match match_idx {
+            Some(match_idx) => {
+                *match_idx = (*match_idx + 1) % matches.len();
+                if let Some((_, e)) = matches.get(*match_idx) {
+                    buffer.set_cursor(*e);
+                }
+                None
+            }
+            None => {
+                let cursor = buffer.get_cursor();
+                let (idx, (_, e)) = matches.iter().enumerate().find(|(_, (s, _))| *s > cursor)?;
+                *match_idx = Some(idx);
+                buffer.set_cursor(*e);
+                None
+            }
+        },
+        _ => None,
     }
 }
 

@@ -256,6 +256,10 @@ impl BufferContext {
         self.cursor
     }
 
+    pub fn set_cursor(&mut self, cursor: usize) {
+        self.cursor = cursor;
+    }
+
     pub fn set_selection(&mut self, start: usize, end: usize) {
         assert!(end >= start);
         let buf = self.buffer.borrow();
@@ -442,7 +446,6 @@ impl BufferContext {
 
     pub fn backspace(&mut self) {
         let mut buf = self.buffer.borrow_mut();
-
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
 
@@ -798,15 +801,85 @@ impl BufferContext {
             .collect()
     }
 
-    pub fn replace(&mut self, ranges: &[(usize, usize)], to: &str) {
+    pub fn clear_matches(&mut self, mut matches: &mut [(usize, usize)]) {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
-        for (s, e) in ranges.iter().rev() {
-            let _ = rope.try_remove(s..e);
-            let _ = rope.try_insert(*s, to);
+        loop {
+            match matches {
+                [] => break,
+                [(s, e)] => {
+                    let _ = rope.try_remove(*s..*e);
+                    break;
+                }
+                [(s, e), rest @ ..] => {
+                    let len = *e - *s;
+                    let _ = rope.try_remove(*s..*e);
+                    for (s, e) in rest.iter_mut() {
+                        *s -= len;
+                        *e -= len;
+                    }
+                    matches = rest;
+                }
+            }
         }
         self.selection = None;
+    }
+
+    pub fn multi_insert_char(&mut self, mut matches: &mut [(usize, usize)], c: char) {
+        let mut buf = self.buffer.borrow_mut();
+        buf.log_undo(self.cursor, self.cursor_column);
+        let mut rope = buf.rope.get_mut();
+        loop {
+            match matches {
+                [] => break,
+                [(_, cursor)] => {
+                    rope.insert_char(*cursor, c);
+                    *cursor += 1;
+                    break;
+                }
+                [(_, cursor), rest @ ..] => {
+                    rope.insert_char(*cursor, c);
+                    *cursor += 1;
+                    for (s, e) in rest.iter_mut() {
+                        *s += 1;
+                        *e += 1;
+                    }
+                    matches = rest;
+                }
+            }
+        }
+    }
+
+    pub fn multi_backspace(&mut self, mut matches: &mut [(usize, usize)]) {
+        let mut buf = self.buffer.borrow_mut();
+        buf.log_undo(self.cursor, self.cursor_column);
+        let mut rope = buf.rope.get_mut();
+        loop {
+            match matches {
+                [] => break,
+                [(s, e)] => {
+                    if *e > *s {
+                        let _ = rope.try_remove((*e - 1)..*e);
+                        *e -= 1;
+                    }
+                    break;
+                }
+                [(s, e), rest @ ..] => {
+                    if *e > *s {
+                        let _ = rope.try_remove((*e - 1)..*e);
+                        *e -= 1;
+                        for (s, e) in rest.iter_mut() {
+                            *s -= 1;
+                            *e -= 1;
+                        }
+                        matches = rest;
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     pub fn set_error<S: Into<Cow<'static, str>>>(&mut self, err: S) {
@@ -1068,7 +1141,7 @@ impl StatefulWidget for BufferWidget<'_> {
         state: &mut BufferContext,
     ) {
         use crate::help::{
-            CONFIRM_CLOSE, FIND, OPEN_FILE, REPLACE, REPLACE_WITH, SELECT_INSIDE, SELECT_LINE,
+            CONFIRM_CLOSE, FIND, OPEN_FILE, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE,
             SELECT_MATCHES,
         };
         use crate::syntax::Highlighter;
@@ -1367,9 +1440,7 @@ impl StatefulWidget for BufferWidget<'_> {
         state.viewport_height = text_area.height.into();
 
         Paragraph::new(match self.mode {
-            Some(
-                EditorMode::ReplaceWith { matches, .. } | EditorMode::SelectMatches { matches, .. },
-            ) => {
+            Some(EditorMode::SelectMatches { matches, .. }) => {
                 let mut matches = matches.iter().copied().collect();
                 match state.selection {
                     // no selection, so highlight matches only
@@ -1490,11 +1561,8 @@ impl StatefulWidget for BufferWidget<'_> {
             Some(EditorMode::SelectMatches { .. }) => {
                 render_confirmation(text_area, buf, "Select Match", SELECT_MATCHES);
             }
-            Some(EditorMode::Replace { replace, .. }) => {
-                render_prompt(text_area, buf, "Replace", replace, REPLACE);
-            }
-            Some(EditorMode::ReplaceWith { with, .. }) => {
-                render_prompt(text_area, buf, "Replace With", with, REPLACE_WITH);
+            Some(EditorMode::ReplaceMatches { .. }) => {
+                render_confirmation(text_area, buf, "Replacing", REPLACE_MATCHES);
             }
         }
 
