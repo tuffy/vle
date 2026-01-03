@@ -1579,11 +1579,11 @@ fn render_confirmation(
     help_message(keybindings).render(keybindings_area, buf);
 }
 
-fn render_prompt(
+fn render_prompt<P: std::fmt::Display>(
     area: ratatui::layout::Rect,
     buf: &mut ratatui::buffer::Buffer,
     label: &str,
-    prompt: &crate::prompt::Prompt,
+    prompt: P,
     keybindings: &[Keybinding],
 ) {
     render_confirmation(area, buf, &format!("{} : {}", label, prompt), keybindings);

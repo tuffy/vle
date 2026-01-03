@@ -1,6 +1,6 @@
 use crate::{
     buffer::{BufferContext, BufferId, BufferList, CutBuffer},
-    prompt::Prompt,
+    prompt::{LinePrompt, Prompt},
 };
 use crossterm::event::Event;
 use ratatui::{
@@ -20,7 +20,7 @@ pub enum EditorMode {
     },
     SelectInside,
     SelectLine {
-        prompt: Prompt,
+        prompt: LinePrompt,
     },
     Find {
         prompt: Prompt,
@@ -392,7 +392,7 @@ impl Editor {
             }
             key!(CONTROL, 't') => {
                 self.mode = EditorMode::SelectLine {
-                    prompt: Prompt::default(),
+                    prompt: LinePrompt::default(),
                 };
             }
             key!(CONTROL, 'f') => {
@@ -487,19 +487,22 @@ impl Editor {
 
 fn process_select_line(
     buffer: &mut BufferContext,
-    prompt: &mut Prompt,
+    prompt: &mut LinePrompt,
     event: Event,
 ) -> Option<EditorMode> {
+    use crate::prompt::Digit;
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
     match event {
         Event::Key(KeyEvent {
-            code: KeyCode::Char(c @ '0'..='9'),
+            code: KeyCode::Char(c),
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
         }) => {
-            prompt.push(c);
+            if let Ok(d) = Digit::try_from(c) {
+                prompt.push(d);
+            }
             None
         }
         key!(Backspace) => {
@@ -507,14 +510,8 @@ fn process_select_line(
             None
         }
         key!(Enter) => {
-            if let Ok(line) = prompt.to_string().parse::<usize>()
-                && let Some(line) = line.checked_sub(1)
-            {
-                buffer.select_line(line);
-                Some(EditorMode::default())
-            } else {
-                None
-            }
+            buffer.select_line(prompt.line().saturating_sub(1));
+            Some(EditorMode::default())
         }
         key!(Home) => {
             buffer.select_line(0);
