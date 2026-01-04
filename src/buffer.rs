@@ -1143,7 +1143,7 @@ impl StatefulWidget for BufferWidget<'_> {
     ) {
         use crate::help::{
             CONFIRM_CLOSE, FIND, OPEN_FILE, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE,
-            SELECT_MATCHES,
+            SELECT_MATCHES, render_help,
         };
         use crate::syntax::Highlighter;
         use ratatui::{
@@ -1555,7 +1555,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(EditorMode::SelectInside) => {
-                render_confirmation(text_area, buf, "Select Inside", SELECT_INSIDE);
+                render_help(text_area, buf, SELECT_INSIDE, |b| b);
             }
             Some(EditorMode::SelectLine { prompt }) => {
                 render_prompt(text_area, buf, "Line", prompt, SELECT_LINE);
@@ -1567,24 +1567,19 @@ impl StatefulWidget for BufferWidget<'_> {
                 render_prompt(text_area, buf, "Find", prompt, FIND);
             }
             Some(EditorMode::SelectMatches { matches, match_idx }) => {
-                render_confirmation(
-                    text_area,
-                    buf,
-                    match match_idx {
+                render_help(text_area, buf, SELECT_MATCHES, |block| {
+                    block.title(match match_idx {
                         Some(idx) => Cow::from(format!("Match {} / {}", idx + 1, matches.len())),
                         None => match matches.len() {
                             1 => "1 Match".into(),
                             n => format!("{n} Matches").into(),
                         },
-                    },
-                    SELECT_MATCHES,
-                );
+                    })
+                });
             }
             Some(EditorMode::ReplaceMatches { matches, match_idx }) => {
-                render_confirmation(
-                    text_area,
-                    buf,
-                    match match_idx {
+                render_help(text_area, buf, REPLACE_MATCHES, |block| {
+                    block.title(match match_idx {
                         Some(idx) => {
                             Cow::from(format!("Replacement {} / {}", idx + 1, matches.len()))
                         }
@@ -1592,9 +1587,8 @@ impl StatefulWidget for BufferWidget<'_> {
                             1 => "1 Replacement".into(),
                             n => format!("{n} Replacements").into(),
                         },
-                    },
-                    REPLACE_MATCHES,
-                );
+                    })
+                });
             }
         }
 
