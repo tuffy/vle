@@ -275,13 +275,13 @@ pub static SELECT_MATCHES: &[Keybinding] = &[
     },
     Keybinding {
         modifier: None,
-        keys: &["Backspace"],
-        action: "Remove Match",
+        keys: &["Del"],
+        action: "Remove Selected Match",
     },
     Keybinding {
         modifier: Some("Ctrl"),
         keys: &["R"],
-        action: "Replace Matches",
+        action: "Replace Selected Matches",
     },
     Keybinding {
         modifier: Some("Ctrl"),
