@@ -24,10 +24,13 @@ pub enum EditorMode {
     },
     Find {
         prompt: Prompt,
+        // TODO - support search history stack + context
     },
     SelectMatches {
         matches: Vec<(usize, usize)>,
         match_idx: Option<usize>,
+        // TODO - need Find's search history stack here too
+        // (but don't need context)
     },
     ReplaceMatches {
         matches: Vec<(usize, usize)>,
@@ -78,6 +81,7 @@ pub struct Editor {
     mode: EditorMode,
     cut_buffer: Option<CutBuffer>, // cut buffer shared globally across editor
     show_help: bool,
+    // TODO - need search history stack
 }
 
 impl Editor {
@@ -1016,10 +1020,14 @@ impl StatefulWidget for LayoutWidget<'_> {
 
         match layout {
             Layout::Single(single) => {
+                let buffer_index = single.current_index();
+                let total_buffers = single.total_buffers();
                 if let Some(buffer) = single.current_mut() {
                     BufferWidget {
                         mode: Some(mode),
                         show_help,
+                        buffer_index,
+                        total_buffers,
                     }
                     .render(area, buf, buffer);
                 }
@@ -1027,8 +1035,14 @@ impl StatefulWidget for LayoutWidget<'_> {
             Layout::Horizontal { top, bottom, which } => {
                 use ratatui::layout::{Constraint, Layout};
 
+                let top_index = top.current_index();
+                let top_total = top.total_buffers();
+                let bottom_index = bottom.current_index();
+                let bottom_total = bottom.total_buffers();
+
                 let [top_area, bottom_area] =
                     Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
+
                 if let Some(buffer) = top.current_mut() {
                     BufferWidget {
                         mode: match which {
@@ -1036,6 +1050,8 @@ impl StatefulWidget for LayoutWidget<'_> {
                             HorizontalPos::Bottom => None,
                         },
                         show_help: show_help && !matches!(which, HorizontalPos::Top),
+                        buffer_index: top_index,
+                        total_buffers: top_total,
                     }
                     .render(top_area, buf, buffer);
                 }
@@ -1046,6 +1062,8 @@ impl StatefulWidget for LayoutWidget<'_> {
                             HorizontalPos::Bottom => Some(mode),
                         },
                         show_help: show_help && !matches!(which, HorizontalPos::Bottom),
+                        buffer_index: bottom_index,
+                        total_buffers: bottom_total,
                     }
                     .render(bottom_area, buf, buffer);
                 }
@@ -1053,8 +1071,14 @@ impl StatefulWidget for LayoutWidget<'_> {
             Layout::Vertical { left, right, which } => {
                 use ratatui::layout::{Constraint, Layout};
 
+                let left_index = left.current_index();
+                let left_total = left.total_buffers();
+                let right_index = right.current_index();
+                let right_total = right.total_buffers();
+
                 let [left_area, right_area] =
                     Layout::horizontal(Constraint::from_fills([1, 1])).areas(area);
+
                 if let Some(buffer) = left.current_mut() {
                     BufferWidget {
                         mode: match which {
@@ -1062,6 +1086,8 @@ impl StatefulWidget for LayoutWidget<'_> {
                             VerticalPos::Right => None,
                         },
                         show_help: show_help && !matches!(which, VerticalPos::Left),
+                        buffer_index: left_index,
+                        total_buffers: left_total,
                     }
                     .render(left_area, buf, buffer);
                 }
@@ -1072,6 +1098,8 @@ impl StatefulWidget for LayoutWidget<'_> {
                             VerticalPos::Right => Some(mode),
                         },
                         show_help: show_help && !matches!(which, VerticalPos::Right),
+                        buffer_index: right_index,
+                        total_buffers: right_total,
                     }
                     .render(right_area, buf, buffer);
                 }

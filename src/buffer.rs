@@ -1124,11 +1124,21 @@ impl BufferList {
             None => Err(()),
         }
     }
+
+    pub fn current_index(&self) -> usize {
+        self.current
+    }
+
+    pub fn total_buffers(&self) -> usize {
+        self.buffers.len()
+    }
 }
 
 pub struct BufferWidget<'e> {
     pub mode: Option<&'e EditorMode>,
     pub show_help: bool,
+    pub buffer_index: usize,
+    pub total_buffers: usize,
 }
 
 impl StatefulWidget for BufferWidget<'_> {
@@ -1419,6 +1429,10 @@ impl StatefulWidget for BufferWidget<'_> {
             } else {
                 Line::from(buffer.source.name())
             })
+            .title_top(
+                Line::from(format!("{}/{}", self.buffer_index + 1, self.total_buffers))
+                    .right_aligned(),
+            )
             .title_bottom(
                 Line::from(match buffer.rope.try_char_to_line(state.cursor) {
                     Ok(line) => (line + 1).to_string(),
