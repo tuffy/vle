@@ -105,7 +105,11 @@ impl Editor {
                 area,
                 &mut self.layout,
             );
-            frame.set_cursor_position(self.layout.cursor_position(area).unwrap_or_default());
+            frame.set_cursor_position(
+                self.layout
+                    .cursor_position(area, &self.mode)
+                    .unwrap_or_default(),
+            );
         })
         .map(|_| ())
     }
@@ -909,12 +913,16 @@ impl Layout {
         self.selected_buffer_list_mut().next_buffer()
     }
 
-    fn cursor_position(&self, area: Rect) -> Option<Position> {
+    fn cursor_position(&self, area: Rect, mode: &EditorMode) -> Option<Position> {
         use ratatui::layout::{Constraint, Layout};
 
         // generate a duplicate of our existing block layout
         // and then apply cursor's position to it
-        fn apply_position(area: Rect, (row, col): (usize, usize)) -> Option<Position> {
+        fn apply_position(
+            area: Rect,
+            (row, col): (usize, usize),
+            _mode: &EditorMode,
+        ) -> Option<Position> {
             use ratatui::{
                 layout::Constraint::{Length, Min},
                 widgets::Block,
@@ -937,7 +945,7 @@ impl Layout {
         match self {
             Self::Single(buf) => buf
                 .cursor_viewport_position()
-                .and_then(|pos| apply_position(area, pos)),
+                .and_then(|pos| apply_position(area, pos, mode)),
             Self::Horizontal { top, bottom, which } => {
                 let [top_area, bottom_area] =
                     Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
@@ -945,10 +953,10 @@ impl Layout {
                 match which {
                     HorizontalPos::Top => top
                         .cursor_viewport_position()
-                        .and_then(|pos| apply_position(top_area, pos)),
+                        .and_then(|pos| apply_position(top_area, pos, mode)),
                     HorizontalPos::Bottom => bottom
                         .cursor_viewport_position()
-                        .and_then(|pos| apply_position(bottom_area, pos)),
+                        .and_then(|pos| apply_position(bottom_area, pos, mode)),
                 }
             }
             Self::Vertical { left, right, which } => {
@@ -958,10 +966,10 @@ impl Layout {
                 match which {
                     VerticalPos::Left => left
                         .cursor_viewport_position()
-                        .and_then(|pos| apply_position(left_area, pos)),
+                        .and_then(|pos| apply_position(left_area, pos, mode)),
                     VerticalPos::Right => right
                         .cursor_viewport_position()
-                        .and_then(|pos| apply_position(right_area, pos)),
+                        .and_then(|pos| apply_position(right_area, pos, mode)),
                 }
             }
         }
