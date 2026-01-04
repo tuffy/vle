@@ -1579,11 +1579,35 @@ impl StatefulWidget for BufferWidget<'_> {
             Some(EditorMode::Find { prompt, .. }) => {
                 render_prompt(text_area, buf, "Find", prompt, FIND);
             }
-            Some(EditorMode::SelectMatches { .. }) => {
-                render_confirmation(text_area, buf, "Select Match", SELECT_MATCHES);
+            Some(EditorMode::SelectMatches { matches, match_idx }) => {
+                render_confirmation(
+                    text_area,
+                    buf,
+                    match match_idx {
+                        Some(idx) => Cow::from(format!("Match {} / {}", idx + 1, matches.len())),
+                        None => match matches.len() {
+                            1 => "1 Match".into(),
+                            n => format!("{n} Matches").into(),
+                        },
+                    },
+                    SELECT_MATCHES,
+                );
             }
-            Some(EditorMode::ReplaceMatches { .. }) => {
-                render_confirmation(text_area, buf, "Replacing", REPLACE_MATCHES);
+            Some(EditorMode::ReplaceMatches { matches, match_idx }) => {
+                render_confirmation(
+                    text_area,
+                    buf,
+                    match match_idx {
+                        Some(idx) => {
+                            Cow::from(format!("Replacement {} / {}", idx + 1, matches.len()))
+                        }
+                        None => match matches.len() {
+                            1 => "1 Replacement".into(),
+                            n => format!("{n} Replacements").into(),
+                        },
+                    },
+                    REPLACE_MATCHES,
+                );
             }
         }
 
@@ -1607,10 +1631,10 @@ pub fn dialog_area(area: ratatui::layout::Rect, width: u16, height: u16) -> rata
     dialog
 }
 
-fn render_confirmation(
+fn render_confirmation<'s, S: Into<Cow<'s, str>>>(
     area: ratatui::layout::Rect,
     buf: &mut ratatui::buffer::Buffer,
-    label: &str,
+    label: S,
     keybindings: &[Keybinding],
 ) {
     use crate::help::{field_widths, help_message};
@@ -1622,6 +1646,8 @@ fn render_confirmation(
         widgets::{Block, BorderType, Paragraph, Widget},
     };
     use unicode_width::UnicodeWidthStr;
+
+    let label = label.into();
 
     let dialog_area = dialog_area(
         area,
@@ -1646,7 +1672,7 @@ fn render_prompt<P: std::fmt::Display>(
     prompt: P,
     keybindings: &[Keybinding],
 ) {
-    render_confirmation(area, buf, &format!("{} : {}", label, prompt), keybindings);
+    render_confirmation(area, buf, format!("{} : {}", label, prompt), keybindings);
 }
 
 fn render_message(
