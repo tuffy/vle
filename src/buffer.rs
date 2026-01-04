@@ -1595,8 +1595,24 @@ impl StatefulWidget for BufferWidget<'_> {
                     .render(line_area, buf);
             }
             Some(EditorMode::Open { prompt }) => {
-                // TODO - redo this - add tab completion
-                render_prompt(text_area, buf, "Open File", prompt, OPEN_FILE);
+                use unicode_width::UnicodeWidthStr;
+
+                render_help(text_area, buf, OPEN_FILE, |b| b);
+
+                let [_, line_area] = Layout::vertical([Min(0), Length(3)]).areas(text_area);
+                let [line_area, _] =
+                    Layout::horizontal([Ratio(1, 2), Ratio(1, 2)]).areas(line_area);
+                ratatui::widgets::Clear.render(line_area, buf);
+                let prompt = prompt.to_string();
+                let prompt_width = prompt.width() as u16;
+                Paragraph::new(prompt)
+                    .scroll((0, prompt_width.saturating_sub(line_area.width - 2)))
+                    .block(
+                        Block::bordered()
+                            .border_type(BorderType::Rounded)
+                            .title("Open File"),
+                    )
+                    .render(line_area, buf);
             }
             Some(EditorMode::SelectMatches { matches, match_idx }) => {
                 render_help(text_area, buf, SELECT_MATCHES, |block| {
@@ -1661,16 +1677,6 @@ fn render_confirmation<'s, S: Into<Cow<'s, str>>>(
     Paragraph::new(label)
         .block(Block::bordered().border_type(BorderType::Rounded))
         .render(dialog_area, buf);
-}
-
-fn render_prompt<P: std::fmt::Display>(
-    area: ratatui::layout::Rect,
-    buf: &mut ratatui::buffer::Buffer,
-    label: &str,
-    prompt: P,
-    keybindings: &[Keybinding],
-) {
-    render_confirmation(area, buf, format!("{} : {}", label, prompt), keybindings);
 }
 
 fn render_message(

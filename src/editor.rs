@@ -942,6 +942,12 @@ impl Layout {
                         + 1,
                     y: text_area.y + text_area.height.saturating_sub(2),
                 }),
+                EditorMode::Open { prompt } => Some(Position {
+                    x: text_area.x
+                        + prompt.width().min((text_area.width / 2).saturating_sub(2))
+                        + 1,
+                    y: text_area.y + text_area.height.saturating_sub(2),
+                }),
                 _ => {
                     let x = (col + usize::from(text_area.x))
                         .min((text_area.x + text_area.width).into());
