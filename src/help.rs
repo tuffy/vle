@@ -1,3 +1,5 @@
+use ratatui::widgets::Block;
+
 pub struct Keybinding {
     modifier: Option<&'static str>,
     keys: &'static [&'static str],
@@ -74,6 +76,36 @@ pub fn field_widths(keybindings: &[Keybinding]) -> [usize; 4] {
             ]
         },
     )
+}
+
+pub fn render_help(
+    area: ratatui::layout::Rect,
+    buf: &mut ratatui::buffer::Buffer,
+    keybindings: &[Keybinding],
+    block: impl FnOnce(Block) -> Block,
+) {
+    use ratatui::{
+        layout::{
+            Constraint::{Length, Min},
+            Layout,
+        },
+        widgets::{BorderType, Widget},
+    };
+
+    let [_, help] = Layout::horizontal([
+        Min(0),
+        Length((field_widths(keybindings).into_iter().sum::<usize>() + 2) as u16),
+    ])
+    .areas(area);
+
+    let [_, help] = Layout::vertical([Min(0), Length(keybindings.len() as u16 + 2)]).areas(help);
+
+    let block = block(Block::bordered().border_type(BorderType::Rounded));
+
+    let help_table = block.inner(help);
+    ratatui::widgets::Clear.render(help, buf);
+    block.render(help, buf);
+    help_message(keybindings).render(help_table, buf);
 }
 
 static UP: &str = "\u{2191}";

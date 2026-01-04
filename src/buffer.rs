@@ -1540,23 +1540,10 @@ impl StatefulWidget for BufferWidget<'_> {
         match self.mode {
             None | Some(EditorMode::Editing) => {
                 if self.show_help {
-                    use crate::help::{EDITING, field_widths, help_message};
-
-                    let [_, help] = Layout::horizontal([
-                        Min(0),
-                        Length((field_widths(EDITING).into_iter().sum::<usize>() + 2) as u16),
-                    ])
-                    .areas(text_area);
-                    let [_, help] =
-                        Layout::vertical([Min(0), Length(EDITING.len() as u16 + 2)]).areas(help);
-                    let block = Block::bordered()
-                        .border_type(BorderType::Rounded)
-                        .title_top("Keybindings")
-                        .title_bottom(Line::from("F1 to toggle").centered());
-                    let help_table = block.inner(help);
-                    ratatui::widgets::Clear.render(help, buf);
-                    block.render(help, buf);
-                    help_message(EDITING).render(help_table, buf);
+                    crate::help::render_help(text_area, buf, crate::help::EDITING, |b| {
+                        b.title_top("Keybindings")
+                            .title_bottom(Line::from("F1 to toggle").centered())
+                    });
                 }
             }
             Some(EditorMode::ConfirmClose { .. }) => {
@@ -1619,7 +1606,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
 // Given whole outer area and width of dialog in characters,
 // returns sub-area for dialog box - including border
-pub fn dialog_area(area: ratatui::layout::Rect, width: u16, height: u16) -> ratatui::layout::Rect {
+pub fn dialog_area(area: ratatui::layout::Rect, width: u16) -> ratatui::layout::Rect {
     use ratatui::layout::{
         Constraint::{Length, Min, Ratio},
         Layout,
@@ -1627,7 +1614,7 @@ pub fn dialog_area(area: ratatui::layout::Rect, width: u16, height: u16) -> rata
 
     let [_, dialog, _] = Layout::horizontal([Min(0), Length(width + 2), Min(0)]).areas(area);
     let [_, dialog] = Layout::vertical([Ratio(2, 3), Ratio(1, 3)]).areas(dialog);
-    let [dialog, _] = Layout::vertical([Length(height + 2), Min(0)]).areas(dialog);
+    let [dialog, _] = Layout::vertical([Length(3), Min(0)]).areas(dialog);
     dialog
 }
 
@@ -1637,32 +1624,17 @@ fn render_confirmation<'s, S: Into<Cow<'s, str>>>(
     label: S,
     keybindings: &[Keybinding],
 ) {
-    use crate::help::{field_widths, help_message};
-    use ratatui::{
-        layout::{
-            Constraint::{Length, Min},
-            Layout,
-        },
-        widgets::{Block, BorderType, Paragraph, Widget},
-    };
+    use ratatui::widgets::{Block, BorderType, Paragraph, Widget};
     use unicode_width::UnicodeWidthStr;
+
+    crate::help::render_help(area, buf, keybindings, |b| b);
 
     let label = label.into();
 
-    let dialog_area = dialog_area(
-        area,
-        label
-            .width()
-            .max(field_widths(keybindings).into_iter().sum()) as u16,
-        (keybindings.len() + 1) as u16,
-    );
-    let block = Block::bordered().border_type(BorderType::Rounded);
-    let [prompt_area, keybindings_area] =
-        Layout::vertical([Length(1), Min(0)]).areas(block.inner(dialog_area));
-    ratatui::widgets::Clear.render(dialog_area, buf);
-    block.render(dialog_area, buf);
-    Paragraph::new(label).render(prompt_area, buf);
-    help_message(keybindings).render(keybindings_area, buf);
+    let dialog_area = dialog_area(area, label.width() as u16);
+    Paragraph::new(label)
+        .block(Block::bordered().border_type(BorderType::Rounded))
+        .render(dialog_area, buf);
 }
 
 fn render_prompt<P: std::fmt::Display>(
