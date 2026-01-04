@@ -11,6 +11,12 @@ impl Prompt {
     pub fn pop(&mut self) -> Option<char> {
         self.value.pop()
     }
+
+    pub fn width(&self) -> u16 {
+        use unicode_width::UnicodeWidthStr;
+
+        self.to_string().width().try_into().unwrap()
+    }
 }
 
 impl std::fmt::Display for Prompt {

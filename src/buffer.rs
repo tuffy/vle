@@ -1148,7 +1148,7 @@ impl StatefulWidget for BufferWidget<'_> {
         use crate::syntax::Highlighter;
         use ratatui::{
             layout::{
-                Constraint::{Length, Min},
+                Constraint::{Length, Min, Ratio},
                 Layout,
             },
             style::{Color, Modifier, Style},
@@ -1574,13 +1574,29 @@ impl StatefulWidget for BufferWidget<'_> {
                     )
                     .render(line_area, buf);
             }
+            Some(EditorMode::Find { prompt, .. }) => {
+                use unicode_width::UnicodeWidthStr;
+
+                render_help(text_area, buf, FIND, |b| b);
+
+                let [_, line_area] = Layout::vertical([Min(0), Length(3)]).areas(text_area);
+                let [line_area, _] =
+                    Layout::horizontal([Ratio(1, 2), Ratio(1, 2)]).areas(line_area);
+                ratatui::widgets::Clear.render(line_area, buf);
+                let prompt = prompt.to_string();
+                let prompt_width = prompt.width() as u16;
+                Paragraph::new(prompt)
+                    .scroll((0, prompt_width.saturating_sub(line_area.width - 2)))
+                    .block(
+                        Block::bordered()
+                            .border_type(BorderType::Rounded)
+                            .title("Find"),
+                    )
+                    .render(line_area, buf);
+            }
             Some(EditorMode::Open { prompt }) => {
                 // TODO - redo this - add tab completion
                 render_prompt(text_area, buf, "Open File", prompt, OPEN_FILE);
-            }
-            Some(EditorMode::Find { prompt, .. }) => {
-                // TODO - redo this
-                render_prompt(text_area, buf, "Find", prompt, FIND);
             }
             Some(EditorMode::SelectMatches { matches, match_idx }) => {
                 render_help(text_area, buf, SELECT_MATCHES, |block| {
