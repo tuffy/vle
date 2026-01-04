@@ -1547,6 +1547,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
             Some(EditorMode::ConfirmClose { .. }) => {
+                // TODO - center this, color it red
                 render_confirmation(
                     text_area,
                     buf,
@@ -1558,12 +1559,27 @@ impl StatefulWidget for BufferWidget<'_> {
                 render_help(text_area, buf, SELECT_INSIDE, |b| b);
             }
             Some(EditorMode::SelectLine { prompt }) => {
-                render_prompt(text_area, buf, "Line", prompt, SELECT_LINE);
+                render_help(text_area, buf, SELECT_LINE, |b| b);
+
+                let [_, line_area] = Layout::vertical([Min(0), Length(3)]).areas(text_area);
+                let [line_area, _] =
+                    Layout::horizontal([Length(crate::prompt::LinePrompt::MAX as u16 + 2), Min(0)])
+                        .areas(line_area);
+                ratatui::widgets::Clear.render(line_area, buf);
+                Paragraph::new(prompt.to_string())
+                    .block(
+                        Block::bordered()
+                            .border_type(BorderType::Rounded)
+                            .title("Goto Line"),
+                    )
+                    .render(line_area, buf);
             }
             Some(EditorMode::Open { prompt }) => {
+                // TODO - redo this - add tab completion
                 render_prompt(text_area, buf, "Open File", prompt, OPEN_FILE);
             }
             Some(EditorMode::Find { prompt, .. }) => {
+                // TODO - redo this
                 render_prompt(text_area, buf, "Find", prompt, FIND);
             }
             Some(EditorMode::SelectMatches { matches, match_idx }) => {

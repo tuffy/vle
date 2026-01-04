@@ -241,12 +241,12 @@ pub static SELECT_LINE: &[Keybinding] = &[
     Keybinding {
         modifier: None,
         keys: &["Home"],
-        action: "Select First Line in File",
+        action: "Goto First Line",
     },
     Keybinding {
         modifier: None,
         keys: &["End"],
-        action: "Select Last Line in File",
+        action: "Goto Last Line",
     },
 ];
 

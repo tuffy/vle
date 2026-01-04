@@ -921,7 +921,7 @@ impl Layout {
         fn apply_position(
             area: Rect,
             (row, col): (usize, usize),
-            _mode: &EditorMode,
+            mode: &EditorMode,
         ) -> Option<Position> {
             use ratatui::{
                 layout::Constraint::{Length, Min},
@@ -931,15 +931,23 @@ impl Layout {
             let [text_area, _] =
                 Layout::horizontal([Min(0), Length(1)]).areas(Block::bordered().inner(area));
 
-            // TODO - apply position to any opened dialog box
+            match mode {
+                EditorMode::SelectLine { prompt } => Some(Position {
+                    x: text_area.x + prompt.len() as u16 + 1,
+                    y: text_area.y + text_area.height.saturating_sub(2),
+                }),
+                _ => {
+                    let x = (col + usize::from(text_area.x))
+                        .min((text_area.x + text_area.width).into());
+                    let y = (row + usize::from(text_area.y))
+                        .min((text_area.y + text_area.height).into());
 
-            let x = (col + usize::from(text_area.x)).min((text_area.x + text_area.width).into());
-            let y = (row + usize::from(text_area.y)).min((text_area.y + text_area.height).into());
-
-            Some(Position {
-                x: u16::try_from(x).ok()?,
-                y: u16::try_from(y).ok()?,
-            })
+                    Some(Position {
+                        x: u16::try_from(x).ok()?,
+                        y: u16::try_from(y).ok()?,
+                    })
+                }
+            }
         }
 
         match self {
