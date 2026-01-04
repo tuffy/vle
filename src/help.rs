@@ -81,6 +81,79 @@ static DOWN: &str = "\u{2193}";
 static LEFT: &str = "\u{2190}";
 static RIGHT: &str = "\u{2192}";
 
+pub static EDITING: &[Keybinding] = &[
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["O"],
+        action: "Open New File",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["PgUp", "PgDn"],
+        action: "Switch Buffer",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &[LEFT, DOWN, UP, RIGHT],
+        action: "Open / Switch Pane",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["S"],
+        action: "Save",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["Q"],
+        action: "Quit Buffer",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["W"],
+        action: "Widen Selection to Lines",
+    },
+    Keybinding {
+        modifier: Some("Shift"),
+        keys: &[LEFT, DOWN, UP, RIGHT],
+        action: "Highlight Text",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["Home", "End"],
+        action: "Start / End of Selection",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["E"],
+        action: "Select Enveloped Items",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["X", "C", "V"],
+        action: "Cut / Copy / Paste",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["Z", "Y"],
+        action: "Undo / Redo",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["P"],
+        action: "Goto Matching Pair",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["T"],
+        action: "Goto Line",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["F"],
+        action: "Find Text",
+    },
+];
+
 pub static CONFIRM_CLOSE: &[Keybinding] = &[
     Keybinding {
         modifier: None,

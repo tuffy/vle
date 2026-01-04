@@ -1129,6 +1129,7 @@ impl BufferList {
 
 pub struct BufferWidget<'e> {
     pub mode: Option<&'e EditorMode>,
+    pub show_help: bool,
 }
 
 impl StatefulWidget for BufferWidget<'_> {
@@ -1537,7 +1538,27 @@ impl StatefulWidget for BufferWidget<'_> {
         );
 
         match self.mode {
-            None | Some(EditorMode::Editing) => { /* no dialog to display */ }
+            None | Some(EditorMode::Editing) => {
+                if self.show_help {
+                    use crate::help::{EDITING, field_widths, help_message};
+
+                    let [_, help] = Layout::horizontal([
+                        Min(0),
+                        Length((field_widths(EDITING).into_iter().sum::<usize>() + 2) as u16),
+                    ])
+                    .areas(text_area);
+                    let [_, help] =
+                        Layout::vertical([Min(0), Length(EDITING.len() as u16 + 2)]).areas(help);
+                    let block = Block::bordered()
+                        .border_type(BorderType::Rounded)
+                        .title_top("Keybindings")
+                        .title_bottom(Line::from("F1 to toggle").centered());
+                    let help_table = block.inner(help);
+                    ratatui::widgets::Clear.render(help, buf);
+                    block.render(help, buf);
+                    help_message(EDITING).render(help_table, buf);
+                }
+            }
             Some(EditorMode::ConfirmClose { .. }) => {
                 render_confirmation(
                     text_area,

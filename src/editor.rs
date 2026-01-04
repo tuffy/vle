@@ -77,6 +77,7 @@ pub struct Editor {
     layout: Layout,
     mode: EditorMode,
     cut_buffer: Option<CutBuffer>, // cut buffer shared globally across editor
+    show_help: bool,
 }
 
 impl Editor {
@@ -85,6 +86,7 @@ impl Editor {
             layout: Layout::Single(BufferList::new(buffers)?),
             mode: EditorMode::default(),
             cut_buffer: None,
+            show_help: false,
         })
     }
 
@@ -93,13 +95,12 @@ impl Editor {
     }
 
     pub fn display(&mut self, term: &mut ratatui::DefaultTerminal) -> std::io::Result<()> {
-        // TODO - display per-mode help if toggled on
-
         term.draw(|frame| {
             let area = frame.area();
             frame.render_stateful_widget(
                 LayoutWidget {
                     mode: &mut self.mode,
+                    show_help: self.show_help,
                 },
                 area,
                 &mut self.layout,
@@ -144,7 +145,14 @@ impl Editor {
             key!(Esc) => {
                 self.mode = EditorMode::default();
             }
-            // TODO - F1 - toggle help display
+            Event::Key(KeyEvent {
+                code: KeyCode::F(1),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.show_help = !self.show_help;
+            }
             event => match &mut self.mode {
                 EditorMode::Editing => self.process_normal_event(event),
                 EditorMode::ConfirmClose { buffer } => {
@@ -962,6 +970,7 @@ impl Layout {
 
 struct LayoutWidget<'e> {
     mode: &'e mut EditorMode,
+    show_help: bool,
 }
 
 impl StatefulWidget for LayoutWidget<'_> {
@@ -975,12 +984,16 @@ impl StatefulWidget for LayoutWidget<'_> {
     ) {
         use crate::buffer::BufferWidget;
 
-        let Self { mode } = self;
+        let Self { mode, show_help } = self;
 
         match layout {
             Layout::Single(single) => {
                 if let Some(buffer) = single.current_mut() {
-                    BufferWidget { mode: Some(mode) }.render(area, buf, buffer);
+                    BufferWidget {
+                        mode: Some(mode),
+                        show_help,
+                    }
+                    .render(area, buf, buffer);
                 }
             }
             Layout::Horizontal { top, bottom, which } => {
@@ -994,6 +1007,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                             HorizontalPos::Top => Some(mode),
                             HorizontalPos::Bottom => None,
                         },
+                        show_help: show_help && !matches!(which, HorizontalPos::Top),
                     }
                     .render(top_area, buf, buffer);
                 }
@@ -1003,6 +1017,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                             HorizontalPos::Top => None,
                             HorizontalPos::Bottom => Some(mode),
                         },
+                        show_help: show_help && !matches!(which, HorizontalPos::Bottom),
                     }
                     .render(bottom_area, buf, buffer);
                 }
@@ -1018,6 +1033,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                             VerticalPos::Left => Some(mode),
                             VerticalPos::Right => None,
                         },
+                        show_help: show_help && !matches!(which, VerticalPos::Left),
                     }
                     .render(left_area, buf, buffer);
                 }
@@ -1027,6 +1043,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                             VerticalPos::Left => None,
                             VerticalPos::Right => Some(mode),
                         },
+                        show_help: show_help && !matches!(which, VerticalPos::Right),
                     }
                     .render(right_area, buf, buffer);
                 }
