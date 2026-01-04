@@ -1,5 +1,4 @@
 use crate::editor::EditorMode;
-use crate::help::Keybinding;
 use crate::syntax::Syntax;
 use ratatui::widgets::StatefulWidget;
 use std::borrow::Cow;
@@ -1547,12 +1546,11 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
             Some(EditorMode::ConfirmClose { .. }) => {
-                // TODO - center this, color it red
-                render_confirmation(
+                render_help(text_area, buf, CONFIRM_CLOSE, |b| b);
+                render_message(
                     text_area,
                     buf,
-                    "Unsaved changes. Really quit?",
-                    CONFIRM_CLOSE,
+                    BufferMessage::Error("Unsaved changes. Really quit?".into()),
                 );
             }
             Some(EditorMode::SelectInside) => {
@@ -1644,39 +1642,6 @@ impl StatefulWidget for BufferWidget<'_> {
             render_message(text_area, buf, message);
         }
     }
-}
-
-// Given whole outer area and width of dialog in characters,
-// returns sub-area for dialog box - including border
-pub fn dialog_area(area: ratatui::layout::Rect, width: u16) -> ratatui::layout::Rect {
-    use ratatui::layout::{
-        Constraint::{Length, Min, Ratio},
-        Layout,
-    };
-
-    let [_, dialog, _] = Layout::horizontal([Min(0), Length(width + 2), Min(0)]).areas(area);
-    let [_, dialog] = Layout::vertical([Ratio(2, 3), Ratio(1, 3)]).areas(dialog);
-    let [dialog, _] = Layout::vertical([Length(3), Min(0)]).areas(dialog);
-    dialog
-}
-
-fn render_confirmation<'s, S: Into<Cow<'s, str>>>(
-    area: ratatui::layout::Rect,
-    buf: &mut ratatui::buffer::Buffer,
-    label: S,
-    keybindings: &[Keybinding],
-) {
-    use ratatui::widgets::{Block, BorderType, Paragraph, Widget};
-    use unicode_width::UnicodeWidthStr;
-
-    crate::help::render_help(area, buf, keybindings, |b| b);
-
-    let label = label.into();
-
-    let dialog_area = dialog_area(area, label.width() as u16);
-    Paragraph::new(label)
-        .block(Block::bordered().border_type(BorderType::Rounded))
-        .render(dialog_area, buf);
 }
 
 fn render_message(
