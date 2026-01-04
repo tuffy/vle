@@ -108,14 +108,14 @@ pub static EDITING: &[Keybinding] = &[
         action: "Quit Buffer",
     },
     Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["W"],
-        action: "Widen Selection to Lines",
-    },
-    Keybinding {
         modifier: Some("Shift"),
         keys: &[LEFT, DOWN, UP, RIGHT],
         action: "Highlight Text",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["W"],
+        action: "Widen Selection to Lines",
     },
     Keybinding {
         modifier: Some("Ctrl"),
