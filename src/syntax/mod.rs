@@ -16,6 +16,7 @@ mod makefile;
 mod markdown;
 mod python;
 mod rust;
+mod xml;
 
 /// Implemented for different syntax highlighters
 pub trait Highlighter: std::fmt::Debug + std::fmt::Display {
@@ -74,6 +75,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("json") => Box::new(json::Json),
         Some("md") => Box::new(markdown::Markdown),
         Some("html" | "htm") => Box::new(html::Html),
+        Some("xml") => Box::new(xml::Xml),
         _ => Box::new(DefaultHighlighter),
     }
 }
@@ -90,5 +92,4 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
 // TODO - add sh syntax
 // TODO - add sql syntax
 // TODO - add tex syntax
-// TODO - add xml syntax
 // TODO - add yaml syntax
