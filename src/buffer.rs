@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::editor::EditorMode;
-use crate::syntax::Syntax;
+use crate::syntax::Highlighter;
 use ratatui::widgets::StatefulWidget;
 use std::borrow::Cow;
 use std::cell::RefCell;
@@ -183,12 +183,12 @@ mod private {
 
 /// A buffer corresponding to a file on disk (either local or remote)
 struct Buffer {
-    source: Source,            // the source file
-    saved: Option<SystemTime>, // when the file was last saved
-    rope: private::Rope,       // the data rope
-    undo: Vec<Undo>,           // the undo stack
-    redo: Vec<BufferState>,    // the redo stack
-    syntax: Syntax,            // the syntax highlighting to use
+    source: Source,               // the source file
+    saved: Option<SystemTime>,    // when the file was last saved
+    rope: private::Rope,          // the data rope
+    undo: Vec<Undo>,              // the undo stack
+    redo: Vec<BufferState>,       // the redo stack
+    syntax: Box<dyn Highlighter>, // the syntax highlighting to use
 }
 
 impl Buffer {
@@ -204,7 +204,7 @@ impl Buffer {
         Ok(Self {
             rope: rope.into(),
             saved,
-            syntax: Syntax::new(&source),
+            syntax: crate::syntax::syntax(&source),
             source,
             undo: vec![],
             redo: vec![],

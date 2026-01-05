@@ -32,84 +32,49 @@ pub trait Highlighter: std::fmt::Debug + std::fmt::Display {
     }
 }
 
-/// Which syntax highlighting method is in use
-#[derive(Default, Debug)]
-pub enum Syntax {
-    #[default]
-    Plain,
-    C(c::C),
-    Html(html::Html),
-    Json(json::Json),
-    Python(python::Python),
-    Makefile(makefile::Makefile),
-    Markdown(markdown::Markdown),
-    Rust(rust::Rust),
-}
-
-impl Syntax {
-    pub fn new(source: &Source) -> Self {
-        match source.extension() {
-            None => match source.file_name() {
-                Some(file_name) => match file_name.as_ref() {
-                    "Makefile" | "makefile" => Self::Makefile(makefile::Makefile),
-                    _ => Self::default(),
-                },
-                None => Self::default(),
-            },
-            Some("rs") => Self::Rust(rust::Rust),
-            Some("c" | "h" | "C" | "H") => Self::C(c::C),
-            Some("py") => Self::Python(python::Python),
-            Some("json") => Self::Json(json::Json),
-            Some("md") => Self::Markdown(markdown::Markdown),
-            Some("html" | "htm") => Self::Html(html::Html),
-            _ => Self::default(),
-        }
-    }
-}
-
-impl Highlighter for Syntax {
+impl Highlighter for Box<dyn Highlighter> {
     fn highlight<'s>(
         &self,
         s: &'s str,
     ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
-        match self {
-            Self::Plain => Box::new(std::iter::empty()),
-            Self::Rust(r) => r.highlight(s),
-            Self::C(c) => c.highlight(s),
-            Self::Python(p) => p.highlight(s),
-            Self::Json(j) => j.highlight(s),
-            Self::Markdown(m) => m.highlight(s),
-            Self::Makefile(m) => m.highlight(s),
-            Self::Html(h) => h.highlight(s),
-        }
-    }
-
-    fn tabs_required(&self) -> bool {
-        match self {
-            Self::Plain => false,
-            Self::Rust(r) => r.tabs_required(),
-            Self::C(c) => c.tabs_required(),
-            Self::Python(p) => p.tabs_required(),
-            Self::Json(j) => j.tabs_required(),
-            Self::Markdown(m) => m.tabs_required(),
-            Self::Makefile(m) => m.tabs_required(),
-            Self::Html(h) => h.tabs_required(),
-        }
+        Box::as_ref(self).highlight(s)
     }
 }
 
-impl std::fmt::Display for Syntax {
+#[derive(Debug)]
+struct DefaultHighlighter;
+
+impl Highlighter for DefaultHighlighter {
+    fn highlight<'s>(
+        &self,
+        _s: &'s str,
+    ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
+        Box::new(std::iter::empty())
+    }
+}
+
+impl std::fmt::Display for DefaultHighlighter {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::Plain => "Plain".fmt(f),
-            Self::Rust(r) => r.fmt(f),
-            Self::C(c) => c.fmt(f),
-            Self::Python(p) => p.fmt(f),
-            Self::Json(j) => j.fmt(f),
-            Self::Markdown(m) => m.fmt(f),
-            Self::Makefile(m) => m.fmt(f),
-            Self::Html(h) => h.fmt(f),
-        }
+        "Plain".fmt(f)
+    }
+}
+
+pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
+    match source.extension() {
+        None => match source.file_name() {
+            Some(file_name) => match file_name.as_ref() {
+                "Makefile" | "makefile" => Box::new(makefile::Makefile),
+                _ => Box::new(DefaultHighlighter),
+            },
+            None => Box::new(DefaultHighlighter),
+        },
+        Some("rs") => Box::new(rust::Rust),
+        Some("c" | "h" | "C" | "H") => Box::new(c::C),
+        Some("py") => Box::new(python::Python),
+        Some("json") => Box::new(json::Json),
+        Some("md") => Box::new(markdown::Markdown),
+        Some("html" | "htm") => Box::new(html::Html),
+        _ => Box::new(DefaultHighlighter),
     }
 }
 
