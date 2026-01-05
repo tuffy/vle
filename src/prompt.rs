@@ -53,7 +53,7 @@ impl SearchPrompt {
                 }
                 None => {
                     // index being outside of history shouldn't happen
-                    todo!()
+                    f(&mut self.value)
                 }
             },
         }

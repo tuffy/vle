@@ -424,7 +424,6 @@ impl Editor {
             }
             key!(ALT, 'o') => self.update_buffer(|b| b.reload()),
             key!(CONTROL, 'j') => self.update_buffer(|b| b.join_selected_lines()),
-            // key!(ALT, 'c') - TODO comment/un-comment region
             _ => { /* ignore other events */ }
         }
     }
