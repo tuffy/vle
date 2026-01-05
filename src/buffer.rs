@@ -1792,6 +1792,7 @@ fn render_message(
     let [_, dialog_area, _] = Layout::horizontal([Min(0), Length(width + 2), Min(0)]).areas(area);
     let [_, dialog_area, _] = Layout::vertical([Min(0), Length(3), Min(0)]).areas(dialog_area);
 
+    ratatui::widgets::Clear.render(dialog_area, buf);
     Paragraph::new(message.as_str())
         .style(match message {
             BufferMessage::Notice(_) => Style::default(),
