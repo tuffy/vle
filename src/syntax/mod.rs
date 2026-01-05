@@ -9,6 +9,7 @@
 use crate::buffer::Source;
 use ratatui::style::Color;
 
+mod c;
 mod json;
 mod makefile;
 mod python;
@@ -35,6 +36,7 @@ pub enum Syntax {
     #[default]
     Plain,
     Rust(rust::Rust),
+    C(c::C),
     Python(python::Python),
     Json(json::Json),
     Makefile(makefile::Makefile),
@@ -51,6 +53,7 @@ impl Syntax {
                 None => Self::default(),
             },
             Some("rs") => Self::Rust(rust::Rust),
+            Some("c" | "h" | "C" | "H") => Self::C(c::C),
             Some("py") => Self::Python(python::Python),
             Some("json") => Self::Json(json::Json),
             _ => Self::default(),
@@ -66,6 +69,7 @@ impl Highlighter for Syntax {
         match self {
             Self::Plain => Box::new(std::iter::empty()),
             Self::Rust(r) => r.highlight(s),
+            Self::C(c) => c.highlight(s),
             Self::Python(p) => p.highlight(s),
             Self::Json(j) => j.highlight(s),
             Self::Makefile(m) => m.highlight(s),
@@ -76,6 +80,7 @@ impl Highlighter for Syntax {
         match self {
             Self::Plain => false,
             Self::Rust(r) => r.tabs_required(),
+            Self::C(c) => c.tabs_required(),
             Self::Python(p) => p.tabs_required(),
             Self::Json(j) => j.tabs_required(),
             Self::Makefile(m) => m.tabs_required(),
@@ -88,6 +93,7 @@ impl std::fmt::Display for Syntax {
         match self {
             Self::Plain => "Plain".fmt(f),
             Self::Rust(r) => r.fmt(f),
+            Self::C(c) => c.fmt(f),
             Self::Python(p) => p.fmt(f),
             Self::Json(j) => j.fmt(f),
             Self::Makefile(m) => m.fmt(f),
@@ -96,7 +102,6 @@ impl std::fmt::Display for Syntax {
 }
 
 // TODO - add cmake syntax
-// TODO - add c syntax
 // TODO - add css syntax
 // TODO - add go syntax
 // TODO - add html syntax
