@@ -50,6 +50,12 @@ impl Source {
         }
     }
 
+    fn read_string(&self) -> std::io::Result<String> {
+        match self {
+            Self::File(path) => std::fs::read_to_string(path),
+        }
+    }
+
     fn read_data(&self) -> std::io::Result<ropey::Rope> {
         use std::fs::File;
         use std::io::BufReader;
@@ -176,7 +182,16 @@ impl Buffer {
         })
     }
 
+    fn reload(&mut self) -> std::io::Result<()> {
+        let reloaded = self.source.read_string()?;
+        patch_rope(&mut self.rope.get_mut(), reloaded);
+        self.rope.save();
+        log_movement(&mut self.undo);
+        Ok(())
+    }
+
     fn save(&mut self, message: &mut Option<BufferMessage>) {
+        // TODO - return io::Result instead
         match self.source.save_data(&self.rope) {
             Ok(()) => {
                 self.rope.save();
@@ -245,6 +260,19 @@ impl BufferContext {
 
     pub fn open(path: OsString) -> std::io::Result<Self> {
         Buffer::open(path).map(|b| b.into())
+    }
+
+    pub fn reload(&mut self) {
+        let mut buf = self.buffer.borrow_mut();
+        match buf.reload() {
+            Ok(()) => {
+                self.selection = None;
+                self.message = Some(BufferMessage::Notice("Reloaded".into()));
+            }
+            Err(err) => {
+                self.message = Some(BufferMessage::Error(err.to_string().into()));
+            }
+        }
     }
 
     pub fn save(&mut self) {
@@ -1747,6 +1775,46 @@ impl BufferMessage {
     fn as_str(&self) -> &str {
         match self {
             Self::Notice(s) | Self::Error(s) => s.as_ref(),
+        }
+    }
+}
+
+// Patches source to match target using diffs
+fn patch_rope(source: &mut ropey::Rope, target: String) {
+    use imara_diff::{Algorithm::Histogram, Diff, Hunk, InternedInput};
+    use ropey::Rope;
+    use std::ops::Range;
+
+    fn remove_lines(rope: &mut Rope, lines: Range<u32>) {
+        rope.remove(rope.line_to_char(lines.start as usize)..rope.line_to_char(lines.end as usize));
+    }
+
+    fn get_lines(rope: &Rope, lines: Range<u32>) -> String {
+        if lines.end > lines.start {
+            rope.lines_at(lines.start as usize)
+                .take((lines.end - lines.start) as usize)
+                .fold(String::default(), |mut acc, line| {
+                    acc.extend(line.chunks());
+                    acc
+                })
+        } else {
+            String::default()
+        }
+    }
+
+    let source_str = source.chunks().collect::<String>();
+
+    let hunks = Diff::compute(Histogram, &InternedInput::new(source_str.as_str(), &target))
+        .hunks()
+        .collect::<Vec<_>>();
+
+    let target = Rope::from(target);
+
+    for Hunk { before, after } in hunks.into_iter().rev() {
+        remove_lines(source, before.clone());
+        let to_insert = get_lines(&target, after);
+        if !to_insert.is_empty() {
+            source.insert(source.line_to_char(before.start as usize), &to_insert);
         }
     }
 }
