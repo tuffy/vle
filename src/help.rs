@@ -120,6 +120,11 @@ pub static EDITING: &[Keybinding] = &[
         action: "Open New File",
     },
     Keybinding {
+        modifier: Some("Alt"),
+        keys: &["O"],
+        action: "Reload File",
+    },
+    Keybinding {
         modifier: Some("Ctrl"),
         keys: &["PgUp", "PgDn"],
         action: "Switch Buffer",
@@ -133,6 +138,11 @@ pub static EDITING: &[Keybinding] = &[
         modifier: Some("Ctrl"),
         keys: &["S"],
         action: "Save",
+    },
+    Keybinding {
+        modifier: Some("Alt"),
+        keys: &["S"],
+        action: "Save With New Name",
     },
     Keybinding {
         modifier: Some("Ctrl"),
@@ -158,6 +168,16 @@ pub static EDITING: &[Keybinding] = &[
         modifier: Some("Ctrl"),
         keys: &["E"],
         action: "Select Enveloped Items",
+    },
+    Keybinding {
+        modifier: Some("Alt"),
+        keys: &["C"],
+        action: "(Un)Comment Selected Lines",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["J"],
+        action: "Join Selected Lines",
     },
     Keybinding {
         modifier: Some("Ctrl"),

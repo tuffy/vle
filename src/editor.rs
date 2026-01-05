@@ -397,6 +397,7 @@ impl Editor {
             key!(CONTROL, 'z') => self.update_buffer(|b| b.perform_undo()),
             key!(CONTROL, 'y') => self.update_buffer(|b| b.perform_redo()),
             key!(CONTROL, 's') => self.update_buffer(|b| b.save()),
+            // key!(ALT, 's') => TODO - prompt for new name for buffer and save
             key!(Tab) => self.update_buffer(|b| b.indent()),
             key!(SHIFT, BackTab) => self.update_buffer(|b| b.un_indent()),
             key!(CONTROL, 'p') => self.update_buffer(|b| b.select_matching_paren()),
@@ -418,6 +419,9 @@ impl Editor {
                     prompt: Prompt::default(),
                 };
             }
+            // key!(ALT, 'o') => TODO - reload file from disk
+            // key!(CONTROL, 'j') - TODO join lines into single line
+            // key!(ALT, 'c') - TODO comment/un-comment region
             _ => { /* ignore other events */ }
         }
     }
