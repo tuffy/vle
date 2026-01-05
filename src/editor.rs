@@ -419,8 +419,8 @@ impl Editor {
                     prompt: Prompt::default(),
                 };
             }
+            key!(CONTROL, 'j') => self.update_buffer(|b| b.join_selected_lines()),
             // key!(ALT, 'o') => TODO - reload file from disk
-            // key!(CONTROL, 'j') - TODO join lines into single line
             // key!(ALT, 'c') - TODO comment/un-comment region
             _ => { /* ignore other events */ }
         }

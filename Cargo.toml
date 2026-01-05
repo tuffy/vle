@@ -10,6 +10,7 @@ path = "src/main.rs"
 [dependencies]
 clap = { version = "4.5.53", features = ["derive"] }
 crossterm = "0.29"
+lazy-regex = "3.5"
 logos = "0.16"
 ratatui = "0.30"
 ropey = "1.6"
