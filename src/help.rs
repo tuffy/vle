@@ -22,13 +22,16 @@ pub fn help_message(keybindings: &[Keybinding]) -> ratatui::widgets::Paragraph<'
         (s > 0).then(|| Span::raw(std::iter::repeat_n(' ', s).collect::<String>()))
     }
 
-    let [mod_width, keys_width, _, _] = field_widths(keybindings);
+    let [action_width, _, mod_width, _] = field_widths(keybindings);
 
     Paragraph::new(
         keybindings
             .iter()
             .map(|k| {
                 let mut line = vec![];
+                line.extend(spaces(action_width - k.action.width()));
+                line.push(Span::from(k.action));
+                line.push(Span::from(" : "));
                 match k.modifier {
                     Some(modifier) => {
                         line.extend(spaces(mod_width - (modifier.width() + 1)));
@@ -39,15 +42,11 @@ pub fn help_message(keybindings: &[Keybinding]) -> ratatui::widgets::Paragraph<'
                         line.extend(spaces(mod_width));
                     }
                 }
-                let mut key_width = 0;
                 for k in k.keys {
                     line.push(key(k));
                     line.push(Span::from(" "));
-                    key_width += k.width() + 1;
                 }
-                line.extend(spaces(keys_width - key_width));
-                line.push(Span::from(": "));
-                line.push(Span::from(k.action));
+
                 Line::from(line)
             })
             .collect::<Vec<_>>(),
@@ -58,21 +57,21 @@ pub fn field_widths(keybindings: &[Keybinding]) -> [usize; 4] {
     use unicode_width::UnicodeWidthStr;
 
     keybindings.iter().fold(
-        [0, 0, 2, 0],
-        |[mod_len, keys_len, _, action_len]: [usize; 4],
+        [0, 2, 0, 0],
+        |[action_len, _, mod_len, keys_len]: [usize; 4],
          Keybinding {
              modifier,
              keys,
              action,
          }: &Keybinding| {
             [
+                action_len.max(action.width()),
+                2,
                 mod_len.max(match modifier {
                     Some(m) => m.width() + 1,
                     None => 0,
                 }),
                 keys_len.max(keys.iter().map(|k| k.width() + 1).sum()),
-                2,
-                action_len.max(action.width()),
             ]
         },
     )
