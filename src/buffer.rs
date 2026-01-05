@@ -1651,8 +1651,16 @@ impl StatefulWidget for BufferWidget<'_> {
             None | Some(EditorMode::Editing) => {
                 if self.show_help {
                     crate::help::render_help(text_area, buf, crate::help::EDITING, |b| {
-                        b.title_top("Keybindings")
-                            .title_bottom(Line::from("F1 to toggle").centered())
+                        b.title_top("Keybindings").title_bottom(
+                            Line::from(vec![
+                                Span::styled(
+                                    "F1",
+                                    Style::default().add_modifier(Modifier::REVERSED),
+                                ),
+                                Span::raw(" to toggle"),
+                            ])
+                            .centered(),
+                        )
                     });
                 }
             }
