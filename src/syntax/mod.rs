@@ -12,6 +12,7 @@ use ratatui::style::Color;
 mod c;
 mod json;
 mod makefile;
+mod markdown;
 mod python;
 mod rust;
 
@@ -40,6 +41,7 @@ pub enum Syntax {
     Python(python::Python),
     Json(json::Json),
     Makefile(makefile::Makefile),
+    Markdown(markdown::Markdown),
 }
 
 impl Syntax {
@@ -56,6 +58,7 @@ impl Syntax {
             Some("c" | "h" | "C" | "H") => Self::C(c::C),
             Some("py") => Self::Python(python::Python),
             Some("json") => Self::Json(json::Json),
+            Some("md") => Self::Markdown(markdown::Markdown),
             _ => Self::default(),
         }
     }
@@ -72,6 +75,7 @@ impl Highlighter for Syntax {
             Self::C(c) => c.highlight(s),
             Self::Python(p) => p.highlight(s),
             Self::Json(j) => j.highlight(s),
+            Self::Markdown(m) => m.highlight(s),
             Self::Makefile(m) => m.highlight(s),
         }
     }
@@ -83,6 +87,7 @@ impl Highlighter for Syntax {
             Self::C(c) => c.tabs_required(),
             Self::Python(p) => p.tabs_required(),
             Self::Json(j) => j.tabs_required(),
+            Self::Markdown(m) => m.tabs_required(),
             Self::Makefile(m) => m.tabs_required(),
         }
     }
@@ -96,6 +101,7 @@ impl std::fmt::Display for Syntax {
             Self::C(c) => c.fmt(f),
             Self::Python(p) => p.fmt(f),
             Self::Json(j) => j.fmt(f),
+            Self::Markdown(m) => m.fmt(f),
             Self::Makefile(m) => m.fmt(f),
         }
     }
@@ -108,7 +114,6 @@ impl std::fmt::Display for Syntax {
 // TODO - add java syntax
 // TODO - add javascript syntax
 // TODO - add lua syntax
-// TODO - add markdown syntax
 // TODO - add patch syntax
 // TODO - add perl syntax
 // TODO - add php syntax
