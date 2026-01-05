@@ -200,6 +200,19 @@ pub static EDITING: &[Keybinding] = &[
     },
 ];
 
+pub static VERIFY_SAVE: &[Keybinding] = &[
+    Keybinding {
+        modifier: None,
+        keys: &["Y"],
+        action: "Yes, Overwrite Contents",
+    },
+    Keybinding {
+        modifier: None,
+        keys: &["N"],
+        action: "No, Do Not Save",
+    },
+];
+
 pub static CONFIRM_CLOSE: &[Keybinding] = &[
     Keybinding {
         modifier: None,

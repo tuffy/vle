@@ -15,6 +15,7 @@ const PAGE_SIZE: usize = 25;
 pub enum EditorMode {
     #[default]
     Editing,
+    VerifySave,
     ConfirmClose {
         buffer: BufferId,
     },
@@ -121,6 +122,13 @@ impl Editor {
         self.layout.selected_buffer_list_mut().update_buf(f)
     }
 
+    fn on_buffer<T>(
+        &mut self,
+        f: impl FnOnce(&mut crate::buffer::BufferContext) -> T,
+    ) -> Option<T> {
+        self.layout.selected_buffer_list_mut().on_buf(f)
+    }
+
     fn perform_cut(&mut self) {
         if let Some(buffer) = self.layout.selected_buffer_list_mut().current_mut()
             && let Some(selection) = buffer.take_selection()
@@ -166,6 +174,7 @@ impl Editor {
                     let buffer = buffer.clone();
                     self.process_confirm_close(event, buffer)
                 }
+                EditorMode::VerifySave => self.process_verify_save(event),
                 EditorMode::SelectInside => self.process_select_inside(event),
                 EditorMode::SelectLine { prompt } => {
                     if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
@@ -399,7 +408,11 @@ impl Editor {
             key!(CONTROL, 'v') => self.perform_paste(),
             key!(CONTROL, 'z') => self.update_buffer(|b| b.perform_undo()),
             key!(CONTROL, 'y') => self.update_buffer(|b| b.perform_redo()),
-            key!(CONTROL, 's') => self.update_buffer(|b| b.save()),
+            key!(CONTROL, 's') => {
+                if let Some(Err(crate::buffer::Modified)) = self.on_buffer(|b| b.verified_save()) {
+                    self.mode = EditorMode::VerifySave;
+                }
+            }
             // key!(ALT, 's') => TODO - prompt for new name for buffer and save
             key!(Tab) => self.update_buffer(|b| b.indent()),
             key!(SHIFT, BackTab) => self.update_buffer(|b| b.un_indent()),
@@ -439,6 +452,23 @@ impl Editor {
             }
             key!('n') => {
                 // cancel close buffer
+                self.mode = EditorMode::default();
+            }
+            _ => { /* ignore other events */ }
+        }
+    }
+
+    fn process_verify_save(&mut self, event: Event) {
+        use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+        match event {
+            key!('y') => {
+                // save buffer anyway
+                self.update_buffer(|b| b.save());
+                self.mode = EditorMode::default();
+            }
+            key!('n') => {
+                // cancel save
                 self.mode = EditorMode::default();
             }
             _ => { /* ignore other events */ }

@@ -6,6 +6,7 @@ use std::cell::RefCell;
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::time::SystemTime;
 
 pub enum Source {
     File(PathBuf),
@@ -50,33 +51,49 @@ impl Source {
         }
     }
 
-    fn read_string(&self) -> std::io::Result<String> {
+    fn read_string(&self) -> std::io::Result<(Option<SystemTime>, String)> {
         match self {
-            Self::File(path) => std::fs::read_to_string(path),
+            Self::File(path) => {
+                let s = std::fs::read_to_string(path)?;
+                Ok((path.metadata().and_then(|m| m.modified()).ok(), s))
+            }
         }
     }
 
-    fn read_data(&self) -> std::io::Result<ropey::Rope> {
+    fn read_data(&self) -> std::io::Result<(Option<SystemTime>, ropey::Rope)> {
         use std::fs::File;
         use std::io::BufReader;
 
         match self {
             Self::File(path) => match File::open(path) {
-                Ok(f) => ropey::Rope::from_reader(BufReader::new(f)),
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(ropey::Rope::default()),
+                Ok(f) => Ok((
+                    f.metadata().and_then(|m| m.modified()).ok(),
+                    ropey::Rope::from_reader(BufReader::new(f))?,
+                )),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    Ok((None, ropey::Rope::default()))
+                }
                 Err(e) => Err(e),
             },
         }
     }
 
-    fn save_data(&self, data: &ropey::Rope) -> std::io::Result<()> {
+    fn save_data(&self, data: &ropey::Rope) -> std::io::Result<Option<SystemTime>> {
         use std::fs::File;
-        use std::io::BufWriter;
+        use std::io::{BufWriter, Write};
 
         match self {
-            Self::File(path) => File::create(path)
-                .map(BufWriter::new)
-                .and_then(|f| data.write_to(f)),
+            Self::File(path) => File::create(path).map(BufWriter::new).and_then(|mut f| {
+                data.write_to(&mut f)?;
+                f.flush()?;
+                Ok(f.get_mut().metadata().and_then(|m| m.modified()).ok())
+            }),
+        }
+    }
+
+    fn last_modified(&self) -> Option<SystemTime> {
+        match self {
+            Self::File(path) => path.metadata().and_then(|m| m.modified()).ok(),
         }
     }
 }
@@ -158,11 +175,12 @@ mod private {
 
 /// A buffer corresponding to a file on disk (either local or remote)
 struct Buffer {
-    source: Source,         // the source file
-    rope: private::Rope,    // the data rope
-    undo: Vec<Undo>,        // the undo stack
-    redo: Vec<BufferState>, // the redo stack
-    syntax: Syntax,         // the syntax highlighting to use
+    source: Source,            // the source file
+    saved: Option<SystemTime>, // when the file was last saved
+    rope: private::Rope,       // the data rope
+    undo: Vec<Undo>,           // the undo stack
+    redo: Vec<BufferState>,    // the redo stack
+    syntax: Syntax,            // the syntax highlighting to use
 }
 
 impl Buffer {
@@ -173,8 +191,11 @@ impl Buffer {
     fn open(path: OsString) -> std::io::Result<Self> {
         let source = Source::from(path);
 
+        let (saved, rope) = source.read_data()?;
+
         Ok(Self {
-            rope: source.read_data()?.into(),
+            rope: rope.into(),
+            saved,
             syntax: Syntax::new(&source),
             source,
             undo: vec![],
@@ -183,15 +204,16 @@ impl Buffer {
     }
 
     fn reload(&mut self) -> std::io::Result<()> {
-        let reloaded = self.source.read_string()?;
+        let (saved, reloaded) = self.source.read_string()?;
         patch_rope(&mut self.rope.get_mut(), reloaded);
         self.rope.save();
+        self.saved = saved;
         log_movement(&mut self.undo);
         Ok(())
     }
 
     fn save(&mut self) -> std::io::Result<()> {
-        self.source.save_data(&self.rope)?;
+        self.saved = self.source.save_data(&self.rope)?;
         self.rope.save();
         log_movement(&mut self.undo);
         Ok(())
@@ -203,6 +225,16 @@ impl Buffer {
 
     pub fn modified(&self) -> bool {
         self.rope.modified()
+    }
+
+    /// When the buffer was last modified, according to the filesystem
+    pub fn last_modified(&self) -> Option<SystemTime> {
+        self.source.last_modified()
+    }
+
+    /// When we last saved the buffer, if it can be known
+    pub fn last_saved(&self) -> Option<SystemTime> {
+        self.saved
     }
 
     fn log_undo(&mut self, cursor: usize, cursor_column: usize) {
@@ -272,6 +304,21 @@ impl BufferContext {
     pub fn save(&mut self) {
         if let Err(err) = self.buffer.borrow_mut().save() {
             self.message = Some(BufferMessage::Error(err.to_string().into()));
+        }
+    }
+
+    pub fn verified_save(&mut self) -> Result<(), Modified> {
+        let mut buf = self.buffer.borrow_mut();
+        if let Some(saved) = buf.last_saved()
+            && let Some(modified) = buf.last_modified()
+            && modified > saved
+        {
+            Err(Modified)
+        } else {
+            if let Err(err) = buf.save() {
+                self.message = Some(BufferMessage::Error(err.to_string().into()));
+            }
+            Ok(())
         }
     }
 
@@ -929,6 +976,9 @@ impl BufferContext {
     }
 }
 
+/// Buffer has been modified since last save
+pub struct Modified;
+
 // Given line in rope, returns (start, end) of that line in characters from start of rope
 fn line_char_range(rope: &ropey::Rope, line: usize) -> Option<(usize, usize)> {
     Some((
@@ -1152,6 +1202,10 @@ impl BufferList {
         }
     }
 
+    pub fn on_buf<T>(&mut self, f: impl FnOnce(&mut BufferContext) -> T) -> Option<T> {
+        self.current_mut().map(f)
+    }
+
     /// Attempts to select buffer by file name
     /// Returns Ok on success, Err on failure
     pub fn select_by_name(&mut self, name: &OsStr) -> Result<(), ()> {
@@ -1195,7 +1249,7 @@ impl StatefulWidget for BufferWidget<'_> {
     ) {
         use crate::help::{
             CONFIRM_CLOSE, FIND, OPEN_FILE, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE,
-            SELECT_MATCHES, render_help,
+            SELECT_MATCHES, VERIFY_SAVE, render_help,
         };
         use crate::syntax::Highlighter;
         use ratatui::{
@@ -1608,6 +1662,14 @@ impl StatefulWidget for BufferWidget<'_> {
                     text_area,
                     buf,
                     BufferMessage::Error("Unsaved changes. Really quit?".into()),
+                );
+            }
+            Some(EditorMode::VerifySave) => {
+                render_help(text_area, buf, VERIFY_SAVE, |b| b);
+                render_message(
+                    text_area,
+                    buf,
+                    BufferMessage::Error("Buffer changed on disk. Really save?".into()),
                 );
             }
             Some(EditorMode::SelectInside) => {
