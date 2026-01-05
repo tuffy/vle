@@ -295,12 +295,12 @@ pub static FIND: &[Keybinding] = &[
     Keybinding {
         modifier: None,
         keys: &[UP],
-        action: "Later Item in History",
+        action: "Earlier Item in History",
     },
     Keybinding {
         modifier: None,
         keys: &[DOWN],
-        action: "Earlier Item in History",
+        action: "Later Item in History",
     },
     Keybinding {
         modifier: None,

@@ -626,11 +626,11 @@ fn process_find(
             None
         }
         key!(Up) => {
-            prompt.next_entry();
+            prompt.previous_entry();
             None
         }
         key!(Down) => {
-            prompt.previous_entry();
+            prompt.next_entry();
             None
         }
         key!(Enter) => {
