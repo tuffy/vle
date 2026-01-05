@@ -169,11 +169,6 @@ pub static EDITING: &[Keybinding] = &[
         action: "Select Enveloped Items",
     },
     Keybinding {
-        modifier: Some("Alt"),
-        keys: &["C"],
-        action: "(Un)Comment Selected Lines",
-    },
-    Keybinding {
         modifier: Some("Ctrl"),
         keys: &["J"],
         action: "Join Selected Lines",
@@ -275,11 +270,23 @@ pub static OPEN_FILE: &[Keybinding] = &[Keybinding {
     action: "Select File",
 }];
 
-pub static FIND: &[Keybinding] = &[Keybinding {
-    modifier: None,
-    keys: &["Enter"],
-    action: "Select All Matches",
-}];
+pub static FIND: &[Keybinding] = &[
+    Keybinding {
+        modifier: None,
+        keys: &[UP],
+        action: "Later Item in History",
+    },
+    Keybinding {
+        modifier: None,
+        keys: &[DOWN],
+        action: "Earlier Item in History",
+    },
+    Keybinding {
+        modifier: None,
+        keys: &["Enter"],
+        action: "Select All Matches",
+    },
+];
 
 pub static SELECT_MATCHES: &[Keybinding] = &[
     Keybinding {

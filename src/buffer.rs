@@ -1669,7 +1669,9 @@ impl StatefulWidget for BufferWidget<'_> {
                     )
                     .render(line_area, buf);
             }
-            Some(EditorMode::SelectMatches { matches, match_idx }) => {
+            Some(EditorMode::SelectMatches {
+                matches, match_idx, ..
+            }) => {
                 render_help(text_area, buf, SELECT_MATCHES, |block| {
                     block.title(match match_idx {
                         Some(idx) => Cow::from(format!("Match {} / {}", idx + 1, matches.len())),
