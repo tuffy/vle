@@ -2,13 +2,14 @@
 name = "vle"
 version = "0.6.0"
 edition = "2024"
+license = "MIT/Apache-2.0"
 
 [[bin]]
 name = "vle"
 path = "src/main.rs"
 
 [dependencies]
-clap = { version = "4.5.53", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }
 crossterm = "0.29"
 imara-diff = "0.2"
 lazy-regex = "3.5"
