@@ -190,17 +190,11 @@ impl Buffer {
         Ok(())
     }
 
-    fn save(&mut self, message: &mut Option<BufferMessage>) {
-        // TODO - return io::Result instead
-        match self.source.save_data(&self.rope) {
-            Ok(()) => {
-                self.rope.save();
-                log_movement(&mut self.undo);
-            }
-            Err(err) => {
-                *message = Some(BufferMessage::Error(err.to_string().into()));
-            }
-        }
+    fn save(&mut self) -> std::io::Result<()> {
+        self.source.save_data(&self.rope)?;
+        self.rope.save();
+        log_movement(&mut self.undo);
+        Ok(())
     }
 
     fn total_lines(&self) -> usize {
@@ -276,7 +270,9 @@ impl BufferContext {
     }
 
     pub fn save(&mut self) {
-        self.buffer.borrow_mut().save(&mut self.message);
+        if let Err(err) = self.buffer.borrow_mut().save() {
+            self.message = Some(BufferMessage::Error(err.to_string().into()));
+        }
     }
 
     pub fn get_cursor(&self) -> usize {
