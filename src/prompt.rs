@@ -12,6 +12,8 @@ pub struct Prompt {
 }
 
 impl Prompt {
+    pub const MAX_WIDTH: u16 = 30;
+
     pub fn push(&mut self, c: char) {
         self.value.push(c)
     }

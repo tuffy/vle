@@ -1017,6 +1017,7 @@ impl Layout {
             (row, col): (usize, usize),
             mode: &EditorMode,
         ) -> Option<Position> {
+            use crate::prompt::Prompt;
             use ratatui::{
                 layout::Constraint::{Length, Min},
                 widgets::Block,
@@ -1032,13 +1033,19 @@ impl Layout {
                 }),
                 EditorMode::Find { prompt } => Some(Position {
                     x: text_area.x
-                        + prompt.width().min((text_area.width / 2).saturating_sub(2))
+                        + prompt
+                            .width()
+                            .min(Prompt::MAX_WIDTH)
+                            .min(text_area.width.saturating_sub(2))
                         + 1,
                     y: text_area.y + text_area.height.saturating_sub(2),
                 }),
                 EditorMode::Open { prompt } => Some(Position {
                     x: text_area.x
-                        + prompt.width().min((text_area.width / 2).saturating_sub(2))
+                        + prompt
+                            .width()
+                            .min(Prompt::MAX_WIDTH)
+                            .min(text_area.width.saturating_sub(2))
                         + 1,
                     y: text_area.y + text_area.height.saturating_sub(2),
                 }),
