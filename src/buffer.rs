@@ -35,9 +35,9 @@ impl std::fmt::Display for Source {
 }
 
 impl Source {
-    fn source_str(&self) -> &OsStr {
+    fn source_str(&self) -> Option<&OsStr> {
         match self {
-            Self::File(pb) => pb.as_os_str(),
+            Self::File(pb) => Some(pb.as_os_str()),
         }
     }
 
@@ -192,7 +192,7 @@ struct Buffer {
 }
 
 impl Buffer {
-    fn source_str(&self) -> &OsStr {
+    fn source_str(&self) -> Option<&OsStr> {
         self.source.source_str()
     }
 
@@ -1234,7 +1234,7 @@ impl BufferList {
         match self
             .buffers
             .iter()
-            .position(|buf| buf.buffer.borrow().source_str() == name)
+            .position(|buf| buf.buffer.borrow().source_str() == Some(name))
         {
             Some(idx) => {
                 self.current = idx;
