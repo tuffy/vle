@@ -24,6 +24,7 @@ pub enum EditorMode {
     #[default]
     Editing,
     VerifySave,
+    VerifyReload,
     ConfirmClose {
         buffer: BufferId,
     },
@@ -183,6 +184,7 @@ impl Editor {
                     self.process_confirm_close(event, buffer)
                 }
                 EditorMode::VerifySave => self.process_verify_save(event),
+                EditorMode::VerifyReload => self.process_verify_reload(event),
                 EditorMode::SelectInside => self.process_select_inside(event),
                 EditorMode::SelectLine { prompt } => {
                     if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
@@ -443,7 +445,19 @@ impl Editor {
                     prompt: Prompt::default(),
                 };
             }
-            key!(ALT, 'o') => self.update_buffer(|b| b.reload()),
+            key!(ALT, 'o') => {
+                if let Some(new_mode) = self.on_buffer(|b| {
+                    if b.modified() {
+                        EditorMode::VerifyReload
+                    } else {
+                        b.reload();
+                        EditorMode::default()
+                    }
+                }) {
+                    self.mode = new_mode;
+                }
+            }
+            // self.update_buffer(|b| b.reload()),
             key!(CONTROL, 'j') => self.update_buffer(|b| b.join_selected_lines()),
             _ => { /* ignore other events */ }
         }
@@ -477,6 +491,23 @@ impl Editor {
             }
             key!('n') => {
                 // cancel save
+                self.mode = EditorMode::default();
+            }
+            _ => { /* ignore other events */ }
+        }
+    }
+
+    fn process_verify_reload(&mut self, event: Event) {
+        use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+        match event {
+            key!('y') => {
+                // reload buffer anyway
+                self.update_buffer(|b| b.reload());
+                self.mode = EditorMode::default();
+            }
+            key!('n') => {
+                // cancel reload
                 self.mode = EditorMode::default();
             }
             _ => { /* ignore other events */ }

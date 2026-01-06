@@ -221,6 +221,19 @@ pub static VERIFY_SAVE: &[Keybinding] = &[
     },
 ];
 
+pub static VERIFY_RELOAD: &[Keybinding] = &[
+    Keybinding {
+        modifier: None,
+        keys: &["Y"],
+        action: "Yes, Overwrite Buffer From Disk",
+    },
+    Keybinding {
+        modifier: None,
+        keys: &["N"],
+        action: "No, Do Not Overwrite",
+    },
+];
+
 pub static CONFIRM_CLOSE: &[Keybinding] = &[
     Keybinding {
         modifier: None,

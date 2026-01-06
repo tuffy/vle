@@ -229,7 +229,8 @@ impl Buffer {
             let mut rope = self.rope.get_mut();
             let len_chars = rope.len_chars();
             if let Some(last_char) = len_chars.checked_sub(1)
-                && rope.get_char(last_char) != Some('\n') {
+                && rope.get_char(last_char) != Some('\n')
+            {
                 rope.insert_char(len_chars, '\n');
             }
             self.source.save_data(&rope)?
@@ -312,6 +313,7 @@ impl BufferContext {
         let mut buf = self.buffer.borrow_mut();
         match buf.reload() {
             Ok(()) => {
+                self.cursor = self.cursor.min(buf.rope.len_chars());
                 self.selection = None;
                 self.message = Some(BufferMessage::Notice("Reloaded".into()));
             }
@@ -1269,7 +1271,7 @@ impl StatefulWidget for BufferWidget<'_> {
     ) {
         use crate::help::{
             CONFIRM_CLOSE, FIND, OPEN_FILE, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE,
-            SELECT_MATCHES, VERIFY_SAVE, render_help,
+            SELECT_MATCHES, VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
         use crate::syntax::Highlighter;
         use ratatui::{
@@ -1698,6 +1700,14 @@ impl StatefulWidget for BufferWidget<'_> {
                     text_area,
                     buf,
                     BufferMessage::Error("Buffer changed on disk. Really save?".into()),
+                );
+            }
+            Some(EditorMode::VerifyReload) => {
+                render_help(text_area, buf, VERIFY_RELOAD, |b| b);
+                render_message(
+                    text_area,
+                    buf,
+                    BufferMessage::Error("Buffer not yet saved. Really reload?".into()),
                 );
             }
             Some(EditorMode::SelectInside) => {
