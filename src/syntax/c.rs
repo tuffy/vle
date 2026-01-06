@@ -19,9 +19,8 @@ enum CToken {
     Variable,
 
     #[token("auto")]
-    #[token("bool")]
-    #[token("char")]
     #[token("const")]
+    #[token("char")]
     #[token("double")]
     #[token("enum")]
     #[token("extern")]
@@ -30,6 +29,7 @@ enum CToken {
     #[token("int")]
     #[token("long")]
     #[token("restrict")]
+    #[token("register")]
     #[token("short")]
     #[token("signed")]
     #[token("sizeof")]
@@ -39,6 +39,7 @@ enum CToken {
     #[token("union")]
     #[token("unsigned")]
     #[token("void")]
+    #[token("volatile")]
     Keyword,
 
     #[token("if")]
@@ -64,7 +65,21 @@ enum CToken {
     #[regex(r#"\"([^\\\"]|\\.)*\""#)]
     String,
 
-    #[regex(r"#[[:blank:]]*(define|include|if(n?def)?|elif|error|warning|pragma|else|endif)")]
+    #[regex(r"0x[0-9a-fA-F]+[uU]?(|ll|LL)?")]
+    #[regex(r"[0-9]+[uU]?(ll|LL)?")]
+    Integer,
+
+    #[token("#define")]
+    #[token("#include")]
+    #[token("#if")]
+    #[token("#ifdef")]
+    #[token("#ifndef")]
+    #[token("#elif")]
+    #[token("#error")]
+    #[token("#warning")]
+    #[token("#pragma")]
+    #[token("#else")]
+    #[token("#endif")]
     Preprocessor,
 }
 
@@ -74,6 +89,7 @@ impl TryFrom<CToken> for Color {
     fn try_from(t: CToken) -> Result<Color, ()> {
         match t {
             CToken::Constant => Ok(Color::Red),
+            CToken::Integer => Ok(Color::Blue),
             CToken::Keyword => Ok(Color::Green),
             CToken::Flowcontrol1 => Ok(Color::LightYellow),
             CToken::Flowcontrol2 => Ok(Color::Magenta),
