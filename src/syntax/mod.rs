@@ -16,6 +16,7 @@ mod makefile;
 mod markdown;
 mod python;
 mod rust;
+mod sql;
 mod xml;
 
 /// Implemented for different syntax highlighters
@@ -76,6 +77,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("md") => Box::new(markdown::Markdown),
         Some("html" | "htm") => Box::new(html::Html),
         Some("xml") => Box::new(xml::Xml),
+        Some("sql") => Box::new(sql::Sql),
         _ => Box::new(DefaultHighlighter),
     }
 }
@@ -90,6 +92,5 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
 // TODO - add perl syntax
 // TODO - add php syntax
 // TODO - add sh syntax
-// TODO - add sql syntax
 // TODO - add tex syntax
 // TODO - add yaml syntax
