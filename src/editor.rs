@@ -457,8 +457,6 @@ impl Editor {
                     self.mode = new_mode;
                 }
             }
-            // self.update_buffer(|b| b.reload()),
-            key!(CONTROL, 'j') => self.update_buffer(|b| b.join_selected_lines()),
             _ => { /* ignore other events */ }
         }
     }

@@ -178,11 +178,6 @@ pub static EDITING: &[Keybinding] = &[
     },
     Keybinding {
         modifier: Some("Ctrl"),
-        keys: &["J"],
-        action: "Join Selected Lines",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
         keys: &["X", "C", "V"],
         action: "Cut / Copy / Paste",
     },

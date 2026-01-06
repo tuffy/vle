@@ -992,25 +992,6 @@ impl BufferContext {
         }
     }
 
-    pub fn join_selected_lines(&mut self) {
-        if let Some(selection) = self.selection {
-            use unicode_width::UnicodeWidthStr;
-
-            let mut buf = self.buffer.borrow_mut();
-            buf.log_undo(self.cursor, self.cursor_column);
-            let mut rope = buf.rope.get_mut();
-            let (start, end) = reorder(self.cursor, selection);
-            let un_joined = rope.slice(start..end).chunks().collect::<String>();
-            let joined = lazy_regex::regex_replace_all!(r"[ \t\r\n]+", &un_joined, |_| " ");
-            let joined_trimmed = joined.trim();
-            rope.remove(start..end);
-            rope.insert(start, joined_trimmed);
-            self.cursor = start + joined_trimmed.width();
-            self.cursor_column = cursor_column(&rope, self.cursor);
-            self.selection = None;
-        }
-    }
-
     pub fn set_error<S: Into<Cow<'static, str>>>(&mut self, err: S) {
         self.message = Some(BufferMessage::Error(err.into()))
     }
