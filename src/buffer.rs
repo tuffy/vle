@@ -1602,8 +1602,8 @@ impl StatefulWidget for BufferWidget<'_> {
             )
             .title_bottom(
                 Line::from(match buffer.rope.try_char_to_line(state.cursor) {
-                    Ok(line) => (line + 1).to_string(),
-                    Err(_) => "???".to_string(),
+                    Ok(line) => format!("{{ {} }}", (line + 1)),
+                    Err(_) => "{{ ??? }}".to_string(),
                 })
                 .centered(),
             );
