@@ -10,6 +10,7 @@ use crate::buffer::Source;
 use ratatui::style::Color;
 
 mod c;
+mod css;
 mod html;
 mod json;
 mod makefile;
@@ -78,12 +79,12 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("html" | "htm") => Box::new(html::Html),
         Some("xml") => Box::new(xml::Xml),
         Some("sql") => Box::new(sql::Sql),
+        Some("css") => Box::new(css::Css),
         _ => Box::new(DefaultHighlighter),
     }
 }
 
 // TODO - add cmake syntax
-// TODO - add css syntax
 // TODO - add go syntax
 // TODO - add java syntax
 // TODO - add javascript syntax
