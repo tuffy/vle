@@ -79,7 +79,7 @@ impl Source {
                     ropey::Rope::from_reader(BufReader::new(f))?,
                 )),
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                    Ok((None, ropey::Rope::default()))
+                    Ok((None, ropey::Rope::from("\n")))
                 }
                 Err(e) => Err(e),
             },
