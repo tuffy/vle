@@ -1309,7 +1309,11 @@ impl StatefulWidget for BufferWidget<'_> {
         }
 
         // Colorize syntax of the given text
-        fn colorize<'s, S: Highlighter>(syntax: &S, text: Cow<'s, str>) -> Vec<Span<'s>> {
+        fn colorize<'s, S: Highlighter>(
+            syntax: &S,
+            text: Cow<'s, str>,
+            current_line: bool,
+        ) -> Vec<Span<'s>> {
             fn colorize_str<'s, S: Highlighter>(syntax: &S, text: &'s str) -> Vec<Span<'s>> {
                 let mut elements = vec![];
                 let mut idx = 0;
@@ -1350,9 +1354,51 @@ impl StatefulWidget for BufferWidget<'_> {
                 elements
             }
 
-            match text {
-                Cow::Borrowed(s) => colorize_str(syntax, s),
-                Cow::Owned(s) => colorize_string(syntax, s),
+            fn highlight_trailing_whitespace(mut colorized: Vec<Span<'_>>) -> Vec<Span<'_>> {
+                fn trim_end(s: &str) -> Result<(&str, &str), &str> {
+                    let trimmed = s.trim_ascii_end();
+                    if trimmed.len() == s.len() {
+                        Err(s)
+                    } else {
+                        Ok((trimmed, &s[trimmed.len()..]))
+                    }
+                }
+
+                if let Some(last) = colorized.last()
+                    && let Ok((non_ws, ws)) = trim_end(&last.content)
+                    && !ws.is_empty()
+                {
+                    let non_ws = Span {
+                        content: Cow::Owned(non_ws.to_string()),
+                        style: last.style,
+                    };
+
+                    let ws = Span {
+                        content: Cow::Owned(ws.to_string()),
+                        style: Style::default()
+                            .fg(Color::Red)
+                            .add_modifier(Modifier::REVERSED),
+                    };
+
+                    colorized.pop();
+                    colorized.push(non_ws);
+                    colorized.push(ws);
+                    colorized
+                } else {
+                    colorized
+                }
+            }
+
+            if current_line {
+                match text {
+                    Cow::Borrowed(s) => colorize_str(syntax, s),
+                    Cow::Owned(s) => colorize_string(syntax, s),
+                }
+            } else {
+                highlight_trailing_whitespace(match text {
+                    Cow::Borrowed(s) => colorize_str(syntax, s),
+                    Cow::Owned(s) => colorize_string(syntax, s),
+                })
             }
         }
 
@@ -1398,7 +1444,7 @@ impl StatefulWidget for BufferWidget<'_> {
             matches: &mut VecDeque<(usize, usize)>,
         ) -> Vec<Span<'s>> {
             // A trivial abstraction to make working
-            // simultaneously with both line and matche ranges
+            // simultaneously with both line and match ranges
             // more intuitive.
             struct IntRange {
                 start: usize,
@@ -1565,8 +1611,9 @@ impl StatefulWidget for BufferWidget<'_> {
 
         block.render(area, buf);
 
-        let viewport_line: usize = rope
-            .try_char_to_line(state.cursor)
+        let current_line = rope.try_char_to_line(state.cursor).ok();
+
+        let viewport_line: usize = current_line
             .map(|line| line.saturating_sub(state.viewport_height / 2))
             .unwrap_or(0);
 
@@ -1582,9 +1629,17 @@ impl StatefulWidget for BufferWidget<'_> {
                         .zip(viewport_line..)
                         .map(
                             |(line, line_number)| match line_char_range(rope, line_number) {
-                                None => Line::from(colorize(syntax, Cow::from(line))),
+                                None => Line::from(colorize(
+                                    syntax,
+                                    Cow::from(line),
+                                    Some(line_number) == current_line,
+                                )),
                                 Some((line_start, line_end)) => highlight_matches(
-                                    colorize(syntax, Cow::from(line)),
+                                    colorize(
+                                        syntax,
+                                        Cow::from(line),
+                                        Some(line_number) == current_line,
+                                    ),
                                     (line_start, line_end),
                                     &mut matches,
                                 )
@@ -1602,10 +1657,18 @@ impl StatefulWidget for BufferWidget<'_> {
                             .zip(viewport_line..)
                             .map(
                                 |(line, line_number)| match line_char_range(rope, line_number) {
-                                    None => Line::from(colorize(syntax, Cow::from(line))),
+                                    None => Line::from(colorize(
+                                        syntax,
+                                        Cow::from(line),
+                                        Some(line_number) == current_line,
+                                    )),
                                     Some((line_start, line_end)) => highlight_selection(
                                         highlight_matches(
-                                            colorize(syntax, Cow::from(line)),
+                                            colorize(
+                                                syntax,
+                                                Cow::from(line),
+                                                Some(line_number) == current_line,
+                                            ),
                                             (line_start, line_end),
                                             &mut matches,
                                         ),
@@ -1625,7 +1688,14 @@ impl StatefulWidget for BufferWidget<'_> {
                     // no selection, so nothing to highlight
                     None => rope
                         .lines_at(viewport_line)
-                        .map(|line| Line::from(colorize(syntax, Cow::from(line))))
+                        .zip(viewport_line..)
+                        .map(|(line, line_number)| {
+                            Line::from(colorize(
+                                syntax,
+                                Cow::from(line),
+                                Some(line_number) == current_line,
+                            ))
+                        })
                         .map(|line| widen_tabs(line, &state.tab_substitution))
                         .take(area.height.into())
                         .collect::<Vec<_>>(),
@@ -1637,9 +1707,17 @@ impl StatefulWidget for BufferWidget<'_> {
                             .zip(viewport_line..)
                             .map(
                                 |(line, line_number)| match line_char_range(rope, line_number) {
-                                    None => Line::from(colorize(syntax, Cow::from(line))),
+                                    None => Line::from(colorize(
+                                        syntax,
+                                        Cow::from(line),
+                                        Some(line_number) == current_line,
+                                    )),
                                     Some((line_start, line_end)) => highlight_selection(
-                                        colorize(syntax, Cow::from(line)),
+                                        colorize(
+                                            syntax,
+                                            Cow::from(line),
+                                            Some(line_number) == current_line,
+                                        ),
                                         (line_start, line_end),
                                         (selection_start, selection_end),
                                     ),
