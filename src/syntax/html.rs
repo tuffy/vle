@@ -12,14 +12,19 @@ use ratatui::style::Color;
 #[derive(Logos, Debug)]
 #[logos(skip r"[ \t\n]+")]
 enum HtmlToken {
-    #[regex("<[[:alpha:]/!?][^>]*>")]
-    Tag,
+    #[regex("<[[:alpha:]][[:alpha:][:digit:]_]*")]
+    TagStart,
+    #[regex("</[[:alpha:]][[:alpha:][:digit:]_]*>")]
+    #[token("/>")]
+    TagEnd,
+    #[regex("[[:alpha:]][[:alpha:][:digit:]_]*\\s*=\\s*")]
+    FieldName,
+    #[regex(r#"\"[^\"]*\""#)]
+    String,
     #[regex("&[^;[:space:]]*;")]
     CharRef,
     #[regex("<!-- .*? -->")]
     Comment,
-    #[regex("</?(b|i|u|em|strong)>", priority = 7)]
-    Important,
 }
 
 impl TryFrom<HtmlToken> for Color {
@@ -27,10 +32,11 @@ impl TryFrom<HtmlToken> for Color {
 
     fn try_from(t: HtmlToken) -> Result<Color, ()> {
         match t {
-            HtmlToken::Tag => Ok(Color::Cyan),
+            HtmlToken::TagStart | HtmlToken::TagEnd => Ok(Color::Cyan),
             HtmlToken::CharRef => Ok(Color::Red),
             HtmlToken::Comment => Ok(Color::Yellow),
-            HtmlToken::Important => Ok(Color::LightMagenta),
+            HtmlToken::FieldName => Ok(Color::Green),
+            HtmlToken::String => Ok(Color::Magenta),
         }
     }
 }
