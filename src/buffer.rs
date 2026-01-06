@@ -79,7 +79,7 @@ impl Source {
                     ropey::Rope::from_reader(BufReader::new(f))?,
                 )),
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                    Ok((None, ropey::Rope::from("\n")))
+                    Ok((None, ropey::Rope::default()))
                 }
                 Err(e) => Err(e),
             },
@@ -221,7 +221,19 @@ impl Buffer {
     }
 
     fn save(&mut self) -> std::io::Result<()> {
-        self.saved = self.source.save_data(&self.rope)?;
+        self.saved = {
+            // if the file is non-empty and doesn't end
+            // with a newline, append one
+            // (needs to be in its own block because we
+            //  have to drop RopeHandle before saving)
+            let mut rope = self.rope.get_mut();
+            let len_chars = rope.len_chars();
+            if let Some(last_char) = len_chars.checked_sub(1)
+                && rope.get_char(last_char) != Some('\n') {
+                rope.insert_char(len_chars, '\n');
+            }
+            self.source.save_data(&rope)?
+        };
         self.rope.save();
         log_movement(&mut self.undo);
         Ok(())
