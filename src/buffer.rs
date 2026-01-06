@@ -1617,14 +1617,18 @@ impl StatefulWidget for BufferWidget<'_> {
             } else {
                 BorderType::Plain
             })
-            .title_top(if buffer.modified() {
-                Line::from(buffer.source.name()).style(Style::default().fg(Color::Blue))
+            .title_top(Line::from(if buffer.modified() {
+                format!("{{ {} * }}", buffer.source.name())
             } else {
-                Line::from(buffer.source.name())
-            })
+                format!("{{ {} }}", buffer.source.name())
+            }))
             .title_top(
-                Line::from(format!("{}/{}", self.buffer_index + 1, self.total_buffers))
-                    .right_aligned(),
+                Line::from(format!(
+                    "{{ {}/{} }}",
+                    self.buffer_index + 1,
+                    self.total_buffers
+                ))
+                .right_aligned(),
             )
             .title_bottom(
                 Line::from(match buffer.rope.try_char_to_line(state.cursor) {
