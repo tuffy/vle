@@ -127,8 +127,8 @@ pub static EDITING: &[Keybinding] = &[
         action: "Open New File",
     },
     Keybinding {
-        modifier: Some("Alt"),
-        keys: &["O"],
+        modifier: Some("Ctrl"),
+        keys: &["R"],
         action: "Reload File",
     },
     Keybinding {
@@ -147,9 +147,9 @@ pub static EDITING: &[Keybinding] = &[
         action: "Save",
     },
     Keybinding {
-        modifier: Some("Alt"),
-        keys: &["S"],
-        action: "Save With New Name",
+        modifier: Some("Ctrl"),
+        keys: &["W"],
+        action: "Write With New Name",
     },
     Keybinding {
         modifier: Some("Ctrl"),

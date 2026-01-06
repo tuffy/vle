@@ -445,7 +445,7 @@ impl Editor {
                     prompt: Prompt::default(),
                 };
             }
-            key!(ALT, 'o') => {
+            key!(CONTROL, 'r') => {
                 if let Some(new_mode) = self.on_buffer(|b| {
                     if b.modified() {
                         EditorMode::VerifyReload
