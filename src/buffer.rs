@@ -1381,7 +1381,9 @@ impl StatefulWidget for BufferWidget<'_> {
                     };
 
                     colorized.pop();
-                    colorized.push(non_ws);
+                    if !non_ws.content.is_empty() {
+                        colorized.push(non_ws);
+                    }
                     colorized.push(ws);
                     colorized
                 } else {
