@@ -18,6 +18,7 @@ use std::time::SystemTime;
 
 pub enum Source {
     File(PathBuf),
+    Tutorial,
 }
 
 impl From<OsString> for Source {
@@ -26,36 +27,32 @@ impl From<OsString> for Source {
     }
 }
 
-impl std::fmt::Display for Source {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::File(pb) => pb.display().fmt(f),
-        }
-    }
-}
-
 impl Source {
     fn source_str(&self) -> Option<&OsStr> {
         match self {
             Self::File(pb) => Some(pb.as_os_str()),
+            Self::Tutorial => None,
         }
     }
 
     fn name(&self) -> Cow<'_, str> {
         match self {
             Self::File(path) => path.to_string_lossy(),
+            Self::Tutorial => "Welcome!".into(),
         }
     }
 
     pub fn file_name(&self) -> Option<Cow<'_, str>> {
         match self {
             Self::File(path) => path.file_name().map(|s| s.to_string_lossy()),
+            Self::Tutorial => None,
         }
     }
 
     pub fn extension(&self) -> Option<&str> {
         match self {
             Self::File(path) => path.extension().and_then(|s| s.to_str()),
+            Self::Tutorial => None,
         }
     }
 
@@ -65,6 +62,10 @@ impl Source {
                 let s = std::fs::read_to_string(path)?;
                 Ok((path.metadata().and_then(|m| m.modified()).ok(), s))
             }
+            Self::Tutorial => Ok((
+                None,
+                include_str!("tutorial.txt").replace("VERSION", env!("CARGO_PKG_VERSION")),
+            )),
         }
     }
 
@@ -83,6 +84,7 @@ impl Source {
                 }
                 Err(e) => Err(e),
             },
+            Self::Tutorial => self.read_string().map(|(t, s)| (t, ropey::Rope::from(s))),
         }
     }
 
@@ -96,12 +98,14 @@ impl Source {
                 f.flush()?;
                 Ok(f.get_mut().metadata().and_then(|m| m.modified()).ok())
             }),
+            Self::Tutorial => Ok(None),
         }
     }
 
     fn last_modified(&self) -> Option<SystemTime> {
         match self {
             Self::File(path) => path.metadata().and_then(|m| m.modified()).ok(),
+            Self::Tutorial => None,
         }
     }
 }
@@ -209,6 +213,20 @@ impl Buffer {
             undo: vec![],
             redo: vec![],
         })
+    }
+
+    fn tutorial() -> Self {
+        Self {
+            rope: ropey::Rope::from(
+                include_str!("tutorial.txt").replace("VERSION", env!("CARGO_PKG_VERSION")),
+            )
+            .into(),
+            saved: None,
+            syntax: Box::new(crate::syntax::DefaultHighlighter),
+            source: Source::Tutorial,
+            undo: vec![],
+            redo: vec![],
+        }
     }
 
     fn reload(&mut self) -> std::io::Result<()> {
@@ -1156,14 +1174,22 @@ pub struct BufferList {
 
 impl BufferList {
     pub fn new(paths: impl IntoIterator<Item = OsString>) -> std::io::Result<Self> {
-        // TODO - if buffers are empty, open an unnamed scratch buffer
-        Ok(Self {
-            buffers: paths
-                .into_iter()
-                .map(|p| Buffer::open(p).map(BufferContext::from))
-                .collect::<Result<_, _>>()?,
-            current: 0,
-        })
+        let buffers = paths
+            .into_iter()
+            .map(|p| Buffer::open(p).map(BufferContext::from))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if buffers.is_empty() {
+            Ok(Self {
+                buffers: vec![Buffer::tutorial().into()],
+                current: 0,
+            })
+        } else {
+            Ok(Self {
+                buffers,
+                current: 0,
+            })
+        }
     }
 
     pub fn is_empty(&self) -> bool {

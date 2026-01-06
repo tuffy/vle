@@ -46,7 +46,7 @@ impl Highlighter for Box<dyn Highlighter> {
 }
 
 #[derive(Debug)]
-struct DefaultHighlighter;
+pub struct DefaultHighlighter;
 
 impl Highlighter for DefaultHighlighter {
     fn highlight<'s>(

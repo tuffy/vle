@@ -1,0 +1,5 @@
+Welcome to the Very Little Editor!
+
+Version: VERSION
+
+Tutorial text to follow.
