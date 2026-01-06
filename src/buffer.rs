@@ -1598,24 +1598,41 @@ impl StatefulWidget for BufferWidget<'_> {
             } else {
                 BorderType::Plain
             })
-            .title_top(Line::from(if buffer.modified() {
-                format!("{{ {} * }}", buffer.source.name())
-            } else {
-                format!("{{ {} }}", buffer.source.name())
-            }))
+            .title_top(Span::styled(
+                if buffer.modified() {
+                    format!("{{ {} * }}", buffer.source.name())
+                } else {
+                    format!("{{ {} }}", buffer.source.name())
+                },
+                if self.mode.is_some() {
+                    Style::default().bold()
+                } else {
+                    Style::default()
+                },
+            ))
             .title_top(
-                Line::from(format!(
-                    "{{ {}/{} }}",
-                    self.buffer_index + 1,
-                    self.total_buffers
+                Line::from(Span::styled(
+                    format!("{{ {}/{} }}", self.buffer_index + 1, self.total_buffers),
+                    if self.mode.is_some() {
+                        Style::default().bold()
+                    } else {
+                        Style::default()
+                    },
                 ))
                 .right_aligned(),
             )
             .title_bottom(
-                Line::from(match buffer.rope.try_char_to_line(state.cursor) {
-                    Ok(line) => format!("{{ {} }}", (line + 1)),
-                    Err(_) => "{{ ??? }}".to_string(),
-                })
+                Line::from(Span::styled(
+                    match buffer.rope.try_char_to_line(state.cursor) {
+                        Ok(line) => format!("{{ {} }}", (line + 1)),
+                        Err(_) => "{{ ??? }}".to_string(),
+                    },
+                    if self.mode.is_some() {
+                        Style::default().bold()
+                    } else {
+                        Style::default()
+                    },
+                ))
                 .centered(),
             );
 
