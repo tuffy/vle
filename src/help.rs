@@ -148,11 +148,6 @@ pub static EDITING: &[Keybinding] = &[
     },
     Keybinding {
         modifier: Some("Ctrl"),
-        keys: &["N"],
-        action: "Write With New Name",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
         keys: &["Q"],
         action: "Quit Buffer",
     },
