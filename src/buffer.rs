@@ -1151,6 +1151,7 @@ impl From<Buffer> for BufferContext {
         let spaces_per_tab: usize = std::env::var("VLE_SPACES_PER_TAB")
             .ok()
             .and_then(|s| s.parse().ok())
+            .filter(|s| (1..=16).contains(s))
             .unwrap_or(4);
 
         Self {
