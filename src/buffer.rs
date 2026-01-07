@@ -1588,6 +1588,22 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
+        fn border_title(title: String, active: bool) -> Line<'static> {
+            if active {
+                Line::from(vec![
+                    Span::raw("\u{252b}"),
+                    Span::styled(title, Style::default().bold()),
+                    Span::raw("\u{2523}"),
+                ])
+            } else {
+                Line::from(vec![
+                    Span::raw("\u{2524}"),
+                    Span::raw(title),
+                    Span::raw("\u{251c}"),
+                ])
+            }
+        }
+
         let buffer = state.buffer.borrow();
         let rope = &buffer.rope;
         let syntax = &buffer.syntax;
@@ -1598,41 +1614,29 @@ impl StatefulWidget for BufferWidget<'_> {
             } else {
                 BorderType::Plain
             })
-            .title_top(Span::styled(
+            .title_top(border_title(
                 if buffer.modified() {
-                    format!("{{ {} * }}", buffer.source.name())
+                    format!("{} *", buffer.source.name())
                 } else {
-                    format!("{{ {} }}", buffer.source.name())
+                    buffer.source.name().to_string()
                 },
-                if self.mode.is_some() {
-                    Style::default().bold()
-                } else {
-                    Style::default()
-                },
+                self.mode.is_some(),
             ))
             .title_top(
-                Line::from(Span::styled(
-                    format!("{{ {}/{} }}", self.buffer_index + 1, self.total_buffers),
-                    if self.mode.is_some() {
-                        Style::default().bold()
-                    } else {
-                        Style::default()
-                    },
-                ))
+                border_title(
+                    format!("{}/{}", self.buffer_index + 1, self.total_buffers),
+                    self.mode.is_some(),
+                )
                 .right_aligned(),
             )
             .title_bottom(
-                Line::from(Span::styled(
+                border_title(
                     match buffer.rope.try_char_to_line(state.cursor) {
-                        Ok(line) => format!("{{ {} }}", (line + 1)),
-                        Err(_) => "{{ ??? }}".to_string(),
+                        Ok(line) => format!("{}", (line + 1)),
+                        Err(_) => "???".to_string(),
                     },
-                    if self.mode.is_some() {
-                        Style::default().bold()
-                    } else {
-                        Style::default()
-                    },
-                ))
+                    self.mode.is_some(),
+                )
                 .centered(),
             );
 
