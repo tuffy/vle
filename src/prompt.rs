@@ -6,35 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[derive(Default)]
-pub struct Prompt {
-    value: Vec<char>,
-}
-
-impl Prompt {
-    pub const MAX_WIDTH: u16 = 30;
-
-    pub fn push(&mut self, c: char) {
-        self.value.push(c)
-    }
-
-    pub fn pop(&mut self) -> Option<char> {
-        self.value.pop()
-    }
-
-    pub fn width(&self) -> u16 {
-        use unicode_width::UnicodeWidthStr;
-
-        self.to_string().width().try_into().unwrap()
-    }
-}
-
-impl std::fmt::Display for Prompt {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.value.iter().try_for_each(|c| c.fmt(f))
-    }
-}
-
 pub struct SearchPrompt {
     value: Vec<char>,
     history: SearchHistory,
@@ -42,6 +13,8 @@ pub struct SearchPrompt {
 }
 
 impl SearchPrompt {
+    pub const MAX_WIDTH: u16 = 30;
+
     pub fn new(history: &SearchHistory) -> Self {
         Self {
             value: vec![],
@@ -246,5 +219,34 @@ impl std::fmt::Display for LinePrompt {
             .iter()
             .copied()
             .try_for_each(|d| (d as usize).fmt(f))
+    }
+}
+
+#[derive(Default)]
+pub struct FilePrompt {
+    value: Vec<char>,
+}
+
+impl FilePrompt {
+    pub const MAX_WIDTH: u16 = 30;
+
+    pub fn push(&mut self, c: char) {
+        self.value.push(c)
+    }
+
+    pub fn pop(&mut self) -> Option<char> {
+        self.value.pop()
+    }
+
+    pub fn width(&self) -> u16 {
+        use unicode_width::UnicodeWidthStr;
+
+        self.to_string().width().try_into().unwrap()
+    }
+}
+
+impl std::fmt::Display for FilePrompt {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.value.iter().try_for_each(|c| c.fmt(f))
     }
 }

@@ -1874,19 +1874,20 @@ impl StatefulWidget for BufferWidget<'_> {
                     .render(line_area, buf);
             }
             Some(EditorMode::Find { prompt, .. }) => {
-                use crate::prompt::Prompt;
+                use crate::prompt::SearchPrompt;
                 use unicode_width::UnicodeWidthStr;
 
                 render_help(text_area, buf, FIND, |b| b);
 
                 let [_, line_area] = Layout::vertical([Min(0), Length(3)]).areas(text_area);
                 let [line_area, _] =
-                    Layout::horizontal([Length(Prompt::MAX_WIDTH + 2), Min(0)]).areas(line_area);
+                    Layout::horizontal([Length(SearchPrompt::MAX_WIDTH + 2), Min(0)])
+                        .areas(line_area);
                 ratatui::widgets::Clear.render(line_area, buf);
                 let prompt = prompt.to_string();
                 let prompt_width = prompt.width() as u16;
                 Paragraph::new(prompt)
-                    .scroll((0, prompt_width.saturating_sub(Prompt::MAX_WIDTH)))
+                    .scroll((0, prompt_width.saturating_sub(SearchPrompt::MAX_WIDTH)))
                     .block(
                         Block::bordered()
                             .border_type(BorderType::Rounded)
@@ -1895,19 +1896,20 @@ impl StatefulWidget for BufferWidget<'_> {
                     .render(line_area, buf);
             }
             Some(EditorMode::Open { prompt }) => {
-                use crate::prompt::Prompt;
+                use crate::prompt::FilePrompt;
                 use unicode_width::UnicodeWidthStr;
 
                 render_help(text_area, buf, OPEN_FILE, |b| b);
 
                 let [_, line_area] = Layout::vertical([Min(0), Length(3)]).areas(text_area);
                 let [line_area, _] =
-                    Layout::horizontal([Length(Prompt::MAX_WIDTH + 2), Min(0)]).areas(line_area);
+                    Layout::horizontal([Length(FilePrompt::MAX_WIDTH + 2), Min(0)])
+                        .areas(line_area);
                 ratatui::widgets::Clear.render(line_area, buf);
                 let prompt = prompt.to_string();
                 let prompt_width = prompt.width() as u16;
                 Paragraph::new(prompt)
-                    .scroll((0, prompt_width.saturating_sub(Prompt::MAX_WIDTH)))
+                    .scroll((0, prompt_width.saturating_sub(FilePrompt::MAX_WIDTH)))
                     .block(
                         Block::bordered()
                             .border_type(BorderType::Rounded)

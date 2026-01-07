@@ -8,7 +8,7 @@
 
 use crate::{
     buffer::{BufferContext, BufferId, BufferList, CutBuffer},
-    prompt::{LinePrompt, Prompt, SearchHistory, SearchPrompt},
+    prompt::{FilePrompt, LinePrompt, SearchHistory, SearchPrompt},
 };
 use crossterm::event::Event;
 use ratatui::{
@@ -45,7 +45,7 @@ pub enum EditorMode {
         match_idx: Option<usize>,
     },
     Open {
-        prompt: Prompt,
+        prompt: FilePrompt,
     },
 }
 
@@ -441,7 +441,7 @@ impl Editor {
             }
             key!(CONTROL, 'o') => {
                 self.mode = EditorMode::Open {
-                    prompt: Prompt::default(),
+                    prompt: FilePrompt::default(),
                 };
             }
             key!(CONTROL, 'r') => {
@@ -606,7 +606,11 @@ fn process_select_line(
     }
 }
 
-fn process_open_file(layout: &mut Layout, prompt: &mut Prompt, event: Event) -> Option<EditorMode> {
+fn process_open_file(
+    layout: &mut Layout,
+    prompt: &mut FilePrompt,
+    event: Event,
+) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
     // TODO - support tab completion
@@ -1014,7 +1018,7 @@ impl Layout {
             (row, col): (usize, usize),
             mode: &EditorMode,
         ) -> Option<Position> {
-            use crate::prompt::Prompt;
+            use crate::prompt::FilePrompt;
             use ratatui::{
                 layout::Constraint::{Length, Min},
                 widgets::Block,
@@ -1032,7 +1036,7 @@ impl Layout {
                     x: text_area.x
                         + prompt
                             .width()
-                            .min(Prompt::MAX_WIDTH)
+                            .min(SearchPrompt::MAX_WIDTH)
                             .min(text_area.width.saturating_sub(2))
                         + 1,
                     y: text_area.y + text_area.height.saturating_sub(2),
@@ -1041,7 +1045,7 @@ impl Layout {
                     x: text_area.x
                         + prompt
                             .width()
-                            .min(Prompt::MAX_WIDTH)
+                            .min(FilePrompt::MAX_WIDTH)
                             .min(text_area.width.saturating_sub(2))
                         + 1,
                     y: text_area.y + text_area.height.saturating_sub(2),
