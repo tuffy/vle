@@ -64,7 +64,7 @@ impl Source {
             }
             Self::Tutorial => Ok((
                 None,
-                include_str!("tutorial.txt").replace("VERSION", env!("CARGO_PKG_VERSION")),
+                include_str!("tutorial.txt").replacen("VERSION", env!("CARGO_PKG_VERSION"), 1),
             )),
         }
     }
@@ -217,9 +217,11 @@ impl Buffer {
 
     fn tutorial() -> Self {
         Self {
-            rope: ropey::Rope::from(
-                include_str!("tutorial.txt").replace("VERSION", env!("CARGO_PKG_VERSION")),
-            )
+            rope: ropey::Rope::from(include_str!("tutorial.txt").replacen(
+                "VERSION",
+                env!("CARGO_PKG_VERSION"),
+                1,
+            ))
             .into(),
             saved: None,
             syntax: Box::new(crate::syntax::DefaultHighlighter),
