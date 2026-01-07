@@ -148,7 +148,7 @@ pub static EDITING: &[Keybinding] = &[
     },
     Keybinding {
         modifier: Some("Ctrl"),
-        keys: &["W"],
+        keys: &["N"],
         action: "Write With New Name",
     },
     Keybinding {

@@ -423,7 +423,9 @@ impl Editor {
                     self.mode = EditorMode::VerifySave;
                 }
             }
-            // key!(ALT, 's') => TODO - prompt for new name for buffer and save
+            key!(CONTROL, 'n') => {
+                self.update_buffer(|b| b.set_error("write buffer with new name"));
+            }
             key!(Tab) => self.update_buffer(|b| b.indent()),
             key!(SHIFT, BackTab) => self.update_buffer(|b| b.un_indent()),
             key!(CONTROL, 'p') => self.update_buffer(|b| b.select_matching_paren()),
