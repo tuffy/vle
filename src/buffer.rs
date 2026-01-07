@@ -912,7 +912,14 @@ impl BufferContext {
 
         // combine rope or rope slice into unified String
         let (whole, byte_offset) = match self.selection {
-            None => (rope.chunks().collect::<String>(), 0),
+            None => (
+                rope.chunks()
+                    .fold(String::with_capacity(rope.len_bytes()), |mut acc, s| {
+                        acc.push_str(s);
+                        acc
+                    }),
+                0,
+            ),
             Some(selection) => {
                 let (start, end) = reorder(self.cursor, selection);
                 (
@@ -2040,7 +2047,13 @@ fn patch_rope(source: &mut ropey::Rope, target: String) {
         }
     }
 
-    let source_str = source.chunks().collect::<String>();
+    let source_str =
+        source
+            .chunks()
+            .fold(String::with_capacity(source.len_bytes()), |mut acc, s| {
+                acc.push_str(s);
+                acc
+            });
 
     let hunks = Diff::compute(Histogram, &InternedInput::new(source_str.as_str(), &target))
         .hunks()
