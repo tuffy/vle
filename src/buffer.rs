@@ -496,7 +496,14 @@ impl BufferContext {
                 selection,
             );
         }
-        rope.insert_char(self.cursor, c);
+        match c {
+            '(' => rope.insert(self.cursor, "()"),
+            '[' => rope.insert(self.cursor, "[]"),
+            '{' => rope.insert(self.cursor, "{}"),
+            '<' => rope.insert(self.cursor, "<>"),
+            '"' => rope.insert(self.cursor, "\"\""),
+            c => rope.insert_char(self.cursor, c),
+        }
         self.cursor += 1;
         self.cursor_column += 1;
     }
@@ -562,11 +569,26 @@ impl BufferContext {
         match self.selection.take() {
             None => {
                 if let Some(prev) = self.cursor.checked_sub(1)
-                    && rope.try_remove(prev..self.cursor).is_ok()
+                    && match rope.get_char(prev) {
+                        Some('(') if rope.get_char(self.cursor) == Some(')') => {
+                            rope.try_remove(prev..=self.cursor).is_ok()
+                        }
+                        Some('[') if rope.get_char(self.cursor) == Some(']') => {
+                            rope.try_remove(prev..=self.cursor).is_ok()
+                        }
+                        Some('{') if rope.get_char(self.cursor) == Some('}') => {
+                            rope.try_remove(prev..=self.cursor).is_ok()
+                        }
+                        Some('<') if rope.get_char(self.cursor) == Some('>') => {
+                            rope.try_remove(prev..=self.cursor).is_ok()
+                        }
+                        Some('"') if rope.get_char(self.cursor) == Some('"') => {
+                            rope.try_remove(prev..=self.cursor).is_ok()
+                        }
+                        _ => rope.try_remove(prev..self.cursor).is_ok(),
+                    }
                 {
                     self.cursor -= 1;
-                    // we need to recalculate the cursor column
-                    // in case a newline has been removed
                     self.cursor_column = cursor_column(&rope, self.cursor);
                 }
             }
