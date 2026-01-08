@@ -28,6 +28,7 @@ impl From<OsString> for Source {
 }
 
 impl Source {
+    /// Used to determine if an input file is a duplicate
     fn source_str(&self) -> Option<&OsStr> {
         match self {
             Self::File(pb) => Some(pb.as_os_str()),
@@ -35,6 +36,7 @@ impl Source {
         }
     }
 
+    /// Used to display in the title
     fn name(&self) -> Cow<'_, str> {
         match self {
             Self::File(path) => path.to_string_lossy(),
@@ -42,6 +44,7 @@ impl Source {
         }
     }
 
+    /// Used to determine syntax highlighting
     pub fn file_name(&self) -> Option<Cow<'_, str>> {
         match self {
             Self::File(path) => path.file_name().map(|s| s.to_string_lossy()),
@@ -49,6 +52,7 @@ impl Source {
         }
     }
 
+    /// Also used to determine syntax highlighting
     pub fn extension(&self) -> Option<&str> {
         match self {
             Self::File(path) => path.extension().and_then(|s| s.to_str()),
@@ -56,6 +60,7 @@ impl Source {
         }
     }
 
+    /// Used for file reloading
     fn read_string(&self) -> std::io::Result<(Option<SystemTime>, String)> {
         match self {
             Self::File(path) => {
@@ -69,6 +74,7 @@ impl Source {
         }
     }
 
+    /// Used for file loading (can be based on read_string)
     fn read_data(&self) -> std::io::Result<(Option<SystemTime>, ropey::Rope)> {
         use std::fs::File;
         use std::io::BufReader;
@@ -88,6 +94,7 @@ impl Source {
         }
     }
 
+    /// Used for file saving
     fn save_data(&self, data: &ropey::Rope) -> std::io::Result<Option<SystemTime>> {
         use std::fs::File;
         use std::io::{BufWriter, Write};
@@ -102,6 +109,7 @@ impl Source {
         }
     }
 
+    /// Used for the "buffer changed on disk" warning
     fn last_modified(&self) -> Option<SystemTime> {
         match self {
             Self::File(path) => path.metadata().and_then(|m| m.modified()).ok(),
