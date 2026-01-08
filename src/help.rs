@@ -142,6 +142,11 @@ pub static EDITING: &[Keybinding] = &[
         action: "Open / Switch Pane",
     },
     Keybinding {
+        modifier: None,
+        keys: &["F2"],
+        action: "Swap Panes",
+    },
+    Keybinding {
         modifier: Some("Ctrl"),
         keys: &["S"],
         action: "Save",
