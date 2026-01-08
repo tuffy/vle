@@ -41,13 +41,11 @@ impl StatefulWidget for FileChooser {
             .border_type(BorderType::Thick)
             .title_top(Line::from(vec![
                 Span::raw("\u{252b}"),
-                Span::styled("Open File(s)", Style::default().bold()),
+                Span::styled(state.dir.display().to_string(), Style::default().bold()),
                 Span::raw("\u{2523}"),
             ]));
 
         ratatui::widgets::Clear.render(area, buf);
-
-        // TODO - list current directory somewhere
 
         let [top_area, list_area] = Layout::vertical([Length(3), Min(0)]).areas(block.inner(area));
 
@@ -93,6 +91,7 @@ impl StatefulWidget for FileChooser {
                     }
                 })),
             })
+            .scroll_padding(10)
             .highlight_style(Style::default().add_modifier(Modifier::REVERSED)),
             list_area,
             buf,
