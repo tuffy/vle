@@ -12,6 +12,7 @@
 
 mod buffer;
 mod editor;
+mod files;
 mod help;
 mod prompt;
 mod syntax;

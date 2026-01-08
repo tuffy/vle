@@ -1289,7 +1289,7 @@ impl BufferList {
 }
 
 pub struct BufferWidget<'e> {
-    pub mode: Option<&'e EditorMode>,
+    pub mode: Option<&'e mut EditorMode>,
     pub show_help: bool,
     pub buffer_index: usize,
     pub total_buffers: usize,
@@ -1305,8 +1305,8 @@ impl StatefulWidget for BufferWidget<'_> {
         state: &mut BufferContext,
     ) {
         use crate::help::{
-            CONFIRM_CLOSE, FIND, OPEN_FILE, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE,
-            SELECT_MATCHES, VERIFY_RELOAD, VERIFY_SAVE, render_help,
+            CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE, SELECT_MATCHES,
+            VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
         use crate::syntax::Highlighter;
         use ratatui::{
@@ -1632,6 +1632,14 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
+        if let Some(EditorMode::Open { chooser }) = self.mode {
+            // file selection mode overrides main editing mode
+            use crate::files::FileChooser;
+
+            FileChooser.render(area, buf, chooser);
+            return;
+        }
+
         let buffer = state.buffer.borrow();
         let rope = &buffer.rope;
         let syntax = &buffer.syntax;
@@ -1891,34 +1899,13 @@ impl StatefulWidget for BufferWidget<'_> {
                     )
                     .render(line_area, buf);
             }
-            Some(EditorMode::Open { prompt }) => {
-                use crate::prompt::FilePrompt;
-                use unicode_width::UnicodeWidthStr;
-
-                render_help(text_area, buf, OPEN_FILE, |b| b);
-
-                let [_, line_area] = Layout::vertical([Min(0), Length(3)]).areas(text_area);
-                let [line_area, _] =
-                    Layout::horizontal([Length(FilePrompt::MAX_WIDTH + 2), Min(0)])
-                        .areas(line_area);
-                ratatui::widgets::Clear.render(line_area, buf);
-                let prompt = prompt.to_string();
-                let prompt_width = prompt.width() as u16;
-                Paragraph::new(prompt)
-                    .scroll((0, prompt_width.saturating_sub(FilePrompt::MAX_WIDTH)))
-                    .block(
-                        Block::bordered()
-                            .border_type(BorderType::Rounded)
-                            .title("Open File"),
-                    )
-                    .render(line_area, buf);
-            }
+            Some(EditorMode::Open { .. }) => { /* already handled, above */ }
             Some(EditorMode::SelectMatches {
                 matches, match_idx, ..
             }) => {
                 render_help(text_area, buf, SELECT_MATCHES, |block| {
                     block.title(match match_idx {
-                        Some(idx) => Cow::from(format!("Match {} / {}", idx + 1, matches.len())),
+                        Some(idx) => Cow::from(format!("Match {} / {}", *idx + 1, matches.len())),
                         None => match matches.len() {
                             1 => "1 Match".into(),
                             n => format!("{n} Matches").into(),
@@ -1930,7 +1917,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 render_help(text_area, buf, REPLACE_MATCHES, |block| {
                     block.title(match match_idx {
                         Some(idx) => {
-                            Cow::from(format!("Replacement {} / {}", idx + 1, matches.len()))
+                            Cow::from(format!("Replacement {} / {}", *idx + 1, matches.len()))
                         }
                         None => match matches.len() {
                             1 => "1 Replacement".into(),

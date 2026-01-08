@@ -221,32 +221,3 @@ impl std::fmt::Display for LinePrompt {
             .try_for_each(|d| (d as usize).fmt(f))
     }
 }
-
-#[derive(Default)]
-pub struct FilePrompt {
-    value: Vec<char>,
-}
-
-impl FilePrompt {
-    pub const MAX_WIDTH: u16 = 30;
-
-    pub fn push(&mut self, c: char) {
-        self.value.push(c)
-    }
-
-    pub fn pop(&mut self) -> Option<char> {
-        self.value.pop()
-    }
-
-    pub fn width(&self) -> u16 {
-        use unicode_width::UnicodeWidthStr;
-
-        self.to_string().width().try_into().unwrap()
-    }
-}
-
-impl std::fmt::Display for FilePrompt {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.value.iter().try_for_each(|c| c.fmt(f))
-    }
-}

@@ -8,7 +8,8 @@
 
 use crate::{
     buffer::{BufferContext, BufferId, BufferList, CutBuffer},
-    prompt::{FilePrompt, LinePrompt, SearchHistory, SearchPrompt},
+    files::FileChooserState,
+    prompt::{LinePrompt, SearchHistory, SearchPrompt},
 };
 use crossterm::event::Event;
 use ratatui::{
@@ -45,7 +46,7 @@ pub enum EditorMode {
         match_idx: Option<usize>,
     },
     Open {
-        prompt: FilePrompt,
+        chooser: FileChooserState,
     },
 }
 
@@ -193,8 +194,8 @@ impl Editor {
                         self.mode = new_mode;
                     }
                 }
-                EditorMode::Open { prompt } => {
-                    if let Some(new_mode) = process_open_file(&mut self.layout, prompt, event) {
+                EditorMode::Open { chooser } => {
+                    if let Some(new_mode) = process_open_file(&mut self.layout, chooser, event) {
                         self.mode = new_mode;
                     }
                 }
@@ -469,11 +470,12 @@ impl Editor {
                     prompt: SearchPrompt::new(&self.search_history),
                 };
             }
-            key!(CONTROL, 'o') => {
-                self.mode = EditorMode::Open {
-                    prompt: FilePrompt::default(),
-                };
-            }
+            key!(CONTROL, 'o') => match FileChooserState::new() {
+                Ok(chooser) => self.mode = EditorMode::Open { chooser },
+                Err(err) => {
+                    self.update_buffer(|b| b.set_error(err.to_string()));
+                }
+            },
             key!(CONTROL, 'r') => {
                 if let Some(new_mode) = self.on_buffer(|b| {
                     if b.modified() {
@@ -638,30 +640,53 @@ fn process_select_line(
 
 fn process_open_file(
     layout: &mut Layout,
-    prompt: &mut FilePrompt,
+    chooser: &mut FileChooserState,
     event: Event,
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-    // TODO - support tab completion
     match event {
+        key!(Up) => {
+            chooser.arrow_up();
+            None
+        }
+        key!(Down) => {
+            chooser.arrow_down();
+            None
+        }
+        key!(Left) => {
+            chooser.arrow_left();
+            None
+        }
+        key!(Right) => {
+            chooser.arrow_right();
+            None
+        }
         Event::Key(KeyEvent {
             code: KeyCode::Char(c),
             modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
             kind: KeyEventKind::Press,
             ..
         }) => {
-            prompt.push(c);
+            chooser.push(c);
             None
         }
         key!(Backspace) => {
-            prompt.pop();
+            chooser.pop();
             None
         }
-        key!(Enter) => layout
-            .add(prompt.to_string().into())
-            .map(|()| EditorMode::default())
-            .ok(),
+        key!(CONTROL, 't') => {
+            chooser.toggle_selected();
+            None
+        }
+        key!(Enter) => {
+            for selected in chooser.select()? {
+                if let Err(()) = layout.add(selected.into()) {
+                    return None;
+                }
+            }
+            Some(EditorMode::default())
+        }
         _ => None, // ignore other events
     }
 }
@@ -1048,7 +1073,6 @@ impl Layout {
             (row, col): (usize, usize),
             mode: &EditorMode,
         ) -> Option<Position> {
-            use crate::prompt::FilePrompt;
             use ratatui::{
                 layout::Constraint::{Length, Min},
                 widgets::Block,
@@ -1071,15 +1095,17 @@ impl Layout {
                         + 1,
                     y: text_area.y + text_area.height.saturating_sub(2),
                 }),
-                EditorMode::Open { prompt } => Some(Position {
-                    x: text_area.x
-                        + prompt
-                            .width()
-                            .min(FilePrompt::MAX_WIDTH)
-                            .min(text_area.width.saturating_sub(2))
-                        + 1,
-                    y: text_area.y + text_area.height.saturating_sub(2),
-                }),
+                // TODO - get cursor position from file chooser
+                EditorMode::Open { .. } => None,
+                //EditorMode::Open { prompt } => Some(Position {
+                //    x: text_area.x
+                //        + prompt
+                //            .width()
+                //            .min(FilePrompt::MAX_WIDTH)
+                //            .min(text_area.width.saturating_sub(2))
+                //        + 1,
+                //    y: text_area.y + text_area.height.saturating_sub(2),
+                //}),
                 _ => {
                     let x = (col + usize::from(text_area.x))
                         .min((text_area.x + text_area.width).into());
