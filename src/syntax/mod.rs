@@ -16,6 +16,7 @@ mod js;
 mod json;
 mod makefile;
 mod markdown;
+mod php;
 mod python;
 mod rust;
 mod sql;
@@ -82,6 +83,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("sql") => Box::new(sql::Sql),
         Some("css") => Box::new(css::Css),
         Some("js") => Box::new(js::JavaScript),
+        Some("php") => Box::new(php::Php),
         _ => Box::new(DefaultHighlighter),
     }
 }
@@ -92,7 +94,6 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
 // TODO - add lua syntax
 // TODO - add patch syntax
 // TODO - add perl syntax
-// TODO - add php syntax
 // TODO - add sh syntax
 // TODO - add tex syntax
 // TODO - add yaml syntax
