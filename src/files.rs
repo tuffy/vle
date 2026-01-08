@@ -64,14 +64,26 @@ impl StatefulWidget for FileChooser {
                         .title("Filename"),
                 )
                 .render(text_area, buf),
-            // TODO - scroll filename if it gets too long
-            Chosen::New(filename) => Paragraph::new(filename.iter().copied().collect::<String>())
-                .block(
-                    Block::bordered()
-                        .border_type(BorderType::Rounded)
-                        .title("Filename"),
-                )
-                .render(text_area, buf),
+            Chosen::New(filename) => {
+                use unicode_width::UnicodeWidthStr;
+
+                let filename = filename.iter().copied().collect::<String>();
+                let filename_width = filename.width();
+                Paragraph::new(filename)
+                    .scroll((
+                        0,
+                        filename_width
+                            .saturating_sub(FileChooserState::TEXT_WIDTH.into())
+                            .try_into()
+                            .unwrap(),
+                    ))
+                    .block(
+                        Block::bordered()
+                            .border_type(BorderType::Rounded)
+                            .title("Filename"),
+                    )
+                    .render(text_area, buf)
+            }
             Chosen::Selected(items) => Paragraph::new(match items.len() {
                 1 => Cow::Borrowed("1 File Selected"),
                 n => Cow::Owned(format!("{n} Files Selected")),
