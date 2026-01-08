@@ -502,7 +502,6 @@ impl BufferContext {
             '(' => rope.insert(self.cursor, "()"),
             '[' => rope.insert(self.cursor, "[]"),
             '{' => rope.insert(self.cursor, "{}"),
-            '<' => rope.insert(self.cursor, "<>"),
             '"' => rope.insert(self.cursor, "\"\""),
             c => rope.insert_char(self.cursor, c),
         }
@@ -579,9 +578,6 @@ impl BufferContext {
                             rope.try_remove(prev..=self.cursor).is_ok()
                         }
                         Some('{') if rope.get_char(self.cursor) == Some('}') => {
-                            rope.try_remove(prev..=self.cursor).is_ok()
-                        }
-                        Some('<') if rope.get_char(self.cursor) == Some('>') => {
                             rope.try_remove(prev..=self.cursor).is_ok()
                         }
                         Some('"') if rope.get_char(self.cursor) == Some('"') => {
