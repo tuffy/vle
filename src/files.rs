@@ -14,6 +14,7 @@ impl StatefulWidget for FileChooser {
         state: &mut FileChooserState,
     ) {
         use crate::buffer::{BufferMessage, render_message};
+        use crate::help::{OPEN_FILE, render_help};
         use ratatui::{
             layout::{
                 Constraint::{Length, Min},
@@ -98,7 +99,8 @@ impl StatefulWidget for FileChooser {
                 .position(state.selected_entry().unwrap_or_default()),
         );
 
-        // TODO - display help popup in lower right
+        render_help(list_area, buf, OPEN_FILE, |b| b);
+
         if let Some(error) = state.error.take() {
             render_message(list_area, buf, BufferMessage::Error(error.into()));
         }

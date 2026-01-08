@@ -293,11 +293,33 @@ pub static SELECT_LINE: &[Keybinding] = &[
     },
 ];
 
-pub static OPEN_FILE: &[Keybinding] = &[Keybinding {
-    modifier: None,
-    keys: &["Enter"],
-    action: "Select File",
-}];
+pub static OPEN_FILE: &[Keybinding] = &[
+    Keybinding {
+        modifier: None,
+        keys: &[DOWN, UP],
+        action: "Navigate Entries",
+    },
+    Keybinding {
+        modifier: None,
+        keys: &[LEFT],
+        action: "Up Directory",
+    },
+    Keybinding {
+        modifier: None,
+        keys: &[RIGHT],
+        action: "Down Directory",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["T"],
+        action: "Toggle File to Open",
+    },
+    Keybinding {
+        modifier: None,
+        keys: &["Enter"],
+        action: "Select File(s)",
+    },
+];
 
 pub static FIND: &[Keybinding] = &[
     Keybinding {
