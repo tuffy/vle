@@ -1295,6 +1295,10 @@ pub struct BufferWidget<'e> {
     pub total_buffers: usize,
 }
 
+impl BufferWidget<'_> {
+    pub const RIGHT_MARGIN: u16 = 5;
+}
+
 impl StatefulWidget for BufferWidget<'_> {
     type State = BufferContext;
 
@@ -1803,7 +1807,7 @@ impl StatefulWidget for BufferWidget<'_> {
         .scroll((
             0,
             cursor_column(rope, state.cursor)
-                .saturating_sub(text_area.width.into())
+                .saturating_sub(text_area.width.saturating_sub(Self::RIGHT_MARGIN).into())
                 .try_into()
                 .unwrap_or(0),
         ))

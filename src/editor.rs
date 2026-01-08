@@ -1119,8 +1119,13 @@ impl Layout {
                     })
                 }
                 _ => {
-                    let x = (col + usize::from(text_area.x))
-                        .min((text_area.x + text_area.width).into());
+                    let x = (col + usize::from(text_area.x)).min(
+                        (text_area.x
+                            + text_area
+                                .width
+                                .saturating_sub(crate::buffer::BufferWidget::RIGHT_MARGIN))
+                        .into(),
+                    );
                     let y = (row + usize::from(text_area.y))
                         .min((text_area.y + text_area.height).into());
 
