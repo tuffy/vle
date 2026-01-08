@@ -109,6 +109,7 @@ pub struct FileChooserState {
 
 impl FileChooserState {
     const TEXT_WIDTH: u16 = 30;
+    const PAGE_SIZE: usize = 10;
 
     /// May return an error if unable to get the current
     /// working directory or are unable to read it
@@ -160,6 +161,35 @@ impl FileChooserState {
             Some(i) => Some(i + 1),
         })
         .and_then(|i| i.checked_rem(max_index(&self.chosen, &self.contents, self.dir_count)));
+    }
+
+    pub fn page_up(&mut self) {
+        self.index = (match self.index {
+            None => Some(0),
+            Some(idx) => Some(idx.saturating_sub(Self::PAGE_SIZE)),
+        })
+        .filter(|i| *i < max_index(&self.chosen, &self.contents, self.dir_count))
+    }
+
+    pub fn page_down(&mut self) {
+        self.index = match max_index(&self.chosen, &self.contents, self.dir_count) {
+            0 => None,
+            max => match self.index {
+                None => Some(Self::PAGE_SIZE.min(max - 1)),
+                Some(idx) => Some((idx + Self::PAGE_SIZE).min(max - 1)),
+            },
+        }
+    }
+
+    pub fn home(&mut self) {
+        self.index = match max_index(&self.chosen, &self.contents, self.dir_count) {
+            0 => None,
+            _ => Some(0),
+        }
+    }
+
+    pub fn end(&mut self) {
+        self.index = max_index(&self.chosen, &self.contents, self.dir_count).checked_sub(1);
     }
 
     pub fn arrow_right(&mut self) {
@@ -265,8 +295,6 @@ impl FileChooserState {
     }
 }
 
-// TODO - support home
-// TODO - support end
 // TODO - support indicating cursor position
 
 fn max_index(chosen: &Chosen, contents: &[Entry], dir_count: usize) -> usize {

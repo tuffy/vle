@@ -654,6 +654,22 @@ fn process_open_file(
             chooser.arrow_down();
             None
         }
+        key!(Home) => {
+            chooser.home();
+            None
+        }
+        key!(End) => {
+            chooser.end();
+            None
+        }
+        key!(PageUp) => {
+            chooser.page_up();
+            None
+        }
+        key!(PageDown) => {
+            chooser.page_down();
+            None
+        }
         key!(Left) => {
             chooser.arrow_left();
             None
