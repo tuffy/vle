@@ -1111,17 +1111,13 @@ impl Layout {
                         + 1,
                     y: text_area.y + text_area.height.saturating_sub(2),
                 }),
-                // TODO - get cursor position from file chooser
-                EditorMode::Open { .. } => None,
-                //EditorMode::Open { prompt } => Some(Position {
-                //    x: text_area.x
-                //        + prompt
-                //            .width()
-                //            .min(FilePrompt::MAX_WIDTH)
-                //            .min(text_area.width.saturating_sub(2))
-                //        + 1,
-                //    y: text_area.y + text_area.height.saturating_sub(2),
-                //}),
+                EditorMode::Open { chooser } => {
+                    let (x, y) = chooser.cursor_position();
+                    Some(Position {
+                        x: text_area.x + x,
+                        y: text_area.y + y,
+                    })
+                }
                 _ => {
                     let x = (col + usize::from(text_area.x))
                         .min((text_area.x + text_area.width).into());

@@ -325,9 +325,20 @@ impl FileChooserState {
             ),
         }
     }
-}
 
-// TODO - support indicating cursor position
+    pub fn cursor_position(&self) -> (u16, u16) {
+        use unicode_width::UnicodeWidthStr;
+
+        match &self.chosen {
+            Chosen::Default => (1, 1),
+            Chosen::New(filename) => (
+                1u16 + (filename.iter().collect::<String>().width() as u16).min(Self::TEXT_WIDTH),
+                1,
+            ),
+            Chosen::Selected(_) => (0, self.index.map(|idx| 3u16 + idx as u16).unwrap_or(1)),
+        }
+    }
+}
 
 fn max_index(chosen: &Chosen, contents: &[Entry], dir_count: usize) -> usize {
     match chosen {
