@@ -488,6 +488,9 @@ impl Editor {
                     self.mode = new_mode;
                 }
             }
+            Event::Paste(pasted) => {
+                self.on_buffer(|b| b.paste(&pasted.into()));
+            }
             _ => { /* ignore other events */ }
         }
     }

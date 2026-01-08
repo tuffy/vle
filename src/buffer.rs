@@ -1989,6 +1989,17 @@ impl From<ropey::RopeSlice<'_>> for CutBuffer {
     }
 }
 
+impl From<String> for CutBuffer {
+    fn from(data: String) -> Self {
+        use unicode_width::UnicodeWidthStr;
+
+        Self {
+            chars_len: data.width(),
+            data,
+        }
+    }
+}
+
 /// Buffer's undo/redo state
 struct BufferState {
     rope: ropey::Rope,
