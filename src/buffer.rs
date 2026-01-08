@@ -1934,7 +1934,7 @@ impl StatefulWidget for BufferWidget<'_> {
     }
 }
 
-fn render_message(
+pub fn render_message(
     area: ratatui::layout::Rect,
     buf: &mut ratatui::buffer::Buffer,
     message: BufferMessage,
@@ -1996,7 +1996,7 @@ fn log_movement(undo: &mut [Undo]) {
 }
 
 #[derive(Clone)]
-enum BufferMessage {
+pub enum BufferMessage {
     Notice(Cow<'static, str>),
     Error(Cow<'static, str>),
 }

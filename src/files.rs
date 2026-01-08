@@ -13,6 +13,7 @@ impl StatefulWidget for FileChooser {
         buf: &mut ratatui::buffer::Buffer,
         state: &mut FileChooserState,
     ) {
+        use crate::buffer::{BufferMessage, render_message};
         use ratatui::{
             layout::{
                 Constraint::{Length, Min},
@@ -36,6 +37,9 @@ impl StatefulWidget for FileChooser {
             ]));
 
         ratatui::widgets::Clear.render(area, buf);
+
+        // TODO - list current directory somewhere
+
         let [top_area, list_area] = Layout::vertical([Length(3), Min(0)]).areas(block.inner(area));
 
         let [list_area, scrollbar_area] = Layout::horizontal([Min(0), Length(1)]).areas(list_area);
@@ -44,6 +48,7 @@ impl StatefulWidget for FileChooser {
 
         let [text_area, _] =
             Layout::horizontal([Length(FileChooserState::TEXT_WIDTH + 2), Min(0)]).areas(top_area);
+
         match &state.chosen {
             Chosen::Default => Paragraph::new("")
                 .block(
@@ -94,17 +99,20 @@ impl StatefulWidget for FileChooser {
         );
 
         // TODO - display help popup in lower right
-        // TODO - display error message in center, if any
+        if let Some(error) = state.error.take() {
+            render_message(list_area, buf, BufferMessage::Error(error.into()));
+        }
     }
 }
 
 pub struct FileChooserState {
-    cwd: PathBuf,         // editor's current working directory
-    dir: PathBuf,         // directory we've navigated to
-    contents: Vec<Entry>, // directory entry
-    dir_count: usize,     // number of directories in contents
-    index: Option<usize>, // index in directory entries
-    chosen: Chosen,       // either new file or chosen entries
+    cwd: PathBuf,          // editor's current working directory
+    dir: PathBuf,          // directory we've navigated to
+    contents: Vec<Entry>,  // directory entry
+    dir_count: usize,      // number of directories in contents
+    index: Option<usize>,  // index in directory entries
+    chosen: Chosen,        // either new file or chosen entries
+    error: Option<String>, // error message
 }
 
 impl FileChooserState {
@@ -123,6 +131,7 @@ impl FileChooserState {
             cwd,
             index: None,
             chosen: Chosen::default(),
+            error: None,
         })
     }
 
@@ -134,7 +143,9 @@ impl FileChooserState {
                 self.index = None;
                 self.dir = new_dir;
             }
-            Err(_) => todo!(), // indicate error in widget
+            Err(err) => {
+                self.error = Some(err.to_string());
+            }
         }
     }
 
