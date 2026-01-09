@@ -26,15 +26,15 @@ and issuing commands to edit text.
 This means we use the arrow keys (← ↓ ↑ →) along with
 PgUp, PgDn, Home and End to move the cursor around.
 The arrows move the cursor one character at a time in
-the indicated direction.  PgUp and PgDn move the cursor
-up and down several rows, respectively.  And lastly,
+the indicated direction. PgUp and PgDn move the cursor
+up and down several rows, respectively. And lastly,
 Home and End move the cursor to the beginning and end of the
 line, respectively.
 
 As you move the cursor downward, you'll notice the viewport
 shifts text as needed so as to always keep it centered
 vertically on your screen once you're no longer at the
-beginning of the file.  This makes it easy for your eyes
+beginning of the file. This makes it easy for your eyes
 to locate it, and eliminates the need for separate keys
 to adjust the viewport's position around your cursor.
 
@@ -53,7 +53,7 @@ and then type in the remaining text to match the line below it.
 ## Deleting Text
 
 Removing text is accomplished with the Backspace and Del
-keys.  Backspace removes one character to the left
+keys. Backspace removes one character to the left
 of the cursor, while Del removes one character to the right.
 
 In this first example, move your cursor to the line marked
@@ -74,8 +74,8 @@ marker, and then repeatedly Del until it matches the line below it.
 ## Saving Your File
 
 As you've made changes to this buffer, you'll notice an
-asterisk (*) next to its title at the top.  This indicates
-the buffer has unsaved changes.  Ctrl-S saves the current file.
+asterisk (*) next to its title at the top. This indicates
+the buffer has unsaved changes. Ctrl-S saves the current file.
 Go ahead and try it now (this tutorial buffer is special
 and isn't actually written to disk, but will behave as if it was).
 Once saved, the asterisk will disappear until the next change is made.
@@ -116,7 +116,7 @@ handy "enveloped items" mode for dealing with it.
 When no selection is active, Ctrl-E will prompt
 for which pair of characters we want to select inside of.
 Once a selection is active, we can cut or copy it
-like any other selection.  Or, we may even simply
+like any other selection. Or, we may even simply
 start typing new text to delete the selection and replace
 it with what we've typed.
 
@@ -131,7 +131,7 @@ we want instead.
 
 If a selection is active, Ctrl-E will instead prompt
 for which pair of characters we want to surround the
-selection with.  This will add the appropriate
+selection with. This will add the appropriate
 pair to each side of the selection while keeping
 the selection active.
 
@@ -150,7 +150,7 @@ set of surrounding characters.
 
 Try moving your cursor inside the parenthesized text
 (again, it doesn't matter where), use Ctrl-E then (
-to select inside the parentheses.  Finally, Ctrl-E then Del
+to select inside the parentheses. Finally, Ctrl-E then Del
 will delete the surrounding parentheses.
 All in far fewer keystrokes than trying to navigate
 and delete them one at a time.
@@ -169,7 +169,7 @@ all the way back to how the file was when it was first
 opened, if necessary.
 
 If you wind up going backward too far, Ctrl-Y performs
-a redo, undoing the undo you just made.  So long as
+a redo, undoing the undo you just made. So long as
 no new changes have been made, you can always redo your
 way back to the buffer's state before you undid anything.
 
@@ -177,8 +177,8 @@ way back to the buffer's state before you undid anything.
 ## Navigating to a Line
 
 Often, you'll find you've made an error at a specific line
-in a file.  Ctrl-T brings up a prompt asking for which
-line you'd like to go to.  Going to line 178 will bring
+in a file. Ctrl-T brings up a prompt asking for which
+line you'd like to go to. Going to line 178 will bring
 you to the beginning of this section.
 
 In addition, you may use Home and End within the "goto line"
@@ -190,7 +190,7 @@ prompt to jump to the beginning and end of the file, respectively.
 Sometimes you'll find your cursor is at one end of a
 matching pair of things, and you'd like to navigate
 to the other end without counting all the intervening
-opening and ending characters by hand.  This is where
+opening and ending characters by hand. This is where
 Ctrl-P comes in handy.
 
 Try placing your cursor at the starting { and
@@ -264,7 +264,7 @@ We've been working entirely within the tutorial buffer thus far.
 However, we may want to work with multiple files at the same time.
 Ctrl-O goes into an "open file" mode which allows us to
 navigate to an existing file on disk or provide a filename
-for a new file to create.  Each file is opened into its own buffer.
+for a new file to create. Each file is opened into its own buffer.
 
 Notice the "1/1" indicator at the frame's upper right?
 This indicates the index of the frame's buffer
