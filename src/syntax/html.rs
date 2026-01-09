@@ -12,7 +12,7 @@ use ratatui::style::Color;
 #[derive(Logos, Debug)]
 #[logos(skip r"[ \t\n]+")]
 enum HtmlToken {
-    #[regex("<[[:alpha:]][[:alpha:][:digit:]_]*")]
+    #[regex("<[[:alpha:]][[:alpha:][:digit:]_]*>?")]
     TagStart,
     #[regex("</[[:alpha:]][[:alpha:][:digit:]_]*>")]
     #[token("/>")]
