@@ -273,6 +273,11 @@ pub static SURROUND_WITH: &[Keybinding] = &[
         keys: &["'"],
         action: "Surround With ' \u{2026} '",
     },
+    Keybinding {
+        modifier: None,
+        keys: &["Del"],
+        action: "Delete Surround",
+    }
 ];
 
 pub static SELECT_INSIDE: &[Keybinding] = &[

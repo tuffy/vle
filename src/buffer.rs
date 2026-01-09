@@ -797,12 +797,14 @@ impl BufferContext {
         match &mut self.selection {
             Some(selection) => {
                 let mut buf = self.buffer.borrow_mut();
+                buf.log_undo(self.cursor, self.cursor_column);
                 let mut rope = buf.rope.get_mut();
                 let (start_pos, end_pos) = reorder(&mut self.cursor, selection);
-                rope.insert_char(*end_pos, end);
-                rope.insert_char(*start_pos, start);
+                let _ = rope.try_insert_char(*end_pos, end);
+                let _ = rope.try_insert_char(*start_pos, start);
                 *start_pos += 1;
                 *end_pos += 1;
+                self.cursor_column = cursor_column(&rope, self.cursor);
             }
             None => {
                 let buf = self.buffer.borrow();
@@ -818,6 +820,36 @@ impl BufferContext {
                     self.cursor = end;
                 }
             }
+        }
+    }
+
+    /// Returns true if selection is active and surround characters
+    /// are deleted
+    pub fn delete_surround(&mut self) -> bool {
+        let Some(selection) = &mut self.selection else {
+            return false;
+        };
+        let mut buf = self.buffer.borrow_mut();
+        buf.log_undo(self.cursor, self.cursor_column);
+        let mut rope = buf.rope.get_mut();
+        let (start, end) = reorder(&mut self.cursor, selection);
+
+        if let Some(prev_pos) = start.checked_sub(1)
+            && let Some(prev_char) = rope.get_char(prev_pos)
+            && let Some(next_char) = rope.get_char(*end)
+            && matches!(
+                (prev_char, next_char),
+                ('(', ')') | ('[', ']') | ('{', '}') | ('<', '>') | ('"', '"') | ('\'', '\'')
+            )
+        {
+            let _ = rope.try_remove(*end..*end + 1);
+            let _ = rope.try_remove(prev_pos..*start);
+            *end -= 1;
+            *start -= 1;
+            self.cursor_column = cursor_column(&rope, self.cursor);
+            true
+        } else {
+            false
         }
     }
 

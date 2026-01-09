@@ -594,6 +594,11 @@ impl Editor {
                 self.update_buffer(|b| b.select_inside(('\'', '\''), None));
                 self.mode = EditorMode::default();
             }
+            key!(Delete) => {
+                if matches!(self.on_buffer(|b| b.delete_surround()), Some(true)) {
+                    self.mode = EditorMode::default();
+                }
+            }
             _ => { /* do nothing */ }
         }
     }
