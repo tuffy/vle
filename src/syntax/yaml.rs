@@ -12,7 +12,7 @@ use ratatui::style::Color;
 #[derive(Logos, Debug)]
 #[logos(skip r"[ \t\n]+")]
 enum YamlToken {
-    #[regex("#.*", allow_greedy=true)]
+    #[regex("#.*", allow_greedy = true)]
     Comment,
     #[token("[")]
     #[token("]")]

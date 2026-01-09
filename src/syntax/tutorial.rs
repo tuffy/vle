@@ -83,7 +83,7 @@ impl TryFrom<TutorialToken> for Color {
             TutorialToken::Header => Ok(Color::Blue),
             TutorialToken::Subheader => Ok(Color::Blue),
             TutorialToken::Correct => Ok(Color::Green),
-            TutorialToken::Incorrect => Ok(Color::Red)
+            TutorialToken::Incorrect => Ok(Color::Red),
         }
     }
 }
