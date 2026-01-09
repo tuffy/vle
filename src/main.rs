@@ -21,13 +21,13 @@ fn main() -> std::io::Result<()> {
     use clap::Parser;
     use crossterm::event::read;
     use editor::Editor;
-    use std::ffi::OsString;
+    use std::path::PathBuf;
 
     #[derive(Parser)]
     #[command(version)]
     #[command(about = "Very Little Editor")]
     struct Opt {
-        files: Vec<OsString>,
+        files: Vec<PathBuf>,
     }
 
     let mut editor = Editor::new(Opt::parse().files)?;

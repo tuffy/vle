@@ -16,7 +16,7 @@ use ratatui::{
     layout::{Position, Rect},
     widgets::StatefulWidget,
 };
-use std::ffi::OsString;
+use std::path::PathBuf;
 
 const PAGE_SIZE: usize = 25;
 
@@ -94,7 +94,7 @@ pub struct Editor {
 }
 
 impl Editor {
-    pub fn new(buffers: impl IntoIterator<Item = OsString>) -> std::io::Result<Self> {
+    pub fn new(buffers: impl IntoIterator<Item = PathBuf>) -> std::io::Result<Self> {
         Ok(Self {
             layout: Layout::Single(BufferList::new(buffers)?),
             mode: EditorMode::default(),
@@ -978,7 +978,7 @@ impl Layout {
         }
     }
 
-    fn add(&mut self, path: OsString) -> Result<(), ()> {
+    fn add(&mut self, path: PathBuf) -> Result<(), ()> {
         self.selected_buffer_list_mut()
             .select_by_name(&path)
             .or_else(|()| match BufferContext::open(path) {

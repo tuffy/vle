@@ -11,8 +11,7 @@ use crate::syntax::Highlighter;
 use ratatui::widgets::StatefulWidget;
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::ffi::{OsStr, OsString};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::SystemTime;
 
@@ -21,17 +20,17 @@ pub enum Source {
     Tutorial,
 }
 
-impl From<OsString> for Source {
-    fn from(s: OsString) -> Self {
-        Self::File(s.into())
+impl From<PathBuf> for Source {
+    fn from(s: PathBuf) -> Self {
+        Self::File(s)
     }
 }
 
 impl Source {
     /// Used to determine if an input file is a duplicate
-    fn source_str(&self) -> Option<&OsStr> {
+    fn source_path(&self) -> Option<&Path> {
         match self {
-            Self::File(pb) => Some(pb.as_os_str()),
+            Self::File(pb) => Some(pb.as_path()),
             Self::Tutorial => None,
         }
     }
@@ -204,11 +203,11 @@ struct Buffer {
 }
 
 impl Buffer {
-    fn source_str(&self) -> Option<&OsStr> {
-        self.source.source_str()
+    fn source_path(&self) -> Option<&Path> {
+        self.source.source_path()
     }
 
-    fn open(path: OsString) -> std::io::Result<Self> {
+    fn open(path: PathBuf) -> std::io::Result<Self> {
         let source = Source::from(path);
 
         let (saved, rope) = source.read_data()?;
@@ -333,7 +332,7 @@ impl BufferContext {
         self.buffer.borrow().modified()
     }
 
-    pub fn open(path: OsString) -> std::io::Result<Self> {
+    pub fn open(path: PathBuf) -> std::io::Result<Self> {
         Buffer::open(path).map(|b| b.into())
     }
 
@@ -1190,7 +1189,7 @@ pub struct BufferList {
 }
 
 impl BufferList {
-    pub fn new(paths: impl IntoIterator<Item = OsString>) -> std::io::Result<Self> {
+    pub fn new(paths: impl IntoIterator<Item = PathBuf>) -> std::io::Result<Self> {
         let buffers = paths
             .into_iter()
             .map(|p| Buffer::open(p).map(BufferContext::from))
@@ -1273,11 +1272,11 @@ impl BufferList {
 
     /// Attempts to select buffer by file name
     /// Returns Ok on success, Err on failure
-    pub fn select_by_name(&mut self, name: &OsStr) -> Result<(), ()> {
+    pub fn select_by_name(&mut self, name: &Path) -> Result<(), ()> {
         match self
             .buffers
             .iter()
-            .position(|buf| buf.buffer.borrow().source_str() == Some(name))
+            .position(|buf| buf.buffer.borrow().source_path() == Some(name))
         {
             Some(idx) => {
                 self.current = idx;
