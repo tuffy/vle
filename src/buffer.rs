@@ -794,17 +794,30 @@ impl BufferContext {
     }
 
     pub fn select_inside(&mut self, (start, end): (char, char), stack: Option<(char, char)>) {
-        let buf = self.buffer.borrow();
-        let (stack_back, stack_forward) = match stack {
-            Some((back, forward)) => (Some(back), Some(forward)),
-            None => (None, None),
-        };
-        if let (Some(start), Some(end)) = (
-            select_next_char::<false>(&buf.rope, self.cursor, start, stack_back),
-            select_next_char::<true>(&buf.rope, self.cursor, end, stack_forward),
-        ) {
-            self.selection = Some(start);
-            self.cursor = end;
+        match &mut self.selection {
+            Some(selection) => {
+                let mut buf = self.buffer.borrow_mut();
+                let mut rope = buf.rope.get_mut();
+                let (start_pos, end_pos) = reorder(&mut self.cursor, selection);
+                rope.insert_char(*end_pos, end);
+                rope.insert_char(*start_pos, start);
+                *start_pos += 1;
+                *end_pos += 1;
+            }
+            None => {
+                let buf = self.buffer.borrow();
+                let (stack_back, stack_forward) = match stack {
+                    Some((back, forward)) => (Some(back), Some(forward)),
+                    None => (None, None),
+                };
+                if let (Some(start), Some(end)) = (
+                    select_next_char::<false>(&buf.rope, self.cursor, start, stack_back),
+                    select_next_char::<true>(&buf.rope, self.cursor, end, stack_forward),
+                ) {
+                    self.selection = Some(start);
+                    self.cursor = end;
+                }
+            }
         }
     }
 
@@ -1317,7 +1330,7 @@ impl StatefulWidget for BufferWidget<'_> {
     ) {
         use crate::help::{
             CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE, SELECT_MATCHES,
-            VERIFY_RELOAD, VERIFY_SAVE, render_help,
+            SURROUND_WITH, VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
         use crate::syntax::Highlighter;
         use ratatui::{
@@ -1870,7 +1883,16 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(EditorMode::SelectInside) => {
-                render_help(text_area, buf, SELECT_INSIDE, |b| b);
+                render_help(
+                    text_area,
+                    buf,
+                    if state.selection.is_some() {
+                        SURROUND_WITH
+                    } else {
+                        SELECT_INSIDE
+                    },
+                    |b| b,
+                );
             }
             Some(EditorMode::SelectLine { prompt }) => {
                 render_help(text_area, buf, SELECT_LINE, |b| b);

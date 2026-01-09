@@ -700,7 +700,7 @@ fn process_open_file(
         }
         key!(Enter) => {
             for selected in chooser.select()? {
-                if let Err(()) = layout.add(selected.into()) {
+                if let Err(()) = layout.add(selected) {
                     return None;
                 }
             }

@@ -242,6 +242,39 @@ pub static CONFIRM_CLOSE: &[Keybinding] = &[
     },
 ];
 
+pub static SURROUND_WITH: &[Keybinding] = &[
+    Keybinding {
+        modifier: None,
+        keys: &["(", ")"],
+        action: "Surround With ( \u{2026} )",
+    },
+    Keybinding {
+        modifier: None,
+        keys: &["[", "]"],
+        action: "Surround With [ \u{2026} ]",
+    },
+    Keybinding {
+        modifier: None,
+        keys: &["{", "}"],
+        action: "Surround With { \u{2026} }",
+    },
+    Keybinding {
+        modifier: None,
+        keys: &["<", ">"],
+        action: "Surround With < \u{2026} >",
+    },
+    Keybinding {
+        modifier: None,
+        keys: &["\""],
+        action: "Surround With \" \u{2026} \"",
+    },
+    Keybinding {
+        modifier: None,
+        keys: &["'"],
+        action: "Surround With ' \u{2026} '",
+    },
+];
+
 pub static SELECT_INSIDE: &[Keybinding] = &[
     Keybinding {
         modifier: None,
