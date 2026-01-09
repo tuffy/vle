@@ -48,6 +48,10 @@ impl Highlighter for Box<dyn Highlighter> {
     ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
         Box::as_ref(self).highlight(s)
     }
+
+    fn tabs_required(&self) -> bool {
+        Box::as_ref(self).tabs_required()
+    }
 }
 
 #[derive(Debug)]
