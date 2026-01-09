@@ -20,6 +20,7 @@ mod php;
 mod python;
 mod rust;
 mod sql;
+mod tutorial;
 mod xml;
 
 /// Implemented for different syntax highlighters
@@ -63,6 +64,8 @@ impl std::fmt::Display for DefaultHighlighter {
         "Plain".fmt(f)
     }
 }
+
+pub use tutorial::Tutorial;
 
 pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
     match source.extension() {

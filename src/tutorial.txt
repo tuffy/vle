@@ -1,5 +1,311 @@
-Welcome to the Very Little Editor!
+__     __                _     _ _   _   _        _____    _ _ _
+\ \   / /__ _ __ _   _  | |   (_) |_| |_| | ___  | ____|__| (_) |_ ___  _ __
+ \ \ / / _ \ '__| | | | | |   | | __| __| |/ _ \ |  _| / _` | | __/ _ \| '__|
+  \ V /  __/ |  | |_| | | |___| | |_| |_| |  __/ | |__| (_| | | || (_) | |
+   \_/ \___|_|   \__, | |_____|_|\__|\__|_|\___| |_____\__,_|_|\__\___/|_|
+                 |___/
 
 Version: VERSION
 
-Tutorial text to follow.
+Press the F1 key to see a list of keybindings.
+
+# About This Editor
+
+Inspired by GNU Nano and other minimalist editors, this editor is designed
+to provide a small but powerful set of features taken from all the text
+editors I've ever used over the years.
+
+# Tutorial
+
+## Navigation
+
+The Very Little Editor, or VLE for short, is non-modal in the
+sense that it doesn't have seperate modes for typing text
+and issuing commands to edit text.
+
+This means we use the arrow keys (← ↓ ↑ →) along with
+PgUp, PgDn, Home and End to move the cursor around.
+The arrows move the cursor one character at a time in
+the indicated direction.  PgUp and PgDn move the cursor
+up and down several rows, respectively.  And lastly,
+Home and End move the cursor to the beginning and end of the
+line, respectively.
+
+As you move the cursor downward, you'll notice the viewport
+shifts text as needed so as to always keep it centered
+vertically on your screen once you're no longer at the
+beginning of the file.  This makes it easy for your eyes
+to locate it, and eliminates the need for separate keys
+to adjust the viewport's position around your cursor.
+
+
+## Inserting Text
+
+Inserting text is as simple as typing it in.
+Try moving your cursor to line marked with '>>>',
+hit the End key to place it at the end of the line if necessary,
+and then type in the remaining text to match the line below it.
+
+>>> sphinx of black quartz
+    sphinx of black quartz judge my vow
+
+
+## Deleting Text
+
+Removing text is accomplished with the Backspace and Del
+keys.  Backspace removes one character to the left
+of the cursor, while Del removes one character to the right.
+
+In this first example, move your cursor to the line marked
+with '>>>', use the End key to place your cursor at the end
+of the line, and then repeatedly Backspace until
+it matches the line below it.
+
+>>> A sentence that's just about perfect except for this extra text
+    A sentence that's just about perfect
+
+In this second example, move your cursor just past the '>>>'
+marker, and then repeatedly Del until it matches the line below it.
+
+>>> Extraneous junk. This sentence is just right.
+    This sentence is just right.
+
+
+## Saving Your File
+
+As you've made changes to this buffer, you'll notice an
+asterisk (*) next to its title at the top.  This indicates
+the buffer has unsaved changes.  Ctrl-S saves the current file.
+Go ahead and try it now (this tutorial buffer is special
+and isn't actually written to disk, but will behave as if it was).
+Once saved, the asterisk will disappear until the next change is made.
+
+
+## Selecting Text
+
+Highlight text by holding down the Shift key along with a direction key.
+Once text is highlighted, you may copy it with Ctrl-C
+(which leaves the text in place), cut it with Ctrl-X
+(which removes it from the text), and then paste it with Ctrl-V.
+
+Try using copy-and-paste to fix the line below.
+
+>>> Duplicate sentence.
+    Duplicate sentence. Duplicate sentence.
+
+And use cut-and-paste to reorder the sentences in the line below.
+
+>>> Sentence 2. Sentence 1.
+    Sentence 1. Sentence 2.
+
+
+## Navigating a Selection
+
+While a selection is active, Ctrl-Home and Ctrl-End
+will place the cursor at its beginning or end, respectively.
+This may be especially handy when the selection has gotten
+quite long or needs to be extended from one side or another.
+
+
+## Surrounded Text
+
+Text surrounded by characters like " or ( are a common
+occurence in programming, so this editor provides a
+handy "enveloped items" mode for dealing with it.
+
+When no selection is active, Ctrl-E will prompt
+for which pair of characters we want to select inside of.
+Once a selection is active, we can cut or copy it
+like any other selection.  Or, we may even simply
+start typing new text to delete the selection and replace
+it with what we've typed.
+
+Try moving your cursor somewhere inside the long string
+(it doesn't matter where), hit Ctrl-E, then the " key.
+Once the selection is active, type in the string
+we want instead.
+
+>>> "a long string we don't want to have to deal with"
+    "the correct string"
+
+
+If a selection is active, Ctrl-E will instead prompt
+for which pair of characters we want to surround the
+selection with.  This will add the appropriate
+pair to each side of the selection while keeping
+the selection active.
+
+Try highlighting the text below, hit Ctrl-E, then (
+to surround it with parentheses.
+
+>>> surround me
+    (surround me)
+
+
+Lastly, if a selection is active, Ctrl-E also
+offers the option to delete the appropriate pair
+of surrounding characters with the Del key.
+This allows us to quickly strip off an unwanted
+set of surrounding characters.
+
+Try moving your cursor inside the parenthesized text
+(again, it doesn't matter where), use Ctrl-E then (
+to select inside the parentheses.  Finally, Ctrl-E then Del
+will delete the surrounding parentheses.
+All in far fewer keystrokes than trying to navigate
+and delete them one at a time.
+
+>>> (un-surround this text)
+    un-surround this text
+
+
+## Undoing and Redoing Changes
+
+Sometimes we make some mistakes when entering text.
+Ctrl-Z restores the buffer and cursor to its previous state.
+Use Ctrl-Z repeatedly to go further back as needed.
+This editor's undo stack has no limit, so you may return
+all the way back to how the file was when it was first
+opened, if necessary.
+
+If you wind up going backward too far, Ctrl-Y performs
+a redo, undoing the undo you just made.  So long as
+no new changes have been made, you can always redo your
+way back to the buffer's state before you undid anything.
+
+
+## Navigating to a Line
+
+Often, you'll find you've made an error at a specific line
+in a file.  Ctrl-T brings up a prompt asking for which
+line you'd like to go to.  Going to line 170 will bring
+you to the beginning of this section.
+
+In addition, you may use Home and End within the "goto line"
+prompt to jump to the beginning and end of the file, respectively.
+
+
+## Navigating to a Matching Pair
+
+Sometimes you'll find your cursor is at one end of a
+matching pair of things, and you'd like to navigate
+to the other end without counting all the intervening
+opening and ending characters by hand.  This is where
+Ctrl-P comes in handy.
+
+Try placing your cursor at the starting { and
+use Ctrl-P to jump all the way to the end.
+From there, you're free to use Ctrl-P to jump
+all the way back to its matching opening character
+at the beginning.
+
+{
+  "item": {
+    "children": [
+      {"name": "Child A"},
+      {"name": "Child B"},
+      {"name": "Child C"}
+    ],
+  }
+}
+
+Note that this only works for matching pairs which
+point in specific directions; it's not available
+for pairs like " because we have no way to know which
+direction to go.
+
+
+## Finding Text
+
+Sometimes we want to locate text in a file
+Ctrl-F prompts for the text to search for.
+By default, it searches the entire file.
+But if a selection is active, the search is limited
+to the contents of the selection.
+
+It then highlights the matches (if any), and allows
+us to cycle the cursor through those matches using ↑ and ↓.
+We can also use Del to remove matches we're not interested in.
+
+Why would we want to remove unwanted highlighted matches?
+That brings us to our next section.
+
+
+## Replacing Text
+
+Using Ctrl-R from find mode deletes all the highlighted
+matches we located and prompts us for a new value.
+Note that replace mode doesn't offer a text box
+for the replacement; the replacement text is inserted
+where all the matches were simultaneously and is
+completed with the Enter key.
+
+Let's walk through this whole process.
+
+Start with Ctrl-F to find three instances of the word to replace.
+This will highlight all three instances of that word, below.
+
+Next, type Ctrl-R to replace those three instances,
+which will remove them from the text.
+
+Finally, type "fixed" to replace all three instances
+and hit Enter when finished.
+
+>>> toreplace
+>>> toreplace
+>>> toreplace
+    fixed
+
+
+## Multiple Buffers
+
+We've been working entirely within the tutorial buffer thus far.
+However, we may want to work with multiple files at the same time.
+Ctrl-O goes into an "open file" mode which allows us to
+navigate to an existing file on disk or provide a filename
+for a new file to create.  Each file is opened into its own buffer.
+
+Notice the "1/1" indicator at the frame's upper right?
+This indicates the index of the frame's buffer
+along with the total number of buffers available.
+Buffers can be cycled using Ctrl-PgUp and Ctrl-PgDn,
+and the buffer's filename will be indicated in its title
+on the upper left.
+
+Unneeded buffers can be closed using Ctrl-Q, and the editor
+will exit once the final buffer is closed.
+
+
+## Panes
+
+It's often handy to see multiple buffers open side-by-side
+simultaneously - or even two different places in the same buffer.
+This is where the panes feature comes in handy.
+
+Ctrl-← or Ctrl-→ divides a single window into two tall
+side-by-side sections which we can navigate between using
+Ctrl-← and Ctrl-→. Ctrl-↑ and Ctrl-↓ restores a single window mode.
+
+Or, Ctrl-↑ or Ctrl-↓ divides a single window into two wide
+top-and-bottom sections which we can navigate between using
+Ctrl-↑ or Ctrl-↓. Ctrl-← and Ctrl-→ restores a single window mode.
+
+When a window is split into two panes, F2 will swap their
+positions onscreen.
+
+
+# Closing Thoughts
+
+As the name suggests, this is a Very Little Editor that doesn't
+have a mountain of features or require a lengthy tutorial to operate.
+But if you've reached this point, hopefully you'll have a better
+understanding of how and why it operates beyond just the
+keybindings themselves.
+
+If it's not the editor for you, that's perfectly okay.
+There's plenty of other great text editors in the world
+and one of them is bound to be for you.
+
+And if you still can't find an editor you like,
+feel free to follow my example and write one that has
+all the features that you do like.

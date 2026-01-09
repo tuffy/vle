@@ -231,7 +231,7 @@ impl Buffer {
             ))
             .into(),
             saved: None,
-            syntax: Box::new(crate::syntax::DefaultHighlighter),
+            syntax: Box::new(crate::syntax::Tutorial),
             source: Source::Tutorial,
             undo: vec![],
             redo: vec![],

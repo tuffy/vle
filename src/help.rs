@@ -174,7 +174,7 @@ pub static EDITING: &[Keybinding] = &[
     Keybinding {
         modifier: Some("Ctrl"),
         keys: &["E"],
-        action: "Select Enveloped Items",
+        action: "Handle Enveloped Items",
     },
     Keybinding {
         modifier: Some("Ctrl"),
