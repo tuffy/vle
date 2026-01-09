@@ -178,7 +178,7 @@ way back to the buffer's state before you undid anything.
 
 Often, you'll find you've made an error at a specific line
 in a file.  Ctrl-T brings up a prompt asking for which
-line you'd like to go to.  Going to line 170 will bring
+line you'd like to go to.  Going to line 178 will bring
 you to the beginning of this section.
 
 In addition, you may use Home and End within the "goto line"
@@ -218,6 +218,7 @@ direction to go.
 ## Finding Text
 
 Sometimes we want to locate text in a file
+but don't know exactly which line it's on.
 Ctrl-F prompts for the text to search for.
 By default, it searches the entire file.
 But if a selection is active, the search is limited
@@ -234,7 +235,7 @@ That brings us to our next section.
 ## Replacing Text
 
 Using Ctrl-R from find mode deletes all the highlighted
-matches we located and prompts us for a new value.
+matches and prompts us for a new value.
 Note that replace mode doesn't offer a text box
 for the replacement; the replacement text is inserted
 where all the matches were simultaneously and is
