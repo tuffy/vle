@@ -11,6 +11,7 @@ use ratatui::style::Color;
 
 mod c;
 mod css;
+mod go;
 mod html;
 mod java;
 mod js;
@@ -91,12 +92,12 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("php") => Box::new(php::Php),
         Some("yaml") => Box::new(yaml::Yaml),
         Some("java") => Box::new(java::Java),
+        Some("go") => Box::new(go::Go),
         _ => Box::new(DefaultHighlighter),
     }
 }
 
 // TODO - add cmake syntax
-// TODO - add go syntax
 // TODO - add lua syntax
 // TODO - add patch syntax
 // TODO - add perl syntax
