@@ -1083,7 +1083,7 @@ pub struct Modified;
 fn line_char_range(rope: &ropey::Rope, line: usize) -> Option<(usize, usize)> {
     Some((
         rope.try_line_to_char(line).ok()?,
-        rope.try_line_to_char(line + 1).ok()? - 1,
+        rope.try_line_to_char(line + 1).ok()?.saturating_sub(1),
     ))
 }
 
