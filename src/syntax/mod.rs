@@ -22,6 +22,7 @@ mod rust;
 mod sql;
 mod tutorial;
 mod xml;
+mod yaml;
 
 /// Implemented for different syntax highlighters
 pub trait Highlighter: std::fmt::Debug + std::fmt::Display {
@@ -87,6 +88,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("css") => Box::new(css::Css),
         Some("js") => Box::new(js::JavaScript),
         Some("php") => Box::new(php::Php),
+        Some("yaml") => Box::new(yaml::Yaml),
         _ => Box::new(DefaultHighlighter),
     }
 }
@@ -99,4 +101,3 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
 // TODO - add perl syntax
 // TODO - add sh syntax
 // TODO - add tex syntax
-// TODO - add yaml syntax
