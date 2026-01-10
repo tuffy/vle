@@ -761,15 +761,25 @@ fn process_find(
             match prompt.get_value() {
                 Some(search) => {
                     let mut matches = buffer.search_matches(area, &search);
-                    // TODO - if cursor is on a match, select that one as an index
                     Some(if matches.is_empty() {
                         buffer.set_error("Not Found");
                         EditorMode::default()
                     } else {
+                        let cursor = buffer.get_cursor();
+                        let mut match_idx = None;
                         buffer.clear_matches(&mut matches);
                         EditorMode::ReplaceMatches {
-                            matches: matches.into_iter().map(|(s, _)| (s, s)).collect(),
-                            match_idx: None,
+                            matches: matches
+                                .into_iter()
+                                .enumerate()
+                                .inspect(|(idx, (s, _))| {
+                                    if *s == cursor {
+                                        match_idx = Some(*idx);
+                                    }
+                                })
+                                .map(|(_, (s, _))| (s, s))
+                                .collect(),
+                            match_idx,
                         }
                     })
                 }
@@ -780,14 +790,14 @@ fn process_find(
             match prompt.get_value() {
                 Some(search) => {
                     let matches = buffer.search_matches(area, &search);
-                    // TODO - if cursor is on a match, select that one as an index
                     Some(if matches.is_empty() {
                         buffer.set_error("Not Found");
                         EditorMode::default()
                     } else {
+                        let cursor = buffer.get_cursor();
                         EditorMode::SelectMatches {
+                            match_idx: matches.iter().position(|(s, _)| *s == cursor),
                             matches,
-                            match_idx: None,
                         }
                     })
                 }
