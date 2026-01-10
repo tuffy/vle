@@ -661,31 +661,13 @@ impl BufferContext {
     pub fn search_area(&mut self) -> SearchArea {
         let rope = &self.buffer.borrow().rope;
 
-        match self.selection.take() {
-            None => SearchArea {
-                byte_offset: 0,
-                char_offset: 0,
-                text: rope
-                    .chunks()
-                    .fold(String::with_capacity(rope.len_bytes()), |mut acc, s| {
-                        acc.push_str(s);
-                        acc
-                    }),
-            },
-            Some(selection) => {
-                let (start, end) = reorder(self.cursor, selection);
-                SearchArea {
-                    byte_offset: rope.char_to_byte(start),
-                    char_offset: start,
-                    text: rope.slice(start..end).chunks().fold(
-                        String::with_capacity(rope.len_bytes()),
-                        |mut acc, s| {
-                            acc.push_str(s);
-                            acc
-                        },
-                    ),
-                }
-            }
+        SearchArea {
+            text: rope
+                .chunks()
+                .fold(String::with_capacity(rope.len_bytes()), |mut acc, s| {
+                    acc.push_str(s);
+                    acc
+                }),
         }
     }
 
@@ -1067,11 +1049,7 @@ impl BufferContext {
     /// returns Vec of match ranges, in characters
     pub fn search_matches(
         &self,
-        SearchArea {
-            text: whole_text,
-            byte_offset,
-            ..
-        }: &SearchArea,
+        SearchArea { text: whole_text }: &SearchArea,
         term: &str,
     ) -> Vec<(usize, usize)> {
         let buf = self.buffer.borrow();
@@ -1079,7 +1057,7 @@ impl BufferContext {
 
         whole_text
             .match_indices(term)
-            .map(|(start_byte, s)| (byte_offset + start_byte, byte_offset + start_byte + s.len()))
+            .map(|(start_byte, s)| (start_byte, start_byte + s.len()))
             .filter_map(|(s, e)| {
                 Some((
                     rope.try_byte_to_char(s).ok()?,
@@ -2249,18 +2227,15 @@ impl From<String> for CutBuffer {
 }
 
 pub struct SearchArea {
-    text: String,       // either whole rope or subset of rope
-    byte_offset: usize, // byte offset of search area in rope
-    char_offset: usize, // character offset of search area in rope
+    text: String, // local copy of entire rope
 }
 
 impl SearchArea {
     /// Splits buffer in half at cursor
     /// If cursor is outside of area, returns (&text, "")
     fn split(&self, rope: &ropey::Rope, cursor: usize) -> (&str, &str) {
-        cursor
-            .checked_sub(self.char_offset)
-            .and_then(|char_offset| rope.try_char_to_byte(char_offset).ok())
+        rope.try_char_to_byte(cursor)
+            .ok()
             .and_then(|byte_offset| self.text.split_at_checked(byte_offset))
             .unwrap_or((self.text.as_str(), ""))
     }
