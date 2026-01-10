@@ -32,6 +32,10 @@ impl SearchPrompt {
 
         self.to_string().width().try_into().unwrap()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.value.is_empty()
+    }
 }
 
 impl std::fmt::Display for SearchPrompt {

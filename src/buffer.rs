@@ -1755,6 +1755,30 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
+        fn line_matches(
+            rope: &ropey::Rope,
+            line_start: usize,
+            line: &str,
+            search: &str,
+        ) -> VecDeque<(usize, usize)> {
+            let line_byte_start = rope.char_to_byte(line_start);
+
+            line.match_indices(search)
+                .map(|(byte_idx, string)| {
+                    (
+                        byte_idx + line_byte_start,
+                        byte_idx + line_byte_start + string.len(),
+                    )
+                })
+                .filter_map(|(byte_start, byte_end)| {
+                    Some((
+                        rope.try_byte_to_char(byte_start).ok()?,
+                        rope.try_byte_to_char(byte_end).ok()?,
+                    ))
+                })
+                .collect()
+        }
+
         fn border_title(title: String, active: bool) -> Line<'static> {
             if active {
                 Line::from(vec![
@@ -1829,7 +1853,78 @@ impl StatefulWidget for BufferWidget<'_> {
         state.viewport_height = text_area.height.into();
 
         Paragraph::new(match self.mode {
-            // TODO - if in find mode, select matching entries per line
+            Some(EditorMode::Find { prompt, .. }) if !prompt.is_empty() => {
+                let searching = prompt.get_value().unwrap_or_default();
+
+                match state.selection {
+                    // no selection, so highlight matches only
+                    None => rope
+                        .lines_at(viewport_line)
+                        .zip(viewport_line..)
+                        .map(
+                            |(line, line_number)| match line_char_range(rope, line_number) {
+                                None => Line::from(colorize(
+                                    syntax,
+                                    Cow::from(line),
+                                    Some(line_number) == current_line,
+                                )),
+                                Some((line_start, line_end)) => {
+                                    let line = Cow::from(line);
+                                    let mut matches =
+                                        line_matches(rope, line_start, &line, &searching);
+                                    highlight_matches(
+                                        colorize(syntax, line, Some(line_number) == current_line),
+                                        (line_start, line_end),
+                                        &mut matches,
+                                    )
+                                    .into()
+                                }
+                            },
+                        )
+                        .map(|line| widen_tabs(line, &state.tab_substitution))
+                        .take(area.height.into())
+                        .collect::<Vec<_>>(),
+                    // highlight both matches *and* selection
+                    Some(selection) => {
+                        let (selection_start, selection_end) = reorder(state.cursor, selection);
+
+                        rope.lines_at(viewport_line)
+                            .zip(viewport_line..)
+                            .map(
+                                |(line, line_number)| match line_char_range(rope, line_number) {
+                                    None => Line::from(colorize(
+                                        syntax,
+                                        Cow::from(line),
+                                        Some(line_number) == current_line,
+                                    )),
+                                    Some((line_start, line_end)) => {
+                                        let line = Cow::from(line);
+
+                                        let mut matches =
+                                            line_matches(rope, line_start, &line, &searching);
+
+                                        highlight_selection(
+                                            highlight_matches(
+                                                colorize(
+                                                    syntax,
+                                                    line,
+                                                    Some(line_number) == current_line,
+                                                ),
+                                                (line_start, line_end),
+                                                &mut matches,
+                                            ),
+                                            (line_start, line_end),
+                                            (selection_start, selection_end),
+                                        )
+                                    }
+                                },
+                            )
+                            .map(|line| widen_tabs(line, &state.tab_substitution))
+                            .take(area.height.into())
+                            .collect::<Vec<_>>()
+                    }
+                }
+            }
             Some(EditorMode::SelectMatches { matches, .. }) => {
                 let mut matches = matches.iter().copied().collect();
                 match state.selection {
