@@ -692,24 +692,40 @@ impl BufferContext {
     /// Updates position to next match
     /// Returns Err if no match found
     pub fn next_match(&mut self, area: &SearchArea, term: &str) -> Result<(), ()> {
+        fn last_resort<T>(
+            mut iter: impl Iterator<Item = T>,
+            avoid: impl FnOnce(&T) -> bool,
+        ) -> Option<T> {
+            let first = iter.next()?;
+            if avoid(&first) {
+                match iter.next() {
+                    None => Some(first),
+                    next @ Some(_) => next,
+                }
+            } else {
+                Some(first)
+            }
+        }
+
         let mut buf = self.buffer.borrow_mut();
         let rope = &buf.rope;
         let (behind, ahead) = area.split(rope, self.cursor);
 
-        let (start, end) = ahead
-            .match_indices(term)
-            .skip_while(|(idx, _)| *idx == 0)
-            .map(|(idx, string)| (idx + behind.len(), string))
-            .next()
-            .or_else(|| behind.match_indices(term).next())
-            .map(|(idx, string)| (idx, idx + string.len()))
-            .and_then(|(start, end)| {
-                Some((
-                    rope.try_byte_to_char(start).ok()?,
-                    rope.try_byte_to_char(end).ok()?,
-                ))
-            })
-            .ok_or(())?;
+        let (start, end) = last_resort(
+            ahead
+                .match_indices(term)
+                .map(|(idx, string)| (idx + behind.len(), string))
+                .chain(behind.match_indices(term)),
+            |(idx, _)| *idx == behind.len(),
+        )
+        .map(|(idx, string)| (idx, idx + string.len()))
+        .and_then(|(start, end)| {
+            Some((
+                rope.try_byte_to_char(start).ok()?,
+                rope.try_byte_to_char(end).ok()?,
+            ))
+        })
+        .ok_or(())?;
 
         self.cursor = start;
         self.selection = Some(end);
