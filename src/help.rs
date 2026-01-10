@@ -359,11 +359,33 @@ pub static OPEN_FILE: &[Keybinding] = &[
     },
 ];
 
-pub static FIND: &[Keybinding] = &[Keybinding {
-    modifier: None,
-    keys: &["Enter"],
-    action: "Select All Matches",
-}];
+pub static FIND: &[Keybinding] = &[
+    Keybinding {
+        modifier: None,
+        keys: &[UP, LEFT],
+        action: "Select Previous Match",
+    },
+    Keybinding {
+        modifier: None,
+        keys: &[DOWN, RIGHT],
+        action: "Select Next Match",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["R"],
+        action: "Replace Selected Matches",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["E"],
+        action: "Edit Selected Matches",
+    },
+    Keybinding {
+        modifier: None,
+        keys: &["Enter"],
+        action: "End Find",
+    },
+];
 
 pub static SELECT_MATCHES: &[Keybinding] = &[
     Keybinding {
@@ -385,11 +407,6 @@ pub static SELECT_MATCHES: &[Keybinding] = &[
         modifier: Some("Ctrl"),
         keys: &["R"],
         action: "Replace Selected Matches",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["F"],
-        action: "Perform New Find",
     },
     Keybinding {
         modifier: None,

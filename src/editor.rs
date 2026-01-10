@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::{
-    buffer::{BufferContext, BufferId, BufferList, CutBuffer},
+    buffer::{BufferContext, BufferId, BufferList, CutBuffer, SearchArea},
     files::FileChooserState,
     prompt::{LinePrompt, SearchPrompt},
 };
@@ -35,6 +35,7 @@ pub enum EditorMode {
     },
     Find {
         prompt: SearchPrompt,
+        area: SearchArea,
     },
     SelectMatches {
         matches: Vec<(usize, usize)>,
@@ -196,9 +197,9 @@ impl Editor {
                         self.mode = new_mode;
                     }
                 }
-                EditorMode::Find { prompt } => {
+                EditorMode::Find { prompt, area } => {
                     if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                        && let Some(new_mode) = process_find(buf, prompt, event)
+                        && let Some(new_mode) = process_find(buf, area, prompt, event)
                     {
                         self.mode = new_mode;
                     }
@@ -459,9 +460,12 @@ impl Editor {
                 };
             }
             key!(CONTROL, 'f') => {
-                self.mode = EditorMode::Find {
+                if let Some(find) = self.on_buffer(|b| EditorMode::Find {
+                    area: b.search_area(),
                     prompt: SearchPrompt::default(),
-                };
+                }) {
+                    self.mode = find;
+                }
             }
             key!(CONTROL, 'o') => match FileChooserState::new() {
                 Ok(chooser) => self.mode = EditorMode::Open { chooser },
@@ -710,14 +714,11 @@ fn process_open_file(
 
 fn process_find(
     buffer: &mut BufferContext,
+    area: &SearchArea,
     prompt: &mut SearchPrompt,
     event: Event,
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-
-    // TODO - up selects previous match
-    // TODO - down selected next match
-    // TODO - enter finishes search
 
     match event {
         Event::Key(KeyEvent {
@@ -733,15 +734,57 @@ fn process_find(
             prompt.pop();
             None
         }
-        key!(Enter) => {
+        Event::Key(KeyEvent {
+            code: KeyCode::Left | KeyCode::Up,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            if let Err(()) = buffer.previous_match(area, &prompt.get_value()?) {
+                buffer.set_error("Not Found");
+            }
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Down | KeyCode::Right,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            if let Err(()) = buffer.next_match(area, &prompt.get_value()?) {
+                buffer.set_error("Not Found");
+            }
+            None
+        }
+        key!(Enter) => Some(EditorMode::default()),
+        key!(CONTROL, 'r') => {
             match prompt.get_value() {
                 Some(search) => {
-                    let matches = buffer.matches(&search);
+                    let mut matches = buffer.search_matches(area, &search);
+                    // TODO - if cursor is on a match, select that one as an index
                     Some(if matches.is_empty() {
                         buffer.set_error("Not Found");
                         EditorMode::default()
                     } else {
-                        buffer.clear_selection();
+                        buffer.clear_matches(&mut matches);
+                        EditorMode::ReplaceMatches {
+                            matches: matches.into_iter().map(|(s, _)| (s, s)).collect(),
+                            match_idx: None,
+                        }
+                    })
+                }
+                None => Some(EditorMode::default()), // no search term
+            }
+        }
+        key!(CONTROL, 'e') => {
+            match prompt.get_value() {
+                Some(search) => {
+                    let matches = buffer.search_matches(area, &search);
+                    // TODO - if cursor is on a match, select that one as an index
+                    Some(if matches.is_empty() {
+                        buffer.set_error("Not Found");
+                        EditorMode::default()
+                    } else {
                         EditorMode::SelectMatches {
                             matches,
                             match_idx: None,
@@ -830,12 +873,6 @@ fn process_select_matches(
                     None
                 }
             }
-        }
-        key!(CONTROL, 'f') => {
-            buffer.clear_selection();
-            Some(EditorMode::Find {
-                prompt: SearchPrompt::default(),
-            })
         }
         key!(CONTROL, 'r') => {
             buffer.clear_matches(matches);
@@ -1097,7 +1134,7 @@ impl Layout {
                     x: text_area.x + prompt.len() as u16 + 1,
                     y: text_area.y + text_area.height.saturating_sub(2),
                 }),
-                EditorMode::Find { prompt } => Some(Position {
+                EditorMode::Find { prompt, .. } => Some(Position {
                     x: text_area.x
                         + prompt
                             .width()
