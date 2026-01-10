@@ -757,6 +757,10 @@ fn process_find(
             None
         }
         key!(Enter) => Some(EditorMode::default()),
+        key!(CONTROL, 'f') => {
+            *prompt = SearchPrompt::default();
+            None
+        }
         key!(CONTROL, 'r') => {
             match prompt.get_value() {
                 Some(search) => {

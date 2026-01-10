@@ -381,6 +381,11 @@ pub static FIND: &[Keybinding] = &[
         action: "Edit Selected Matches",
     },
     Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["F"],
+        action: "Begin New Find",
+    },
+    Keybinding {
         modifier: None,
         keys: &["Enter"],
         action: "End Find",
