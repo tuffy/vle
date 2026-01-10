@@ -22,7 +22,6 @@ impl SearchPrompt {
         self.value.pop()
     }
 
-    /// Retrieves value, if any, and updates history
     pub fn get_value(&self) -> Option<String> {
         (!self.value.is_empty()).then(|| self.value.iter().copied().collect())
     }

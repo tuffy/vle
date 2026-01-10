@@ -536,12 +536,17 @@ impl BufferContext {
 
     pub fn newline(&mut self) {
         let mut buf = self.buffer.borrow_mut();
+        let indent_char = if self.tabs_required {
+            '\t'
+        } else {
+            ' '
+        };
 
         let (indent, all_indent) = match line_start_to_cursor(&buf.rope, self.cursor) {
             Some(iter) => {
                 let mut iter = iter.peekable();
                 let mut indent = 0;
-                while iter.next_if(|c| *c == ' ').is_some() {
+                while iter.next_if(|c| *c == indent_char).is_some() {
                     indent += 1;
                 }
                 (indent, iter.next().is_none())
@@ -562,7 +567,7 @@ impl BufferContext {
             self.cursor += 1;
             self.cursor_column = 0;
             for _ in 0..indent {
-                rope.insert_char(self.cursor, ' ');
+                rope.insert_char(self.cursor, indent_char);
                 self.cursor += 1;
                 self.cursor_column += 1;
             }
@@ -1281,8 +1286,9 @@ fn select_next_char<const FORWARD: bool>(
 impl From<Buffer> for BufferContext {
     fn from(buffer: Buffer) -> Self {
         use crate::syntax::Highlighter;
+        use std::env::var;
 
-        let spaces_per_tab: usize = std::env::var("VLE_SPACES_PER_TAB")
+        let spaces_per_tab: usize = var("VLE_SPACES_PER_TAB")
             .ok()
             .and_then(|s| s.parse().ok())
             .filter(|s| (1..=16).contains(s))
@@ -1290,7 +1296,7 @@ impl From<Buffer> for BufferContext {
 
         Self {
             tab_substitution: std::iter::repeat_n(' ', spaces_per_tab).collect(),
-            tabs_required: buffer.syntax.tabs_required(),
+            tabs_required: var("VLE_ALWAYS_TAB").is_ok() || buffer.syntax.tabs_required(),
             buffer: Rc::new(RefCell::new(buffer)),
             viewport_height: 0,
             cursor: 0,
