@@ -359,23 +359,11 @@ pub static OPEN_FILE: &[Keybinding] = &[
     },
 ];
 
-pub static FIND: &[Keybinding] = &[
-    Keybinding {
-        modifier: None,
-        keys: &[UP],
-        action: "Earlier Item in History",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &[DOWN],
-        action: "Later Item in History",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["Enter"],
-        action: "Select All Matches",
-    },
-];
+pub static FIND: &[Keybinding] = &[Keybinding {
+    modifier: None,
+    keys: &["Enter"],
+    action: "Select All Matches",
+}];
 
 pub static SELECT_MATCHES: &[Keybinding] = &[
     Keybinding {

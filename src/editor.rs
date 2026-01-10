@@ -9,7 +9,7 @@
 use crate::{
     buffer::{BufferContext, BufferId, BufferList, CutBuffer},
     files::FileChooserState,
-    prompt::{LinePrompt, SearchHistory, SearchPrompt},
+    prompt::{LinePrompt, SearchPrompt},
 };
 use crossterm::event::Event;
 use ratatui::{
@@ -39,7 +39,6 @@ pub enum EditorMode {
     SelectMatches {
         matches: Vec<(usize, usize)>,
         match_idx: Option<usize>,
-        search_history: SearchHistory,
     },
     ReplaceMatches {
         matches: Vec<(usize, usize)>,
@@ -90,7 +89,6 @@ pub struct Editor {
     mode: EditorMode,
     cut_buffer: Option<CutBuffer>, // cut buffer shared globally across editor
     show_help: bool,
-    search_history: SearchHistory,
 }
 
 impl Editor {
@@ -100,7 +98,6 @@ impl Editor {
             mode: EditorMode::default(),
             cut_buffer: None,
             show_help: false,
-            search_history: SearchHistory::default(),
         })
     }
 
@@ -206,14 +203,10 @@ impl Editor {
                         self.mode = new_mode;
                     }
                 }
-                EditorMode::SelectMatches {
-                    matches,
-                    match_idx,
-                    search_history,
-                } => {
+                EditorMode::SelectMatches { matches, match_idx } => {
                     if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
                         && let Some(new_mode) =
-                            process_select_matches(buf, matches, match_idx, search_history, event)
+                            process_select_matches(buf, matches, match_idx, event)
                     {
                         self.mode = new_mode;
                     }
@@ -467,7 +460,7 @@ impl Editor {
             }
             key!(CONTROL, 'f') => {
                 self.mode = EditorMode::Find {
-                    prompt: SearchPrompt::new(&self.search_history),
+                    prompt: SearchPrompt::default(),
                 };
             }
             key!(CONTROL, 'o') => match FileChooserState::new() {
@@ -722,6 +715,10 @@ fn process_find(
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
+    // TODO - up selects previous match
+    // TODO - down selected next match
+    // TODO - enter finishes search
+
     match event {
         Event::Key(KeyEvent {
             code: KeyCode::Char(c),
@@ -736,14 +733,6 @@ fn process_find(
             prompt.pop();
             None
         }
-        key!(Up) => {
-            prompt.previous_entry();
-            None
-        }
-        key!(Down) => {
-            prompt.next_entry();
-            None
-        }
         key!(Enter) => {
             match prompt.get_value() {
                 Some(search) => {
@@ -756,7 +745,6 @@ fn process_find(
                         EditorMode::SelectMatches {
                             matches,
                             match_idx: None,
-                            search_history: prompt.history().clone(),
                         }
                     })
                 }
@@ -771,7 +759,6 @@ fn process_select_matches(
     buffer: &mut BufferContext,
     matches: &mut Vec<(usize, usize)>,
     match_idx: &mut Option<usize>,
-    search_history: &SearchHistory,
     event: Event,
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -847,7 +834,7 @@ fn process_select_matches(
         key!(CONTROL, 'f') => {
             buffer.clear_selection();
             Some(EditorMode::Find {
-                prompt: SearchPrompt::new(search_history),
+                prompt: SearchPrompt::default(),
             })
         }
         key!(CONTROL, 'r') => {

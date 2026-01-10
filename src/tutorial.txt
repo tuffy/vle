@@ -9,7 +9,7 @@ Version: VERSION
 
 Press the F1 key to see a list of keybindings.
 
-# About This Editor
+# About The Very Little Editor
 
 Inspired by GNU Nano and other minimalist editors, this editor is designed
 to provide a small but powerful set of features taken from all the text
