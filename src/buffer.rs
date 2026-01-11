@@ -858,13 +858,13 @@ impl BufferContext {
         }
     }
 
-    pub fn indent(&mut self) {
-        // TODO - adjust secondary cursor position
+    pub fn indent(&mut self, alt: Option<AltCursor<'_>>) {
         let indent = match self.tabs_required {
             false => self.tab_substitution.as_str(),
             true => "\t",
         };
         let mut buf = self.buffer.borrow_mut();
+        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
 
         buf.log_undo(self.cursor, self.cursor_column);
 
@@ -877,9 +877,11 @@ impl BufferContext {
                 {
                     rope.insert(line_start, indent);
                     self.cursor += indent.len();
+                    alt += indent.len();
                 }
             }
             selection @ Some(_) => {
+                // TODO - apply indent to secondary cursor also
                 let mut rope = buf.rope.get_mut();
                 let indent_lines = selected_lines(&rope, self.cursor, selection)
                     .filter(|l| l.end > l.start)
@@ -898,13 +900,13 @@ impl BufferContext {
         }
     }
 
-    pub fn un_indent(&mut self) {
-        // TODO - adjust secondary cursor position
+    pub fn un_indent(&mut self, alt: Option<AltCursor<'_>>) {
         let indent = match self.tabs_required {
             false => self.tab_substitution.as_str(),
             true => "\t",
         };
         let mut buf = self.buffer.borrow_mut();
+        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
 
         match self.selection {
             None => {
@@ -924,9 +926,12 @@ impl BufferContext {
                     rope.remove(line_start..line_start + indent.len());
                     self.cursor = line_start;
                     self.cursor_column = 0;
+                    // TODO - accomodate alt cursor inside indented region
+                    alt -= indent.len();
                 }
             }
             selection @ Some(_) => {
+                // TODO - apply indent to secondary cursor also
                 let unindent_lines = selected_lines(&buf.rope, self.cursor, selection)
                     .filter(|l| l.end > l.start)
                     .collect::<Vec<_>>();

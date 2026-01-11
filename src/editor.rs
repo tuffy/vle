@@ -515,8 +515,8 @@ impl Editor {
                     self.mode = EditorMode::VerifySave;
                 }
             }
-            key!(Tab) => self.update_buffer(|b| b.indent()),
-            key!(SHIFT, BackTab) => self.update_buffer(|b| b.un_indent()),
+            key!(Tab) => self.update_buffer_at(|b, a| b.indent(a)),
+            key!(SHIFT, BackTab) => self.update_buffer_at(|b, a| b.un_indent(a)),
             key!(CONTROL, 'p') => self.update_buffer(|b| b.select_matching_paren()),
             key!(CONTROL, 'e') => {
                 self.mode = EditorMode::SelectInside;
