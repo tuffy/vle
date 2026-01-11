@@ -881,7 +881,6 @@ impl BufferContext {
                 }
             }
             selection @ Some(_) => {
-                // TODO - apply indent to secondary cursor also
                 let mut rope = buf.rope.get_mut();
                 let indent_lines = selected_lines(&rope, self.cursor, selection)
                     .filter(|l| l.end > l.start)
@@ -896,6 +895,9 @@ impl BufferContext {
                     .last()
                     .map(|l| l.end + (indent.len() * indent_lines.len()))
                     .unwrap_or(0);
+
+                // TODO - accomodate alt cursor inside indented region
+                alt.update(|pos| *pos += indent.len() * indent_lines.len());
             }
         }
     }
@@ -931,7 +933,6 @@ impl BufferContext {
                 }
             }
             selection @ Some(_) => {
-                // TODO - apply indent to secondary cursor also
                 let unindent_lines = selected_lines(&buf.rope, self.cursor, selection)
                     .filter(|l| l.end > l.start)
                     .collect::<Vec<_>>();
@@ -957,6 +958,11 @@ impl BufferContext {
                         .last()
                         .map(|l| l.end - (unindent_lines.len() * indent.len()))
                         .unwrap_or(0);
+
+                    // TODO - accomodate alt cursor inside un-indented region
+                    alt.update(|pos| {
+                        *pos = pos.saturating_sub(indent.len() * unindent_lines.len())
+                    });
                 }
             }
         }
