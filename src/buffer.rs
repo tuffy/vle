@@ -601,7 +601,6 @@ impl BufferContext {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
-        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
 
         let update = |pos: &mut usize| match self.cursor.cmp(pos) {
             Ordering::Less => {
@@ -615,6 +614,7 @@ impl BufferContext {
 
         match self.selection.take() {
             None => {
+                let mut alt = Secondary::new(alt, |a| a >= self.cursor);
                 if let Some(prev) = self.cursor.checked_sub(1)
                     && match rope.get_char(prev) {
                         Some('(') if rope.get_char(self.cursor) == Some(')') => {
@@ -659,6 +659,7 @@ impl BufferContext {
                 }
             }
             Some(current_selection) => {
+                let mut alt = Secondary::new(alt, |a| a >= self.cursor.min(current_selection));
                 zap_selection(
                     &mut rope,
                     &mut self.cursor,
@@ -674,16 +675,17 @@ impl BufferContext {
         let buf = &mut self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
-        let mut alt = Secondary::new(alt, |a| a > self.cursor);
 
         match self.selection.take() {
             None => {
+                let mut alt = Secondary::new(alt, |a| a > self.cursor);
                 if rope.try_remove(self.cursor..(self.cursor + 1)).is_ok() {
                     alt -= 1;
                 }
                 // leave our cursor position and current column unchanged
             }
             Some(current_selection) => {
+                let mut alt = Secondary::new(alt, |a| a > self.cursor.min(current_selection));
                 zap_selection(
                     &mut rope,
                     &mut self.cursor,
@@ -820,7 +822,6 @@ impl BufferContext {
     }
 
     pub fn perform_undo(&mut self) {
-        // TODO - adjust secondary cursor position?
         let mut buf = self.buffer.borrow_mut();
         match buf.undo.pop() {
             Some(Undo { mut state, .. }) => {
@@ -838,7 +839,6 @@ impl BufferContext {
     }
 
     pub fn perform_redo(&mut self) {
-        // TODO - adjust secondary cursor position?
         let mut buf = self.buffer.borrow_mut();
         match buf.redo.pop() {
             Some(mut state) => {
@@ -1452,7 +1452,13 @@ fn zap_selection(
         // TODO - accomodate secondary being inside selection
         *cursor = selection_start;
         *column = cursor_column(rope, *cursor);
-        *secondary -= selection_end - selection_start;
+        secondary.update(|pos| {
+            if (selection_start..selection_end).contains(pos) {
+                *pos = selection_start;
+            } else {
+                *pos -= selection_end - selection_start;
+            }
+        });
     }
 }
 
