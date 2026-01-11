@@ -448,7 +448,7 @@ impl Editor {
                 ..
             }) => self.update_buffer_at(|b, a| b.insert_char(c, a)),
             key!(Backspace) => self.update_buffer_at(|b, a| b.backspace(a)),
-            key!(Delete) => self.update_buffer(|b| b.delete()),
+            key!(Delete) => self.update_buffer_at(|b, a| b.delete(a)),
             key!(Enter) => self.update_buffer(|b| b.newline()),
             key!(CONTROL, 'w') => self.update_buffer(|b| b.select_whole_lines()),
             key!(CONTROL, 'x') => self.perform_cut(),
@@ -481,7 +481,11 @@ impl Editor {
                 }
             }
             key!(CONTROL, 'o') => match FileChooserState::new() {
-                Ok(chooser) => self.mode = EditorMode::Open { chooser: Box::new(chooser) },
+                Ok(chooser) => {
+                    self.mode = EditorMode::Open {
+                        chooser: Box::new(chooser),
+                    }
+                }
                 Err(err) => {
                     self.update_buffer(|b| b.set_error(err.to_string()));
                 }

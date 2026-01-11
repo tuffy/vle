@@ -508,11 +508,26 @@ impl BufferContext {
             );
         }
         alt += match c {
-            '(' => {rope.insert(self.cursor, "()"); 2}
-            '[' => {rope.insert(self.cursor, "[]"); 2}
-            '{' => {rope.insert(self.cursor, "{}"); 2}
-            '"' => {rope.insert(self.cursor, "\"\""); 2}
-            c => {rope.insert_char(self.cursor, c); 1}
+            '(' => {
+                rope.insert(self.cursor, "()");
+                2
+            }
+            '[' => {
+                rope.insert(self.cursor, "[]");
+                2
+            }
+            '{' => {
+                rope.insert(self.cursor, "{}");
+                2
+            }
+            '"' => {
+                rope.insert(self.cursor, "\"\"");
+                2
+            }
+            c => {
+                rope.insert_char(self.cursor, c);
+                1
+            }
         };
         self.cursor += 1;
         self.cursor_column += 1;
@@ -631,7 +646,7 @@ impl BufferContext {
                                 alt -= 1;
                             }
                             removed
-                        },
+                        }
                     }
                 {
                     self.cursor -= 1;
@@ -650,18 +665,21 @@ impl BufferContext {
         }
     }
 
-    pub fn delete(&mut self) {
-        // TODO - adjust secondary cursor position
+    pub fn delete(&mut self, alt: Option<AltCursor<'_>>) {
         let buf = &mut self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
+        let mut alt = Secondary::new(alt, |a| a > self.cursor);
 
         match self.selection.take() {
             None => {
-                let _ = rope.try_remove(self.cursor..(self.cursor + 1));
-                // leave cursor position and current column unchanged
+                if rope.try_remove(self.cursor..(self.cursor + 1)).is_ok() {
+                    alt -= 1;
+                }
+                // leave our cursor position and current column unchanged
             }
             Some(current_selection) => {
+                // TODO - adjust secondary cursor in zap_selection
                 zap_selection(
                     &mut rope,
                     &mut self.cursor,
@@ -1258,13 +1276,17 @@ impl<'b> Secondary<'b> {
 
 impl std::ops::AddAssign<usize> for Secondary<'_> {
     fn add_assign(&mut self, rhs: usize) {
-        self.update(|c| { *c += rhs; })
+        self.update(|c| {
+            *c += rhs;
+        })
     }
 }
 
 impl std::ops::SubAssign<usize> for Secondary<'_> {
     fn sub_assign(&mut self, rhs: usize) {
-        self.update(|c| { *c -= rhs; })
+        self.update(|c| {
+            *c -= rhs;
+        })
     }
 }
 
