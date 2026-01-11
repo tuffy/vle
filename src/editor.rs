@@ -447,7 +447,7 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => self.update_buffer_at(|b, a| b.insert_char(c, a)),
-            key!(Backspace) => self.update_buffer(|b| b.backspace()),
+            key!(Backspace) => self.update_buffer_at(|b, a| b.backspace(a)),
             key!(Delete) => self.update_buffer(|b| b.delete()),
             key!(Enter) => self.update_buffer(|b| b.newline()),
             key!(CONTROL, 'w') => self.update_buffer(|b| b.select_whole_lines()),

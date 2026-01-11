@@ -519,6 +519,7 @@ impl BufferContext {
     }
 
     pub fn paste(&mut self, pasted: &CutBuffer) {
+        // TODO - adjust secondary cursor position
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
@@ -537,6 +538,7 @@ impl BufferContext {
     }
 
     pub fn newline(&mut self) {
+        // TODO - adjust secondary cursor position
         let mut buf = self.buffer.borrow_mut();
         let indent_char = if self.tabs_required { '\t' } else { ' ' };
 
@@ -572,28 +574,64 @@ impl BufferContext {
         }
     }
 
-    pub fn backspace(&mut self) {
+    pub fn backspace(&mut self, alt: Option<AltCursor<'_>>) {
+        use std::cmp::Ordering;
+
+        // TODO - adjust secondary cursor position
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
+        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
+
+        let update = |pos: &mut usize| match self.cursor.cmp(pos) {
+            Ordering::Less => {
+                *pos -= 2;
+            }
+            Ordering::Equal => {
+                *pos -= 1;
+            }
+            Ordering::Greater => { /* do nothing */ }
+        };
 
         match self.selection.take() {
             None => {
                 if let Some(prev) = self.cursor.checked_sub(1)
                     && match rope.get_char(prev) {
                         Some('(') if rope.get_char(self.cursor) == Some(')') => {
-                            rope.try_remove(prev..=self.cursor).is_ok()
+                            let removed = rope.try_remove(prev..=self.cursor).is_ok();
+                            if removed {
+                                alt.update(|pos| update(pos));
+                            }
+                            removed
                         }
                         Some('[') if rope.get_char(self.cursor) == Some(']') => {
-                            rope.try_remove(prev..=self.cursor).is_ok()
+                            let removed = rope.try_remove(prev..=self.cursor).is_ok();
+                            if removed {
+                                alt.update(|pos| update(pos));
+                            }
+                            removed
                         }
                         Some('{') if rope.get_char(self.cursor) == Some('}') => {
-                            rope.try_remove(prev..=self.cursor).is_ok()
+                            let removed = rope.try_remove(prev..=self.cursor).is_ok();
+                            if removed {
+                                alt.update(|pos| update(pos));
+                            }
+                            removed
                         }
                         Some('"') if rope.get_char(self.cursor) == Some('"') => {
-                            rope.try_remove(prev..=self.cursor).is_ok()
+                            let removed = rope.try_remove(prev..=self.cursor).is_ok();
+                            if removed {
+                                alt.update(|pos| update(pos));
+                            }
+                            removed
                         }
-                        _ => rope.try_remove(prev..self.cursor).is_ok(),
+                        _ => {
+                            let removed = rope.try_remove(prev..self.cursor).is_ok();
+                            if removed {
+                                alt -= 1;
+                            }
+                            removed
+                        },
                     }
                 {
                     self.cursor -= 1;
@@ -601,6 +639,7 @@ impl BufferContext {
                 }
             }
             Some(current_selection) => {
+                // TODO - adjust secondary cursor in zap_selection
                 zap_selection(
                     &mut rope,
                     &mut self.cursor,
@@ -612,6 +651,7 @@ impl BufferContext {
     }
 
     pub fn delete(&mut self) {
+        // TODO - adjust secondary cursor position
         let buf = &mut self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
@@ -643,6 +683,7 @@ impl BufferContext {
     }
 
     pub fn take_selection(&mut self) -> Option<CutBuffer> {
+        // TODO - adjust secondary cursor position
         let selection = self.selection.take()?;
         let (selection_start, selection_end) = reorder(self.cursor, selection);
         let mut buf = self.buffer.borrow_mut();
@@ -754,6 +795,7 @@ impl BufferContext {
     }
 
     pub fn perform_undo(&mut self) {
+        // TODO - adjust secondary cursor position?
         let mut buf = self.buffer.borrow_mut();
         match buf.undo.pop() {
             Some(Undo { mut state, .. }) => {
@@ -771,6 +813,7 @@ impl BufferContext {
     }
 
     pub fn perform_redo(&mut self) {
+        // TODO - adjust secondary cursor position?
         let mut buf = self.buffer.borrow_mut();
         match buf.redo.pop() {
             Some(mut state) => {
@@ -791,6 +834,7 @@ impl BufferContext {
     }
 
     pub fn indent(&mut self) {
+        // TODO - adjust secondary cursor position
         let indent = match self.tabs_required {
             false => self.tab_substitution.as_str(),
             true => "\t",
@@ -830,6 +874,7 @@ impl BufferContext {
     }
 
     pub fn un_indent(&mut self) {
+        // TODO - adjust secondary cursor position
         let indent = match self.tabs_required {
             false => self.tab_substitution.as_str(),
             true => "\t",
@@ -920,6 +965,7 @@ impl BufferContext {
     /// Returns true if selection is active and surround characters
     /// are deleted
     pub fn delete_surround(&mut self) -> bool {
+        // TODO - adjust secondary cursor position
         let Some(selection) = &mut self.selection else {
             return false;
         };
@@ -1071,6 +1117,7 @@ impl BufferContext {
     }
 
     pub fn clear_matches(&mut self, mut matches: &mut [(usize, usize)]) {
+        // TODO - adjust secondary cursor position
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
@@ -1102,6 +1149,7 @@ impl BufferContext {
     }
 
     pub fn multi_insert_char(&mut self, mut matches: &mut [(usize, usize)], c: char) {
+        // TODO - adjust secondary cursor position
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
@@ -1133,6 +1181,7 @@ impl BufferContext {
     }
 
     pub fn multi_backspace(&mut self, mut matches: &mut [(usize, usize)]) {
+        // TODO - adjust secondary cursor position
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
@@ -1197,14 +1246,25 @@ impl<'b> Secondary<'b> {
     fn new(alt: Option<AltCursor<'b>>, f: impl FnOnce(usize) -> bool) -> Self {
         Self(alt.filter(|alt| f(*alt.cursor)))
     }
+
+    /// Updates secondary cursor in-place, if available
+    fn update(&mut self, f: impl FnOnce(&mut usize)) {
+        if let Some(AltCursor { cursor, selection }) = &mut self.0 {
+            f(cursor);
+            **selection = None;
+        }
+    }
 }
 
 impl std::ops::AddAssign<usize> for Secondary<'_> {
     fn add_assign(&mut self, rhs: usize) {
-        if let Some(AltCursor { cursor, selection }) = &mut self.0 {
-            **cursor += rhs;
-            **selection = None;
-        }
+        self.update(|c| { *c += rhs; })
+    }
+}
+
+impl std::ops::SubAssign<usize> for Secondary<'_> {
+    fn sub_assign(&mut self, rhs: usize) {
+        self.update(|c| { *c -= rhs; })
     }
 }
 
