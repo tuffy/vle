@@ -996,8 +996,7 @@ impl BufferContext {
 
     /// Returns true if selection is active and surround characters
     /// are deleted
-    pub fn delete_surround(&mut self) -> bool {
-        // TODO - adjust secondary cursor position
+    pub fn delete_surround(&mut self, alt: Option<AltCursor<'_>>) -> bool {
         let Some(selection) = &mut self.selection else {
             return false;
         };
@@ -1005,6 +1004,7 @@ impl BufferContext {
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
         let (start, end) = reorder(&mut self.cursor, selection);
+        let mut alt = Secondary::new(alt, |a| a >= *start);
 
         if let Some(prev_pos) = start.checked_sub(1)
             && let Some(prev_char) = rope.get_char(prev_pos)
@@ -1016,6 +1016,7 @@ impl BufferContext {
         {
             let _ = rope.try_remove(*end..*end + 1);
             let _ = rope.try_remove(prev_pos..*start);
+            alt.update(|pos| *pos -= if *pos > *end { 2 } else { 1 });
             *end -= 1;
             *start -= 1;
             self.cursor_column = cursor_column(&rope, self.cursor);
