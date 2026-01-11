@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::{
-    buffer::{BufferContext, BufferId, BufferList, CutBuffer, SearchArea},
+    buffer::{AltCursor, BufferContext, BufferId, BufferList, CutBuffer, SearchArea},
     files::FileChooserState,
     prompt::{LinePrompt, SearchPrompt},
 };
@@ -128,6 +128,19 @@ impl Editor {
 
     fn update_buffer(&mut self, f: impl FnOnce(&mut crate::buffer::BufferContext)) {
         self.layout.selected_buffer_list_mut().update_buf(f)
+    }
+
+    fn update_buffer_at(
+        &mut self,
+        f: impl FnOnce(&mut crate::buffer::BufferContext, Option<AltCursor<'_>>),
+    ) {
+        let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
+        // Both primary and secondary buffer should be at the same index
+        // within the BufferList.
+        let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
+        if let Some(primary) = primary.current_mut() {
+            f(primary, secondary.map(|s| s.alt_cursor()))
+        }
     }
 
     fn on_buffer<T>(
@@ -433,7 +446,7 @@ impl Editor {
                 modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.update_buffer(|b| b.insert_char(c)),
+            }) => self.update_buffer_at(|b, a| b.insert_char(c, a)),
             key!(Backspace) => self.update_buffer(|b| b.backspace()),
             key!(Delete) => self.update_buffer(|b| b.delete()),
             key!(Enter) => self.update_buffer(|b| b.newline()),
@@ -1108,6 +1121,32 @@ impl Layout {
                 which: VerticalPos::Right,
                 ..
             } => buffer,
+        }
+    }
+
+    fn selected_buffer_list_pair_mut(&mut self) -> (&mut BufferList, Option<&mut BufferList>) {
+        match self {
+            Self::Single(buffer) => (buffer, None),
+            Self::Horizontal {
+                top: buffer,
+                bottom: alt,
+                which: HorizontalPos::Top,
+            }
+            | Self::Horizontal {
+                top: alt,
+                bottom: buffer,
+                which: HorizontalPos::Bottom,
+            }
+            | Self::Vertical {
+                left: buffer,
+                right: alt,
+                which: VerticalPos::Left,
+            }
+            | Self::Vertical {
+                left: alt,
+                right: buffer,
+                which: VerticalPos::Right,
+            } => (buffer, Some(alt)),
         }
     }
 

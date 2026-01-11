@@ -493,11 +493,13 @@ impl BufferContext {
         }
     }
 
-    pub fn insert_char(&mut self, c: char) {
+    pub fn insert_char(&mut self, c: char, alt: Option<AltCursor<'_>>) {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
+        let mut alt = if_later(self.cursor, alt);
         if let Some(selection) = self.selection.take() {
+            // TODO - adjust alt cursor in zap_selection
             zap_selection(
                 &mut rope,
                 &mut self.cursor,
@@ -505,13 +507,13 @@ impl BufferContext {
                 selection,
             );
         }
-        match c {
-            '(' => rope.insert(self.cursor, "()"),
-            '[' => rope.insert(self.cursor, "[]"),
-            '{' => rope.insert(self.cursor, "{}"),
-            '"' => rope.insert(self.cursor, "\"\""),
-            c => rope.insert_char(self.cursor, c),
-        }
+        alt += match c {
+            '(' => {rope.insert(self.cursor, "()"); 2}
+            '[' => {rope.insert(self.cursor, "[]"); 2}
+            '{' => {rope.insert(self.cursor, "{}"); 2}
+            '"' => {rope.insert(self.cursor, "\"\""); 2}
+            c => {rope.insert_char(self.cursor, c); 1}
+        };
         self.cursor += 1;
         self.cursor_column += 1;
     }
@@ -1170,6 +1172,36 @@ impl BufferContext {
     pub fn set_error<S: Into<Cow<'static, str>>>(&mut self, err: S) {
         self.message = Some(BufferMessage::Error(err.into()))
     }
+
+    pub fn alt_cursor(&mut self) -> AltCursor<'_> {
+        AltCursor {
+            cursor: &mut self.cursor,
+            selection: &mut self.selection,
+        }
+    }
+}
+
+pub struct AltCursor<'b> {
+    cursor: &'b mut usize,
+    selection: &'b mut Option<usize>,
+}
+
+/// Secondary cursor is modified only if it's later in the same
+/// buffer as the primary cursor.
+fn if_later<'b>(cursor: usize, alt: Option<AltCursor<'b>>) -> Secondary<'b> {
+    Secondary(alt.filter(|alt| *alt.cursor >= cursor))
+}
+
+/// A secondary cursor which implements various math operations
+struct Secondary<'b>(Option<AltCursor<'b>>);
+
+impl std::ops::AddAssign<usize> for Secondary<'_> {
+    fn add_assign(&mut self, rhs: usize) {
+        if let Some(AltCursor { cursor, selection }) = &mut self.0 {
+            **cursor += rhs;
+            **selection = None;
+        }
+    }
 }
 
 /// Buffer has been modified since last save
@@ -1430,6 +1462,10 @@ impl BufferList {
 
     pub fn current_index(&self) -> usize {
         self.current
+    }
+
+    pub fn get_mut(&mut self, idx: usize) -> Option<&mut BufferContext> {
+        self.buffers.get_mut(idx)
     }
 
     pub fn total_buffers(&self) -> usize {
