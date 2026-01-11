@@ -237,16 +237,35 @@ impl Editor {
                     }
                 }
                 EditorMode::Find { prompt, area } => {
-                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                        && let Some(new_mode) = process_find(buf, area, prompt, event)
+                    let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
+                    let cur_idx = cur_buf_list.current_index();
+                    if let Some(buf) = cur_buf_list.current_mut()
+                        && let Some(new_mode) = process_find(
+                            buf,
+                            area,
+                            prompt,
+                            event,
+                            alt_buf_list
+                                .and_then(|l| l.get_mut(cur_idx))
+                                .map(|b| b.alt_cursor()),
+                        )
                     {
                         self.mode = new_mode;
                     }
                 }
                 EditorMode::SelectMatches { matches, match_idx } => {
-                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                        && let Some(new_mode) =
-                            process_select_matches(buf, matches, match_idx, event)
+                    let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
+                    let cur_idx = cur_buf_list.current_index();
+                    if let Some(buf) = cur_buf_list.current_mut()
+                        && let Some(new_mode) = process_select_matches(
+                            buf,
+                            matches,
+                            match_idx,
+                            event,
+                            alt_buf_list
+                                .and_then(|l| l.get_mut(cur_idx))
+                                .map(|b| b.alt_cursor()),
+                        )
                     {
                         self.mode = new_mode;
                     }
@@ -760,6 +779,7 @@ fn process_find(
     area: &SearchArea,
     prompt: &mut SearchPrompt,
     event: Event,
+    alt: Option<AltCursor<'_>>,
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
@@ -814,7 +834,7 @@ fn process_find(
                     } else {
                         let cursor = buffer.get_cursor();
                         let mut match_idx = None;
-                        buffer.clear_matches(&mut matches);
+                        buffer.clear_matches(&mut matches, alt);
                         EditorMode::ReplaceMatches {
                             matches: matches
                                 .into_iter()
@@ -860,6 +880,7 @@ fn process_select_matches(
     matches: &mut Vec<(usize, usize)>,
     match_idx: &mut Option<usize>,
     event: Event,
+    alt: Option<AltCursor<'_>>,
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
@@ -932,7 +953,7 @@ fn process_select_matches(
             }
         }
         key!(CONTROL, 'r') => {
-            buffer.clear_matches(matches);
+            buffer.clear_matches(matches, alt);
             if let Some((cursor, _)) = match_idx.and_then(|idx| matches.get(idx)) {
                 buffer.set_cursor(*cursor);
             }

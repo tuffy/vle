@@ -1149,11 +1149,17 @@ impl BufferContext {
             .collect()
     }
 
-    pub fn clear_matches(&mut self, mut matches: &mut [(usize, usize)]) {
-        // TODO - adjust secondary cursor position
+    pub fn clear_matches(
+        &mut self,
+        mut matches: &mut [(usize, usize)],
+        alt: Option<AltCursor<'_>>,
+    ) {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
+        // TODO - update alt cursor
+        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
+
         loop {
             match matches {
                 [] => break,
@@ -1162,6 +1168,11 @@ impl BufferContext {
                     if *s <= self.cursor {
                         self.cursor = self.cursor.saturating_sub((*e - *s).min(self.cursor - *s));
                     }
+                    alt.update(|cursor| {
+                        if *s <= *cursor {
+                            *cursor = cursor.saturating_sub((*e - *s).min(*cursor - *s));
+                        }
+                    });
                     break;
                 }
                 [(s, e), rest @ ..] => {
@@ -1170,6 +1181,11 @@ impl BufferContext {
                     if *s <= self.cursor {
                         self.cursor = self.cursor.saturating_sub(len.min(self.cursor - *s));
                     }
+                    alt.update(|cursor| {
+                        if *s <= *cursor {
+                            *cursor = cursor.saturating_sub(len.min(*cursor - *s));
+                        }
+                    });
                     for (s, e) in rest.iter_mut() {
                         *s -= len;
                         *e -= len;
