@@ -952,15 +952,22 @@ impl BufferContext {
         }
     }
 
-    pub fn select_inside(&mut self, (start, end): (char, char), stack: Option<(char, char)>) {
+    pub fn select_inside(
+        &mut self,
+        (start, end): (char, char),
+        stack: Option<(char, char)>,
+        alt: Option<AltCursor<'_>>,
+    ) {
         match &mut self.selection {
             Some(selection) => {
                 let mut buf = self.buffer.borrow_mut();
                 buf.log_undo(self.cursor, self.cursor_column);
                 let mut rope = buf.rope.get_mut();
+                let mut alt = Secondary::new(alt, |a| a >= self.cursor);
                 let (start_pos, end_pos) = reorder(&mut self.cursor, selection);
                 let _ = rope.try_insert_char(*end_pos, end);
                 let _ = rope.try_insert_char(*start_pos, start);
+                alt.update(|pos| *pos += if *pos > *end_pos { 2 } else { 1 });
                 *start_pos += 1;
                 *end_pos += 1;
                 self.cursor_column = cursor_column(&rope, self.cursor);

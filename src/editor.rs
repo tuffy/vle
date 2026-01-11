@@ -570,7 +570,7 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                self.update_buffer(|b| b.select_inside(('(', ')'), Some((')', '('))));
+                self.update_buffer_at(|b, a| b.select_inside(('(', ')'), Some((')', '(')), a));
                 self.mode = EditorMode::default();
             }
             Event::Key(KeyEvent {
@@ -579,7 +579,7 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                self.update_buffer(|b| b.select_inside(('[', ']'), Some((']', '['))));
+                self.update_buffer_at(|b, a| b.select_inside(('[', ']'), Some((']', '[')), a));
                 self.mode = EditorMode::default();
             }
             Event::Key(KeyEvent {
@@ -588,7 +588,7 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                self.update_buffer(|b| b.select_inside(('{', '}'), Some(('}', '{'))));
+                self.update_buffer_at(|b, a| b.select_inside(('{', '}'), Some(('}', '{')), a));
                 self.mode = EditorMode::default();
             }
             Event::Key(KeyEvent {
@@ -597,15 +597,15 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                self.update_buffer(|b| b.select_inside(('<', '>'), Some(('>', '<'))));
+                self.update_buffer_at(|b, a| b.select_inside(('<', '>'), Some(('>', '<')), a));
                 self.mode = EditorMode::default();
             }
             key!('"') => {
-                self.update_buffer(|b| b.select_inside(('"', '"'), None));
+                self.update_buffer_at(|b, a| b.select_inside(('"', '"'), None, a));
                 self.mode = EditorMode::default();
             }
             key!('\'') => {
-                self.update_buffer(|b| b.select_inside(('\'', '\''), None));
+                self.update_buffer_at(|b, a| b.select_inside(('\'', '\''), None, a));
                 self.mode = EditorMode::default();
             }
             key!(Delete) => {
