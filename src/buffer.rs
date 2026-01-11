@@ -713,16 +713,21 @@ impl BufferContext {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
-        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
+        let mut alt = Secondary::new(alt, |a| a >= selection_start);
 
         rope.get_slice(selection_start..selection_end)
             .map(|r| r.into())
             .inspect(|_| {
                 rope.remove(selection_start..selection_end);
                 self.cursor = selection_start;
-                // TODO - accomodate selection being inside cut
-                alt.update(|pos| *pos -= selection_end - selection_start);
                 self.cursor_column = cursor_column(&rope, self.cursor);
+                alt.update(|pos| {
+                    if (selection_start..selection_end).contains(pos) {
+                        *pos = selection_start;
+                    } else {
+                        *pos -= selection_end - selection_start;
+                    }
+                });
             })
     }
 
@@ -928,8 +933,11 @@ impl BufferContext {
                     rope.remove(line_start..line_start + indent.len());
                     self.cursor = line_start;
                     self.cursor_column = 0;
-                    // TODO - accomodate alt cursor inside indented region
-                    alt -= indent.len();
+                    alt.update(|pos| if (line_start..line_start + indent.len()).contains(pos) {
+                        *pos = line_start;
+                    } else {
+                        *pos -= indent.len();
+                    });
                 }
             }
             selection @ Some(_) => {
@@ -1449,7 +1457,6 @@ fn zap_selection(
 ) {
     let (selection_start, selection_end) = reorder(*cursor, selection);
     if rope.try_remove(selection_start..selection_end).is_ok() {
-        // TODO - accomodate secondary being inside selection
         *cursor = selection_start;
         *column = cursor_column(rope, *cursor);
         secondary.update(|pos| {
