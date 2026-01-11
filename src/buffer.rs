@@ -497,7 +497,7 @@ impl BufferContext {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
-        let mut alt = if_later(self.cursor, alt);
+        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
         if let Some(selection) = self.selection.take() {
             // TODO - adjust alt cursor in zap_selection
             zap_selection(
@@ -1186,14 +1186,18 @@ pub struct AltCursor<'b> {
     selection: &'b mut Option<usize>,
 }
 
-/// Secondary cursor is modified only if it's later in the same
-/// buffer as the primary cursor.
-fn if_later<'b>(cursor: usize, alt: Option<AltCursor<'b>>) -> Secondary<'b> {
-    Secondary(alt.filter(|alt| *alt.cursor >= cursor))
-}
-
 /// A secondary cursor which implements various math operations
 struct Secondary<'b>(Option<AltCursor<'b>>);
+
+impl<'b> Secondary<'b> {
+    /// Takes some optional alternative cursor
+    /// and a conditional which takes that cursor's position and
+    /// returns true if the secondary cursor should be manipulated
+    /// and returns ourself, which implements necessary math operations.
+    fn new(alt: Option<AltCursor<'b>>, f: impl FnOnce(usize) -> bool) -> Self {
+        Self(alt.filter(|alt| f(*alt.cursor)))
+    }
+}
 
 impl std::ops::AddAssign<usize> for Secondary<'_> {
     fn add_assign(&mut self, rhs: usize) {
