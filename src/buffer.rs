@@ -533,12 +533,14 @@ impl BufferContext {
         self.cursor_column += 1;
     }
 
-    pub fn paste(&mut self, pasted: &CutBuffer) {
-        // TODO - adjust secondary cursor position
+    pub fn paste(&mut self, pasted: &CutBuffer, alt: Option<AltCursor<'_>>) {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
+        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
+
         if let Some(selection) = self.selection.take() {
+            // TODO - adjust secondary cursor in zap_selection
             zap_selection(
                 &mut rope,
                 &mut self.cursor,
@@ -548,6 +550,7 @@ impl BufferContext {
         }
         if rope.try_insert(self.cursor, &pasted.data).is_ok() {
             self.cursor += pasted.chars_len;
+            alt += pasted.chars_len;
             self.cursor_column = cursor_column(&rope, self.cursor);
         }
     }

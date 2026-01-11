@@ -168,9 +168,16 @@ impl Editor {
 
     fn perform_paste(&mut self) {
         if let Some(cut_buffer) = &self.cut_buffer
-            && let Some(buffer) = self.layout.selected_buffer_list_mut().current_mut()
+            && let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut()
+            && let cur_idx = cur_buf_list.current_index()
+            && let Some(buffer) = cur_buf_list.current_mut()
         {
-            buffer.paste(cut_buffer);
+            buffer.paste(
+                cut_buffer,
+                alt_buf_list
+                    .and_then(|l| l.get_mut(cur_idx))
+                    .map(|b| b.alt_cursor()),
+            );
         }
     }
 
@@ -503,7 +510,7 @@ impl Editor {
                 }
             }
             Event::Paste(pasted) => {
-                self.on_buffer(|b| b.paste(&pasted.into()));
+                self.update_buffer_at(|b, a| b.paste(&pasted.into(), a));
             }
             _ => { /* ignore other events */ }
         }
