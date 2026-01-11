@@ -1157,8 +1157,7 @@ impl BufferContext {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
-        // TODO - update alt cursor
-        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
+        let mut alt = Secondary::new(alt, |_| true);
 
         loop {
             match matches {
@@ -1197,11 +1196,17 @@ impl BufferContext {
         self.selection = None;
     }
 
-    pub fn multi_insert_char(&mut self, mut matches: &mut [(usize, usize)], c: char) {
-        // TODO - adjust secondary cursor position
+    pub fn multi_insert_char(
+        &mut self,
+        mut matches: &mut [(usize, usize)],
+        c: char,
+        alt: Option<AltCursor<'_>>,
+    ) {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
+        let mut alt = Secondary::new(alt, |_| true);
+
         loop {
             match matches {
                 [] => break,
@@ -1210,6 +1215,11 @@ impl BufferContext {
                     if *cursor <= self.cursor {
                         self.cursor += 1;
                     }
+                    alt.update(|a| {
+                        if *cursor <= *a {
+                            *a += 1;
+                        }
+                    });
                     *cursor += 1;
                     break;
                 }
@@ -1218,6 +1228,11 @@ impl BufferContext {
                     if *cursor <= self.cursor {
                         self.cursor += 1;
                     }
+                    alt.update(|a| {
+                        if *cursor <= *a {
+                            *a += 1;
+                        }
+                    });
                     *cursor += 1;
                     for (s, e) in rest.iter_mut() {
                         *s += 1;

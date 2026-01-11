@@ -271,9 +271,18 @@ impl Editor {
                     }
                 }
                 EditorMode::ReplaceMatches { matches, match_idx } => {
-                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                        && let Some(new_mode) =
-                            process_replace_matches(buf, matches, match_idx, event)
+                    let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
+                    let cur_idx = cur_buf_list.current_index();
+                    if let Some(buf) = cur_buf_list.current_mut()
+                        && let Some(new_mode) = process_replace_matches(
+                            buf,
+                            matches,
+                            match_idx,
+                            event,
+                            alt_buf_list
+                                .and_then(|l| l.get_mut(cur_idx))
+                                .map(|b| b.alt_cursor()),
+                        )
                     {
                         self.mode = new_mode;
                     }
@@ -975,6 +984,7 @@ fn process_replace_matches(
     matches: &mut [(usize, usize)],
     match_idx: &mut Option<usize>,
     event: Event,
+    alt: Option<AltCursor<'_>>,
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
@@ -985,7 +995,7 @@ fn process_replace_matches(
             kind: KeyEventKind::Press,
             ..
         }) => {
-            buffer.multi_insert_char(matches, c);
+            buffer.multi_insert_char(matches, c, alt);
             None
         }
         key!(Backspace) => {
