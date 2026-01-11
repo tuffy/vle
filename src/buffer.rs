@@ -536,11 +536,7 @@ impl BufferContext {
 
     pub fn newline(&mut self) {
         let mut buf = self.buffer.borrow_mut();
-        let indent_char = if self.tabs_required {
-            '\t'
-        } else {
-            ' '
-        };
+        let indent_char = if self.tabs_required { '\t' } else { ' ' };
 
         let (indent, all_indent) = match line_start_to_cursor(&buf.rope, self.cursor) {
             Some(iter) => {
@@ -1082,7 +1078,7 @@ impl BufferContext {
                 [(s, e)] => {
                     let _ = rope.try_remove(*s..*e);
                     if *s <= self.cursor {
-                        self.cursor = self.cursor.saturating_sub(*e - *s);
+                        self.cursor = self.cursor.saturating_sub((*e - *s).min(self.cursor - *s));
                     }
                     break;
                 }
@@ -1090,7 +1086,7 @@ impl BufferContext {
                     let len = *e - *s;
                     let _ = rope.try_remove(*s..*e);
                     if *s <= self.cursor {
-                        self.cursor = self.cursor.saturating_sub(len);
+                        self.cursor = self.cursor.saturating_sub(len.min(self.cursor - *s));
                     }
                     for (s, e) in rest.iter_mut() {
                         *s -= len;
