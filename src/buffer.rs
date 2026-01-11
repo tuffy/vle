@@ -705,19 +705,21 @@ impl BufferContext {
             .map(|r| r.into())
     }
 
-    pub fn take_selection(&mut self) -> Option<CutBuffer> {
-        // TODO - adjust secondary cursor position
+    pub fn take_selection(&mut self, alt: Option<AltCursor<'_>>) -> Option<CutBuffer> {
         let selection = self.selection.take()?;
         let (selection_start, selection_end) = reorder(self.cursor, selection);
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
+        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
 
         rope.get_slice(selection_start..selection_end)
             .map(|r| r.into())
             .inspect(|_| {
                 rope.remove(selection_start..selection_end);
                 self.cursor = selection_start;
+                // TODO - accomodate selection being inside cut
+                alt.update(|pos| *pos -= selection_end - selection_start);
                 self.cursor_column = cursor_column(&rope, self.cursor);
             })
     }

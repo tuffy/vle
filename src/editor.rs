@@ -151,8 +151,14 @@ impl Editor {
     }
 
     fn perform_cut(&mut self) {
-        if let Some(buffer) = self.layout.selected_buffer_list_mut().current_mut()
-            && let Some(selection) = buffer.take_selection()
+        let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
+        let cur_idx = cur_buf_list.current_index();
+        if let Some(buffer) = cur_buf_list.current_mut()
+            && let Some(selection) = buffer.take_selection(
+                alt_buf_list
+                    .and_then(|l| l.get_mut(cur_idx))
+                    .map(|b| b.alt_cursor()),
+            )
         {
             self.cut_buffer = Some(selection);
         }
