@@ -1081,11 +1081,17 @@ impl BufferContext {
                 [] => break,
                 [(s, e)] => {
                     let _ = rope.try_remove(*s..*e);
+                    if *s <= self.cursor {
+                        self.cursor = self.cursor.saturating_sub(*e - *s);
+                    }
                     break;
                 }
                 [(s, e), rest @ ..] => {
                     let len = *e - *s;
                     let _ = rope.try_remove(*s..*e);
+                    if *s <= self.cursor {
+                        self.cursor = self.cursor.saturating_sub(len);
+                    }
                     for (s, e) in rest.iter_mut() {
                         *s -= len;
                         *e -= len;
@@ -1106,11 +1112,17 @@ impl BufferContext {
                 [] => break,
                 [(_, cursor)] => {
                     rope.insert_char(*cursor, c);
+                    if *cursor <= self.cursor {
+                        self.cursor += 1;
+                    }
                     *cursor += 1;
                     break;
                 }
                 [(_, cursor), rest @ ..] => {
                     rope.insert_char(*cursor, c);
+                    if *cursor <= self.cursor {
+                        self.cursor += 1;
+                    }
                     *cursor += 1;
                     for (s, e) in rest.iter_mut() {
                         *s += 1;
@@ -1132,6 +1144,9 @@ impl BufferContext {
                 [(s, e)] => {
                     if *e > *s {
                         let _ = rope.try_remove((*e - 1)..*e);
+                        if *s <= self.cursor {
+                            self.cursor = self.cursor.saturating_sub(1);
+                        }
                         *e -= 1;
                     }
                     break;
@@ -1139,6 +1154,9 @@ impl BufferContext {
                 [(s, e), rest @ ..] => {
                     if *e > *s {
                         let _ = rope.try_remove((*e - 1)..*e);
+                        if *s <= self.cursor {
+                            self.cursor = self.cursor.saturating_sub(1);
+                        }
                         *e -= 1;
                         for (s, e) in rest.iter_mut() {
                             *s -= 1;

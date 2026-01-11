@@ -922,16 +922,10 @@ fn process_replace_matches(
             ..
         }) => {
             buffer.multi_insert_char(matches, c);
-            if let Some((_, cursor)) = match_idx.and_then(|idx| matches.get(idx)) {
-                buffer.set_cursor(*cursor);
-            }
             None
         }
         key!(Backspace) => {
             buffer.multi_backspace(matches);
-            if let Some((_, cursor)) = match_idx.and_then(|idx| matches.get(idx)) {
-                buffer.set_cursor(*cursor);
-            }
             None
         }
         key!(Enter) => Some(EditorMode::default()),
