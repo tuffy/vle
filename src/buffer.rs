@@ -1244,11 +1244,16 @@ impl BufferContext {
         }
     }
 
-    pub fn multi_backspace(&mut self, mut matches: &mut [(usize, usize)]) {
-        // TODO - adjust secondary cursor position
+    pub fn multi_backspace(
+        &mut self,
+        mut matches: &mut [(usize, usize)],
+        alt: Option<AltCursor<'_>>,
+    ) {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
+        let mut alt = Secondary::new(alt, |_| true);
+
         loop {
             match matches {
                 [] => break,
@@ -1258,6 +1263,11 @@ impl BufferContext {
                         if *s <= self.cursor {
                             self.cursor = self.cursor.saturating_sub(1);
                         }
+                        alt.update(|a| {
+                            if *s <= *a {
+                                *a = a.saturating_sub(1);
+                            }
+                        });
                         *e -= 1;
                     }
                     break;
@@ -1268,6 +1278,11 @@ impl BufferContext {
                         if *s <= self.cursor {
                             self.cursor = self.cursor.saturating_sub(1);
                         }
+                        alt.update(|a| {
+                            if *s <= *a {
+                                *a = a.saturating_sub(1);
+                            }
+                        });
                         *e -= 1;
                         for (s, e) in rest.iter_mut() {
                             *s -= 1;

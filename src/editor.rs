@@ -999,7 +999,7 @@ fn process_replace_matches(
             None
         }
         key!(Backspace) => {
-            buffer.multi_backspace(matches);
+            buffer.multi_backspace(matches, alt);
             None
         }
         key!(Enter) => Some(EditorMode::default()),
