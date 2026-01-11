@@ -499,12 +499,12 @@ impl BufferContext {
         let mut rope = buf.rope.get_mut();
         let mut alt = Secondary::new(alt, |a| a >= self.cursor);
         if let Some(selection) = self.selection.take() {
-            // TODO - adjust alt cursor in zap_selection
             zap_selection(
                 &mut rope,
                 &mut self.cursor,
                 &mut self.cursor_column,
                 selection,
+                &mut alt,
             );
         }
         alt += match c {
@@ -540,12 +540,12 @@ impl BufferContext {
         let mut alt = Secondary::new(alt, |a| a >= self.cursor);
 
         if let Some(selection) = self.selection.take() {
-            // TODO - adjust secondary cursor in zap_selection
             zap_selection(
                 &mut rope,
                 &mut self.cursor,
                 &mut self.cursor_column,
                 selection,
+                &mut alt,
             );
         }
         if rope.try_insert(self.cursor, &pasted.data).is_ok() {
@@ -659,12 +659,12 @@ impl BufferContext {
                 }
             }
             Some(current_selection) => {
-                // TODO - adjust secondary cursor in zap_selection
                 zap_selection(
                     &mut rope,
                     &mut self.cursor,
                     &mut self.cursor_column,
                     current_selection,
+                    &mut alt,
                 );
             }
         }
@@ -684,12 +684,12 @@ impl BufferContext {
                 // leave our cursor position and current column unchanged
             }
             Some(current_selection) => {
-                // TODO - adjust secondary cursor in zap_selection
                 zap_selection(
                     &mut rope,
                     &mut self.cursor,
                     &mut self.cursor_column,
                     current_selection,
+                    &mut alt,
                 );
             }
         }
@@ -1383,11 +1383,19 @@ fn update_selection(selection: &mut Option<usize>, cursor: usize, selecting: boo
     }
 }
 
-fn zap_selection(rope: &mut ropey::Rope, cursor: &mut usize, column: &mut usize, selection: usize) {
+fn zap_selection(
+    rope: &mut ropey::Rope,
+    cursor: &mut usize,
+    column: &mut usize,
+    selection: usize,
+    secondary: &mut Secondary,
+) {
     let (selection_start, selection_end) = reorder(*cursor, selection);
     if rope.try_remove(selection_start..selection_end).is_ok() {
+        // TODO - accomodate secondary being inside selection
         *cursor = selection_start;
         *column = cursor_column(rope, *cursor);
+        *secondary -= selection_end - selection_start;
     }
 }
 
