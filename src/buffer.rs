@@ -552,10 +552,10 @@ impl BufferContext {
         }
     }
 
-    pub fn newline(&mut self) {
-        // TODO - adjust secondary cursor position
+    pub fn newline(&mut self, alt: Option<AltCursor<'_>>) {
         let mut buf = self.buffer.borrow_mut();
         let indent_char = if self.tabs_required { '\t' } else { ' ' };
+        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
 
         let (indent, all_indent) = match line_start_to_cursor(&buf.rope, self.cursor) {
             Some(iter) => {
@@ -577,13 +577,16 @@ impl BufferContext {
         if all_indent {
             rope.insert_char(self.cursor - indent, '\n');
             self.cursor += 1;
+            alt += 1;
         } else {
             rope.insert_char(self.cursor, '\n');
             self.cursor += 1;
+            alt += 1;
             self.cursor_column = 0;
             for _ in 0..indent {
                 rope.insert_char(self.cursor, indent_char);
                 self.cursor += 1;
+                alt += 1;
                 self.cursor_column += 1;
             }
         }
@@ -592,7 +595,6 @@ impl BufferContext {
     pub fn backspace(&mut self, alt: Option<AltCursor<'_>>) {
         use std::cmp::Ordering;
 
-        // TODO - adjust secondary cursor position
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();

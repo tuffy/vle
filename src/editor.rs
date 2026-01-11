@@ -449,7 +449,7 @@ impl Editor {
             }) => self.update_buffer_at(|b, a| b.insert_char(c, a)),
             key!(Backspace) => self.update_buffer_at(|b, a| b.backspace(a)),
             key!(Delete) => self.update_buffer_at(|b, a| b.delete(a)),
-            key!(Enter) => self.update_buffer(|b| b.newline()),
+            key!(Enter) => self.update_buffer_at(|b, a| b.newline(a)),
             key!(CONTROL, 'w') => self.update_buffer(|b| b.select_whole_lines()),
             key!(CONTROL, 'x') => self.perform_cut(),
             key!(CONTROL, 'c') => self.perform_copy(),
