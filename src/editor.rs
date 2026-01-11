@@ -46,7 +46,7 @@ pub enum EditorMode {
         match_idx: Option<usize>,
     },
     Open {
-        chooser: FileChooserState,
+        chooser: Box<FileChooserState>,
     },
 }
 
@@ -468,7 +468,7 @@ impl Editor {
                 }
             }
             key!(CONTROL, 'o') => match FileChooserState::new() {
-                Ok(chooser) => self.mode = EditorMode::Open { chooser },
+                Ok(chooser) => self.mode = EditorMode::Open { chooser: Box::new(chooser) },
                 Err(err) => {
                     self.update_buffer(|b| b.set_error(err.to_string()));
                 }
