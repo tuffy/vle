@@ -124,7 +124,7 @@ pub static EDITING: &[Keybinding] = &[
     Keybinding {
         modifier: Some("Ctrl"),
         keys: &["O"],
-        action: "Open New File",
+        action: "Open File",
     },
     Keybinding {
         modifier: None,
@@ -133,8 +133,18 @@ pub static EDITING: &[Keybinding] = &[
     },
     Keybinding {
         modifier: Some("Ctrl"),
+        keys: &["S"],
+        action: "Save",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
         keys: &["PgUp", "PgDn"],
         action: "Switch Buffer",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["Q"],
+        action: "Quit Buffer",
     },
     Keybinding {
         modifier: Some("Ctrl"),
@@ -145,16 +155,6 @@ pub static EDITING: &[Keybinding] = &[
         modifier: None,
         keys: &["F2"],
         action: "Swap Panes",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["S"],
-        action: "Save",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["Q"],
-        action: "Quit Buffer",
     },
     Keybinding {
         modifier: Some("Shift"),
