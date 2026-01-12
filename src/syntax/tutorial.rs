@@ -54,7 +54,13 @@ enum TutorialToken {
     #[token("Ctrl-PgDn")]
     #[token("Ctrl-Home")]
     #[token("Ctrl-End")]
+    #[token("Esc")]
+    #[token("Tab")]
+    #[token("Shift-Tab")]
     Keybinding,
+    #[token("VLE_SPACES_PER_TAB")]
+    #[token("VLE_ALWAYS_TAB")]
+    Variable,
     #[regex("# [[:upper:]].+", allow_greedy = true)]
     Header,
     #[regex("## [[:upper:]].+", allow_greedy = true)]
@@ -68,8 +74,14 @@ enum TutorialToken {
     #[token(">>> (surround me)")]
     #[token(">>> un-surround this text")]
     #[token(">>> fixed")]
+    #[token("    println!(\"a is {a}\");")]
+    #[token("    println!(\"b is {b}\");")]
+    #[token("    println!(\"c is {c}\");")]
     Correct,
     #[regex(">>> .+", allow_greedy = true)]
+    #[token("println!(\"a is {a}\");")]
+    #[token("println!(\"b is {b}\");")]
+    #[token("println!(\"c is {c}\");")]
     Incorrect,
 }
 
@@ -84,6 +96,7 @@ impl TryFrom<TutorialToken> for Color {
             TutorialToken::Subheader => Ok(Color::Blue),
             TutorialToken::Correct => Ok(Color::Green),
             TutorialToken::Incorrect => Ok(Color::Red),
+            TutorialToken::Variable => Ok(Color::Cyan),
         }
     }
 }

@@ -107,6 +107,37 @@ This may be especially handy when the selection has gotten
 quite long or needs to be extended from one side or another.
 
 
+## Indenting Text
+
+Using Tab anywhere in a line will indent that line,
+which inserts four spaces by default.
+If multiple lines are selected, all lines
+will be indented simultaneously.
+
+Similarly, Shift-Tab will un-indent the current
+or selected lines by the same number of spaces.
+This will only work if the whole region can be
+un-indented as a unit; once any line of text
+cannot be un-indented further, un-indenting will stop.
+
+The number of spaces inserted per tab is controlled
+with the VLE_SPACES_PER_TAB environment variable,
+which can be modified from your shell prior to running VLE.
+
+Similarly, if one wants to have the Tab key insert
+literal tabs for all file formats (and not just Makefiles),
+that can be configured by setting the VLE_ALWAYS_TAB
+environment variable to something.
+
+Let's give it a try with an example:
+
+fn my_function_name(a: i32, b: i32, c: i32) {
+println!("a is {a}");
+println!("b is {b}");
+println!("c is {c}");
+}
+
+
 ## Surrounded Text
 
 Text surrounded by characters like " or ( are a common
@@ -219,23 +250,39 @@ direction to go.
 
 Sometimes we want to locate text in a file
 but don't know exactly which line it's on.
-Ctrl-F prompts for the text to search for.
-By default, it searches the entire file.
-But if a selection is active, the search is limited
-to the contents of the selection.
+Ctrl-F prompts for text to search for.
 
-It then highlights the matches (if any), and allows
-us to cycle the cursor through those matches using ↑ and ↓.
-We can also use Del to remove matches we're not interested in.
+Searching proceeds incrementally forward
+as more characters are added to the prompt.
+But you're always free to use the arrow keys
+to cycle forward or backward through the existing
+matches.
 
-Why would we want to remove unwanted highlighted matches?
-That brings us to our next section.
+From here, one can hit Enter to enter match selection mode,
+Ctrl-R to replace all existing matches,
+or Esc to exit find mode.
+
+
+## Selecting Matches
+
+Match selection mode works much like find mode
+in that we can use arrow keys to cycle between matches,
+but the search text is now fixed.
+
+From this mode, we can use Del to remove selected matches,
+continue on to text replacement with Ctrl-R,
+or just exit altogether with Esc.
+
+Sometimes we want to replace matched text, but not all matches.
+This mode to cull unwanted replacement candidates
+allows us to omit some of them without having to query
+for each candidate individually.
 
 
 ## Replacing Text
 
-Using Ctrl-R from find mode deletes all the highlighted
-matches and prompts us for a new value.
+Using Ctrl-R from find or selection mode deletes
+all the highlighted matches and prompts us for a new value.
 Note that replace mode doesn't offer a text box
 for the replacement; the replacement text is inserted
 where all the matches were simultaneously and is
