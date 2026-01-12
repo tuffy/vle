@@ -363,8 +363,8 @@ pub static OPEN_FILE: &[Keybinding] = &[
         action: "Down Directory",
     },
     Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["T"],
+        modifier: None,
+        keys: &["Tab"],
         action: "Toggle File to Open",
     },
     Keybinding {

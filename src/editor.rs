@@ -768,7 +768,7 @@ fn process_open_file(
             chooser.pop();
             None
         }
-        key!(CONTROL, 't') => {
+        key!(Tab) => {
             chooser.toggle_selected();
             None
         }
