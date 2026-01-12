@@ -376,11 +376,6 @@ pub static FIND: &[Keybinding] = &[
         action: "Replace Selected Matches",
     },
     Keybinding {
-        modifier: None,
-        keys: &["F4"],
-        action: "Edit Selected Matches",
-    },
-    Keybinding {
         modifier: Some("Ctrl"),
         keys: &["F"],
         action: "Begin New Find",
@@ -388,7 +383,7 @@ pub static FIND: &[Keybinding] = &[
     Keybinding {
         modifier: None,
         keys: &["Enter"],
-        action: "End Find",
+        action: "Edit Selected Matches",
     },
 ];
 

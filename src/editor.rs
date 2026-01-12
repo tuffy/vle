@@ -841,7 +841,6 @@ fn process_find(
             }
             None
         }
-        key!(Enter) => Some(EditorMode::default()),
         key!(CONTROL, 'f') => {
             *prompt = SearchPrompt::default();
             None
@@ -875,12 +874,7 @@ fn process_find(
                 None => Some(EditorMode::default()), // no search term
             }
         }
-        Event::Key(KeyEvent {
-            code: KeyCode::F(4),
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
+        key!(Enter) => {
             match prompt.get_value() {
                 Some(search) => {
                     let matches = buffer.search_matches(area, &search);
