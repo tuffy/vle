@@ -127,8 +127,8 @@ pub static EDITING: &[Keybinding] = &[
         action: "Open File",
     },
     Keybinding {
-        modifier: None,
-        keys: &["F3"],
+        modifier: Some("Ctrl"),
+        keys: &["L"],
         action: "Reload File",
     },
     Keybinding {
@@ -152,8 +152,8 @@ pub static EDITING: &[Keybinding] = &[
         action: "Open / Switch Pane",
     },
     Keybinding {
-        modifier: None,
-        keys: &["F2"],
+        modifier: Some("Ctrl"),
+        keys: &["N"],
         action: "Swap Panes",
     },
     Keybinding {

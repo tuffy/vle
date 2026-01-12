@@ -416,12 +416,7 @@ impl Editor {
                     self.layout = Layout::Single(std::mem::take(right));
                 }
             },
-            Event::Key(KeyEvent {
-                code: KeyCode::F(2),
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
+            key!(CONTROL, 'n') => {
                 match &mut self.layout {
                     Layout::Horizontal { top, bottom, which } => {
                         self.layout = Layout::Horizontal {
@@ -550,12 +545,7 @@ impl Editor {
                     self.update_buffer(|b| b.set_error(err.to_string()));
                 }
             },
-            Event::Key(KeyEvent {
-                code: KeyCode::F(3),
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
+            key!(CONTROL, 'l') => {
                 if let Some(new_mode) = self.on_buffer(|b| {
                     if b.modified() {
                         EditorMode::VerifyReload
