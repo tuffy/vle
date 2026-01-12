@@ -1622,9 +1622,18 @@ impl BufferList {
     }
 
     pub fn remove(&mut self, buffer: &BufferId) {
+        let current_id = self.buffers.get(self.current).map(|buf| buf.id());
+
         self.buffers
             .retain(|buf| !Rc::ptr_eq(&buf.buffer, &buffer.0));
-        self.current = self.current.min(self.buffers.len()).saturating_sub(1);
+
+        self.current = current_id
+            .and_then(|id| {
+                self.buffers
+                    .iter()
+                    .position(|buf| Rc::ptr_eq(&buf.buffer, &id.0))
+            })
+            .unwrap_or(self.buffers.len().saturating_sub(1));
     }
 
     pub fn current(&self) -> Option<&BufferContext> {
