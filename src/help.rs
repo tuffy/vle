@@ -434,6 +434,11 @@ pub static SELECT_MATCHES: &[Keybinding] = &[
         action: "Replace Selected Matches",
     },
     Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["F"],
+        action: "Begin New Find",
+    },
+    Keybinding {
         modifier: None,
         keys: &["Enter", "Esc"],
         action: "Finish Find",
