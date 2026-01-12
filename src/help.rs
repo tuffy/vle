@@ -127,8 +127,8 @@ pub static EDITING: &[Keybinding] = &[
         action: "Open New File",
     },
     Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["R"],
+        modifier: None,
+        keys: &["F3"],
         action: "Reload File",
     },
     Keybinding {
@@ -376,8 +376,8 @@ pub static FIND: &[Keybinding] = &[
         action: "Replace Selected Matches",
     },
     Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["E"],
+        modifier: None,
+        keys: &["F4"],
         action: "Edit Selected Matches",
     },
     Keybinding {

@@ -544,7 +544,12 @@ impl Editor {
                     self.update_buffer(|b| b.set_error(err.to_string()));
                 }
             },
-            key!(CONTROL, 'r') => {
+            Event::Key(KeyEvent {
+                code: KeyCode::F(3),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 if let Some(new_mode) = self.on_buffer(|b| {
                     if b.modified() {
                         EditorMode::VerifyReload
@@ -862,7 +867,12 @@ fn process_find(
                 None => Some(EditorMode::default()), // no search term
             }
         }
-        key!(CONTROL, 'e') => {
+        Event::Key(KeyEvent {
+            code: KeyCode::F(4),
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
             match prompt.get_value() {
                 Some(search) => {
                     let matches = buffer.search_matches(area, &search);
