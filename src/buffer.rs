@@ -869,12 +869,12 @@ impl BufferContext {
             true => "\t",
         };
         let mut buf = self.buffer.borrow_mut();
-        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
 
         buf.log_undo(self.cursor, self.cursor_column);
 
         match self.selection {
             None => {
+                let mut alt = Secondary::new(alt, |a| a >= self.cursor);
                 let mut rope = buf.rope.get_mut();
                 if let Ok(line_start) = rope
                     .try_char_to_line(self.cursor)
@@ -885,9 +885,11 @@ impl BufferContext {
                     alt += indent.len();
                 }
             }
-            selection @ Some(_) => {
+            selection_opt @ Some(selection) => {
+                let (start, end) = reorder(self.cursor, selection);
+                let mut alt = Secondary::new(alt, |a| a >= start);
                 let mut rope = buf.rope.get_mut();
-                let indent_lines = selected_lines(&rope, self.cursor, selection)
+                let indent_lines = selected_lines(&rope, self.cursor, selection_opt)
                     .filter(|l| l.end > l.start)
                     .collect::<Vec<_>>();
 
@@ -901,8 +903,13 @@ impl BufferContext {
                     .map(|l| l.end + (indent.len() * indent_lines.len()))
                     .unwrap_or(0);
 
-                // TODO - accomodate alt cursor inside indented region
-                alt.update(|pos| *pos += indent.len() * indent_lines.len());
+                alt.update(|pos| {
+                    if (start..end).contains(pos) {
+                        *pos = self.cursor;
+                    } else {
+                        *pos += indent.len() * indent_lines.len()
+                    }
+                });
             }
         }
     }
@@ -913,10 +920,11 @@ impl BufferContext {
             true => "\t",
         };
         let mut buf = self.buffer.borrow_mut();
-        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
 
         match self.selection {
             None => {
+                let mut alt = Secondary::new(alt, |a| a >= self.cursor);
+
                 if let Some(line_start) = buf
                     .rope
                     .try_char_to_line(self.cursor)
@@ -933,15 +941,20 @@ impl BufferContext {
                     rope.remove(line_start..line_start + indent.len());
                     self.cursor = line_start;
                     self.cursor_column = 0;
-                    alt.update(|pos| if (line_start..line_start + indent.len()).contains(pos) {
-                        *pos = line_start;
-                    } else {
-                        *pos -= indent.len();
+                    alt.update(|pos| {
+                        if (line_start..line_start + indent.len()).contains(pos) {
+                            *pos = line_start;
+                        } else {
+                            *pos -= indent.len();
+                        }
                     });
                 }
             }
-            selection @ Some(_) => {
-                let unindent_lines = selected_lines(&buf.rope, self.cursor, selection)
+            selection_opt @ Some(selection) => {
+                let (start, end) = reorder(self.cursor, selection);
+                let mut alt = Secondary::new(alt, |a| a >= self.cursor);
+
+                let unindent_lines = selected_lines(&buf.rope, self.cursor, selection_opt)
                     .filter(|l| l.end > l.start)
                     .collect::<Vec<_>>();
 
@@ -967,9 +980,12 @@ impl BufferContext {
                         .map(|l| l.end - (unindent_lines.len() * indent.len()))
                         .unwrap_or(0);
 
-                    // TODO - accomodate alt cursor inside un-indented region
                     alt.update(|pos| {
-                        *pos = pos.saturating_sub(indent.len() * unindent_lines.len())
+                        if (start..end).contains(pos) {
+                            *pos = self.cursor;
+                        } else {
+                            *pos = pos.saturating_sub(indent.len() * unindent_lines.len());
+                        }
                     });
                 }
             }
