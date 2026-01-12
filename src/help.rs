@@ -278,6 +278,11 @@ pub static SURROUND_WITH: &[Keybinding] = &[
         keys: &["Del"],
         action: "Delete Surround",
     },
+    Keybinding {
+        modifier: None,
+        keys: &["Esc"],
+        action: "Cancel",
+    },
 ];
 
 pub static SELECT_INSIDE: &[Keybinding] = &[
@@ -311,6 +316,11 @@ pub static SELECT_INSIDE: &[Keybinding] = &[
         keys: &["'"],
         action: "Select Inside ' \u{2026} '",
     },
+    Keybinding {
+        modifier: None,
+        keys: &["Esc"],
+        action: "Cancel",
+    },
 ];
 
 pub static SELECT_LINE: &[Keybinding] = &[
@@ -328,6 +338,11 @@ pub static SELECT_LINE: &[Keybinding] = &[
         modifier: None,
         keys: &["End"],
         action: "Goto Last Line",
+    },
+    Keybinding {
+        modifier: None,
+        keys: &["Esc"],
+        action: "Cancel",
     },
 ];
 
@@ -357,6 +372,11 @@ pub static OPEN_FILE: &[Keybinding] = &[
         keys: &["Enter"],
         action: "Select File(s)",
     },
+    Keybinding {
+        modifier: None,
+        keys: &["Esc"],
+        action: "Cancel",
+    },
 ];
 
 pub static FIND: &[Keybinding] = &[
@@ -385,6 +405,11 @@ pub static FIND: &[Keybinding] = &[
         keys: &["Enter"],
         action: "Edit Selected Matches",
     },
+    Keybinding {
+        modifier: None,
+        keys: &["Esc"],
+        action: "Cancel",
+    },
 ];
 
 pub static SELECT_MATCHES: &[Keybinding] = &[
@@ -410,7 +435,7 @@ pub static SELECT_MATCHES: &[Keybinding] = &[
     },
     Keybinding {
         modifier: None,
-        keys: &["Enter"],
+        keys: &["Enter", "Esc"],
         action: "Finish Find",
     },
 ];
@@ -428,7 +453,7 @@ pub static REPLACE_MATCHES: &[Keybinding] = &[
     },
     Keybinding {
         modifier: None,
-        keys: &["Enter"],
+        keys: &["Enter", "Esc"],
         action: "Finish Replacement",
     },
 ];
