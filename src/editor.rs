@@ -40,6 +40,7 @@ pub enum EditorMode {
     SelectMatches {
         matches: Vec<(usize, usize)>,
         match_idx: Option<usize>,
+        area: SearchArea,
     },
     ReplaceMatches {
         matches: Vec<(usize, usize)>,
@@ -253,12 +254,17 @@ impl Editor {
                         self.mode = new_mode;
                     }
                 }
-                EditorMode::SelectMatches { matches, match_idx } => {
+                EditorMode::SelectMatches {
+                    matches,
+                    match_idx,
+                    area,
+                } => {
                     let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
                     let cur_idx = cur_buf_list.current_index();
                     if let Some(buf) = cur_buf_list.current_mut()
                         && let Some(new_mode) = process_select_matches(
                             buf,
+                            area,
                             matches,
                             match_idx,
                             event,
@@ -790,7 +796,7 @@ fn process_open_file(
 
 fn process_find(
     buffer: &mut BufferContext,
-    area: &SearchArea,
+    area: &mut SearchArea,
     prompt: &mut SearchPrompt,
     event: Event,
     alt: Option<AltCursor<'_>>,
@@ -886,6 +892,7 @@ fn process_find(
                         EditorMode::SelectMatches {
                             match_idx: matches.iter().position(|(s, _)| *s == cursor),
                             matches,
+                            area: std::mem::take(area),
                         }
                     })
                 }
@@ -898,6 +905,7 @@ fn process_find(
 
 fn process_select_matches(
     buffer: &mut BufferContext,
+    area: &mut SearchArea,
     matches: &mut Vec<(usize, usize)>,
     match_idx: &mut Option<usize>,
     event: Event,
@@ -986,6 +994,10 @@ fn process_select_matches(
                 match_idx: std::mem::take(match_idx),
             })
         }
+        key!(CONTROL, 'f') => Some(EditorMode::Find {
+            prompt: SearchPrompt::default(),
+            area: std::mem::take(area),
+        }),
         key!(Enter) => Some(EditorMode::default()),
         _ => None, // ignore other events
     }

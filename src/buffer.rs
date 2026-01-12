@@ -2508,6 +2508,7 @@ impl From<String> for CutBuffer {
     }
 }
 
+#[derive(Default)]
 pub struct SearchArea {
     text: String, // local copy of entire rope
 }
