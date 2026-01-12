@@ -497,7 +497,7 @@ impl BufferContext {
         }
     }
 
-    pub fn insert_char(&mut self, c: char, alt: Option<AltCursor<'_>>) {
+    pub fn insert_char(&mut self, alt: Option<AltCursor<'_>>, c: char) {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
@@ -537,7 +537,7 @@ impl BufferContext {
         self.cursor_column += 1;
     }
 
-    pub fn paste(&mut self, pasted: &CutBuffer, alt: Option<AltCursor<'_>>) {
+    pub fn paste(&mut self, alt: Option<AltCursor<'_>>, pasted: &CutBuffer) {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
@@ -1025,9 +1025,9 @@ impl BufferContext {
 
     pub fn select_inside(
         &mut self,
+        alt: Option<AltCursor<'_>>,
         (start, end): (char, char),
         stack: Option<(char, char)>,
-        alt: Option<AltCursor<'_>>,
     ) {
         match &mut self.selection {
             Some(selection) => {
@@ -1217,8 +1217,8 @@ impl BufferContext {
 
     pub fn clear_matches(
         &mut self,
-        mut matches: &mut [(usize, usize)],
         alt: Option<AltCursor<'_>>,
+        mut matches: &mut [(usize, usize)],
     ) {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
@@ -1264,9 +1264,9 @@ impl BufferContext {
 
     pub fn multi_insert_char(
         &mut self,
+        alt: Option<AltCursor<'_>>,
         mut matches: &mut [(usize, usize)],
         c: char,
-        alt: Option<AltCursor<'_>>,
     ) {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
@@ -1312,8 +1312,8 @@ impl BufferContext {
 
     pub fn multi_backspace(
         &mut self,
-        mut matches: &mut [(usize, usize)],
         alt: Option<AltCursor<'_>>,
+        mut matches: &mut [(usize, usize)],
     ) {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);

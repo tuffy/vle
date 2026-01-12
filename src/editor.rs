@@ -193,10 +193,10 @@ impl Editor {
             && let Some(buffer) = cur_buf_list.current_mut()
         {
             buffer.paste(
-                cut_buffer,
                 alt_buf_list
                     .and_then(|l| l.get_mut(cur_idx))
                     .map(|b| b.alt_cursor()),
+                cut_buffer,
             );
         }
     }
@@ -506,7 +506,7 @@ impl Editor {
                 modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.update_buffer_at(|b, a| b.insert_char(c, a)),
+            }) => self.update_buffer_at(|b, a| b.insert_char(a, c)),
             key!(Backspace) => self.update_buffer_at(|b, a| b.backspace(a)),
             key!(Delete) => self.update_buffer_at(|b, a| b.delete(a)),
             key!(Enter) => self.update_buffer_at(|b, a| b.newline(a)),
@@ -568,7 +568,7 @@ impl Editor {
                 }
             }
             Event::Paste(pasted) => {
-                self.update_buffer_at(|b, a| b.paste(&pasted.into(), a));
+                self.update_buffer_at(|b, a| b.paste(a, &pasted.into()));
             }
             _ => { /* ignore other events */ }
         }
@@ -635,7 +635,7 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                self.update_buffer_at(|b, a| b.select_inside(('(', ')'), Some((')', '(')), a));
+                self.update_buffer_at(|b, a| b.select_inside(a, ('(', ')'), Some((')', '('))));
                 self.mode = EditorMode::default();
             }
             Event::Key(KeyEvent {
@@ -644,7 +644,7 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                self.update_buffer_at(|b, a| b.select_inside(('[', ']'), Some((']', '[')), a));
+                self.update_buffer_at(|b, a| b.select_inside(a, ('[', ']'), Some((']', '['))));
                 self.mode = EditorMode::default();
             }
             Event::Key(KeyEvent {
@@ -653,7 +653,7 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                self.update_buffer_at(|b, a| b.select_inside(('{', '}'), Some(('}', '{')), a));
+                self.update_buffer_at(|b, a| b.select_inside(a, ('{', '}'), Some(('}', '{'))));
                 self.mode = EditorMode::default();
             }
             Event::Key(KeyEvent {
@@ -662,15 +662,15 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                self.update_buffer_at(|b, a| b.select_inside(('<', '>'), Some(('>', '<')), a));
+                self.update_buffer_at(|b, a| b.select_inside(a, ('<', '>'), Some(('>', '<'))));
                 self.mode = EditorMode::default();
             }
             key!('"') => {
-                self.update_buffer_at(|b, a| b.select_inside(('"', '"'), None, a));
+                self.update_buffer_at(|b, a| b.select_inside(a, ('"', '"'), None));
                 self.mode = EditorMode::default();
             }
             key!('\'') => {
-                self.update_buffer_at(|b, a| b.select_inside(('\'', '\''), None, a));
+                self.update_buffer_at(|b, a| b.select_inside(a, ('\'', '\''), None));
                 self.mode = EditorMode::default();
             }
             key!(Delete) => {
@@ -861,7 +861,7 @@ fn process_find(
                     } else {
                         let cursor = buffer.get_cursor();
                         let mut match_idx = None;
-                        buffer.clear_matches(&mut matches, alt);
+                        buffer.clear_matches(alt, &mut matches);
                         EditorMode::ReplaceMatches {
                             matches: matches
                                 .into_iter()
@@ -982,7 +982,7 @@ fn process_select_matches(
             }
         }
         key!(CONTROL, 'r') => {
-            buffer.clear_matches(matches, alt);
+            buffer.clear_matches(alt, matches);
             if let Some((cursor, _)) = match_idx.and_then(|idx| matches.get(idx)) {
                 buffer.set_cursor(*cursor);
             }
@@ -1019,11 +1019,11 @@ fn process_replace_matches(
             kind: KeyEventKind::Press,
             ..
         }) => {
-            buffer.multi_insert_char(matches, c, alt);
+            buffer.multi_insert_char(alt, matches, c);
             None
         }
         key!(Backspace) => {
-            buffer.multi_backspace(matches, alt);
+            buffer.multi_backspace(alt, matches);
             None
         }
         key!(Enter) => Some(EditorMode::default()),
