@@ -805,10 +805,18 @@ fn process_find(
             ..
         }) => {
             prompt.push(c);
+            if let Err(()) = buffer.next_or_current_match(area, &prompt.get_value()?) {
+                buffer.set_error("Not Found");
+            }
             None
         }
         key!(Backspace) => {
             prompt.pop();
+            if prompt.is_empty() {
+                buffer.clear_selection();
+            } else if let Err(()) = buffer.next_or_current_match(area, &prompt.get_value()?) {
+                buffer.set_error("Not Found");
+            }
             None
         }
         Event::Key(KeyEvent {

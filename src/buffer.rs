@@ -387,6 +387,10 @@ impl BufferContext {
         self.cursor_column = cursor_column(&buf.rope, self.cursor);
     }
 
+    pub fn clear_selection(&mut self) {
+        self.selection = None;
+    }
+
     /// Returns cursor position in rope as (row, col), if possible
     ///
     /// Both indexes start from 0
@@ -745,6 +749,33 @@ impl BufferContext {
                     acc
                 }),
         }
+    }
+
+    pub fn next_or_current_match(&mut self, area: &SearchArea, term: &str) -> Result<(), ()> {
+        let mut buf = self.buffer.borrow_mut();
+        let rope = &buf.rope;
+        let (behind, ahead) = area.split(rope, self.cursor);
+
+        let (start, end) = ahead
+            .match_indices(term)
+            .map(|(idx, string)| (idx + behind.len(), string))
+            .chain(behind.match_indices(term))
+            .next()
+            .map(|(idx, string)| (idx, idx + string.len()))
+            .and_then(|(start, end)| {
+                Some((
+                    rope.try_byte_to_char(start).ok()?,
+                    rope.try_byte_to_char(end).ok()?,
+                ))
+            })
+            .ok_or(())?;
+
+        self.cursor = start;
+        self.selection = Some(end);
+        self.cursor_column = cursor_column(rope, self.cursor);
+        log_movement(&mut buf.undo);
+
+        Ok(())
     }
 
     /// Updates position to next match
