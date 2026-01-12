@@ -6,82 +6,24 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#[derive(Default)]
 pub struct SearchPrompt {
     value: Vec<char>,
-    history: SearchHistory,
-    index: Option<usize>,
 }
 
 impl SearchPrompt {
     pub const MAX_WIDTH: u16 = 30;
 
-    pub fn new(history: &SearchHistory) -> Self {
-        Self {
-            value: vec![],
-            history: history.clone(),
-            index: None,
-        }
-    }
-
-    // Operates on our current value (if no index)
-    // or moves the value from history into our current value
-    // before operating on it
-    fn update<T>(&mut self, f: impl FnOnce(&mut Vec<char>) -> T) -> T {
-        match self.index {
-            None => f(&mut self.value),
-            Some(index) => match self.history.try_remove(index) {
-                Some(v) => {
-                    self.value = v;
-                    f(&mut self.value)
-                }
-                None => {
-                    // index being outside of history shouldn't happen
-                    f(&mut self.value)
-                }
-            },
-        }
-    }
-
     pub fn push(&mut self, c: char) {
-        self.update(|v| v.push(c));
+        self.value.push(c);
     }
 
     pub fn pop(&mut self) -> Option<char> {
-        self.update(|v| v.pop())
+        self.value.pop()
     }
 
-    /// Retrieves value, if any, and updates history
-    pub fn get_value(&mut self) -> Option<String> {
-        let s = self.update(|v| v.iter().copied().collect::<String>());
-        (!s.is_empty()).then(|| {
-            self.history.push(std::mem::take(&mut self.value));
-            self.index = None;
-            s
-        })
-    }
-
-    pub fn history(&self) -> &SearchHistory {
-        &self.history
-    }
-
-    pub fn previous_entry(&mut self) {
-        // if no index is set, goto top entry in history (if any)
-        self.index = match self.index {
-            None => self.history.len().checked_sub(1),
-            Some(index) => index.checked_sub(1),
-        }
-    }
-
-    pub fn next_entry(&mut self) {
-        fn checked_value(index: usize, max: usize) -> Option<usize> {
-            (index < max).then_some(index)
-        }
-
-        // index increments unless it exceeds maximum
-        self.index = match self.index {
-            None => checked_value(0, self.history.len()),
-            Some(index) => checked_value(index + 1, self.history.len()),
-        }
+    pub fn get_value(&self) -> Option<String> {
+        (!self.value.is_empty()).then(|| self.value.iter().copied().collect())
     }
 
     pub fn width(&self) -> u16 {
@@ -89,61 +31,15 @@ impl SearchPrompt {
 
         self.to_string().width().try_into().unwrap()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.value.is_empty()
+    }
 }
 
 impl std::fmt::Display for SearchPrompt {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.index
-            .and_then(|idx| self.history.get(idx))
-            .unwrap_or_else(|| self.value.clone())
-            .into_iter()
-            .try_for_each(|c| c.fmt(f))
-    }
-}
-
-#[derive(Clone, Default)]
-pub struct SearchHistory(std::rc::Rc<std::cell::RefCell<private::SearchHistory>>);
-
-impl SearchHistory {
-    pub fn get(&self, index: usize) -> Option<Vec<char>> {
-        self.0.borrow().get(index)
-    }
-
-    pub fn push(&mut self, value: Vec<char>) {
-        self.0.borrow_mut().push(value)
-    }
-
-    pub fn try_remove(&mut self, index: usize) -> Option<Vec<char>> {
-        self.0.borrow_mut().try_remove(index)
-    }
-
-    pub fn len(&self) -> usize {
-        self.0.borrow().len()
-    }
-}
-
-mod private {
-    #[derive(Clone, Default)]
-    pub struct SearchHistory {
-        history: Vec<Vec<char>>,
-    }
-
-    impl SearchHistory {
-        pub fn get(&self, index: usize) -> Option<Vec<char>> {
-            self.history.get(index).cloned()
-        }
-
-        pub fn push(&mut self, value: Vec<char>) {
-            self.history.push(value);
-        }
-
-        pub fn try_remove(&mut self, index: usize) -> Option<Vec<char>> {
-            (index < self.history.len()).then(|| self.history.remove(index))
-        }
-
-        pub fn len(&self) -> usize {
-            self.history.len()
-        }
+        self.get_value().unwrap_or_default().fmt(f)
     }
 }
 

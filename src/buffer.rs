@@ -387,6 +387,10 @@ impl BufferContext {
         self.cursor_column = cursor_column(&buf.rope, self.cursor);
     }
 
+    pub fn clear_selection(&mut self) {
+        self.selection = None;
+    }
+
     /// Returns cursor position in rope as (row, col), if possible
     ///
     /// Both indexes start from 0
@@ -493,55 +497,78 @@ impl BufferContext {
         }
     }
 
-    pub fn insert_char(&mut self, c: char) {
+    pub fn insert_char(&mut self, c: char, alt: Option<AltCursor<'_>>) {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
+        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
         if let Some(selection) = self.selection.take() {
             zap_selection(
                 &mut rope,
                 &mut self.cursor,
                 &mut self.cursor_column,
                 selection,
+                &mut alt,
             );
         }
-        match c {
-            '(' => rope.insert(self.cursor, "()"),
-            '[' => rope.insert(self.cursor, "[]"),
-            '{' => rope.insert(self.cursor, "{}"),
-            '"' => rope.insert(self.cursor, "\"\""),
-            c => rope.insert_char(self.cursor, c),
-        }
+        alt += match c {
+            '(' => {
+                rope.insert(self.cursor, "()");
+                2
+            }
+            '[' => {
+                rope.insert(self.cursor, "[]");
+                2
+            }
+            '{' => {
+                rope.insert(self.cursor, "{}");
+                2
+            }
+            '"' => {
+                rope.insert(self.cursor, "\"\"");
+                2
+            }
+            c => {
+                rope.insert_char(self.cursor, c);
+                1
+            }
+        };
         self.cursor += 1;
         self.cursor_column += 1;
     }
 
-    pub fn paste(&mut self, pasted: &CutBuffer) {
+    pub fn paste(&mut self, pasted: &CutBuffer, alt: Option<AltCursor<'_>>) {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
+        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
+
         if let Some(selection) = self.selection.take() {
             zap_selection(
                 &mut rope,
                 &mut self.cursor,
                 &mut self.cursor_column,
                 selection,
+                &mut alt,
             );
         }
         if rope.try_insert(self.cursor, &pasted.data).is_ok() {
             self.cursor += pasted.chars_len;
+            alt += pasted.chars_len;
             self.cursor_column = cursor_column(&rope, self.cursor);
         }
     }
 
-    pub fn newline(&mut self) {
+    pub fn newline(&mut self, alt: Option<AltCursor<'_>>) {
         let mut buf = self.buffer.borrow_mut();
+        let indent_char = if self.tabs_required { '\t' } else { ' ' };
+        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
 
         let (indent, all_indent) = match line_start_to_cursor(&buf.rope, self.cursor) {
             Some(iter) => {
                 let mut iter = iter.peekable();
                 let mut indent = 0;
-                while iter.next_if(|c| *c == ' ').is_some() {
+                while iter.next_if(|c| *c == indent_char).is_some() {
                     indent += 1;
                 }
                 (indent, iter.next().is_none())
@@ -557,40 +584,78 @@ impl BufferContext {
         if all_indent {
             rope.insert_char(self.cursor - indent, '\n');
             self.cursor += 1;
+            alt += 1;
         } else {
             rope.insert_char(self.cursor, '\n');
             self.cursor += 1;
+            alt += 1;
             self.cursor_column = 0;
             for _ in 0..indent {
-                rope.insert_char(self.cursor, ' ');
+                rope.insert_char(self.cursor, indent_char);
                 self.cursor += 1;
+                alt += 1;
                 self.cursor_column += 1;
             }
         }
     }
 
-    pub fn backspace(&mut self) {
+    pub fn backspace(&mut self, alt: Option<AltCursor<'_>>) {
+        use std::cmp::Ordering;
+
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
 
+        let update = |pos: &mut usize| match self.cursor.cmp(pos) {
+            Ordering::Less => {
+                *pos -= 2;
+            }
+            Ordering::Equal => {
+                *pos -= 1;
+            }
+            Ordering::Greater => { /* do nothing */ }
+        };
+
         match self.selection.take() {
             None => {
+                let mut alt = Secondary::new(alt, |a| a >= self.cursor);
                 if let Some(prev) = self.cursor.checked_sub(1)
                     && match rope.get_char(prev) {
                         Some('(') if rope.get_char(self.cursor) == Some(')') => {
-                            rope.try_remove(prev..=self.cursor).is_ok()
+                            let removed = rope.try_remove(prev..=self.cursor).is_ok();
+                            if removed {
+                                alt.update(|pos| update(pos));
+                            }
+                            removed
                         }
                         Some('[') if rope.get_char(self.cursor) == Some(']') => {
-                            rope.try_remove(prev..=self.cursor).is_ok()
+                            let removed = rope.try_remove(prev..=self.cursor).is_ok();
+                            if removed {
+                                alt.update(|pos| update(pos));
+                            }
+                            removed
                         }
                         Some('{') if rope.get_char(self.cursor) == Some('}') => {
-                            rope.try_remove(prev..=self.cursor).is_ok()
+                            let removed = rope.try_remove(prev..=self.cursor).is_ok();
+                            if removed {
+                                alt.update(|pos| update(pos));
+                            }
+                            removed
                         }
                         Some('"') if rope.get_char(self.cursor) == Some('"') => {
-                            rope.try_remove(prev..=self.cursor).is_ok()
+                            let removed = rope.try_remove(prev..=self.cursor).is_ok();
+                            if removed {
+                                alt.update(|pos| update(pos));
+                            }
+                            removed
                         }
-                        _ => rope.try_remove(prev..self.cursor).is_ok(),
+                        _ => {
+                            let removed = rope.try_remove(prev..self.cursor).is_ok();
+                            if removed {
+                                alt -= 1;
+                            }
+                            removed
+                        }
                     }
                 {
                     self.cursor -= 1;
@@ -598,32 +663,39 @@ impl BufferContext {
                 }
             }
             Some(current_selection) => {
+                let mut alt = Secondary::new(alt, |a| a >= self.cursor.min(current_selection));
                 zap_selection(
                     &mut rope,
                     &mut self.cursor,
                     &mut self.cursor_column,
                     current_selection,
+                    &mut alt,
                 );
             }
         }
     }
 
-    pub fn delete(&mut self) {
+    pub fn delete(&mut self, alt: Option<AltCursor<'_>>) {
         let buf = &mut self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
 
         match self.selection.take() {
             None => {
-                let _ = rope.try_remove(self.cursor..(self.cursor + 1));
-                // leave cursor position and current column unchanged
+                let mut alt = Secondary::new(alt, |a| a > self.cursor);
+                if rope.try_remove(self.cursor..(self.cursor + 1)).is_ok() {
+                    alt -= 1;
+                }
+                // leave our cursor position and current column unchanged
             }
             Some(current_selection) => {
+                let mut alt = Secondary::new(alt, |a| a > self.cursor.min(current_selection));
                 zap_selection(
                     &mut rope,
                     &mut self.cursor,
                     &mut self.cursor_column,
                     current_selection,
+                    &mut alt,
                 );
             }
         }
@@ -639,16 +711,13 @@ impl BufferContext {
             .map(|r| r.into())
     }
 
-    pub fn clear_selection(&mut self) {
-        self.selection = None;
-    }
-
-    pub fn take_selection(&mut self) -> Option<CutBuffer> {
+    pub fn take_selection(&mut self, alt: Option<AltCursor<'_>>) -> Option<CutBuffer> {
         let selection = self.selection.take()?;
         let (selection_start, selection_end) = reorder(self.cursor, selection);
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
+        let mut alt = Secondary::new(alt, |a| a >= selection_start);
 
         rope.get_slice(selection_start..selection_end)
             .map(|r| r.into())
@@ -656,7 +725,136 @@ impl BufferContext {
                 rope.remove(selection_start..selection_end);
                 self.cursor = selection_start;
                 self.cursor_column = cursor_column(&rope, self.cursor);
+                alt.update(|pos| {
+                    if (selection_start..selection_end).contains(pos) {
+                        *pos = selection_start;
+                    } else {
+                        *pos -= selection_end - selection_start;
+                    }
+                });
             })
+    }
+
+    /// Returns offset in characters, data of area to search,
+    /// which may be the whole rope if no selection is active
+    /// Clears selection afterward.
+    pub fn search_area(&mut self) -> SearchArea {
+        let rope = &self.buffer.borrow().rope;
+
+        SearchArea {
+            text: rope
+                .chunks()
+                .fold(String::with_capacity(rope.len_bytes()), |mut acc, s| {
+                    acc.push_str(s);
+                    acc
+                }),
+        }
+    }
+
+    pub fn next_or_current_match(&mut self, area: &SearchArea, term: &str) -> Result<(), ()> {
+        let mut buf = self.buffer.borrow_mut();
+        let rope = &buf.rope;
+        let (behind, ahead) = area.split(rope, self.cursor);
+
+        let (start, end) = ahead
+            .match_indices(term)
+            .map(|(idx, string)| (idx + behind.len(), string))
+            .chain(behind.match_indices(term))
+            .next()
+            .map(|(idx, string)| (idx, idx + string.len()))
+            .and_then(|(start, end)| {
+                Some((
+                    rope.try_byte_to_char(start).ok()?,
+                    rope.try_byte_to_char(end).ok()?,
+                ))
+            })
+            .ok_or(())?;
+
+        self.cursor = start;
+        self.selection = Some(end);
+        self.cursor_column = cursor_column(rope, self.cursor);
+        log_movement(&mut buf.undo);
+
+        Ok(())
+    }
+
+    /// Updates position to next match
+    /// Returns Err if no match found
+    pub fn next_match(&mut self, area: &SearchArea, term: &str) -> Result<(), ()> {
+        fn last_resort<T>(
+            mut iter: impl Iterator<Item = T>,
+            avoid: impl FnOnce(&T) -> bool,
+        ) -> Option<T> {
+            let first = iter.next()?;
+            if avoid(&first) {
+                match iter.next() {
+                    None => Some(first),
+                    next @ Some(_) => next,
+                }
+            } else {
+                Some(first)
+            }
+        }
+
+        let mut buf = self.buffer.borrow_mut();
+        let rope = &buf.rope;
+        let (behind, ahead) = area.split(rope, self.cursor);
+
+        let (start, end) = last_resort(
+            ahead
+                .match_indices(term)
+                .map(|(idx, string)| (idx + behind.len(), string))
+                .chain(behind.match_indices(term)),
+            |(idx, _)| *idx == behind.len(),
+        )
+        .map(|(idx, string)| (idx, idx + string.len()))
+        .and_then(|(start, end)| {
+            Some((
+                rope.try_byte_to_char(start).ok()?,
+                rope.try_byte_to_char(end).ok()?,
+            ))
+        })
+        .ok_or(())?;
+
+        self.cursor = start;
+        self.selection = Some(end);
+        self.cursor_column = cursor_column(rope, self.cursor);
+        log_movement(&mut buf.undo);
+
+        Ok(())
+    }
+
+    /// Updates position to next match
+    /// Returns Err if no match found
+    pub fn previous_match(&mut self, area: &SearchArea, term: &str) -> Result<(), ()> {
+        let mut buf = self.buffer.borrow_mut();
+        let rope = &buf.rope;
+        let (behind, ahead) = area.split(rope, self.cursor);
+
+        let (start, end) = behind
+            .rmatch_indices(term)
+            .next()
+            .or_else(|| {
+                ahead
+                    .rmatch_indices(term)
+                    .map(|(idx, string)| (idx + behind.len(), string))
+                    .next()
+            })
+            .map(|(idx, string)| (idx, idx + string.len()))
+            .and_then(|(start, end)| {
+                Some((
+                    rope.try_byte_to_char(start).ok()?,
+                    rope.try_byte_to_char(end).ok()?,
+                ))
+            })
+            .ok_or(())?;
+
+        self.cursor = start;
+        self.selection = Some(end);
+        self.cursor_column = cursor_column(rope, self.cursor);
+        log_movement(&mut buf.undo);
+
+        Ok(())
     }
 
     pub fn perform_undo(&mut self) {
@@ -696,7 +894,7 @@ impl BufferContext {
         }
     }
 
-    pub fn indent(&mut self) {
+    pub fn indent(&mut self, alt: Option<AltCursor<'_>>) {
         let indent = match self.tabs_required {
             false => self.tab_substitution.as_str(),
             true => "\t",
@@ -707,6 +905,7 @@ impl BufferContext {
 
         match self.selection {
             None => {
+                let mut alt = Secondary::new(alt, |a| a >= self.cursor);
                 let mut rope = buf.rope.get_mut();
                 if let Ok(line_start) = rope
                     .try_char_to_line(self.cursor)
@@ -714,11 +913,14 @@ impl BufferContext {
                 {
                     rope.insert(line_start, indent);
                     self.cursor += indent.len();
+                    alt += indent.len();
                 }
             }
-            selection @ Some(_) => {
+            selection_opt @ Some(selection) => {
+                let (start, end) = reorder(self.cursor, selection);
+                let mut alt = Secondary::new(alt, |a| a >= start);
                 let mut rope = buf.rope.get_mut();
-                let indent_lines = selected_lines(&rope, self.cursor, selection)
+                let indent_lines = selected_lines(&rope, self.cursor, selection_opt)
                     .filter(|l| l.end > l.start)
                     .collect::<Vec<_>>();
 
@@ -731,11 +933,19 @@ impl BufferContext {
                     .last()
                     .map(|l| l.end + (indent.len() * indent_lines.len()))
                     .unwrap_or(0);
+
+                alt.update(|pos| {
+                    if (start..end).contains(pos) {
+                        *pos = self.cursor;
+                    } else {
+                        *pos += indent.len() * indent_lines.len()
+                    }
+                });
             }
         }
     }
 
-    pub fn un_indent(&mut self) {
+    pub fn un_indent(&mut self, alt: Option<AltCursor<'_>>) {
         let indent = match self.tabs_required {
             false => self.tab_substitution.as_str(),
             true => "\t",
@@ -744,6 +954,8 @@ impl BufferContext {
 
         match self.selection {
             None => {
+                let mut alt = Secondary::new(alt, |a| a >= self.cursor);
+
                 if let Some(line_start) = buf
                     .rope
                     .try_char_to_line(self.cursor)
@@ -760,10 +972,20 @@ impl BufferContext {
                     rope.remove(line_start..line_start + indent.len());
                     self.cursor = line_start;
                     self.cursor_column = 0;
+                    alt.update(|pos| {
+                        if (line_start..line_start + indent.len()).contains(pos) {
+                            *pos = line_start;
+                        } else {
+                            *pos -= indent.len();
+                        }
+                    });
                 }
             }
-            selection @ Some(_) => {
-                let unindent_lines = selected_lines(&buf.rope, self.cursor, selection)
+            selection_opt @ Some(selection) => {
+                let (start, end) = reorder(self.cursor, selection);
+                let mut alt = Secondary::new(alt, |a| a >= self.cursor);
+
+                let unindent_lines = selected_lines(&buf.rope, self.cursor, selection_opt)
                     .filter(|l| l.end > l.start)
                     .collect::<Vec<_>>();
 
@@ -788,20 +1010,35 @@ impl BufferContext {
                         .last()
                         .map(|l| l.end - (unindent_lines.len() * indent.len()))
                         .unwrap_or(0);
+
+                    alt.update(|pos| {
+                        if (start..end).contains(pos) {
+                            *pos = self.cursor;
+                        } else {
+                            *pos = pos.saturating_sub(indent.len() * unindent_lines.len());
+                        }
+                    });
                 }
             }
         }
     }
 
-    pub fn select_inside(&mut self, (start, end): (char, char), stack: Option<(char, char)>) {
+    pub fn select_inside(
+        &mut self,
+        (start, end): (char, char),
+        stack: Option<(char, char)>,
+        alt: Option<AltCursor<'_>>,
+    ) {
         match &mut self.selection {
             Some(selection) => {
                 let mut buf = self.buffer.borrow_mut();
                 buf.log_undo(self.cursor, self.cursor_column);
                 let mut rope = buf.rope.get_mut();
+                let mut alt = Secondary::new(alt, |a| a >= self.cursor);
                 let (start_pos, end_pos) = reorder(&mut self.cursor, selection);
                 let _ = rope.try_insert_char(*end_pos, end);
                 let _ = rope.try_insert_char(*start_pos, start);
+                alt.update(|pos| *pos += if *pos > *end_pos { 2 } else { 1 });
                 *start_pos += 1;
                 *end_pos += 1;
                 self.cursor_column = cursor_column(&rope, self.cursor);
@@ -825,7 +1062,7 @@ impl BufferContext {
 
     /// Returns true if selection is active and surround characters
     /// are deleted
-    pub fn delete_surround(&mut self) -> bool {
+    pub fn delete_surround(&mut self, alt: Option<AltCursor<'_>>) -> bool {
         let Some(selection) = &mut self.selection else {
             return false;
         };
@@ -833,6 +1070,7 @@ impl BufferContext {
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
         let (start, end) = reorder(&mut self.cursor, selection);
+        let mut alt = Secondary::new(alt, |a| a >= *start);
 
         if let Some(prev_pos) = start.checked_sub(1)
             && let Some(prev_char) = rope.get_char(prev_pos)
@@ -844,6 +1082,7 @@ impl BufferContext {
         {
             let _ = rope.try_remove(*end..*end + 1);
             let _ = rope.try_remove(prev_pos..*start);
+            alt.update(|pos| *pos -= if *pos > *end { 2 } else { 1 });
             *end -= 1;
             *start -= 1;
             self.cursor_column = cursor_column(&rope, self.cursor);
@@ -953,34 +1192,20 @@ impl BufferContext {
         }
     }
 
-    /// Given search term, returns all match ranges as characters
-    /// If selection is active, matches are restricted to selection
-    pub fn matches(&self, term: &str) -> Vec<(usize, usize)> {
-        let rope = &self.buffer.borrow().rope;
+    /// Given the whole text to search (maybe a subset of rope),
+    /// the byte offset of that whole text (maybe 0) and a search term,
+    /// returns Vec of match ranges, in characters
+    pub fn search_matches(
+        &self,
+        SearchArea { text: whole_text }: &SearchArea,
+        term: &str,
+    ) -> Vec<(usize, usize)> {
+        let buf = self.buffer.borrow();
+        let rope = &buf.rope;
 
-        // combine rope or rope slice into unified String
-        let (whole, byte_offset) = match self.selection {
-            None => (
-                rope.chunks()
-                    .fold(String::with_capacity(rope.len_bytes()), |mut acc, s| {
-                        acc.push_str(s);
-                        acc
-                    }),
-                0,
-            ),
-            Some(selection) => {
-                let (start, end) = reorder(self.cursor, selection);
-                (
-                    rope.slice(start..end).chunks().collect(),
-                    rope.char_to_byte(start),
-                )
-            }
-        };
-
-        // get byte ranges of matches and convert them to character offsets
-        whole
+        whole_text
             .match_indices(term)
-            .map(|(start_byte, s)| (byte_offset + start_byte, byte_offset + start_byte + s.len()))
+            .map(|(start_byte, s)| (start_byte, start_byte + s.len()))
             .filter_map(|(s, e)| {
                 Some((
                     rope.try_byte_to_char(s).ok()?,
@@ -990,20 +1215,42 @@ impl BufferContext {
             .collect()
     }
 
-    pub fn clear_matches(&mut self, mut matches: &mut [(usize, usize)]) {
+    pub fn clear_matches(
+        &mut self,
+        mut matches: &mut [(usize, usize)],
+        alt: Option<AltCursor<'_>>,
+    ) {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
+        let mut alt = Secondary::new(alt, |_| true);
+
         loop {
             match matches {
                 [] => break,
                 [(s, e)] => {
                     let _ = rope.try_remove(*s..*e);
+                    if *s <= self.cursor {
+                        self.cursor = self.cursor.saturating_sub((*e - *s).min(self.cursor - *s));
+                    }
+                    alt.update(|cursor| {
+                        if *s <= *cursor {
+                            *cursor = cursor.saturating_sub((*e - *s).min(*cursor - *s));
+                        }
+                    });
                     break;
                 }
                 [(s, e), rest @ ..] => {
                     let len = *e - *s;
                     let _ = rope.try_remove(*s..*e);
+                    if *s <= self.cursor {
+                        self.cursor = self.cursor.saturating_sub(len.min(self.cursor - *s));
+                    }
+                    alt.update(|cursor| {
+                        if *s <= *cursor {
+                            *cursor = cursor.saturating_sub(len.min(*cursor - *s));
+                        }
+                    });
                     for (s, e) in rest.iter_mut() {
                         *s -= len;
                         *e -= len;
@@ -1015,20 +1262,43 @@ impl BufferContext {
         self.selection = None;
     }
 
-    pub fn multi_insert_char(&mut self, mut matches: &mut [(usize, usize)], c: char) {
+    pub fn multi_insert_char(
+        &mut self,
+        mut matches: &mut [(usize, usize)],
+        c: char,
+        alt: Option<AltCursor<'_>>,
+    ) {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
+        let mut alt = Secondary::new(alt, |_| true);
+
         loop {
             match matches {
                 [] => break,
                 [(_, cursor)] => {
                     rope.insert_char(*cursor, c);
+                    if *cursor <= self.cursor {
+                        self.cursor += 1;
+                    }
+                    alt.update(|a| {
+                        if *cursor <= *a {
+                            *a += 1;
+                        }
+                    });
                     *cursor += 1;
                     break;
                 }
                 [(_, cursor), rest @ ..] => {
                     rope.insert_char(*cursor, c);
+                    if *cursor <= self.cursor {
+                        self.cursor += 1;
+                    }
+                    alt.update(|a| {
+                        if *cursor <= *a {
+                            *a += 1;
+                        }
+                    });
                     *cursor += 1;
                     for (s, e) in rest.iter_mut() {
                         *s += 1;
@@ -1040,16 +1310,30 @@ impl BufferContext {
         }
     }
 
-    pub fn multi_backspace(&mut self, mut matches: &mut [(usize, usize)]) {
+    pub fn multi_backspace(
+        &mut self,
+        mut matches: &mut [(usize, usize)],
+        alt: Option<AltCursor<'_>>,
+    ) {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
+        let mut alt = Secondary::new(alt, |_| true);
+
         loop {
             match matches {
                 [] => break,
                 [(s, e)] => {
                     if *e > *s {
                         let _ = rope.try_remove((*e - 1)..*e);
+                        if *s <= self.cursor {
+                            self.cursor = self.cursor.saturating_sub(1);
+                        }
+                        alt.update(|a| {
+                            if *s <= *a {
+                                *a = a.saturating_sub(1);
+                            }
+                        });
                         *e -= 1;
                     }
                     break;
@@ -1057,6 +1341,14 @@ impl BufferContext {
                 [(s, e), rest @ ..] => {
                     if *e > *s {
                         let _ = rope.try_remove((*e - 1)..*e);
+                        if *s <= self.cursor {
+                            self.cursor = self.cursor.saturating_sub(1);
+                        }
+                        alt.update(|a| {
+                            if *s <= *a {
+                                *a = a.saturating_sub(1);
+                            }
+                        });
                         *e -= 1;
                         for (s, e) in rest.iter_mut() {
                             *s -= 1;
@@ -1073,6 +1365,55 @@ impl BufferContext {
 
     pub fn set_error<S: Into<Cow<'static, str>>>(&mut self, err: S) {
         self.message = Some(BufferMessage::Error(err.into()))
+    }
+
+    pub fn alt_cursor(&mut self) -> AltCursor<'_> {
+        AltCursor {
+            cursor: &mut self.cursor,
+            selection: &mut self.selection,
+        }
+    }
+}
+
+pub struct AltCursor<'b> {
+    cursor: &'b mut usize,
+    selection: &'b mut Option<usize>,
+}
+
+/// A secondary cursor which implements various math operations
+struct Secondary<'b>(Option<AltCursor<'b>>);
+
+impl<'b> Secondary<'b> {
+    /// Takes some optional alternative cursor
+    /// and a conditional which takes that cursor's position and
+    /// returns true if the secondary cursor should be manipulated
+    /// and returns ourself, which implements necessary math operations.
+    fn new(alt: Option<AltCursor<'b>>, f: impl FnOnce(usize) -> bool) -> Self {
+        Self(alt.filter(|alt| f(*alt.cursor)))
+    }
+
+    /// Updates secondary cursor in-place, if available
+    fn update(&mut self, f: impl FnOnce(&mut usize)) {
+        if let Some(AltCursor { cursor, selection }) = &mut self.0 {
+            f(cursor);
+            **selection = None;
+        }
+    }
+}
+
+impl std::ops::AddAssign<usize> for Secondary<'_> {
+    fn add_assign(&mut self, rhs: usize) {
+        self.update(|c| {
+            *c += rhs;
+        })
+    }
+}
+
+impl std::ops::SubAssign<usize> for Secondary<'_> {
+    fn sub_assign(&mut self, rhs: usize) {
+        self.update(|c| {
+            *c -= rhs;
+        })
     }
 }
 
@@ -1154,11 +1495,24 @@ fn update_selection(selection: &mut Option<usize>, cursor: usize, selecting: boo
     }
 }
 
-fn zap_selection(rope: &mut ropey::Rope, cursor: &mut usize, column: &mut usize, selection: usize) {
+fn zap_selection(
+    rope: &mut ropey::Rope,
+    cursor: &mut usize,
+    column: &mut usize,
+    selection: usize,
+    secondary: &mut Secondary,
+) {
     let (selection_start, selection_end) = reorder(*cursor, selection);
     if rope.try_remove(selection_start..selection_end).is_ok() {
         *cursor = selection_start;
         *column = cursor_column(rope, *cursor);
+        secondary.update(|pos| {
+            if (selection_start..selection_end).contains(pos) {
+                *pos = selection_start;
+            } else {
+                *pos -= selection_end - selection_start;
+            }
+        });
     }
 }
 
@@ -1204,8 +1558,9 @@ fn select_next_char<const FORWARD: bool>(
 impl From<Buffer> for BufferContext {
     fn from(buffer: Buffer) -> Self {
         use crate::syntax::Highlighter;
+        use std::env::var;
 
-        let spaces_per_tab: usize = std::env::var("VLE_SPACES_PER_TAB")
+        let spaces_per_tab: usize = var("VLE_SPACES_PER_TAB")
             .ok()
             .and_then(|s| s.parse().ok())
             .filter(|s| (1..=16).contains(s))
@@ -1213,7 +1568,7 @@ impl From<Buffer> for BufferContext {
 
         Self {
             tab_substitution: std::iter::repeat_n(' ', spaces_per_tab).collect(),
-            tabs_required: buffer.syntax.tabs_required(),
+            tabs_required: var("VLE_ALWAYS_TAB").is_ok() || buffer.syntax.tabs_required(),
             buffer: Rc::new(RefCell::new(buffer)),
             viewport_height: 0,
             cursor: 0,
@@ -1333,6 +1688,10 @@ impl BufferList {
 
     pub fn current_index(&self) -> usize {
         self.current
+    }
+
+    pub fn get_mut(&mut self, idx: usize) -> Option<&mut BufferContext> {
+        self.buffers.get_mut(idx)
     }
 
     pub fn total_buffers(&self) -> usize {
@@ -1672,6 +2031,30 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
+        fn line_matches(
+            rope: &ropey::Rope,
+            line_start: usize,
+            line: &str,
+            search: &str,
+        ) -> VecDeque<(usize, usize)> {
+            let line_byte_start = rope.char_to_byte(line_start);
+
+            line.match_indices(search)
+                .map(|(byte_idx, string)| {
+                    (
+                        byte_idx + line_byte_start,
+                        byte_idx + line_byte_start + string.len(),
+                    )
+                })
+                .filter_map(|(byte_start, byte_end)| {
+                    Some((
+                        rope.try_byte_to_char(byte_start).ok()?,
+                        rope.try_byte_to_char(byte_end).ok()?,
+                    ))
+                })
+                .collect()
+        }
+
         fn border_title(title: String, active: bool) -> Line<'static> {
             if active {
                 Line::from(vec![
@@ -1746,6 +2129,78 @@ impl StatefulWidget for BufferWidget<'_> {
         state.viewport_height = text_area.height.into();
 
         Paragraph::new(match self.mode {
+            Some(EditorMode::Find { prompt, .. }) if !prompt.is_empty() => {
+                let searching = prompt.get_value().unwrap_or_default();
+
+                match state.selection {
+                    // no selection, so highlight matches only
+                    None => rope
+                        .lines_at(viewport_line)
+                        .zip(viewport_line..)
+                        .map(
+                            |(line, line_number)| match line_char_range(rope, line_number) {
+                                None => Line::from(colorize(
+                                    syntax,
+                                    Cow::from(line),
+                                    Some(line_number) == current_line,
+                                )),
+                                Some((line_start, line_end)) => {
+                                    let line = Cow::from(line);
+                                    let mut matches =
+                                        line_matches(rope, line_start, &line, &searching);
+                                    highlight_matches(
+                                        colorize(syntax, line, Some(line_number) == current_line),
+                                        (line_start, line_end),
+                                        &mut matches,
+                                    )
+                                    .into()
+                                }
+                            },
+                        )
+                        .map(|line| widen_tabs(line, &state.tab_substitution))
+                        .take(area.height.into())
+                        .collect::<Vec<_>>(),
+                    // highlight both matches *and* selection
+                    Some(selection) => {
+                        let (selection_start, selection_end) = reorder(state.cursor, selection);
+
+                        rope.lines_at(viewport_line)
+                            .zip(viewport_line..)
+                            .map(
+                                |(line, line_number)| match line_char_range(rope, line_number) {
+                                    None => Line::from(colorize(
+                                        syntax,
+                                        Cow::from(line),
+                                        Some(line_number) == current_line,
+                                    )),
+                                    Some((line_start, line_end)) => {
+                                        let line = Cow::from(line);
+
+                                        let mut matches =
+                                            line_matches(rope, line_start, &line, &searching);
+
+                                        highlight_selection(
+                                            highlight_matches(
+                                                colorize(
+                                                    syntax,
+                                                    line,
+                                                    Some(line_number) == current_line,
+                                                ),
+                                                (line_start, line_end),
+                                                &mut matches,
+                                            ),
+                                            (line_start, line_end),
+                                            (selection_start, selection_end),
+                                        )
+                                    }
+                                },
+                            )
+                            .map(|line| widen_tabs(line, &state.tab_substitution))
+                            .take(area.height.into())
+                            .collect::<Vec<_>>()
+                    }
+                }
+            }
             Some(EditorMode::SelectMatches { matches, .. }) => {
                 let mut matches = matches.iter().copied().collect();
                 match state.selection {
@@ -2050,6 +2505,21 @@ impl From<String> for CutBuffer {
             chars_len: data.width(),
             data,
         }
+    }
+}
+
+pub struct SearchArea {
+    text: String, // local copy of entire rope
+}
+
+impl SearchArea {
+    /// Splits buffer in half at cursor
+    /// If cursor is outside of area, returns (&text, "")
+    fn split(&self, rope: &ropey::Rope, cursor: usize) -> (&str, &str) {
+        rope.try_char_to_byte(cursor)
+            .ok()
+            .and_then(|byte_offset| self.text.split_at_checked(byte_offset))
+            .unwrap_or((self.text.as_str(), ""))
     }
 }
 

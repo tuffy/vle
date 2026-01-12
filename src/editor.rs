@@ -7,9 +7,9 @@
 // except according to those terms.
 
 use crate::{
-    buffer::{BufferContext, BufferId, BufferList, CutBuffer},
+    buffer::{AltCursor, BufferContext, BufferId, BufferList, CutBuffer, SearchArea},
     files::FileChooserState,
-    prompt::{LinePrompt, SearchHistory, SearchPrompt},
+    prompt::{LinePrompt, SearchPrompt},
 };
 use crossterm::event::Event;
 use ratatui::{
@@ -35,18 +35,18 @@ pub enum EditorMode {
     },
     Find {
         prompt: SearchPrompt,
+        area: SearchArea,
     },
     SelectMatches {
         matches: Vec<(usize, usize)>,
         match_idx: Option<usize>,
-        search_history: SearchHistory,
     },
     ReplaceMatches {
         matches: Vec<(usize, usize)>,
         match_idx: Option<usize>,
     },
     Open {
-        chooser: FileChooserState,
+        chooser: Box<FileChooserState>,
     },
 }
 
@@ -90,7 +90,6 @@ pub struct Editor {
     mode: EditorMode,
     cut_buffer: Option<CutBuffer>, // cut buffer shared globally across editor
     show_help: bool,
-    search_history: SearchHistory,
 }
 
 impl Editor {
@@ -100,7 +99,6 @@ impl Editor {
             mode: EditorMode::default(),
             cut_buffer: None,
             show_help: false,
-            search_history: SearchHistory::default(),
         })
     }
 
@@ -132,6 +130,19 @@ impl Editor {
         self.layout.selected_buffer_list_mut().update_buf(f)
     }
 
+    fn update_buffer_at(
+        &mut self,
+        f: impl FnOnce(&mut crate::buffer::BufferContext, Option<AltCursor<'_>>),
+    ) {
+        let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
+        // Both primary and secondary buffer should be at the same index
+        // within the BufferList.
+        let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
+        if let Some(primary) = primary.current_mut() {
+            f(primary, secondary.map(|s| s.alt_cursor()))
+        }
+    }
+
     fn on_buffer<T>(
         &mut self,
         f: impl FnOnce(&mut crate::buffer::BufferContext) -> T,
@@ -139,9 +150,28 @@ impl Editor {
         self.layout.selected_buffer_list_mut().on_buf(f)
     }
 
+    fn on_buffer_at<T>(
+        &mut self,
+        f: impl FnOnce(&mut crate::buffer::BufferContext, Option<AltCursor<'_>>) -> T,
+    ) -> Option<T> {
+        let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
+        // Both primary and secondary buffer should be at the same index
+        // within the BufferList.
+        let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
+        primary
+            .current_mut()
+            .map(|primary| f(primary, secondary.map(|s| s.alt_cursor())))
+    }
+
     fn perform_cut(&mut self) {
-        if let Some(buffer) = self.layout.selected_buffer_list_mut().current_mut()
-            && let Some(selection) = buffer.take_selection()
+        let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
+        let cur_idx = cur_buf_list.current_index();
+        if let Some(buffer) = cur_buf_list.current_mut()
+            && let Some(selection) = buffer.take_selection(
+                alt_buf_list
+                    .and_then(|l| l.get_mut(cur_idx))
+                    .map(|b| b.alt_cursor()),
+            )
         {
             self.cut_buffer = Some(selection);
         }
@@ -157,9 +187,16 @@ impl Editor {
 
     fn perform_paste(&mut self) {
         if let Some(cut_buffer) = &self.cut_buffer
-            && let Some(buffer) = self.layout.selected_buffer_list_mut().current_mut()
+            && let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut()
+            && let cur_idx = cur_buf_list.current_index()
+            && let Some(buffer) = cur_buf_list.current_mut()
         {
-            buffer.paste(cut_buffer);
+            buffer.paste(
+                cut_buffer,
+                alt_buf_list
+                    .and_then(|l| l.get_mut(cur_idx))
+                    .map(|b| b.alt_cursor()),
+            );
         }
     }
 
@@ -199,29 +236,53 @@ impl Editor {
                         self.mode = new_mode;
                     }
                 }
-                EditorMode::Find { prompt } => {
-                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                        && let Some(new_mode) = process_find(buf, prompt, event)
+                EditorMode::Find { prompt, area } => {
+                    let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
+                    let cur_idx = cur_buf_list.current_index();
+                    if let Some(buf) = cur_buf_list.current_mut()
+                        && let Some(new_mode) = process_find(
+                            buf,
+                            area,
+                            prompt,
+                            event,
+                            alt_buf_list
+                                .and_then(|l| l.get_mut(cur_idx))
+                                .map(|b| b.alt_cursor()),
+                        )
                     {
                         self.mode = new_mode;
                     }
                 }
-                EditorMode::SelectMatches {
-                    matches,
-                    match_idx,
-                    search_history,
-                } => {
-                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                        && let Some(new_mode) =
-                            process_select_matches(buf, matches, match_idx, search_history, event)
+                EditorMode::SelectMatches { matches, match_idx } => {
+                    let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
+                    let cur_idx = cur_buf_list.current_index();
+                    if let Some(buf) = cur_buf_list.current_mut()
+                        && let Some(new_mode) = process_select_matches(
+                            buf,
+                            matches,
+                            match_idx,
+                            event,
+                            alt_buf_list
+                                .and_then(|l| l.get_mut(cur_idx))
+                                .map(|b| b.alt_cursor()),
+                        )
                     {
                         self.mode = new_mode;
                     }
                 }
                 EditorMode::ReplaceMatches { matches, match_idx } => {
-                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                        && let Some(new_mode) =
-                            process_replace_matches(buf, matches, match_idx, event)
+                    let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
+                    let cur_idx = cur_buf_list.current_index();
+                    if let Some(buf) = cur_buf_list.current_mut()
+                        && let Some(new_mode) = process_replace_matches(
+                            buf,
+                            matches,
+                            match_idx,
+                            event,
+                            alt_buf_list
+                                .and_then(|l| l.get_mut(cur_idx))
+                                .map(|b| b.alt_cursor()),
+                        )
                     {
                         self.mode = new_mode;
                     }
@@ -439,10 +500,10 @@ impl Editor {
                 modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self.update_buffer(|b| b.insert_char(c)),
-            key!(Backspace) => self.update_buffer(|b| b.backspace()),
-            key!(Delete) => self.update_buffer(|b| b.delete()),
-            key!(Enter) => self.update_buffer(|b| b.newline()),
+            }) => self.update_buffer_at(|b, a| b.insert_char(c, a)),
+            key!(Backspace) => self.update_buffer_at(|b, a| b.backspace(a)),
+            key!(Delete) => self.update_buffer_at(|b, a| b.delete(a)),
+            key!(Enter) => self.update_buffer_at(|b, a| b.newline(a)),
             key!(CONTROL, 'w') => self.update_buffer(|b| b.select_whole_lines()),
             key!(CONTROL, 'x') => self.perform_cut(),
             key!(CONTROL, 'c') => self.perform_copy(),
@@ -454,8 +515,8 @@ impl Editor {
                     self.mode = EditorMode::VerifySave;
                 }
             }
-            key!(Tab) => self.update_buffer(|b| b.indent()),
-            key!(SHIFT, BackTab) => self.update_buffer(|b| b.un_indent()),
+            key!(Tab) => self.update_buffer_at(|b, a| b.indent(a)),
+            key!(SHIFT, BackTab) => self.update_buffer_at(|b, a| b.un_indent(a)),
             key!(CONTROL, 'p') => self.update_buffer(|b| b.select_matching_paren()),
             key!(CONTROL, 'e') => {
                 self.mode = EditorMode::SelectInside;
@@ -466,17 +527,29 @@ impl Editor {
                 };
             }
             key!(CONTROL, 'f') => {
-                self.mode = EditorMode::Find {
-                    prompt: SearchPrompt::new(&self.search_history),
-                };
+                if let Some(find) = self.on_buffer(|b| EditorMode::Find {
+                    area: b.search_area(),
+                    prompt: SearchPrompt::default(),
+                }) {
+                    self.mode = find;
+                }
             }
             key!(CONTROL, 'o') => match FileChooserState::new() {
-                Ok(chooser) => self.mode = EditorMode::Open { chooser },
+                Ok(chooser) => {
+                    self.mode = EditorMode::Open {
+                        chooser: Box::new(chooser),
+                    }
+                }
                 Err(err) => {
                     self.update_buffer(|b| b.set_error(err.to_string()));
                 }
             },
-            key!(CONTROL, 'r') => {
+            Event::Key(KeyEvent {
+                code: KeyCode::F(3),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 if let Some(new_mode) = self.on_buffer(|b| {
                     if b.modified() {
                         EditorMode::VerifyReload
@@ -489,7 +562,7 @@ impl Editor {
                 }
             }
             Event::Paste(pasted) => {
-                self.on_buffer(|b| b.paste(&pasted.into()));
+                self.update_buffer_at(|b, a| b.paste(&pasted.into(), a));
             }
             _ => { /* ignore other events */ }
         }
@@ -556,7 +629,7 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                self.update_buffer(|b| b.select_inside(('(', ')'), Some((')', '('))));
+                self.update_buffer_at(|b, a| b.select_inside(('(', ')'), Some((')', '(')), a));
                 self.mode = EditorMode::default();
             }
             Event::Key(KeyEvent {
@@ -565,7 +638,7 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                self.update_buffer(|b| b.select_inside(('[', ']'), Some((']', '['))));
+                self.update_buffer_at(|b, a| b.select_inside(('[', ']'), Some((']', '[')), a));
                 self.mode = EditorMode::default();
             }
             Event::Key(KeyEvent {
@@ -574,7 +647,7 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                self.update_buffer(|b| b.select_inside(('{', '}'), Some(('}', '{'))));
+                self.update_buffer_at(|b, a| b.select_inside(('{', '}'), Some(('}', '{')), a));
                 self.mode = EditorMode::default();
             }
             Event::Key(KeyEvent {
@@ -583,19 +656,19 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                self.update_buffer(|b| b.select_inside(('<', '>'), Some(('>', '<'))));
+                self.update_buffer_at(|b, a| b.select_inside(('<', '>'), Some(('>', '<')), a));
                 self.mode = EditorMode::default();
             }
             key!('"') => {
-                self.update_buffer(|b| b.select_inside(('"', '"'), None));
+                self.update_buffer_at(|b, a| b.select_inside(('"', '"'), None, a));
                 self.mode = EditorMode::default();
             }
             key!('\'') => {
-                self.update_buffer(|b| b.select_inside(('\'', '\''), None));
+                self.update_buffer_at(|b, a| b.select_inside(('\'', '\''), None, a));
                 self.mode = EditorMode::default();
             }
             key!(Delete) => {
-                if matches!(self.on_buffer(|b| b.delete_surround()), Some(true)) {
+                if matches!(self.on_buffer_at(|b, a| b.delete_surround(a)), Some(true)) {
                     self.mode = EditorMode::default();
                 }
             }
@@ -717,8 +790,10 @@ fn process_open_file(
 
 fn process_find(
     buffer: &mut BufferContext,
+    area: &SearchArea,
     prompt: &mut SearchPrompt,
     event: Event,
+    alt: Option<AltCursor<'_>>,
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
@@ -730,33 +805,87 @@ fn process_find(
             ..
         }) => {
             prompt.push(c);
+            if let Err(()) = buffer.next_or_current_match(area, &prompt.get_value()?) {
+                buffer.set_error("Not Found");
+            }
             None
         }
         key!(Backspace) => {
             prompt.pop();
+            if prompt.is_empty() {
+                buffer.clear_selection();
+            } else if let Err(()) = buffer.next_or_current_match(area, &prompt.get_value()?) {
+                buffer.set_error("Not Found");
+            }
             None
         }
-        key!(Up) => {
-            prompt.previous_entry();
+        Event::Key(KeyEvent {
+            code: KeyCode::Left | KeyCode::Up,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            if let Err(()) = buffer.previous_match(area, &prompt.get_value()?) {
+                buffer.set_error("Not Found");
+            }
             None
         }
-        key!(Down) => {
-            prompt.next_entry();
+        Event::Key(KeyEvent {
+            code: KeyCode::Down | KeyCode::Right,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            if let Err(()) = buffer.next_match(area, &prompt.get_value()?) {
+                buffer.set_error("Not Found");
+            }
             None
         }
-        key!(Enter) => {
+        key!(CONTROL, 'f') => {
+            *prompt = SearchPrompt::default();
+            None
+        }
+        key!(CONTROL, 'r') => {
             match prompt.get_value() {
                 Some(search) => {
-                    let matches = buffer.matches(&search);
+                    let mut matches = buffer.search_matches(area, &search);
                     Some(if matches.is_empty() {
                         buffer.set_error("Not Found");
                         EditorMode::default()
                     } else {
-                        buffer.clear_selection();
+                        let cursor = buffer.get_cursor();
+                        let mut match_idx = None;
+                        buffer.clear_matches(&mut matches, alt);
+                        EditorMode::ReplaceMatches {
+                            matches: matches
+                                .into_iter()
+                                .enumerate()
+                                .inspect(|(idx, (s, _))| {
+                                    if *s == cursor {
+                                        match_idx = Some(*idx);
+                                    }
+                                })
+                                .map(|(_, (s, _))| (s, s))
+                                .collect(),
+                            match_idx,
+                        }
+                    })
+                }
+                None => Some(EditorMode::default()), // no search term
+            }
+        }
+        key!(Enter) => {
+            match prompt.get_value() {
+                Some(search) => {
+                    let matches = buffer.search_matches(area, &search);
+                    Some(if matches.is_empty() {
+                        buffer.set_error("Not Found");
+                        EditorMode::default()
+                    } else {
+                        let cursor = buffer.get_cursor();
                         EditorMode::SelectMatches {
+                            match_idx: matches.iter().position(|(s, _)| *s == cursor),
                             matches,
-                            match_idx: None,
-                            search_history: prompt.history().clone(),
                         }
                     })
                 }
@@ -771,8 +900,8 @@ fn process_select_matches(
     buffer: &mut BufferContext,
     matches: &mut Vec<(usize, usize)>,
     match_idx: &mut Option<usize>,
-    search_history: &SearchHistory,
     event: Event,
+    alt: Option<AltCursor<'_>>,
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
@@ -844,14 +973,8 @@ fn process_select_matches(
                 }
             }
         }
-        key!(CONTROL, 'f') => {
-            buffer.clear_selection();
-            Some(EditorMode::Find {
-                prompt: SearchPrompt::new(search_history),
-            })
-        }
         key!(CONTROL, 'r') => {
-            buffer.clear_matches(matches);
+            buffer.clear_matches(matches, alt);
             if let Some((cursor, _)) = match_idx.and_then(|idx| matches.get(idx)) {
                 buffer.set_cursor(*cursor);
             }
@@ -873,6 +996,7 @@ fn process_replace_matches(
     matches: &mut [(usize, usize)],
     match_idx: &mut Option<usize>,
     event: Event,
+    alt: Option<AltCursor<'_>>,
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
@@ -883,17 +1007,11 @@ fn process_replace_matches(
             kind: KeyEventKind::Press,
             ..
         }) => {
-            buffer.multi_insert_char(matches, c);
-            if let Some((_, cursor)) = match_idx.and_then(|idx| matches.get(idx)) {
-                buffer.set_cursor(*cursor);
-            }
+            buffer.multi_insert_char(matches, c, alt);
             None
         }
         key!(Backspace) => {
-            buffer.multi_backspace(matches);
-            if let Some((_, cursor)) = match_idx.and_then(|idx| matches.get(idx)) {
-                buffer.set_cursor(*cursor);
-            }
+            buffer.multi_backspace(matches, alt);
             None
         }
         key!(Enter) => Some(EditorMode::default()),
@@ -1079,6 +1197,32 @@ impl Layout {
         }
     }
 
+    fn selected_buffer_list_pair_mut(&mut self) -> (&mut BufferList, Option<&mut BufferList>) {
+        match self {
+            Self::Single(buffer) => (buffer, None),
+            Self::Horizontal {
+                top: buffer,
+                bottom: alt,
+                which: HorizontalPos::Top,
+            }
+            | Self::Horizontal {
+                top: alt,
+                bottom: buffer,
+                which: HorizontalPos::Bottom,
+            }
+            | Self::Vertical {
+                left: buffer,
+                right: alt,
+                which: VerticalPos::Left,
+            }
+            | Self::Vertical {
+                left: alt,
+                right: buffer,
+                which: VerticalPos::Right,
+            } => (buffer, Some(alt)),
+        }
+    }
+
     fn previous_buffer(&mut self) {
         self.selected_buffer_list_mut().previous_buffer()
     }
@@ -1110,7 +1254,7 @@ impl Layout {
                     x: text_area.x + prompt.len() as u16 + 1,
                     y: text_area.y + text_area.height.saturating_sub(2),
                 }),
-                EditorMode::Find { prompt } => Some(Position {
+                EditorMode::Find { prompt, .. } => Some(Position {
                     x: text_area.x
                         + prompt
                             .width()
