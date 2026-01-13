@@ -1773,6 +1773,22 @@ impl StatefulWidget for BufferWidget<'_> {
             text: Cow<'s, str>,
             current_line: bool,
         ) -> Vec<Span<'s>> {
+            // Replace with String::remove_last(), if that ever stabilizes
+            fn trim_string_matches(mut s: String, to_trim: char) -> String {
+                loop {
+                    match s.pop() {
+                        Some(c) if c == to_trim => { /* drop char*/ }
+                        Some(c) => {
+                            s.push(c);
+                            break s;
+                        }
+                        None => {
+                            break s;
+                        }
+                    }
+                }
+            }
+
             fn colorize_str<'s, S: Highlighter>(syntax: &S, text: &'s str) -> Vec<Span<'s>> {
                 let mut elements = vec![];
                 let mut idx = 0;
@@ -1852,13 +1868,13 @@ impl StatefulWidget for BufferWidget<'_> {
 
             if current_line {
                 match text {
-                    Cow::Borrowed(s) => colorize_str(syntax, s),
-                    Cow::Owned(s) => colorize_string(syntax, s),
+                    Cow::Borrowed(s) => colorize_str(syntax, s.trim_end_matches('\n')),
+                    Cow::Owned(s) => colorize_string(syntax, trim_string_matches(s, '\n')),
                 }
             } else {
                 highlight_trailing_whitespace(match text {
-                    Cow::Borrowed(s) => colorize_str(syntax, s),
-                    Cow::Owned(s) => colorize_string(syntax, s),
+                    Cow::Borrowed(s) => colorize_str(syntax, s.trim_end_matches('\n')),
+                    Cow::Owned(s) => colorize_string(syntax, trim_string_matches(s, '\n')),
                 })
             }
         }
