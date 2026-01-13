@@ -31,15 +31,16 @@ impl StatefulWidget for FileChooser {
             style::{Modifier, Style},
             text::{Line, Span},
             widgets::{
-                Block, BorderType, List, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
-                ScrollbarState, Widget,
+                Block, BorderType, Borders, List, ListState, Paragraph, Scrollbar,
+                ScrollbarOrientation, ScrollbarState, Widget,
             },
         };
         use std::borrow::Cow;
 
         let block = Block::bordered()
             .border_type(BorderType::Thick)
-            .title_top(Line::from(vec![
+            .borders(Borders::BOTTOM)
+            .title_bottom(Line::from(vec![
                 Span::raw("\u{252b}"),
                 Span::styled(state.dir.display().to_string(), Style::default().bold()),
                 Span::raw("\u{2523}"),

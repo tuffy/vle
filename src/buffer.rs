@@ -1741,8 +1741,8 @@ impl StatefulWidget for BufferWidget<'_> {
             style::{Color, Modifier, Style},
             text::{Line, Span},
             widgets::{
-                Block, BorderType, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
-                Widget,
+                Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation,
+                ScrollbarState, Widget,
             },
         };
         use std::borrow::Cow;
@@ -2093,12 +2093,23 @@ impl StatefulWidget for BufferWidget<'_> {
         let syntax = &buffer.syntax;
 
         let block = Block::bordered()
+            .borders(Borders::BOTTOM)
             .border_type(if self.mode.is_some() {
                 BorderType::Thick
             } else {
                 BorderType::Plain
             })
-            .title_top(border_title(
+            .title_bottom(border_title(
+                // total_buffers can't be 0, so ilog10 won't panic
+                format!(
+                    "{:0width$}/{}",
+                    self.buffer_index + 1,
+                    self.total_buffers,
+                    width = self.total_buffers.ilog10() as usize + 1
+                ),
+                self.mode.is_some(),
+            ))
+            .title_bottom(border_title(
                 if buffer.modified() {
                     format!("{} *", buffer.source.name())
                 } else {
@@ -2106,13 +2117,6 @@ impl StatefulWidget for BufferWidget<'_> {
                 },
                 self.mode.is_some(),
             ))
-            .title_top(
-                border_title(
-                    format!("{}/{}", self.buffer_index + 1, self.total_buffers),
-                    self.mode.is_some(),
-                )
-                .right_aligned(),
-            )
             .title_bottom(
                 border_title(
                     match buffer.rope.try_char_to_line(state.cursor) {
@@ -2121,7 +2125,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     },
                     self.mode.is_some(),
                 )
-                .centered(),
+                .right_aligned(),
             );
 
         let [text_area, scrollbar_area] =

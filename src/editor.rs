@@ -1245,11 +1245,11 @@ impl Layout {
         ) -> Option<Position> {
             use ratatui::{
                 layout::Constraint::{Length, Min},
-                widgets::Block,
+                widgets::{Block, Borders},
             };
 
-            let [text_area, _] =
-                Layout::horizontal([Min(0), Length(1)]).areas(Block::bordered().inner(area));
+            let [text_area, _] = Layout::horizontal([Min(0), Length(1)])
+                .areas(Block::bordered().borders(Borders::BOTTOM).inner(area));
 
             match mode {
                 EditorMode::SelectLine { prompt } => Some(Position {
