@@ -15,8 +15,10 @@ use ratatui::style::Color;
 enum CssToken {
     #[regex(r"[[:alpha:]-]*: ")]
     Property,
-    #[regex(r"/\*.*?\*/")]
-    Comment,
+    #[token("/*")]
+    StartComment,
+    #[token("*/")]
+    EndComment,
     #[token("{")]
     #[token("}")]
     #[token(";")]
@@ -41,7 +43,7 @@ impl TryFrom<CssToken> for Color {
     fn try_from(t: CssToken) -> Result<Color, ()> {
         match t {
             CssToken::Property => Ok(Color::Yellow),
-            CssToken::Comment => Ok(Color::Blue),
+            CssToken::StartComment | CssToken::EndComment => Ok(Color::Blue),
             CssToken::Syntax => Ok(Color::Green),
             CssToken::Class => Ok(Color::Red),
             CssToken::Id => Ok(Color::Magenta),
@@ -59,4 +61,4 @@ impl std::fmt::Display for Css {
     }
 }
 
-highlighter!(Css, CssToken);
+highlighter!(Css, CssToken, StartComment, EndComment, Blue);

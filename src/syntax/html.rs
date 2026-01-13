@@ -24,8 +24,10 @@ enum HtmlToken {
     String,
     #[regex("&[^;[:space:]]*;")]
     CharRef,
-    #[regex("<!-- .*? -->")]
-    Comment,
+    #[token("<!--")]
+    StartComment,
+    #[token("-->")]
+    EndComment,
 }
 
 impl TryFrom<HtmlToken> for Color {
@@ -35,7 +37,7 @@ impl TryFrom<HtmlToken> for Color {
         match t {
             HtmlToken::TagStart | HtmlToken::TagEnd => Ok(Color::Cyan),
             HtmlToken::CharRef => Ok(Color::Red),
-            HtmlToken::Comment => Ok(Color::Yellow),
+            HtmlToken::StartComment | HtmlToken::EndComment => Ok(Color::Yellow),
             HtmlToken::FieldName => Ok(Color::Green),
             HtmlToken::String => Ok(Color::Magenta),
         }
@@ -51,4 +53,4 @@ impl std::fmt::Display for Html {
     }
 }
 
-highlighter!(Html, HtmlToken);
+highlighter!(Html, HtmlToken, StartComment, EndComment, Yellow);

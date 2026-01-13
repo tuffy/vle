@@ -65,8 +65,11 @@ enum JavaToken {
     #[regex(r#"\"([^\\\"]|\\.)*\""#)]
     String,
     #[regex("//.*", allow_greedy = true)]
-    #[regex(r"/\*.*?\*/")]
     Comment,
+    #[token("/*")]
+    StartComment,
+    #[token("*/")]
+    EndComment,
 }
 
 impl TryFrom<JavaToken> for Color {
@@ -78,7 +81,7 @@ impl TryFrom<JavaToken> for Color {
             JavaToken::Flow => Ok(Color::Red),
             JavaToken::Keyword => Ok(Color::Cyan),
             JavaToken::String => Ok(Color::Red),
-            JavaToken::Comment => Ok(Color::Blue),
+            JavaToken::Comment | JavaToken::StartComment | JavaToken::EndComment => Ok(Color::Blue),
         }
     }
 }
@@ -92,4 +95,4 @@ impl std::fmt::Display for Java {
     }
 }
 
-highlighter!(Java, JavaToken);
+highlighter!(Java, JavaToken, StartComment, EndComment, Blue);

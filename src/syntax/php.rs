@@ -91,8 +91,13 @@ enum PhpToken {
     Constant,
 
     #[regex("//.*", allow_greedy = true)]
-    #[regex(r"/\*.*?\*/")]
     Comment,
+
+    #[token("/*")]
+    StartComment,
+
+    #[token("*/")]
+    EndComment,
 }
 
 impl TryFrom<PhpToken> for Color {
@@ -105,7 +110,7 @@ impl TryFrom<PhpToken> for Color {
             PhpToken::Keyword => Ok(Color::LightCyan),
             PhpToken::Flow => Ok(Color::Magenta),
             PhpToken::String => Ok(Color::LightYellow),
-            PhpToken::Comment => Ok(Color::LightBlue),
+            PhpToken::Comment | PhpToken::StartComment | PhpToken::EndComment => Ok(Color::LightBlue),
             PhpToken::Constant => Ok(Color::Red),
         }
     }
@@ -120,4 +125,4 @@ impl std::fmt::Display for Php {
     }
 }
 
-highlighter!(Php, PhpToken);
+highlighter!(Php, PhpToken, StartComment, EndComment, LightBlue);

@@ -84,8 +84,13 @@ enum RustToken {
     Type,
 
     #[regex("//.*", allow_greedy = true)]
-    #[regex(r"/\*.*?\*/")]
     Comment,
+
+    #[token("/*")]
+    StartComment,
+
+    #[token("*/")]
+    EndComment,
 
     #[regex("fn [[:lower:][:digit:]_]+")]
     Function,
@@ -129,7 +134,7 @@ impl TryFrom<RustToken> for Color {
             RustToken::Constant => Ok(Color::Magenta),
             RustToken::Macro => Ok(Color::Red),
             RustToken::Type => Ok(Color::Magenta),
-            RustToken::Comment => Ok(Color::Blue),
+            RustToken::Comment | RustToken::StartComment | RustToken::EndComment => Ok(Color::Blue),
             RustToken::Function => Ok(Color::Magenta),
             RustToken::String => Ok(Color::Green),
             RustToken::Variable | RustToken::Integer | RustToken::Punctuation => Err(()),
@@ -146,4 +151,4 @@ impl std::fmt::Display for Rust {
     }
 }
 
-highlighter!(Rust, RustToken);
+highlighter!(Rust, RustToken, StartComment, EndComment, Blue);

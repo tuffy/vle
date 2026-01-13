@@ -45,6 +45,7 @@ impl crate::syntax::Highlighter for Makefile {
     fn highlight<'s>(
         &self,
         s: &'s str,
+        _state: &'s mut crate::syntax::HighlightState,
     ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
         Box::new(
             MakefileToken::lexer(s)

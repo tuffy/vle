@@ -26,12 +26,20 @@ mod tutorial;
 mod xml;
 mod yaml;
 
+#[derive(Default)]
+pub enum HighlightState {
+    #[default]
+    Normal,
+    Commenting,
+}
+
 /// Implemented for different syntax highlighters
 pub trait Highlighter: std::fmt::Debug + std::fmt::Display {
     /// Yields portions of the string to highlight in a particular color
     fn highlight<'s>(
         &self,
         s: &'s str,
+        state: &'s mut HighlightState,
     ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's>;
 
     /// Returns true if the format requires actual tabs instead of spaces
@@ -45,8 +53,9 @@ impl Highlighter for Box<dyn Highlighter> {
     fn highlight<'s>(
         &self,
         s: &'s str,
+        state: &'s mut HighlightState,
     ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
-        Box::as_ref(self).highlight(s)
+        Box::as_ref(self).highlight(s, state)
     }
 
     fn tabs_required(&self) -> bool {
@@ -61,6 +70,7 @@ impl Highlighter for DefaultHighlighter {
     fn highlight<'s>(
         &self,
         _s: &'s str,
+        _state: &'s mut HighlightState,
     ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
         Box::new(std::iter::empty())
     }
@@ -108,6 +118,7 @@ macro_rules! highlighter {
             fn highlight<'s>(
                 &self,
                 s: &'s str,
+                _state: &'s mut $crate::syntax::HighlightState,
             ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
                 Box::new(<$token>::lexer(s).spanned().filter_map(|(t, r)| {
                     t.ok().and_then(|t| Color::try_from(t).ok()).map(|c| (c, r))
@@ -115,6 +126,38 @@ macro_rules! highlighter {
             }
         }
     };
+    ($syntax:ty, $token:ty, $comment_start:ident, $comment_end:ident, $comment_color:ident) => {
+        impl $crate::syntax::Highlighter for $syntax {
+            fn highlight<'s>(
+                &self,
+                s: &'s str,
+                state: &'s mut $crate::syntax::HighlightState,
+            ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
+                use $crate::syntax::HighlightState;
+
+                Box::new(<$token>::lexer(s).spanned().filter_map(move |(t, r)| {
+                    match state {
+                        HighlightState::Normal => t
+                            .ok()
+                            .inspect(|t| {
+                                if matches!(t, <$token>::$comment_start) {
+                                    *state = HighlightState::Commenting;
+                                }
+                            })
+                            .and_then(|t| Color::try_from(t).ok())
+                            .map(|c| (c, r)),
+                        HighlightState::Commenting => Some(match t {
+                            Ok(end @ <$token>::$comment_end) => {
+                                *state = HighlightState::default();
+                                (Color::try_from(end).ok()?, r)
+                            }
+                            _ => (Color::$comment_color, r),
+                        }),
+                    }
+                }))
+            }
+        }
+    }
 }
 
 // TODO - add cmake syntax

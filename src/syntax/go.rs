@@ -84,8 +84,11 @@ enum GoToken {
     #[regex(r#"\"([^\\\"]|\\.)*\""#)]
     String,
     #[regex("//.*", allow_greedy = true)]
-    #[regex(r"/\*.*?\*/")]
     Comment,
+    #[token("/*")]
+    StartComment,
+    #[token("*/")]
+    EndComment,
 }
 
 impl TryFrom<GoToken> for Color {
@@ -100,7 +103,7 @@ impl TryFrom<GoToken> for Color {
             GoToken::Declaration => Ok(Color::LightCyan),
             GoToken::Literal => Ok(Color::Red),
             GoToken::String => Ok(Color::Red),
-            GoToken::Comment => Ok(Color::LightBlue),
+            GoToken::Comment | GoToken::StartComment | GoToken::EndComment => Ok(Color::LightBlue),
         }
     }
 }
@@ -114,4 +117,4 @@ impl std::fmt::Display for Go {
     }
 }
 
-highlighter!(Go, GoToken);
+highlighter!(Go, GoToken, StartComment, EndComment, LightBlue);

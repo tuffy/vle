@@ -60,8 +60,13 @@ enum CToken {
     Flowcontrol2,
 
     #[regex("//.*", allow_greedy = true)]
-    #[regex(r"/\*.*?\*/")]
     Comment,
+
+    #[token("/*")]
+    StartComment,
+
+    #[token("*/")]
+    EndComment,
 
     #[regex(r#"\"([^\\\"]|\\.)*\""#)]
     String,
@@ -98,6 +103,7 @@ impl TryFrom<CToken> for Color {
             CToken::String => Ok(Color::LightYellow),
             CToken::Variable => Err(()),
             CToken::Preprocessor => Ok(Color::LightCyan),
+            CToken::StartComment | CToken::EndComment => Ok(Color::Blue),
         }
     }
 }
@@ -111,4 +117,5 @@ impl std::fmt::Display for C {
     }
 }
 
-highlighter!(C, CToken);
+
+highlighter!(C, CToken, StartComment, EndComment, Blue);

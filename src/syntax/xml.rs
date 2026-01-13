@@ -22,6 +22,10 @@ enum XmlToken {
     FieldName,
     #[regex(r#"\"[^\"]*\""#)]
     String,
+    #[token("<!--")]
+    StartComment,
+    #[token("-->")]
+    EndComment,
 }
 
 impl TryFrom<XmlToken> for Color {
@@ -32,6 +36,7 @@ impl TryFrom<XmlToken> for Color {
             XmlToken::TagStart | XmlToken::TagEnd => Ok(Color::Cyan),
             XmlToken::FieldName => Ok(Color::Green),
             XmlToken::String => Ok(Color::Magenta),
+            XmlToken::StartComment | XmlToken::EndComment => Ok(Color::Yellow),
         }
     }
 }
@@ -45,4 +50,4 @@ impl std::fmt::Display for Xml {
     }
 }
 
-highlighter!(Xml, XmlToken);
+highlighter!(Xml, XmlToken, StartComment, EndComment, Yellow);

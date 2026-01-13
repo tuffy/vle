@@ -59,8 +59,11 @@ enum JavaScriptToken {
     #[regex("[[:lower:]][[:lower:][:digit:]_]*")]
     Identifier,
     #[regex("//.*", allow_greedy = true)]
-    #[regex(r"/\*.*?\*/")]
     Comment,
+    #[token("/*")]
+    StartComment,
+    #[token("*/")]
+    EndComment,
 }
 
 impl TryFrom<JavaScriptToken> for Color {
@@ -68,7 +71,7 @@ impl TryFrom<JavaScriptToken> for Color {
 
     fn try_from(t: JavaScriptToken) -> Result<Color, ()> {
         match t {
-            JavaScriptToken::Comment => Ok(Color::LightBlue),
+            JavaScriptToken::Comment | JavaScriptToken::StartComment | JavaScriptToken::EndComment => Ok(Color::LightBlue),
             JavaScriptToken::Keyword => Ok(Color::Green),
             JavaScriptToken::Flow => Ok(Color::LightYellow),
             JavaScriptToken::Break => Ok(Color::Magenta),
@@ -88,4 +91,4 @@ impl std::fmt::Display for JavaScript {
     }
 }
 
-highlighter!(JavaScript, JavaScriptToken);
+highlighter!(JavaScript, JavaScriptToken, StartComment, EndComment, LightBlue);

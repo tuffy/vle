@@ -1732,7 +1732,7 @@ impl StatefulWidget for BufferWidget<'_> {
             CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE, SELECT_MATCHES,
             SURROUND_WITH, VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
-        use crate::syntax::Highlighter;
+        use crate::syntax::{HighlightState, Highlighter};
         use ratatui::{
             layout::{
                 Constraint::{Length, Min},
@@ -1770,6 +1770,7 @@ impl StatefulWidget for BufferWidget<'_> {
         // Colorize syntax of the given text
         fn colorize<'s, S: Highlighter>(
             syntax: &S,
+            state: &mut HighlightState,
             text: Cow<'s, str>,
             current_line: bool,
         ) -> Vec<Span<'s>> {
@@ -1789,10 +1790,14 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
 
-            fn colorize_str<'s, S: Highlighter>(syntax: &S, text: &'s str) -> Vec<Span<'s>> {
+            fn colorize_str<'s, S: Highlighter>(
+                syntax: &S,
+                state: &mut HighlightState,
+                text: &'s str,
+            ) -> Vec<Span<'s>> {
                 let mut elements = vec![];
                 let mut idx = 0;
-                for (color, range) in syntax.highlight(text) {
+                for (color, range) in syntax.highlight(text, state) {
                     if idx < range.start {
                         elements.push(Span::raw(&text[idx..range.start]));
                     }
@@ -1809,10 +1814,14 @@ impl StatefulWidget for BufferWidget<'_> {
                 elements
             }
 
-            fn colorize_string<S: Highlighter>(syntax: &S, text: String) -> Vec<Span<'static>> {
+            fn colorize_string<S: Highlighter>(
+                syntax: &S,
+                state: &mut HighlightState,
+                text: String,
+            ) -> Vec<Span<'static>> {
                 let mut elements = vec![];
                 let mut idx = 0;
-                for (color, range) in syntax.highlight(&text) {
+                for (color, range) in syntax.highlight(&text, state) {
                     if idx < range.start {
                         elements.push(Span::raw(text[idx..range.start].to_string()));
                     }
@@ -1868,13 +1877,13 @@ impl StatefulWidget for BufferWidget<'_> {
 
             if current_line {
                 match text {
-                    Cow::Borrowed(s) => colorize_str(syntax, s.trim_end_matches('\n')),
-                    Cow::Owned(s) => colorize_string(syntax, trim_string_matches(s, '\n')),
+                    Cow::Borrowed(s) => colorize_str(syntax, state, s.trim_end_matches('\n')),
+                    Cow::Owned(s) => colorize_string(syntax, state, trim_string_matches(s, '\n')),
                 }
             } else {
                 highlight_trailing_whitespace(match text {
-                    Cow::Borrowed(s) => colorize_str(syntax, s.trim_end_matches('\n')),
-                    Cow::Owned(s) => colorize_string(syntax, trim_string_matches(s, '\n')),
+                    Cow::Borrowed(s) => colorize_str(syntax, state, s.trim_end_matches('\n')),
+                    Cow::Owned(s) => colorize_string(syntax, state, trim_string_matches(s, '\n')),
                 })
             }
         }
@@ -2160,6 +2169,7 @@ impl StatefulWidget for BufferWidget<'_> {
         Paragraph::new(match self.mode {
             Some(EditorMode::Find { prompt, .. }) if !prompt.is_empty() => {
                 let searching = prompt.get_value().unwrap_or_default();
+                let mut hlstate = HighlightState::default();
 
                 match state.selection {
                     // no selection, so highlight matches only
@@ -2170,6 +2180,7 @@ impl StatefulWidget for BufferWidget<'_> {
                             |(line, line_number)| match line_char_range(rope, line_number) {
                                 None => Line::from(colorize(
                                     syntax,
+                                    &mut hlstate,
                                     Cow::from(line),
                                     Some(line_number) == current_line,
                                 )),
@@ -2178,7 +2189,12 @@ impl StatefulWidget for BufferWidget<'_> {
                                     let mut matches =
                                         line_matches(rope, line_start, &line, &searching);
                                     highlight_matches(
-                                        colorize(syntax, line, Some(line_number) == current_line),
+                                        colorize(
+                                            syntax,
+                                            &mut hlstate,
+                                            line,
+                                            Some(line_number) == current_line,
+                                        ),
                                         (line_start, line_end),
                                         &mut matches,
                                     )
@@ -2199,6 +2215,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                 |(line, line_number)| match line_char_range(rope, line_number) {
                                     None => Line::from(colorize(
                                         syntax,
+                                        &mut hlstate,
                                         Cow::from(line),
                                         Some(line_number) == current_line,
                                     )),
@@ -2212,6 +2229,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                             highlight_matches(
                                                 colorize(
                                                     syntax,
+                                                    &mut hlstate,
                                                     line,
                                                     Some(line_number) == current_line,
                                                 ),
@@ -2232,6 +2250,8 @@ impl StatefulWidget for BufferWidget<'_> {
             }
             Some(EditorMode::SelectMatches { matches, .. }) => {
                 let mut matches = matches.iter().copied().collect();
+                let mut hlstate = HighlightState::default();
+
                 match state.selection {
                     // no selection, so highlight matches only
                     None => rope
@@ -2241,12 +2261,14 @@ impl StatefulWidget for BufferWidget<'_> {
                             |(line, line_number)| match line_char_range(rope, line_number) {
                                 None => Line::from(colorize(
                                     syntax,
+                                    &mut hlstate,
                                     Cow::from(line),
                                     Some(line_number) == current_line,
                                 )),
                                 Some((line_start, line_end)) => highlight_matches(
                                     colorize(
                                         syntax,
+                                        &mut hlstate,
                                         Cow::from(line),
                                         Some(line_number) == current_line,
                                     ),
@@ -2262,6 +2284,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     // highlight both matches *and* selection
                     Some(selection) => {
                         let (selection_start, selection_end) = reorder(state.cursor, selection);
+                        let mut hlstate = HighlightState::default();
 
                         rope.lines_at(viewport_line)
                             .zip(viewport_line..)
@@ -2269,6 +2292,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                 |(line, line_number)| match line_char_range(rope, line_number) {
                                     None => Line::from(colorize(
                                         syntax,
+                                        &mut hlstate,
                                         Cow::from(line),
                                         Some(line_number) == current_line,
                                     )),
@@ -2276,6 +2300,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                         highlight_matches(
                                             colorize(
                                                 syntax,
+                                                &mut hlstate,
                                                 Cow::from(line),
                                                 Some(line_number) == current_line,
                                             ),
@@ -2294,6 +2319,8 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
             _ => {
+                let mut hlstate = HighlightState::default();
+
                 match state.selection {
                     // no selection, so nothing to highlight
                     None => rope
@@ -2302,6 +2329,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         .map(|(line, line_number)| {
                             Line::from(colorize(
                                 syntax,
+                                &mut hlstate,
                                 Cow::from(line),
                                 Some(line_number) == current_line,
                             ))
@@ -2319,12 +2347,14 @@ impl StatefulWidget for BufferWidget<'_> {
                                 |(line, line_number)| match line_char_range(rope, line_number) {
                                     None => Line::from(colorize(
                                         syntax,
+                                        &mut hlstate,
                                         Cow::from(line),
                                         Some(line_number) == current_line,
                                     )),
                                     Some((line_start, line_end)) => highlight_selection(
                                         colorize(
                                             syntax,
+                                            &mut hlstate,
                                             Cow::from(line),
                                             Some(line_number) == current_line,
                                         ),
