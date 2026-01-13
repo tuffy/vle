@@ -101,6 +101,22 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
     }
 }
 
+#[macro_export]
+macro_rules! highlighter {
+    ($syntax:ty, $token:ty) => {
+        impl $crate::syntax::Highlighter for $syntax {
+            fn highlight<'s>(
+                &self,
+                s: &'s str,
+            ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
+                Box::new(<$token>::lexer(s).spanned().filter_map(|(t, r)| {
+                    t.ok().and_then(|t| Color::try_from(t).ok()).map(|c| (c, r))
+                }))
+            }
+        }
+    };
+}
+
 // TODO - add cmake syntax
 // TODO - add lua syntax
 // TODO - add patch syntax

@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use crate::highlighter;
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -56,15 +57,4 @@ impl std::fmt::Display for Json {
     }
 }
 
-impl crate::syntax::Highlighter for Json {
-    fn highlight<'s>(
-        &self,
-        s: &'s str,
-    ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
-        Box::new(
-            JsonToken::lexer(s)
-                .spanned()
-                .filter_map(|(t, r)| t.ok().and_then(|t| Color::try_from(t).ok()).map(|c| (c, r))),
-        )
-    }
-}
+highlighter!(Json, JsonToken);
