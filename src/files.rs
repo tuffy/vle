@@ -18,9 +18,11 @@ const TEXT_WIDTH: u16 = 30;
 const PAGE_SIZE: usize = 10;
 
 pub trait ChooserSource {
-    fn current_dir(&self) -> std::io::Result<PathBuf>;
+    type Error: std::fmt::Display;
 
-    fn read_dir(&self, dir: &Path) -> std::io::Result<Vec<Entry>>;
+    fn current_dir(&self) -> Result<PathBuf, Self::Error>;
+
+    fn read_dir(&self, dir: &Path) -> Result<Vec<Entry>, Self::Error>;
 
     fn open(&self, path: PathBuf) -> Source;
 }
@@ -29,6 +31,8 @@ pub trait ChooserSource {
 pub struct LocalSource;
 
 impl ChooserSource for LocalSource {
+    type Error = std::io::Error;
+
     fn current_dir(&self) -> std::io::Result<PathBuf> {
         std::env::current_dir()
     }
@@ -49,9 +53,107 @@ impl ChooserSource for LocalSource {
     }
 }
 
-#[derive(Default)]
+#[cfg(feature = "ssh")]
+pub struct SshSource {
+    remote: std::rc::Rc<ssh2::Sftp>,
+}
+
+#[cfg(feature = "ssh")]
+impl SshSource {
+    pub fn open(session: &ssh2::Session) -> Result<Self, ssh2::Error> {
+        session.sftp().map(|remote| Self {
+            remote: std::rc::Rc::new(remote),
+        })
+    }
+}
+
+#[cfg(feature = "ssh")]
+impl ChooserSource for SshSource {
+    type Error = ssh2::Error;
+
+    fn current_dir(&self) -> Result<PathBuf, Self::Error> {
+        self.remote.realpath(Path::new("."))
+    }
+
+    fn read_dir(&self, dir: &Path) -> Result<Vec<Entry>, Self::Error> {
+        self.remote
+            .readdir(dir)
+            .map(|entries| entries.into_iter().map(Entry::from).collect())
+            .map(|mut entries: Vec<Entry>| {
+                entries.sort_unstable_by(|x, y| {
+                    x.is_dir.cmp(&y.is_dir).reverse().then(x.path.cmp(&y.path))
+                });
+                entries
+            })
+    }
+
+    fn open(&self, path: PathBuf) -> Source {
+        todo!()
+    }
+}
+
+#[cfg(feature = "ssh")]
+pub enum EitherSource {
+    Local(LocalSource),
+    Ssh(SshSource),
+}
+
+#[cfg(feature = "ssh")]
+impl ChooserSource for EitherSource {
+    type Error = EitherError;
+
+    fn current_dir(&self) -> Result<PathBuf, Self::Error> {
+        match self {
+            Self::Local(l) => l.current_dir().map_err(EitherError::Io),
+            Self::Ssh(s) => s.current_dir().map_err(EitherError::Ssh),
+        }
+    }
+
+    fn read_dir(&self, dir: &Path) -> Result<Vec<Entry>, Self::Error> {
+        match self {
+            Self::Local(l) => l.read_dir(dir).map_err(EitherError::Io),
+            Self::Ssh(s) => s.read_dir(dir).map_err(EitherError::Ssh),
+        }
+    }
+
+    fn open(&self, path: PathBuf) -> Source {
+        match self {
+            Self::Local(l) => l.open(path),
+            Self::Ssh(s) => s.open(path),
+        }
+    }
+}
+
+#[cfg(feature = "ssh")]
+#[derive(Debug)]
+pub enum EitherError {
+    Io(std::io::Error),
+    Ssh(ssh2::Error),
+}
+
+#[cfg(feature = "ssh")]
+impl std::fmt::Display for EitherError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Io(i) => i.fmt(f),
+            Self::Ssh(s) => s.fmt(f),
+        }
+    }
+}
+
+#[cfg(feature = "ssh")]
+impl std::error::Error for EitherError {}
+
 pub struct FileChooser<S: ChooserSource> {
     phantom: std::marker::PhantomData<S>,
+}
+
+impl<S: ChooserSource> Default for FileChooser<S> {
+    fn default() -> Self {
+        Self {
+            phantom: std::marker::PhantomData,
+        }
+    }
 }
 
 impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
@@ -182,7 +284,7 @@ pub struct FileChooserState<S: ChooserSource> {
 impl<S: ChooserSource> FileChooserState<S> {
     /// May return an error if unable to get the current
     /// working directory or are unable to read it
-    pub fn new(source: S) -> std::io::Result<Self> {
+    pub fn new(source: S) -> Result<Self, S::Error> {
         let cwd = source.current_dir()?;
 
         let contents = source.read_dir(&cwd)?;
@@ -413,6 +515,30 @@ impl TryFrom<std::fs::DirEntry> for Entry {
             path: entry.path(),
             is_dir,
         })
+    }
+}
+
+#[cfg(feature = "ssh")]
+impl From<(PathBuf, ssh2::FileStat)> for Entry {
+    fn from((path, stat): (PathBuf, ssh2::FileStat)) -> Self {
+        let is_dir = stat.is_dir();
+        Self {
+            name: match is_dir {
+                false => path
+                    .file_name()
+                    .map(|n| n.display().to_string())
+                    .unwrap_or_default(),
+                true => format!(
+                    "{}{}",
+                    path.file_name()
+                        .map(|n| n.display().to_string())
+                        .unwrap_or_default(),
+                    std::path::MAIN_SEPARATOR,
+                ),
+            },
+            path,
+            is_dir,
+        }
     }
 }
 

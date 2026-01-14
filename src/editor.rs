@@ -6,6 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#[cfg(feature = "ssh")]
+use crate::files::{EitherSource, SshSource};
 use crate::{
     buffer::{AltCursor, BufferContext, BufferId, BufferList, CutBuffer, SearchArea, Source},
     files::{ChooserSource, FileChooserState, LocalSource},
@@ -46,7 +48,10 @@ pub enum EditorMode {
         match_idx: Option<usize>,
     },
     Open {
+        #[cfg(not(feature = "ssh"))]
         chooser: Box<FileChooserState<LocalSource>>,
+        #[cfg(feature = "ssh")]
+        chooser: Box<FileChooserState<EitherSource>>,
     },
 }
 
@@ -107,7 +112,10 @@ impl Editor {
     }
 
     #[cfg(feature = "ssh")]
-    pub fn new_remote(buffers: impl IntoIterator<Item = Source>, remote: ssh2::Session) -> std::io::Result<Self> {
+    pub fn new_remote(
+        buffers: impl IntoIterator<Item = Source>,
+        remote: ssh2::Session,
+    ) -> std::io::Result<Self> {
         Ok(Self {
             layout: Layout::Single(BufferList::new(buffers)?),
             mode: EditorMode::default(),
@@ -549,6 +557,7 @@ impl Editor {
                     self.mode = find;
                 }
             }
+            #[cfg(not(feature = "ssh"))]
             key!(CONTROL, 'o') => match FileChooserState::new(LocalSource) {
                 Ok(chooser) => {
                     self.mode = EditorMode::Open {
@@ -558,6 +567,34 @@ impl Editor {
                 Err(err) => {
                     self.update_buffer(|b| b.set_error(err.to_string()));
                 }
+            },
+            #[cfg(feature = "ssh")]
+            key!(CONTROL, 'o') => match self.remote.as_ref() {
+                None => match FileChooserState::new(EitherSource::Local(LocalSource)) {
+                    Ok(chooser) => {
+                        self.mode = EditorMode::Open {
+                            chooser: Box::new(chooser),
+                        }
+                    }
+                    Err(err) => {
+                        self.update_buffer(|b| b.set_error(err.to_string()));
+                    }
+                },
+                Some(remote) => match SshSource::open(remote) {
+                    Ok(source) => match FileChooserState::new(EitherSource::Ssh(source)) {
+                        Ok(chooser) => {
+                            self.mode = EditorMode::Open {
+                                chooser: Box::new(chooser),
+                            }
+                        }
+                        Err(err) => {
+                            self.update_buffer(|b| b.set_error(err.to_string()));
+                        }
+                    },
+                    Err(err) => {
+                        self.update_buffer(|b| b.set_error(err.to_string()));
+                    }
+                },
             },
             key!(CONTROL, 'l') => {
                 if let Some(new_mode) = self.on_buffer(|b| {

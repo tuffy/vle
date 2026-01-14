@@ -48,16 +48,18 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
         files: Vec<PathBuf>,
     }
 
-    Editor::new(Opt::parse().files.into_iter().map(buffer::Source::from))
+    Ok(Editor::new(
+        Opt::parse().files.into_iter().map(buffer::Source::from),
+    )?)
 }
 
 #[cfg(feature = "ssh")]
 fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
     use clap::Parser;
-    use inquire::{Text, Password, PasswordDisplayMode};
-    use std::path::PathBuf;
-    use std::net::TcpStream;
+    use inquire::{Password, PasswordDisplayMode, Text};
     use ssh2::Session;
+    use std::net::TcpStream;
+    use std::path::PathBuf;
 
     #[derive(Debug, Parser)]
     #[command(version)]
@@ -66,17 +68,35 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
         files: Vec<PathBuf>,
         #[clap(short = 's', long = "ssh", help = "remote SSH host")]
         host: Option<String>,
-        #[clap(short = 'u', long = "user", help = "remote username", requires = "host")]
+        #[clap(
+            short = 'u',
+            long = "user",
+            help = "remote username",
+            requires = "host"
+        )]
         username: Option<String>,
         #[clap(short = 'P', long = "private", help = "private key", requires = "host")]
         private_key: Option<PathBuf>,
-        #[clap(short = 'p', long = "public", help = "public key", requires = "private_key")]
+        #[clap(
+            short = 'p',
+            long = "public",
+            help = "public key",
+            requires = "private_key"
+        )]
         public_key: Option<PathBuf>,
     }
 
     match Opt::parse() {
-        Opt { files, host: None, .. } => Ok(Editor::new(files.into_iter().map(buffer::Source::from))?),
-        Opt { files, host: Some(host), username, private_key, public_key } => {
+        Opt {
+            files, host: None, ..
+        } => Ok(Editor::new(files.into_iter().map(buffer::Source::from))?),
+        Opt {
+            files,
+            host: Some(host),
+            username,
+            private_key,
+            public_key,
+        } => {
             let username = match username {
                 Some(username) => username,
                 None => Text::new("Username").prompt()?,
@@ -116,7 +136,7 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
                         sess.userauth_password(&username, &password)?;
                         sess
                     }
-                }
+                },
             )?)
         }
     }
