@@ -61,8 +61,6 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
     use std::net::TcpStream;
     use std::path::PathBuf;
 
-    // TODO - add port option with default
-
     #[derive(Debug, Parser)]
     #[command(version)]
     #[command(about = "Very Little Editor")]
@@ -86,6 +84,8 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
             requires = "private_key"
         )]
         public_key: Option<PathBuf>,
+        #[clap(long = "port", help = "remote port number", default_value="22")]
+        port: String,
     }
 
     match Opt::parse() {
@@ -98,6 +98,7 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
             username,
             private_key,
             public_key,
+            port,
         } => {
             let username = match username {
                 Some(username) => username,
@@ -113,7 +114,7 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
                             .without_confirmation()
                             .prompt_skippable()?;
 
-                        let tcp = TcpStream::connect(&host)?;
+                        let tcp = TcpStream::connect(&format!("{host}:{port}"))?;
                         let mut sess = Session::new()?;
                         sess.set_tcp_stream(tcp);
                         sess.handshake()?;
