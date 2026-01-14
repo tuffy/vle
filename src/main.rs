@@ -17,20 +17,12 @@ mod help;
 mod prompt;
 mod syntax;
 
-fn main() -> std::io::Result<()> {
-    use clap::Parser;
+use editor::Editor;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     use crossterm::event::read;
-    use editor::Editor;
-    use std::path::PathBuf;
 
-    #[derive(Parser)]
-    #[command(version)]
-    #[command(about = "Very Little Editor")]
-    struct Opt {
-        files: Vec<PathBuf>,
-    }
-
-    let mut editor = Editor::new(Opt::parse().files.into_iter().map(buffer::Source::from))?;
+    let mut editor = open_editor()?;
 
     execute_terminal(|terminal| {
         while editor.has_open_buffers() {
@@ -39,7 +31,95 @@ fn main() -> std::io::Result<()> {
         }
 
         Ok(())
-    })
+    })?;
+
+    Ok(())
+}
+
+#[cfg(not(feature = "ssh"))]
+fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
+    use clap::Parser;
+    use std::path::PathBuf;
+
+    #[derive(Debug, Parser)]
+    #[command(version)]
+    #[command(about = "Very Little Editor")]
+    struct Opt {
+        files: Vec<PathBuf>,
+    }
+
+    Editor::new(Opt::parse().files.into_iter().map(buffer::Source::from))
+}
+
+#[cfg(feature = "ssh")]
+fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
+    use clap::Parser;
+    use inquire::{Text, Password, PasswordDisplayMode};
+    use std::path::PathBuf;
+    use std::net::TcpStream;
+    use ssh2::Session;
+
+    #[derive(Debug, Parser)]
+    #[command(version)]
+    #[command(about = "Very Little Editor")]
+    struct Opt {
+        files: Vec<PathBuf>,
+        #[clap(short = 's', long = "ssh", help = "remote SSH host")]
+        host: Option<String>,
+        #[clap(short = 'u', long = "user", help = "remote username", requires = "host")]
+        username: Option<String>,
+        #[clap(short = 'P', long = "private", help = "private key", requires = "host")]
+        private_key: Option<PathBuf>,
+        #[clap(short = 'p', long = "public", help = "public key", requires = "private_key")]
+        public_key: Option<PathBuf>,
+    }
+
+    match Opt::parse() {
+        Opt { files, host: None, .. } => Ok(Editor::new(files.into_iter().map(buffer::Source::from))?),
+        Opt { files, host: Some(host), username, private_key, public_key } => {
+            let username = match username {
+                Some(username) => username,
+                None => Text::new("Username").prompt()?,
+            };
+
+            Ok(Editor::new_remote(
+                files.into_iter().map(buffer::Source::from),
+                match private_key {
+                    Some(private_key) => {
+                        let password = Password::new("Private Key Password")
+                            .with_display_mode(PasswordDisplayMode::Masked)
+                            .without_confirmation()
+                            .prompt_skippable()?;
+
+                        let tcp = TcpStream::connect(&host)?;
+                        let mut sess = Session::new()?;
+                        sess.set_tcp_stream(tcp);
+                        sess.handshake()?;
+                        sess.userauth_pubkey_file(
+                            &username,
+                            public_key.as_deref(),
+                            &private_key,
+                            password.as_deref(),
+                        )?;
+                        sess
+                    }
+                    None => {
+                        let password = Password::new("Password")
+                            .with_display_mode(PasswordDisplayMode::Masked)
+                            .without_confirmation()
+                            .prompt()?;
+
+                        let tcp = TcpStream::connect(&host)?;
+                        let mut sess = Session::new()?;
+                        sess.set_tcp_stream(tcp);
+                        sess.handshake()?;
+                        sess.userauth_password(&username, &password)?;
+                        sess
+                    }
+                }
+            )?)
+        }
+    }
 }
 
 /// Sets up terminal, executes editor, and automatically cleans up afterward

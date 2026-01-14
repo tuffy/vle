@@ -90,6 +90,8 @@ pub struct Editor {
     mode: EditorMode,
     cut_buffer: Option<CutBuffer>, // cut buffer shared globally across editor
     show_help: bool,
+    #[cfg(feature = "ssh")]
+    remote: Option<ssh2::Session>,
 }
 
 impl Editor {
@@ -99,6 +101,19 @@ impl Editor {
             mode: EditorMode::default(),
             cut_buffer: None,
             show_help: false,
+            #[cfg(feature = "ssh")]
+            remote: None,
+        })
+    }
+
+    #[cfg(feature = "ssh")]
+    pub fn new_remote(buffers: impl IntoIterator<Item = Source>, remote: ssh2::Session) -> std::io::Result<Self> {
+        Ok(Self {
+            layout: Layout::Single(BufferList::new(buffers)?),
+            mode: EditorMode::default(),
+            cut_buffer: None,
+            show_help: false,
+            remote: Some(remote),
         })
     }
 
