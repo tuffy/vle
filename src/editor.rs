@@ -7,8 +7,8 @@
 // except according to those terms.
 
 use crate::{
-    buffer::{AltCursor, BufferContext, BufferId, BufferList, CutBuffer, SearchArea},
-    files::FileChooserState,
+    buffer::{AltCursor, BufferContext, BufferId, BufferList, CutBuffer, SearchArea, Source},
+    files::{ChooserSource, FileChooserState, LocalSource},
     prompt::{LinePrompt, SearchPrompt},
 };
 use crossterm::event::Event;
@@ -16,7 +16,6 @@ use ratatui::{
     layout::{Position, Rect},
     widgets::StatefulWidget,
 };
-use std::path::PathBuf;
 
 const PAGE_SIZE: usize = 25;
 
@@ -47,7 +46,7 @@ pub enum EditorMode {
         match_idx: Option<usize>,
     },
     Open {
-        chooser: Box<FileChooserState>,
+        chooser: Box<FileChooserState<LocalSource>>,
     },
 }
 
@@ -94,7 +93,7 @@ pub struct Editor {
 }
 
 impl Editor {
-    pub fn new(buffers: impl IntoIterator<Item = PathBuf>) -> std::io::Result<Self> {
+    pub fn new(buffers: impl IntoIterator<Item = Source>) -> std::io::Result<Self> {
         Ok(Self {
             layout: Layout::Single(BufferList::new(buffers)?),
             mode: EditorMode::default(),
@@ -535,7 +534,7 @@ impl Editor {
                     self.mode = find;
                 }
             }
-            key!(CONTROL, 'o') => match FileChooserState::new() {
+            key!(CONTROL, 'o') => match FileChooserState::new(LocalSource) {
                 Ok(chooser) => {
                     self.mode = EditorMode::Open {
                         chooser: Box::new(chooser),
@@ -715,9 +714,9 @@ fn process_select_line(
     }
 }
 
-fn process_open_file(
+fn process_open_file<S: ChooserSource>(
     layout: &mut Layout,
-    chooser: &mut FileChooserState,
+    chooser: &mut FileChooserState<S>,
     event: Event,
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -1103,9 +1102,9 @@ impl Layout {
         }
     }
 
-    fn add(&mut self, path: PathBuf) -> Result<(), ()> {
+    fn add(&mut self, path: Source) -> Result<(), ()> {
         self.selected_buffer_list_mut()
-            .select_by_name(&path)
+            .select_by_source(&path)
             .or_else(|()| match BufferContext::open(path) {
                 Ok(buffer) => match self {
                     Self::Single(b) => {

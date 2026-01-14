@@ -71,7 +71,9 @@ impl TryFrom<JavaScriptToken> for Color {
 
     fn try_from(t: JavaScriptToken) -> Result<Color, ()> {
         match t {
-            JavaScriptToken::Comment | JavaScriptToken::StartComment | JavaScriptToken::EndComment => Ok(Color::LightBlue),
+            JavaScriptToken::Comment
+            | JavaScriptToken::StartComment
+            | JavaScriptToken::EndComment => Ok(Color::LightBlue),
             JavaScriptToken::Keyword => Ok(Color::Green),
             JavaScriptToken::Flow => Ok(Color::LightYellow),
             JavaScriptToken::Break => Ok(Color::Magenta),
@@ -91,4 +93,10 @@ impl std::fmt::Display for JavaScript {
     }
 }
 
-highlighter!(JavaScript, JavaScriptToken, StartComment, EndComment, LightBlue);
+highlighter!(
+    JavaScript,
+    JavaScriptToken,
+    StartComment,
+    EndComment,
+    LightBlue
+);

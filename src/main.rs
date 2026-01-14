@@ -30,7 +30,7 @@ fn main() -> std::io::Result<()> {
         files: Vec<PathBuf>,
     }
 
-    let mut editor = Editor::new(Opt::parse().files)?;
+    let mut editor = Editor::new(Opt::parse().files.into_iter().map(buffer::Source::from))?;
 
     execute_terminal(|terminal| {
         while editor.has_open_buffers() {

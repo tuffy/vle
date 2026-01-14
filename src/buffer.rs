@@ -11,10 +11,11 @@ use crate::syntax::Highlighter;
 use ratatui::widgets::StatefulWidget;
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::SystemTime;
 
+#[derive(Eq, PartialEq)]
 pub enum Source {
     Local(PathBuf),
     Tutorial,
@@ -27,14 +28,6 @@ impl From<PathBuf> for Source {
 }
 
 impl Source {
-    /// Used to determine if an input file is a duplicate
-    fn source_path(&self) -> Option<&Path> {
-        match self {
-            Self::Local(pb) => Some(pb.as_path()),
-            Self::Tutorial => None,
-        }
-    }
-
     /// Used to display in the title
     fn name(&self) -> Cow<'_, str> {
         match self {
@@ -203,13 +196,12 @@ struct Buffer {
 }
 
 impl Buffer {
-    fn source_path(&self) -> Option<&Path> {
-        self.source.source_path()
+    // Used to find if Source has already been opened
+    fn source(&self) -> &Source {
+        &self.source
     }
 
-    fn open(path: PathBuf) -> std::io::Result<Self> {
-        let source = Source::from(path);
-
+    fn open(source: Source) -> std::io::Result<Self> {
         let (saved, rope) = source.read_data()?;
 
         Ok(Self {
@@ -332,8 +324,8 @@ impl BufferContext {
         self.buffer.borrow().modified()
     }
 
-    pub fn open(path: PathBuf) -> std::io::Result<Self> {
-        Buffer::open(path).map(|b| b.into())
+    pub fn open(source: Source) -> std::io::Result<Self> {
+        Buffer::open(source).map(|b| b.into())
     }
 
     pub fn reload(&mut self) {
@@ -1589,7 +1581,7 @@ pub struct BufferList {
 }
 
 impl BufferList {
-    pub fn new(paths: impl IntoIterator<Item = PathBuf>) -> std::io::Result<Self> {
+    pub fn new(paths: impl IntoIterator<Item = Source>) -> std::io::Result<Self> {
         let buffers = paths
             .into_iter()
             .map(|p| Buffer::open(p).map(BufferContext::from))
@@ -1679,13 +1671,13 @@ impl BufferList {
         self.current_mut().map(f)
     }
 
-    /// Attempts to select buffer by file name
+    /// Attempts to select existing buffer by its source
     /// Returns Ok on success, Err on failure
-    pub fn select_by_name(&mut self, name: &Path) -> Result<(), ()> {
+    pub fn select_by_source(&mut self, source: &Source) -> Result<(), ()> {
         match self
             .buffers
             .iter()
-            .position(|buf| buf.buffer.borrow().source_path() == Some(name))
+            .position(|buf| buf.buffer.borrow().source() == source)
         {
             Some(idx) => {
                 self.current = idx;
@@ -2109,7 +2101,7 @@ impl StatefulWidget for BufferWidget<'_> {
             // file selection mode overrides main editing mode
             use crate::files::FileChooser;
 
-            FileChooser.render(area, buf, chooser);
+            FileChooser::default().render(area, buf, chooser);
             return;
         }
 

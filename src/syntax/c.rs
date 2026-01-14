@@ -117,5 +117,4 @@ impl std::fmt::Display for C {
     }
 }
 
-
 highlighter!(C, CToken, StartComment, EndComment, Blue);

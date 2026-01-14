@@ -6,20 +6,62 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use crate::buffer::Source;
 use ratatui::widgets::StatefulWidget;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-pub struct FileChooser;
+/// Width of text box, in characters
+const TEXT_WIDTH: u16 = 30;
 
-impl StatefulWidget for FileChooser {
-    type State = FileChooserState;
+/// Size of each page, in rows
+const PAGE_SIZE: usize = 10;
+
+pub trait ChooserSource {
+    fn current_dir(&self) -> std::io::Result<PathBuf>;
+
+    fn read_dir(&self, dir: &Path) -> std::io::Result<Vec<Entry>>;
+
+    fn open(&self, path: PathBuf) -> Source;
+}
+
+#[derive(Default)]
+pub struct LocalSource;
+
+impl ChooserSource for LocalSource {
+    fn current_dir(&self) -> std::io::Result<PathBuf> {
+        std::env::current_dir()
+    }
+
+    fn read_dir(&self, dir: &Path) -> std::io::Result<Vec<Entry>> {
+        dir.read_dir()
+            .and_then(|entries| entries.map(|e| e.and_then(Entry::try_from)).collect())
+            .map(|mut entries: Vec<Entry>| {
+                entries.sort_unstable_by(|x, y| {
+                    x.is_dir.cmp(&y.is_dir).reverse().then(x.path.cmp(&y.path))
+                });
+                entries
+            })
+    }
+
+    fn open(&self, path: PathBuf) -> Source {
+        Source::Local(path)
+    }
+}
+
+#[derive(Default)]
+pub struct FileChooser<S: ChooserSource> {
+    phantom: std::marker::PhantomData<S>,
+}
+
+impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
+    type State = FileChooserState<S>;
 
     fn render(
         self,
         area: ratatui::layout::Rect,
         buf: &mut ratatui::buffer::Buffer,
-        state: &mut FileChooserState,
+        state: &mut FileChooserState<S>,
     ) {
         use crate::buffer::{BufferMessage, render_message};
         use crate::help::{OPEN_FILE, render_help};
@@ -54,8 +96,7 @@ impl StatefulWidget for FileChooser {
 
         block.render(area, buf);
 
-        let [text_area, _] =
-            Layout::horizontal([Length(FileChooserState::TEXT_WIDTH + 2), Min(0)]).areas(top_area);
+        let [text_area, _] = Layout::horizontal([Length(TEXT_WIDTH + 2), Min(0)]).areas(top_area);
 
         match &state.chosen {
             Chosen::Default => Paragraph::new("")
@@ -74,7 +115,7 @@ impl StatefulWidget for FileChooser {
                     .scroll((
                         0,
                         filename_width
-                            .saturating_sub(FileChooserState::TEXT_WIDTH.into())
+                            .saturating_sub(TEXT_WIDTH.into())
                             .try_into()
                             .unwrap(),
                     ))
@@ -127,7 +168,7 @@ impl StatefulWidget for FileChooser {
     }
 }
 
-pub struct FileChooserState {
+pub struct FileChooserState<S: ChooserSource> {
     cwd: PathBuf,          // editor's current working directory
     dir: PathBuf,          // directory we've navigated to
     contents: Vec<Entry>,  // directory entry
@@ -135,17 +176,17 @@ pub struct FileChooserState {
     index: Option<usize>,  // index in directory entries
     chosen: Chosen,        // either new file or chosen entries
     error: Option<String>, // error message
+    source: S,             // file source
 }
 
-impl FileChooserState {
-    const TEXT_WIDTH: u16 = 30;
-    const PAGE_SIZE: usize = 10;
-
+impl<S: ChooserSource> FileChooserState<S> {
     /// May return an error if unable to get the current
     /// working directory or are unable to read it
-    pub fn new() -> std::io::Result<Self> {
-        let cwd = std::env::current_dir()?;
-        let contents = Entry::read_dir(&cwd)?;
+    pub fn new(source: S) -> std::io::Result<Self> {
+        let cwd = source.current_dir()?;
+
+        let contents = source.read_dir(&cwd)?;
+
         Ok(Self {
             dir: cwd.clone(),
             dir_count: contents.iter().take_while(|e| e.is_dir).count(),
@@ -154,11 +195,12 @@ impl FileChooserState {
             index: None,
             chosen: Chosen::default(),
             error: None,
+            source,
         })
     }
 
     pub fn update_dir(&mut self, new_dir: PathBuf) {
-        match Entry::read_dir(&new_dir) {
+        match self.source.read_dir(&new_dir) {
             Ok(contents) => {
                 self.dir_count = contents.iter().take_while(|e| e.is_dir).count();
                 self.contents = contents;
@@ -199,7 +241,7 @@ impl FileChooserState {
     pub fn page_up(&mut self) {
         self.index = (match self.index {
             None => Some(0),
-            Some(idx) => Some(idx.saturating_sub(Self::PAGE_SIZE)),
+            Some(idx) => Some(idx.saturating_sub(PAGE_SIZE)),
         })
         .filter(|i| *i < max_index(&self.chosen, &self.contents, self.dir_count))
     }
@@ -208,8 +250,8 @@ impl FileChooserState {
         self.index = match max_index(&self.chosen, &self.contents, self.dir_count) {
             0 => None,
             max => match self.index {
-                None => Some(Self::PAGE_SIZE.min(max - 1)),
-                Some(idx) => Some((idx + Self::PAGE_SIZE).min(max - 1)),
+                None => Some(PAGE_SIZE.min(max - 1)),
+                Some(idx) => Some((idx + PAGE_SIZE).min(max - 1)),
             },
         }
     }
@@ -292,7 +334,7 @@ impl FileChooserState {
         }
     }
 
-    pub fn select(&mut self) -> Option<Vec<PathBuf>> {
+    pub fn select(&mut self) -> Option<Vec<Source>> {
         fn strip_cwd(cwd: &Path, path: &Path) -> PathBuf {
             match path.strip_prefix(cwd) {
                 Ok(stripped) => stripped.to_path_buf(),
@@ -312,16 +354,16 @@ impl FileChooserState {
                     is_dir: false,
                     path,
                     ..
-                } => Some(vec![strip_cwd(&self.cwd, path)]),
+                } => Some(vec![self.source.open(strip_cwd(&self.cwd, path))]),
             },
-            Chosen::New(filename) => Some(vec![strip_cwd(
+            Chosen::New(filename) => Some(vec![self.source.open(strip_cwd(
                 &self.cwd,
                 &self.dir.join(filename.into_iter().collect::<String>()),
-            )]),
+            ))]),
             Chosen::Selected(selected) => Some(
                 selected
                     .into_iter()
-                    .map(|path| strip_cwd(&self.cwd, &path))
+                    .map(|path| self.source.open(strip_cwd(&self.cwd, &path)))
                     .collect(),
             ),
         }
@@ -333,7 +375,7 @@ impl FileChooserState {
         match &self.chosen {
             Chosen::Default => (1, 1),
             Chosen::New(filename) => (
-                1u16 + (filename.iter().collect::<String>().width() as u16).min(Self::TEXT_WIDTH),
+                1u16 + (filename.iter().collect::<String>().width() as u16).min(TEXT_WIDTH),
                 1,
             ),
             Chosen::Selected(_) => (0, self.index.map(|idx| 3u16 + idx as u16).unwrap_or(1)),
@@ -348,23 +390,10 @@ fn max_index(chosen: &Chosen, contents: &[Entry], dir_count: usize) -> usize {
     }
 }
 
-struct Entry {
+pub struct Entry {
     name: String,  // user-visible name
     path: PathBuf, // actual path on disk
     is_dir: bool,  // whether item is directory
-}
-
-impl Entry {
-    fn read_dir(dir: &Path) -> std::io::Result<Vec<Self>> {
-        dir.read_dir()
-            .and_then(|entries| entries.map(|e| e.and_then(Entry::try_from)).collect())
-            .map(|mut entries: Vec<Entry>| {
-                entries.sort_unstable_by(|x, y| {
-                    x.is_dir.cmp(&y.is_dir).reverse().then(x.path.cmp(&y.path))
-                });
-                entries
-            })
-    }
 }
 
 impl TryFrom<std::fs::DirEntry> for Entry {
@@ -390,7 +419,7 @@ impl TryFrom<std::fs::DirEntry> for Entry {
 #[derive(Default)]
 enum Chosen {
     #[default]
-    Default, // not new file, nothing selected
+    Default, // nothing selected
     New(Vec<char>),              // new file
     Selected(BTreeSet<PathBuf>), // selected existing file(s)
 }

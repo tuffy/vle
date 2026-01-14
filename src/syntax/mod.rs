@@ -157,7 +157,7 @@ macro_rules! highlighter {
                 }))
             }
         }
-    }
+    };
 }
 
 // TODO - add cmake syntax
