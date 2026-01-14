@@ -19,21 +19,27 @@ mod syntax;
 
 use editor::Editor;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     use crossterm::event::read;
 
-    let mut editor = open_editor()?;
+    let mut editor = match open_editor() {
+        Ok(editor) => editor,
+        Err(err) => {
+            eprintln!("* {err}");
+            return;
+        }
+    };
 
-    execute_terminal(|terminal| {
+    if let Err(err) = execute_terminal(|terminal| {
         while editor.has_open_buffers() {
             editor.display(terminal)?;
             editor.process_event(read()?);
         }
 
         Ok(())
-    })?;
-
-    Ok(())
+    }) {
+        eprintln!("{err}");
+    }
 }
 
 #[cfg(not(feature = "ssh"))]
@@ -132,7 +138,7 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
                             .without_confirmation()
                             .prompt()?;
 
-                        let tcp = TcpStream::connect(&host)?;
+                        let tcp = TcpStream::connect(&format!("{host}:{port}"))?;
                         let mut sess = Session::new()?;
                         sess.set_tcp_stream(tcp);
                         sess.handshake()?;
