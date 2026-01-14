@@ -16,13 +16,13 @@ use std::rc::Rc;
 use std::time::SystemTime;
 
 pub enum Source {
-    File(PathBuf),
+    Local(PathBuf),
     Tutorial,
 }
 
 impl From<PathBuf> for Source {
     fn from(s: PathBuf) -> Self {
-        Self::File(s)
+        Self::Local(s)
     }
 }
 
@@ -30,7 +30,7 @@ impl Source {
     /// Used to determine if an input file is a duplicate
     fn source_path(&self) -> Option<&Path> {
         match self {
-            Self::File(pb) => Some(pb.as_path()),
+            Self::Local(pb) => Some(pb.as_path()),
             Self::Tutorial => None,
         }
     }
@@ -38,7 +38,7 @@ impl Source {
     /// Used to display in the title
     fn name(&self) -> Cow<'_, str> {
         match self {
-            Self::File(path) => path.to_string_lossy(),
+            Self::Local(path) => path.to_string_lossy(),
             Self::Tutorial => "Welcome!".into(),
         }
     }
@@ -46,7 +46,7 @@ impl Source {
     /// Used to determine syntax highlighting
     pub fn file_name(&self) -> Option<Cow<'_, str>> {
         match self {
-            Self::File(path) => path.file_name().map(|s| s.to_string_lossy()),
+            Self::Local(path) => path.file_name().map(|s| s.to_string_lossy()),
             Self::Tutorial => None,
         }
     }
@@ -54,7 +54,7 @@ impl Source {
     /// Also used to determine syntax highlighting
     pub fn extension(&self) -> Option<&str> {
         match self {
-            Self::File(path) => path.extension().and_then(|s| s.to_str()),
+            Self::Local(path) => path.extension().and_then(|s| s.to_str()),
             Self::Tutorial => None,
         }
     }
@@ -62,7 +62,7 @@ impl Source {
     /// Used for file reloading
     fn read_string(&self) -> std::io::Result<(Option<SystemTime>, String)> {
         match self {
-            Self::File(path) => {
+            Self::Local(path) => {
                 let s = std::fs::read_to_string(path)?;
                 Ok((path.metadata().and_then(|m| m.modified()).ok(), s))
             }
@@ -79,7 +79,7 @@ impl Source {
         use std::io::BufReader;
 
         match self {
-            Self::File(path) => match File::open(path) {
+            Self::Local(path) => match File::open(path) {
                 Ok(f) => Ok((
                     f.metadata().and_then(|m| m.modified()).ok(),
                     ropey::Rope::from_reader(BufReader::new(f))?,
@@ -99,7 +99,7 @@ impl Source {
         use std::io::{BufWriter, Write};
 
         match self {
-            Self::File(path) => File::create(path).map(BufWriter::new).and_then(|mut f| {
+            Self::Local(path) => File::create(path).map(BufWriter::new).and_then(|mut f| {
                 data.write_to(&mut f)?;
                 f.flush()?;
                 Ok(f.get_mut().metadata().and_then(|m| m.modified()).ok())
@@ -111,7 +111,7 @@ impl Source {
     /// Used for the "buffer changed on disk" warning
     fn last_modified(&self) -> Option<SystemTime> {
         match self {
-            Self::File(path) => path.metadata().and_then(|m| m.modified()).ok(),
+            Self::Local(path) => path.metadata().and_then(|m| m.modified()).ok(),
             Self::Tutorial => None,
         }
     }
