@@ -102,7 +102,12 @@ impl Source {
                     use std::io::Read;
                     let mut s = String::default();
                     f.read_to_string(&mut s)?;
-                    Ok((None, s))
+                    Ok((
+                        f.stat().ok().and_then(|stat| stat.mtime).and_then(|secs| {
+                            SystemTime::UNIX_EPOCH.checked_add(std::time::Duration::from_secs(secs))
+                        }),
+                        s,
+                    ))
                 }
                 // TODO - see if file-not-found can be converted
                 Err(e) => Err(e.into()),
@@ -132,7 +137,12 @@ impl Source {
             },
             #[cfg(feature = "ssh")]
             Self::Ssh { sftp, path } => match sftp.open(path) {
-                Ok(f) => Ok((None, ropey::Rope::from_reader(BufReader::new(f))?)),
+                Ok(mut f) => Ok((
+                    f.stat().ok().and_then(|stat| stat.mtime).and_then(|secs| {
+                        SystemTime::UNIX_EPOCH.checked_add(std::time::Duration::from_secs(secs))
+                    }),
+                    ropey::Rope::from_reader(BufReader::new(f))?,
+                )),
                 // TODO - see if file-not-found can be converted
                 Err(e) => Err(e.into()),
             },
@@ -156,7 +166,9 @@ impl Source {
                 Ok(mut f) => {
                     data.write_to(&mut f)?;
                     f.flush()?;
-                    Ok(None)
+                    Ok(f.stat().ok().and_then(|stat| stat.mtime).and_then(|secs| {
+                        SystemTime::UNIX_EPOCH.checked_add(std::time::Duration::from_secs(secs))
+                    }))
                 }
                 Err(e) => Err(e.into()),
             },
@@ -169,7 +181,14 @@ impl Source {
         match self {
             Self::Local(path) => path.metadata().and_then(|m| m.modified()).ok(),
             #[cfg(feature = "ssh")]
-            Self::Ssh { .. } => None,
+            Self::Ssh { sftp, path } => {
+                sftp.stat(path)
+                    .ok()
+                    .and_then(|stat| stat.mtime)
+                    .and_then(|secs| {
+                        SystemTime::UNIX_EPOCH.checked_add(std::time::Duration::from_secs(secs))
+                    })
+            }
             Self::Tutorial => None,
         }
     }
