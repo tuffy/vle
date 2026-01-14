@@ -656,6 +656,8 @@ impl BufferContext {
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
 
+        // TODO - accomodate '\r\n' in some fashion
+
         // if the whole line is indent, insert newline *before* indent
         // instead of adding a fresh indentation
         if all_indent {
@@ -1952,6 +1954,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
 
+            // TODO - accomodate '\r\n' in some fashion
             if current_line {
                 match text {
                     Cow::Borrowed(s) => colorize_str(syntax, state, s.trim_end_matches('\n')),
