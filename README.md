@@ -16,18 +16,19 @@ TODO
 | Action                         | Keys                       |
 |-------------------------------:|----------------------------|
 | Open File                      | `Ctrl-O`                   |
-| Reload File                    | `F3`                       |
+| Reload File                    | `Ctrl-L`                   |
 | Save                           | `Ctrl-S`                   |
 | Switch Buffer                  | `Ctrl-PgUp` `Ctrl-PgDn`    |
 | Quit Buffer                    | `Ctrl-Q`                   |
 | Open/Switch Pane               | `Ctrl-Arrows`              |
-| Swap Panes                     | `F2`                       |
+| Swap Panes                     | `Ctrl-N`                   |
 | Highlight Text                 | `Shift-Arrows`             |
 | Widen Selection to Whole Lines | `Ctrl-W`                   |
 | Start/End of Selection         | `Ctrl-Home` `Ctrl-End`     |
 | Handle Enveloped Items         | `Ctrl-E`                   |
 | Cut/Copy/Paste                 | `Ctrl-X` `Ctrl-C` `Ctrl-V` |
 | Undo/Redo                      | `Ctrl-Z` `Ctrl-Y`          |
+| Goto Matching Pair             | `Ctrl-P`                   |
 | Goto Line                      | `Ctrl-T`                   |
 | Find Text                      | `Ctrl-F`                   |
 

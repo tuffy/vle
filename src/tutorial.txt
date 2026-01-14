@@ -313,7 +313,7 @@ Ctrl-O goes into an "open file" mode which allows us to
 navigate to an existing file on disk or provide a filename
 for a new file to create. Each file is opened into its own buffer.
 
-Notice the "1/1" indicator at the frame's upper right?
+Notice the "1/1" indicator at the frame's lower left?
 This indicates the index of the frame's buffer
 along with the total number of buffers available.
 Buffers can be cycled using Ctrl-PgUp and Ctrl-PgDn,
