@@ -109,7 +109,6 @@ impl Source {
                         s,
                     ))
                 }
-                // TODO - see if file-not-found can be converted
                 Err(e) => Err(e.into()),
             },
             Self::Tutorial => Ok((
@@ -143,7 +142,9 @@ impl Source {
                     }),
                     ropey::Rope::from_reader(BufReader::new(f))?,
                 )),
-                // TODO - see if file-not-found can be converted
+                Err(e) if e.code() == ssh2::ErrorCode::SFTP(2) => {
+                    Ok((None, ropey::Rope::default()))
+                }
                 Err(e) => Err(e.into()),
             },
             Self::Tutorial => self.read_string().map(|(t, s)| (t, ropey::Rope::from(s))),
