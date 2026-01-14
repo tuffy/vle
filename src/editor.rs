@@ -775,7 +775,7 @@ fn process_open_file(
         key!(Enter) => {
             for selected in chooser.select()? {
                 if let Err(()) = layout.add(selected) {
-                    return None;
+                    return Some(EditorMode::default());
                 }
             }
             Some(EditorMode::default())
