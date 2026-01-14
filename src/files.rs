@@ -88,7 +88,10 @@ impl ChooserSource for SshSource {
     }
 
     fn open(&self, path: PathBuf) -> Source {
-        todo!()
+        Source::Ssh {
+            sftp: std::rc::Rc::clone(&self.remote),
+            path,
+        }
     }
 }
 

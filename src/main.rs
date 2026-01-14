@@ -61,6 +61,8 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
     use std::net::TcpStream;
     use std::path::PathBuf;
 
+    // TODO - add port option with default
+
     #[derive(Debug, Parser)]
     #[command(version)]
     #[command(about = "Very Little Editor")]

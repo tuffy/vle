@@ -15,11 +15,42 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::SystemTime;
 
-#[derive(Eq, PartialEq)]
 pub enum Source {
     Local(PathBuf),
+    #[cfg(feature = "ssh")]
+    Ssh {
+        sftp: Rc<ssh2::Sftp>,
+        path: PathBuf,
+    },
     Tutorial,
 }
+
+#[cfg(not(feature = "ssh"))]
+impl PartialEq for Source {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Local(x), Self::Local(y)) => x == y,
+            (Self::Tutorial, Self::Tutorial) => true,
+            _ => false,
+        }
+    }
+}
+
+#[cfg(feature = "ssh")]
+impl PartialEq for Source {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Local(x), Self::Local(y)) => x == y,
+            (Self::Ssh { sftp: s1, path: x }, Self::Ssh { sftp: s2, path: y }) => {
+                Rc::ptr_eq(s1, s2) && x == y
+            }
+            (Self::Tutorial, Self::Tutorial) => true,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Source {}
 
 impl From<PathBuf> for Source {
     fn from(s: PathBuf) -> Self {
@@ -32,6 +63,8 @@ impl Source {
     fn name(&self) -> Cow<'_, str> {
         match self {
             Self::Local(path) => path.to_string_lossy(),
+            #[cfg(feature = "ssh")]
+            Self::Ssh { path, .. } => path.to_string_lossy(),
             Self::Tutorial => "Welcome!".into(),
         }
     }
@@ -40,6 +73,8 @@ impl Source {
     pub fn file_name(&self) -> Option<Cow<'_, str>> {
         match self {
             Self::Local(path) => path.file_name().map(|s| s.to_string_lossy()),
+            #[cfg(feature = "ssh")]
+            Self::Ssh { path, .. } => path.file_name().map(|s| s.to_string_lossy()),
             Self::Tutorial => None,
         }
     }
@@ -48,6 +83,8 @@ impl Source {
     pub fn extension(&self) -> Option<&str> {
         match self {
             Self::Local(path) => path.extension().and_then(|s| s.to_str()),
+            #[cfg(feature = "ssh")]
+            Self::Ssh { path, .. } => path.extension().and_then(|s| s.to_str()),
             Self::Tutorial => None,
         }
     }
@@ -59,6 +96,17 @@ impl Source {
                 let s = std::fs::read_to_string(path)?;
                 Ok((path.metadata().and_then(|m| m.modified()).ok(), s))
             }
+            #[cfg(feature = "ssh")]
+            Self::Ssh { sftp, path } => match sftp.open(path) {
+                Ok(mut f) => {
+                    use std::io::Read;
+                    let mut s = String::default();
+                    f.read_to_string(&mut s)?;
+                    Ok((None, s))
+                }
+                // TODO - see if file-not-found can be converted
+                Err(e) => Err(e.into()),
+            },
             Self::Tutorial => Ok((
                 None,
                 include_str!("tutorial.txt").replacen("VERSION", env!("CARGO_PKG_VERSION"), 1),
@@ -82,6 +130,12 @@ impl Source {
                 }
                 Err(e) => Err(e),
             },
+            #[cfg(feature = "ssh")]
+            Self::Ssh { sftp, path } => match sftp.open(path) {
+                Ok(f) => Ok((None, ropey::Rope::from_reader(BufReader::new(f))?)),
+                // TODO - see if file-not-found can be converted
+                Err(e) => Err(e.into()),
+            },
             Self::Tutorial => self.read_string().map(|(t, s)| (t, ropey::Rope::from(s))),
         }
     }
@@ -97,6 +151,15 @@ impl Source {
                 f.flush()?;
                 Ok(f.get_mut().metadata().and_then(|m| m.modified()).ok())
             }),
+            #[cfg(feature = "ssh")]
+            Self::Ssh { sftp, path } => match sftp.create(path) {
+                Ok(mut f) => {
+                    data.write_to(&mut f)?;
+                    f.flush()?;
+                    Ok(None)
+                }
+                Err(e) => Err(e.into()),
+            },
             Self::Tutorial => Ok(None),
         }
     }
@@ -105,6 +168,8 @@ impl Source {
     fn last_modified(&self) -> Option<SystemTime> {
         match self {
             Self::Local(path) => path.metadata().and_then(|m| m.modified()).ok(),
+            #[cfg(feature = "ssh")]
+            Self::Ssh { .. } => None,
             Self::Tutorial => None,
         }
     }
