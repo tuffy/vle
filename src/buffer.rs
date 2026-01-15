@@ -1122,8 +1122,8 @@ impl BufferContext {
                 let mut buf = self.buffer.borrow_mut();
                 buf.log_undo(self.cursor, self.cursor_column);
                 let mut rope = buf.rope.get_mut();
-                let mut alt = Secondary::new(alt, |a| a >= self.cursor);
                 let (start_pos, end_pos) = reorder(&mut self.cursor, selection);
+                let mut alt = Secondary::new(alt, |a| a >= *start_pos);
                 let _ = rope.try_insert_char(*end_pos, end);
                 let _ = rope.try_insert_char(*start_pos, start);
                 alt.update(|pos| *pos += if *pos > *end_pos { 2 } else { 1 });
