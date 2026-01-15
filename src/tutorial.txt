@@ -74,7 +74,7 @@ marker, and then repeatedly Del until it matches the line below it.
 ## Saving Your File
 
 As you've made changes to this buffer, you'll notice an
-asterisk (*) next to its title at the top. This indicates
+asterisk (*) next to its title at the bottom. This indicates
 the buffer has unsaved changes. Ctrl-S saves the current file.
 Go ahead and try it now (this tutorial buffer is special
 and isn't actually written to disk, but will behave as if it was).
@@ -339,7 +339,7 @@ Or, Ctrl-↑ or Ctrl-↓ divides a single window into two wide
 top-and-bottom sections which we can navigate between using
 Ctrl-↑ or Ctrl-↓. Ctrl-← and Ctrl-→ restores a single window mode.
 
-When a window is split into two panes, F2 will swap their
+When a window is split into two panes, Ctrl-N will swap their
 positions onscreen.
 
 

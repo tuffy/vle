@@ -51,6 +51,7 @@ enum TutorialToken {
     #[token("Ctrl-R")]
     #[token("Ctrl-O")]
     #[token("Ctrl-Q")]
+    #[token("Ctrl-N")]
     #[token("Ctrl-PgUp")]
     #[token("Ctrl-PgDn")]
     #[token("Ctrl-Home")]
