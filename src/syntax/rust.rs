@@ -75,6 +75,7 @@ enum RustToken {
     Integer,
 
     #[regex(r#"\"([^\\\"]|\\.)*\""#)]
+    #[regex(r"'([^\\\']|\\.)*'")]
     String,
 
     #[regex("[[:lower:]_]+!")]
@@ -94,35 +95,6 @@ enum RustToken {
 
     #[regex("fn [[:lower:][:digit:]_]+")]
     Function,
-
-    #[token("~")]
-    #[token("!")]
-    #[token("@")]
-    #[token("$")]
-    #[token("%")]
-    #[token("^")]
-    #[token("&")]
-    #[token("*")]
-    #[token("(")]
-    #[token(")")]
-    #[token("-")]
-    #[token("=")]
-    #[token("+")]
-    #[token("[")]
-    #[token("]")]
-    #[token("{")]
-    #[token("}")]
-    #[token("|")]
-    #[token("\\")]
-    #[token(":")]
-    #[token(";")]
-    #[token(",")]
-    #[token(".")]
-    #[token("<")]
-    #[token(">")]
-    #[token("/")]
-    #[token("?")]
-    Punctuation,
 }
 
 impl TryFrom<RustToken> for Color {
@@ -137,7 +109,7 @@ impl TryFrom<RustToken> for Color {
             RustToken::Comment | RustToken::StartComment | RustToken::EndComment => Ok(Color::Blue),
             RustToken::Function => Ok(Color::Magenta),
             RustToken::String => Ok(Color::Green),
-            RustToken::Variable | RustToken::Integer | RustToken::Punctuation => Err(()),
+            RustToken::Variable | RustToken::Integer => Err(()),
         }
     }
 }
