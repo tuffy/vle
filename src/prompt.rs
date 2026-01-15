@@ -18,6 +18,10 @@ impl SearchPrompt {
         self.value.push(c);
     }
 
+    pub fn extend(&mut self, s: &str) {
+        self.value.extend(s.chars());
+    }
+
     pub fn pop(&mut self) -> Option<char> {
         self.value.pop()
     }

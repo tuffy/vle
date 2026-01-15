@@ -872,6 +872,13 @@ fn process_find(
             }
             None
         }
+        Event::Paste(pasted) => {
+            prompt.extend(&pasted);
+            if let Err(()) = buffer.next_or_current_match(area, &prompt.get_value()?) {
+                buffer.set_error("Not Found");
+            }
+            None
+        }
         key!(Backspace) => {
             prompt.pop();
             if prompt.is_empty() {
