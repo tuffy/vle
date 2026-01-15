@@ -100,7 +100,7 @@ impl Source {
             #[cfg(feature = "ssh")]
             Self::Ssh { sftp, path } => match sftp.open(path) {
                 Ok(mut f) => {
-                    let s = endings.reader_to_string(f)?;
+                    let s = endings.reader_to_string(&mut f)?;
                     Ok((
                         f.stat().ok().and_then(|stat| stat.mtime).and_then(|secs| {
                             SystemTime::UNIX_EPOCH.checked_add(std::time::Duration::from_secs(secs))
@@ -135,14 +135,14 @@ impl Source {
             #[cfg(feature = "ssh")]
             Self::Ssh { sftp, path } => match sftp.open(path) {
                 Ok(mut f) => {
-                    let (endings, rope) = LineEndings::reader_to_rope(f)?;
-                    Ok((f.stat().ok().and_then(|stat| stat.mtime).and_then(
-                        |secs| {
+                    let (endings, rope) = LineEndings::reader_to_rope(&mut f)?;
+                    Ok((
+                        f.stat().ok().and_then(|stat| stat.mtime).and_then(|secs| {
                             SystemTime::UNIX_EPOCH.checked_add(std::time::Duration::from_secs(secs))
-                        },
+                        }),
                         rope,
                         endings,
-                    )))
+                    ))
                 }
                 Err(e) if e.code() == ssh2::ErrorCode::SFTP(2) => {
                     Ok((None, ropey::Rope::default(), LineEndings::default()))
