@@ -160,29 +160,27 @@ we want instead.
     "the correct string"
 
 
-If a selection is active, Ctrl-E will instead prompt
-for which pair of characters we want to surround the
-selection with. This will add the appropriate
-pair to each side of the selection while keeping
-the selection active.
+If a selection is active, typing a surround character
+like ( will add the appropriate pair on each side
+of the selection while keeping the selection active.
 
-Try highlighting the text below, hit Ctrl-E, then (
-to surround it with parentheses.
+Try highlighting the text below,
+then type ( to surround it with parentheses.
 
 >>> surround me
     (surround me)
 
 
-Lastly, if a selection is active, Ctrl-E also
-offers the option to delete the appropriate pair
-of surrounding characters with the Del key.
+Lastly, if a selection is active,
+Del will delete the appropriate pair
+of surrounding characters on each side of the selection.
 This allows us to quickly strip off an unwanted
 set of surrounding characters.
 
 Try moving your cursor inside the parenthesized text
 (again, it doesn't matter where), use Ctrl-E then (
-to select inside the parentheses. Finally, Ctrl-E then Del
-will delete the surrounding parentheses.
+to select inside the parentheses.
+Finally, Del will delete the surrounding parentheses.
 All in far fewer keystrokes than trying to navigate
 and delete them one at a time.
 
