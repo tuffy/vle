@@ -848,7 +848,7 @@ impl BufferContext {
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
 
-        match self.selection.take() {
+        match &mut self.selection {
             None => {
                 let mut alt = Secondary::new(alt, |a| a > self.cursor);
                 if rope.try_remove(self.cursor..(self.cursor + 1)).is_ok() {
@@ -856,15 +856,23 @@ impl BufferContext {
                 }
                 // leave our cursor position and current column unchanged
             }
-            Some(current_selection) => {
-                let mut alt = Secondary::new(alt, |a| a > self.cursor.min(current_selection));
-                zap_selection(
+            Some(selection) => {
+                if let Err(mut alt) = delete_surround(
                     &mut rope,
                     &mut self.cursor,
                     &mut self.cursor_column,
-                    current_selection,
-                    &mut alt,
-                );
+                    selection,
+                    alt,
+                ) {
+                    zap_selection(
+                        &mut rope,
+                        &mut self.cursor,
+                        &mut self.cursor_column,
+                        *selection,
+                        &mut alt,
+                    );
+                    self.selection = None;
+                }
             }
         }
     }
@@ -1230,32 +1238,20 @@ impl BufferContext {
     /// Returns true if selection is active and surround characters
     /// are deleted
     pub fn delete_surround(&mut self, alt: Option<AltCursor<'_>>) -> bool {
-        let Some(selection) = &mut self.selection else {
-            return false;
-        };
-        let mut buf = self.buffer.borrow_mut();
-        buf.log_undo(self.cursor, self.cursor_column);
-        let mut rope = buf.rope.get_mut();
-        let (start, end) = reorder(&mut self.cursor, selection);
-        let mut alt = Secondary::new(alt, |a| a >= *start);
-
-        if let Some(prev_pos) = start.checked_sub(1)
-            && let Some(prev_char) = rope.get_char(prev_pos)
-            && let Some(next_char) = rope.get_char(*end)
-            && matches!(
-                (prev_char, next_char),
-                ('(', ')') | ('[', ']') | ('{', '}') | ('<', '>') | ('"', '"') | ('\'', '\'')
-            )
-        {
-            let _ = rope.try_remove(*end..*end + 1);
-            let _ = rope.try_remove(prev_pos..*start);
-            alt.update(|pos| *pos -= if *pos > *end { 2 } else { 1 });
-            *end -= 1;
-            *start -= 1;
-            self.cursor_column = cursor_column(&rope, self.cursor);
-            true
-        } else {
-            false
+        match &mut self.selection {
+            Some(selection) => {
+                let mut buf = self.buffer.borrow_mut();
+                buf.log_undo(self.cursor, self.cursor_column);
+                delete_surround(
+                    &mut buf.rope.get_mut(),
+                    &mut self.cursor,
+                    &mut self.cursor_column,
+                    selection,
+                    alt,
+                )
+                .is_ok()
+            }
+            None => false,
         }
     }
 
@@ -1740,6 +1736,37 @@ fn perform_surround(
         *end_pos += 1;
     }
     *cursor_col = cursor_column(rope, *cursor);
+}
+
+/// Returns Ok is surround performed, or Err(Secondary) if not
+fn delete_surround<'s>(
+    rope: &mut ropey::Rope,
+    cursor: &mut usize,
+    cursor_col: &mut usize,
+    selection: &mut usize,
+    alt: Option<AltCursor<'s>>,
+) -> Result<(), Secondary<'s>> {
+    let (start, end) = reorder(&mut *cursor, selection);
+    let mut alt = Secondary::new(alt, |a| a >= *start);
+
+    if let Some(prev_pos) = start.checked_sub(1)
+        && let Some(prev_char) = rope.get_char(prev_pos)
+        && let Some(next_char) = rope.get_char(*end)
+        && matches!(
+            (prev_char, next_char),
+            ('(', ')') | ('[', ']') | ('{', '}') | ('<', '>') | ('"', '"') | ('\'', '\'')
+        )
+    {
+        let _ = rope.try_remove(*end..*end + 1);
+        let _ = rope.try_remove(prev_pos..*start);
+        alt.update(|pos| *pos -= if *pos > *end { 2 } else { 1 });
+        *end -= 1;
+        *start -= 1;
+        *cursor_col = cursor_column(rope, *cursor);
+        Ok(())
+    } else {
+        Err(alt)
+    }
 }
 
 impl From<Buffer> for BufferContext {
