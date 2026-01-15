@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::editor::EditorMode;
+use crate::endings::LineEndings;
 use crate::syntax::Highlighter;
 use ratatui::widgets::StatefulWidget;
 use std::borrow::Cow;
@@ -90,18 +91,16 @@ impl Source {
     }
 
     /// Used for file reloading
-    fn read_string(&self) -> std::io::Result<(Option<SystemTime>, String)> {
+    fn read_string(&self, endings: LineEndings) -> std::io::Result<(Option<SystemTime>, String)> {
         match self {
             Self::Local(path) => {
-                let s = std::fs::read_to_string(path)?;
+                let s = std::fs::File::open(path).and_then(|f| endings.reader_to_string(f))?;
                 Ok((path.metadata().and_then(|m| m.modified()).ok(), s))
             }
             #[cfg(feature = "ssh")]
             Self::Ssh { sftp, path } => match sftp.open(path) {
                 Ok(mut f) => {
-                    use std::io::Read;
-                    let mut s = String::default();
-                    f.read_to_string(&mut s)?;
+                    let s = endings.reader_to_string(f)?;
                     Ok((
                         f.stat().ok().and_then(|stat| stat.mtime).and_then(|secs| {
                             SystemTime::UNIX_EPOCH.checked_add(std::time::Duration::from_secs(secs))
@@ -119,53 +118,62 @@ impl Source {
     }
 
     /// Used for file loading (can be based on read_string)
-    fn read_data(&self) -> std::io::Result<(Option<SystemTime>, ropey::Rope)> {
+    fn read_data(&self) -> std::io::Result<(Option<SystemTime>, ropey::Rope, LineEndings)> {
         use std::fs::File;
-        use std::io::BufReader;
 
         match self {
             Self::Local(path) => match File::open(path) {
-                Ok(f) => Ok((
-                    f.metadata().and_then(|m| m.modified()).ok(),
-                    ropey::Rope::from_reader(BufReader::new(f))?,
-                )),
+                Ok(mut f) => {
+                    let (endings, rope) = LineEndings::reader_to_rope(&mut f)?;
+                    Ok((f.metadata().and_then(|m| m.modified()).ok(), rope, endings))
+                }
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                    Ok((None, ropey::Rope::default()))
+                    Ok((None, ropey::Rope::default(), LineEndings::default()))
                 }
                 Err(e) => Err(e),
             },
             #[cfg(feature = "ssh")]
             Self::Ssh { sftp, path } => match sftp.open(path) {
-                Ok(mut f) => Ok((
-                    f.stat().ok().and_then(|stat| stat.mtime).and_then(|secs| {
-                        SystemTime::UNIX_EPOCH.checked_add(std::time::Duration::from_secs(secs))
-                    }),
-                    ropey::Rope::from_reader(BufReader::new(f))?,
-                )),
+                Ok(mut f) => {
+                    let (endings, rope) = LineEndings::reader_to_rope(f)?;
+                    Ok((f.stat().ok().and_then(|stat| stat.mtime).and_then(
+                        |secs| {
+                            SystemTime::UNIX_EPOCH.checked_add(std::time::Duration::from_secs(secs))
+                        },
+                        rope,
+                        endings,
+                    )))
+                }
                 Err(e) if e.code() == ssh2::ErrorCode::SFTP(2) => {
-                    Ok((None, ropey::Rope::default()))
+                    Ok((None, ropey::Rope::default(), LineEndings::default()))
                 }
                 Err(e) => Err(e.into()),
             },
-            Self::Tutorial => self.read_string().map(|(t, s)| (t, ropey::Rope::from(s))),
+            Self::Tutorial => self
+                .read_string(LineEndings::default())
+                .map(|(t, s)| (t, ropey::Rope::from(s), LineEndings::default())),
         }
     }
 
     /// Used for file saving
-    fn save_data(&self, data: &ropey::Rope) -> std::io::Result<Option<SystemTime>> {
+    fn save_data(
+        &self,
+        data: &ropey::Rope,
+        endings: LineEndings,
+    ) -> std::io::Result<Option<SystemTime>> {
         use std::fs::File;
         use std::io::{BufWriter, Write};
 
         match self {
             Self::Local(path) => File::create(path).map(BufWriter::new).and_then(|mut f| {
-                data.write_to(&mut f)?;
+                endings.rope_to_writer(data, &mut f)?;
                 f.flush()?;
                 Ok(f.get_mut().metadata().and_then(|m| m.modified()).ok())
             }),
             #[cfg(feature = "ssh")]
             Self::Ssh { sftp, path } => match sftp.create(path) {
                 Ok(mut f) => {
-                    data.write_to(&mut f)?;
+                    endings.rope_to_writer(data, &mut f)?;
                     f.flush()?;
                     Ok(f.stat().ok().and_then(|stat| stat.mtime).and_then(|secs| {
                         SystemTime::UNIX_EPOCH.checked_add(std::time::Duration::from_secs(secs))
@@ -273,6 +281,7 @@ mod private {
 /// A buffer corresponding to a file on disk (either local or remote)
 struct Buffer {
     source: Source,               // the source file
+    endings: LineEndings,         // the source file's line endings
     saved: Option<SystemTime>,    // when the file was last saved
     rope: private::Rope,          // the data rope
     undo: Vec<Undo>,              // the undo stack
@@ -287,10 +296,11 @@ impl Buffer {
     }
 
     fn open(source: Source) -> std::io::Result<Self> {
-        let (saved, rope) = source.read_data()?;
+        let (saved, rope, endings) = source.read_data()?;
 
         Ok(Self {
             rope: rope.into(),
+            endings,
             saved,
             syntax: crate::syntax::syntax(&source),
             source,
@@ -307,6 +317,7 @@ impl Buffer {
                 1,
             ))
             .into(),
+            endings: LineEndings::default(),
             saved: None,
             syntax: Box::new(crate::syntax::Tutorial),
             source: Source::Tutorial,
@@ -316,7 +327,7 @@ impl Buffer {
     }
 
     fn reload(&mut self) -> std::io::Result<()> {
-        let (saved, reloaded) = self.source.read_string()?;
+        let (saved, reloaded) = self.source.read_string(self.endings)?;
         patch_rope(&mut self.rope.get_mut(), reloaded);
         self.rope.save();
         self.saved = saved;
@@ -337,7 +348,7 @@ impl Buffer {
             {
                 rope.insert_char(len_chars, '\n');
             }
-            self.source.save_data(&rope)?
+            self.source.save_data(&rope, self.endings)?
         };
         self.rope.save();
         log_movement(&mut self.undo);
@@ -655,8 +666,6 @@ impl BufferContext {
 
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
-
-        // TODO - accomodate '\r\n' in some fashion
 
         // if the whole line is indent, insert newline *before* indent
         // instead of adding a fresh indentation
@@ -1954,7 +1963,6 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
 
-            // TODO - accomodate '\r\n' in some fashion
             if current_line {
                 match text {
                     Cow::Borrowed(s) => colorize_str(syntax, state, s.trim_end_matches('\n')),
@@ -2221,17 +2229,24 @@ impl StatefulWidget for BufferWidget<'_> {
                     buffer.source.name().to_string()
                 },
                 self.mode.is_some(),
-            ))
-            .title_bottom(
-                border_title(
-                    match buffer.rope.try_char_to_line(state.cursor) {
-                        Ok(line) => format!("{}", (line + 1)),
-                        Err(_) => "???".to_string(),
-                    },
-                    self.mode.is_some(),
-                )
-                .right_aligned(),
-            );
+            ));
+
+        let block = match buffer.endings.name() {
+            Some(name) => block
+                .title_bottom(border_title(name.to_string(), self.mode.is_some()).right_aligned()),
+            None => block,
+        };
+
+        let block = block.title_bottom(
+            border_title(
+                match buffer.rope.try_char_to_line(state.cursor) {
+                    Ok(line) => format!("{}", (line + 1)),
+                    Err(_) => "???".to_string(),
+                },
+                self.mode.is_some(),
+            )
+            .right_aligned(),
+        );
 
         let [text_area, scrollbar_area] =
             Layout::horizontal([Min(0), Length(1)]).areas(block.inner(area));
