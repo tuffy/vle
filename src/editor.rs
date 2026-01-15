@@ -542,7 +542,22 @@ impl Editor {
             key!(SHIFT, BackTab) => self.update_buffer_at(|b, a| b.un_indent(a)),
             key!(CONTROL, 'p') => self.update_buffer(|b| b.select_matching_paren()),
             key!(CONTROL, 'e') => {
-                self.mode = EditorMode::SelectInside;
+                if let Some(false) =
+                    self.on_buffer(|b| match (b.prev_pairing_char(), b.next_pairing_char()) {
+                        (Some(('(', start)), Some((')', end)))
+                        | (Some(('[', start)), Some((']', end)))
+                        | (Some(('{', start)), Some(('}', end)))
+                        | (Some(('<', start)), Some(('>', end)))
+                        | (Some(('"', start)), Some(('"', end)))
+                        | (Some(('\'', start)), Some(('\'', end))) => {
+                            b.set_selection_end(start, end);
+                            true
+                        }
+                        _ => false,
+                    })
+                {
+                    self.mode = EditorMode::SelectInside;
+                }
             }
             key!(CONTROL, 't') => {
                 self.mode = EditorMode::SelectLine {

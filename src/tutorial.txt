@@ -144,19 +144,22 @@ Text surrounded by characters like " or ( are a common
 occurence in programming, so this editor provides a
 handy "enveloped items" mode for dealing with it.
 
-When no selection is active, Ctrl-E will prompt
-for which pair of characters we want to select inside of.
+When no selection is active, Ctrl-E will attempt
+to select inside of surrounded text, prompting
+for which pair of characters you want to select inside of
+if it can't figure out which ones you mean.
+
 Once a selection is active, we can cut or copy it
 like any other selection. Or, we may even simply
 start typing new text to delete the selection and replace
 it with what we've typed.
 
 Try moving your cursor somewhere inside the long string
-(it doesn't matter where), hit Ctrl-E, then the " key.
+(it doesn't matter where), then hit Ctrl-E.
 Once the selection is active, type in the string
 we want instead.
 
->>> "a long string we don't want to have to deal with"
+>>> "a long string we would rather delete and replace"
     "the correct string"
 
 
@@ -178,8 +181,8 @@ This allows us to quickly strip off an unwanted
 set of surrounding characters.
 
 Try moving your cursor inside the parenthesized text
-(again, it doesn't matter where), use Ctrl-E then (
-to select inside the parentheses.
+(again, it doesn't matter where),
+then use Ctrl-E to select inside the parentheses.
 Finally, Del will delete the surrounding parentheses.
 All in far fewer keystrokes than trying to navigate
 and delete them one at a time.
