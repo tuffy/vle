@@ -134,7 +134,7 @@ pub static EDITING: &[Keybinding] = &[
     Keybinding {
         modifier: Some("Ctrl"),
         keys: &["S"],
-        action: "Save",
+        action: "Save File",
     },
     Keybinding {
         modifier: Some("Ctrl"),
