@@ -589,40 +589,120 @@ impl BufferContext {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
-        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
-        if let Some(selection) = self.selection.take() {
-            zap_selection(
-                &mut rope,
-                &mut self.cursor,
-                &mut self.cursor_column,
-                selection,
-                &mut alt,
-            );
-        }
-        alt += match c {
-            '(' => {
-                rope.insert(self.cursor, "()");
-                2
-            }
-            '[' => {
-                rope.insert(self.cursor, "[]");
-                2
-            }
-            '{' => {
-                rope.insert(self.cursor, "{}");
-                2
-            }
-            '"' => {
-                rope.insert(self.cursor, "\"\"");
-                2
-            }
+        match c {
+            '(' => match &mut self.selection {
+                Some(selection) => perform_surround(
+                    &mut rope,
+                    &mut self.cursor,
+                    &mut self.cursor_column,
+                    selection,
+                    alt,
+                    ['(', ')'],
+                ),
+                None => {
+                    rope.insert(self.cursor, "()");
+                    Secondary::new(alt, |a| a >= self.cursor).update(|pos| *pos += 2);
+                    self.cursor += 1;
+                    self.cursor_column += 1;
+                }
+            },
+            '[' => match &mut self.selection {
+                Some(selection) => perform_surround(
+                    &mut rope,
+                    &mut self.cursor,
+                    &mut self.cursor_column,
+                    selection,
+                    alt,
+                    ['[', ']'],
+                ),
+                None => {
+                    rope.insert(self.cursor, "[]");
+                    Secondary::new(alt, |a| a >= self.cursor).update(|pos| *pos += 2);
+                    self.cursor += 1;
+                    self.cursor_column += 1;
+                }
+            },
+            '{' => match &mut self.selection {
+                Some(selection) => perform_surround(
+                    &mut rope,
+                    &mut self.cursor,
+                    &mut self.cursor_column,
+                    selection,
+                    alt,
+                    ['{', '}'],
+                ),
+                None => {
+                    rope.insert(self.cursor, "{}");
+                    Secondary::new(alt, |a| a >= self.cursor).update(|pos| *pos += 2);
+                    self.cursor += 1;
+                    self.cursor_column += 1;
+                }
+            },
+            '\"' => match &mut self.selection {
+                Some(selection) => perform_surround(
+                    &mut rope,
+                    &mut self.cursor,
+                    &mut self.cursor_column,
+                    selection,
+                    alt,
+                    ['\"', '\"'],
+                ),
+                None => {
+                    rope.insert(self.cursor, "\"\"");
+                    Secondary::new(alt, |a| a >= self.cursor).update(|pos| *pos += 2);
+                    self.cursor += 1;
+                    self.cursor_column += 1;
+                }
+            },
+            c @ '\'' => match &mut self.selection {
+                Some(selection) => perform_surround(
+                    &mut rope,
+                    &mut self.cursor,
+                    &mut self.cursor_column,
+                    selection,
+                    alt,
+                    ['\'', '\''],
+                ),
+                None => {
+                    rope.insert_char(self.cursor, c);
+                    Secondary::new(alt, |a| a >= self.cursor).update(|pos| *pos += 1);
+                    self.cursor += 1;
+                    self.cursor_column += 1;
+                }
+            },
+            c @ '<' | c @ '>' => match &mut self.selection {
+                Some(selection) => perform_surround(
+                    &mut rope,
+                    &mut self.cursor,
+                    &mut self.cursor_column,
+                    selection,
+                    alt,
+                    ['<', '>'],
+                ),
+                None => {
+                    rope.insert_char(self.cursor, c);
+                    Secondary::new(alt, |a| a >= self.cursor).update(|pos| *pos += 1);
+                    self.cursor += 1;
+                    self.cursor_column += 1;
+                }
+            },
             c => {
+                let mut alt = Secondary::new(alt, |a| a >= self.cursor);
+                if let Some(selection) = self.selection.take() {
+                    zap_selection(
+                        &mut rope,
+                        &mut self.cursor,
+                        &mut self.cursor_column,
+                        selection,
+                        &mut alt,
+                    );
+                }
                 rope.insert_char(self.cursor, c);
-                1
+                self.cursor += 1;
+                self.cursor_column += 1;
+                alt += 1;
             }
-        };
-        self.cursor += 1;
-        self.cursor_column += 1;
+        }
     }
 
     pub fn paste(&mut self, alt: Option<AltCursor<'_>>, pasted: &CutBuffer) {
@@ -1121,15 +1201,14 @@ impl BufferContext {
             Some(selection) => {
                 let mut buf = self.buffer.borrow_mut();
                 buf.log_undo(self.cursor, self.cursor_column);
-                let mut rope = buf.rope.get_mut();
-                let (start_pos, end_pos) = reorder(&mut self.cursor, selection);
-                let mut alt = Secondary::new(alt, |a| a >= *start_pos);
-                let _ = rope.try_insert_char(*end_pos, end);
-                let _ = rope.try_insert_char(*start_pos, start);
-                alt.update(|pos| *pos += if *pos > *end_pos { 2 } else { 1 });
-                *start_pos += 1;
-                *end_pos += 1;
-                self.cursor_column = cursor_column(&rope, self.cursor);
+                perform_surround(
+                    &mut buf.rope.get_mut(),
+                    &mut self.cursor,
+                    &mut self.cursor_column,
+                    selection,
+                    alt,
+                    [start, end],
+                )
             }
             None => {
                 let buf = self.buffer.borrow();
@@ -1641,6 +1720,26 @@ fn select_next_char<const FORWARD: bool>(
                 .map(|pos| if FORWARD { cursor + pos } else { cursor - pos })
         }
     }
+}
+
+fn perform_surround(
+    rope: &mut ropey::Rope,
+    cursor: &mut usize,
+    cursor_col: &mut usize,
+    selection: &mut usize,
+    alt: Option<AltCursor<'_>>,
+    [start, end]: [char; 2],
+) {
+    {
+        let (start_pos, end_pos) = reorder(&mut *cursor, selection);
+        let mut alt = Secondary::new(alt, |a| a >= *start_pos);
+        let _ = rope.try_insert_char(*end_pos, end);
+        let _ = rope.try_insert_char(*start_pos, start);
+        alt.update(|pos| *pos += if *pos > *end_pos { 2 } else { 1 });
+        *start_pos += 1;
+        *end_pos += 1;
+    }
+    *cursor_col = cursor_column(rope, *cursor);
 }
 
 impl From<Buffer> for BufferContext {
