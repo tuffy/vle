@@ -2701,9 +2701,12 @@ impl StatefulWidget for BufferWidget<'_> {
         })
         .scroll((
             0,
-            cursor_column(rope, state.cursor)
-                .saturating_sub(text_area.width.saturating_sub(Self::RIGHT_MARGIN).into())
-                .try_into()
+            state
+                .cursor_position()
+                .map(|(_, col)| {
+                    col.saturating_sub(text_area.width.saturating_sub(Self::RIGHT_MARGIN).into())
+                        as u16
+                })
                 .unwrap_or(0),
         ))
         .render(text_area, buf);
