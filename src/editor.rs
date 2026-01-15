@@ -1078,6 +1078,10 @@ fn process_replace_matches(
             buffer.multi_insert_char(alt, matches, c);
             None
         }
+        Event::Paste(pasted) => {
+            buffer.multi_insert_string(alt, matches, &pasted);
+            None
+        }
         key!(Backspace) => {
             buffer.multi_backspace(alt, matches);
             None

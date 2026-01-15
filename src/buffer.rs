@@ -1581,6 +1581,58 @@ impl BufferContext {
         }
     }
 
+    pub fn multi_insert_string(
+        &mut self,
+        alt: Option<AltCursor<'_>>,
+        mut matches: &mut [(usize, usize)],
+        s: &str,
+    ) {
+        use unicode_width::UnicodeWidthStr;
+
+        let mut buf = self.buffer.borrow_mut();
+        buf.log_undo(self.cursor, self.cursor_column);
+        let mut rope = buf.rope.get_mut();
+        let mut alt = Secondary::new(alt, |_| true);
+
+        let chars_len = s.width();
+
+        loop {
+            match matches {
+                [] => break,
+                [(_, cursor)] => {
+                    rope.insert(*cursor, s);
+                    if *cursor <= self.cursor {
+                        self.cursor += chars_len;
+                    }
+                    alt.update(|a| {
+                        if *cursor <= *a {
+                            *a += chars_len;
+                        }
+                    });
+                    *cursor += chars_len;
+                    break;
+                }
+                [(_, cursor), rest @ ..] => {
+                    rope.insert(*cursor, s);
+                    if *cursor <= self.cursor {
+                        self.cursor += chars_len;
+                    }
+                    alt.update(|a| {
+                        if *cursor <= *a {
+                            *a += chars_len;
+                        }
+                    });
+                    *cursor += chars_len;
+                    for (s, e) in rest.iter_mut() {
+                        *s += chars_len;
+                        *e += chars_len;
+                    }
+                    matches = rest;
+                }
+            }
+        }
+    }
+
     pub fn multi_backspace(
         &mut self,
         alt: Option<AltCursor<'_>>,
