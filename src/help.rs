@@ -392,6 +392,11 @@ pub static FIND: &[Keybinding] = &[
     },
     Keybinding {
         modifier: Some("Ctrl"),
+        keys: &["V"],
+        action: "Copy from Cut Buffer",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
         keys: &["R"],
         action: "Replace Selected Matches",
     },
@@ -455,6 +460,11 @@ pub static REPLACE_MATCHES: &[Keybinding] = &[
         modifier: None,
         keys: &[DOWN, RIGHT],
         action: "Select Next Match",
+    },
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &["V"],
+        action: "Copy from Cut Buffer",
     },
     Keybinding {
         modifier: None,

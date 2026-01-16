@@ -2944,6 +2944,12 @@ pub struct CutBuffer {
     chars_len: usize,
 }
 
+impl CutBuffer {
+    pub fn as_str(&self) -> &str {
+        self.data.as_str()
+    }
+}
+
 impl From<ropey::RopeSlice<'_>> for CutBuffer {
     fn from(slice: ropey::RopeSlice<'_>) -> Self {
         Self {

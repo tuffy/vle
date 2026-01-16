@@ -265,6 +265,7 @@ impl Editor {
                     if let Some(buf) = cur_buf_list.current_mut()
                         && let Some(new_mode) = process_find(
                             buf,
+                            self.cut_buffer.as_ref(),
                             area,
                             prompt,
                             event,
@@ -304,6 +305,7 @@ impl Editor {
                     if let Some(buf) = cur_buf_list.current_mut()
                         && let Some(new_mode) = process_replace_matches(
                             buf,
+                            self.cut_buffer.as_ref(),
                             matches,
                             match_idx,
                             event,
@@ -862,6 +864,7 @@ fn process_open_file<S: ChooserSource>(
 
 fn process_find(
     buffer: &mut BufferContext,
+    cut_buffer: Option<&CutBuffer>,
     area: &mut SearchArea,
     prompt: &mut SearchPrompt,
     event: Event,
@@ -879,6 +882,15 @@ fn process_find(
             prompt.push(c);
             if let Err(()) = buffer.next_or_current_match(area, &prompt.get_value()?) {
                 buffer.set_error("Not Found");
+            }
+            None
+        }
+        key!(CONTROL, 'v') => {
+            if let Some(buf) = cut_buffer {
+                prompt.extend(buf.as_str());
+                if let Err(()) = buffer.next_or_current_match(area, &prompt.get_value()?) {
+                    buffer.set_error("Not Found");
+                }
             }
             None
         }
@@ -1078,6 +1090,7 @@ fn process_select_matches(
 
 fn process_replace_matches(
     buffer: &mut BufferContext,
+    cut_buffer: Option<&CutBuffer>,
     matches: &mut [(usize, usize)],
     match_idx: &mut Option<usize>,
     event: Event,
@@ -1097,6 +1110,12 @@ fn process_replace_matches(
         }
         Event::Paste(pasted) => {
             buffer.multi_insert_string(alt, matches, &pasted);
+            None
+        }
+        key!(CONTROL, 'v') => {
+            if let Some(buf) = cut_buffer {
+                buffer.multi_insert_string(alt, matches, buf.as_str());
+            }
             None
         }
         key!(Backspace) => {
