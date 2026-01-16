@@ -493,6 +493,8 @@ impl BufferContext {
     ///
     /// This position is independent of the viewport position
     fn cursor_position(&self) -> Option<(usize, usize)> {
+        use unicode_width::UnicodeWidthChar;
+
         let rope = &self.buffer.borrow().rope;
         let line = rope.try_char_to_line(self.cursor).ok()?;
         let line_start = rope.try_line_to_char(line).ok()?;
@@ -504,7 +506,7 @@ impl BufferContext {
                 .take(self.cursor.checked_sub(line_start)?)
                 .map(|c| match c {
                     '\t' => spaces_per_tab,
-                    _ => 1,
+                    c => c.width().unwrap_or(0),
                 })
                 .sum(),
         ))
