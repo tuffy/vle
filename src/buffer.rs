@@ -1589,14 +1589,12 @@ impl BufferContext {
         mut matches: &mut [(usize, usize)],
         s: &str,
     ) {
-        use unicode_width::UnicodeWidthStr;
-
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
         let mut alt = Secondary::new(alt, |_| true);
 
-        let chars_len = s.width();
+        let chars_len = s.chars().count();
 
         loop {
             match matches {
@@ -2957,10 +2955,8 @@ impl From<ropey::RopeSlice<'_>> for CutBuffer {
 
 impl From<String> for CutBuffer {
     fn from(data: String) -> Self {
-        use unicode_width::UnicodeWidthStr;
-
         Self {
-            chars_len: data.width(),
+            chars_len: data.chars().count(),
             data,
         }
     }
