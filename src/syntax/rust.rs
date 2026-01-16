@@ -75,7 +75,7 @@ enum RustToken {
     Integer,
 
     #[regex(r#"\"([^\\\"]|\\.)*\""#)]
-    #[regex(r"'([^\\\']|\\.)*'")]
+    #[regex(r"'([^\\\']|\\.){0,1}'")]
     String,
 
     #[regex("[[:lower:]_]+!")]
