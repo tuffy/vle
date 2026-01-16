@@ -759,18 +759,16 @@ fn process_select_line(
             }
             None
         }
-        Event::Paste(pasted) => {
-            match pasted.parse::<usize>() {
-                Ok(line) => {
-                    buffer.select_line(line.saturating_sub(1));
-                    Some(EditorMode::default())
-                }
-                Err(_) => {
-                    buffer.set_error("Invalid Line Number");
-                    None
-                }
+        Event::Paste(pasted) => match pasted.parse::<usize>() {
+            Ok(line) => {
+                buffer.select_line(line.saturating_sub(1));
+                Some(EditorMode::default())
             }
-        }
+            Err(_) => {
+                buffer.set_error("Invalid Line Number");
+                None
+            }
+        },
         key!(Backspace) => {
             prompt.pop();
             None

@@ -2270,27 +2270,40 @@ impl StatefulWidget for BufferWidget<'_> {
             output: &mut Vec<Span<'s>>,
             map: impl Fn(Span<'s>) -> Span<'s>,
         ) {
-            use unicode_truncate::UnicodeTruncateStr;
+            fn split_cow(s: Cow<'_, str>, chars: usize) -> (Cow<'_, str>, Cow<'_, str>) {
+                let Some((split_point, _)) = s.char_indices().nth(chars) else {
+                    return (s, "".into());
+                };
+
+                match s {
+                    Cow::Borrowed(slice) => {
+                        let (start, end) = slice.split_at(split_point);
+                        (Cow::Borrowed(start), Cow::Borrowed(end))
+                    }
+                    Cow::Owned(mut string) => {
+                        let suffix = string.split_off(split_point);
+                        (Cow::Owned(string), Cow::Owned(suffix))
+                    }
+                }
+            }
 
             while characters > 0 {
                 let Some(span) = colorized.pop_front() else {
                     return;
                 };
-                let span_width = span.width();
+                let span_width = span.content.chars().count();
                 if span_width <= characters {
                     characters -= span_width;
                     output.push(map(span));
                 } else {
-                    let mut s = span.content.into_owned();
-                    let (split, _) = s.unicode_truncate(characters);
-                    let suffix = s.split_off(split.len());
+                    let (prefix, suffix) = split_cow(span.content, characters);
                     colorized.push_front(Span {
                         style: span.style,
-                        content: suffix.into(),
+                        content: suffix,
                     });
                     output.push(map(Span {
                         style: span.style,
-                        content: s.into(),
+                        content: prefix,
                     }));
                     return;
                 }
