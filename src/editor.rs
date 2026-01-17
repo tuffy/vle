@@ -65,6 +65,14 @@ macro_rules! key {
             ..
         })
     };
+    (F($code:literal)) => {
+        Event::Key(KeyEvent {
+            code: KeyCode::F($code),
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        })
+    };
     ($modifier:ident, $code:ident) => {
         Event::Key(KeyEvent {
             code: KeyCode::$code,
@@ -329,7 +337,7 @@ impl Editor {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
         match event {
-            key!(CONTROL, 'q') => {
+            key!(CONTROL, 'q') | key!(F(12)) => {
                 if let Some(buf) = self.layout.selected_buffer_list().current() {
                     if buf.modified() {
                         self.mode = EditorMode::ConfirmClose { buffer: buf.id() };
@@ -444,7 +452,7 @@ impl Editor {
                     self.layout = Layout::Single(std::mem::take(right));
                 }
             },
-            key!(CONTROL, 'n') => {
+            key!(CONTROL, 'n') | key!(F(10)) => {
                 match &mut self.layout {
                     Layout::Horizontal { top, bottom, which } => {
                         self.layout = Layout::Horizontal {
@@ -533,21 +541,21 @@ impl Editor {
             key!(Backspace) => self.update_buffer_at(|b, a| b.backspace(a)),
             key!(Delete) => self.update_buffer_at(|b, a| b.delete(a)),
             key!(Enter) => self.update_buffer_at(|b, a| b.newline(a)),
-            key!(CONTROL, 'w') => self.update_buffer(|b| b.select_whole_lines()),
+            key!(CONTROL, 'w') | key!(F(9)) => self.update_buffer(|b| b.select_whole_lines()),
             key!(CONTROL, 'x') => self.perform_cut(),
             key!(CONTROL, 'c') => self.perform_copy(),
             key!(CONTROL, 'v') => self.perform_paste(),
             key!(CONTROL, 'z') => self.update_buffer(|b| b.perform_undo()),
             key!(CONTROL, 'y') => self.update_buffer(|b| b.perform_redo()),
-            key!(CONTROL, 's') => {
+            key!(CONTROL, 's') | key!(F(3)) => {
                 if let Some(Err(crate::buffer::Modified)) = self.on_buffer(|b| b.verified_save()) {
                     self.mode = EditorMode::VerifySave;
                 }
             }
             key!(Tab) => self.update_buffer_at(|b, a| b.indent(a)),
             key!(SHIFT, BackTab) => self.update_buffer_at(|b, a| b.un_indent(a)),
-            key!(CONTROL, 'p') => self.update_buffer(|b| b.select_matching_paren()),
-            key!(CONTROL, 'e') => {
+            key!(CONTROL, 'p') | key!(F(7)) => self.update_buffer(|b| b.select_matching_paren()),
+            key!(CONTROL, 'e') | key!(F(8)) => {
                 if let Some(false) =
                     self.on_buffer(|b| match (b.prev_pairing_char(), b.next_pairing_char()) {
                         (Some(('(', start)), Some((')', end)))
@@ -565,12 +573,12 @@ impl Editor {
                     self.mode = EditorMode::SelectInside;
                 }
             }
-            key!(CONTROL, 't') => {
+            key!(CONTROL, 't') | key!(F(4)) => {
                 self.mode = EditorMode::SelectLine {
                     prompt: LinePrompt::default(),
                 };
             }
-            key!(CONTROL, 'f') => {
+            key!(CONTROL, 'f') | key!(F(5)) => {
                 if let Some(find) = self.on_buffer(|b| EditorMode::Find {
                     area: b.search_area(),
                     prompt: SearchPrompt::default(),
@@ -579,7 +587,7 @@ impl Editor {
                 }
             }
             #[cfg(not(feature = "ssh"))]
-            key!(CONTROL, 'o') => match FileChooserState::new(LocalSource) {
+            key!(CONTROL, 'o') | key!(F(2)) => match FileChooserState::new(LocalSource) {
                 Ok(chooser) => {
                     self.mode = EditorMode::Open {
                         chooser: Box::new(chooser),
@@ -617,7 +625,7 @@ impl Editor {
                     }
                 },
             },
-            key!(CONTROL, 'l') => {
+            key!(CONTROL, 'l') | key!(F(11)) => {
                 if let Some(new_mode) = self.on_buffer(|b| {
                     if b.modified() {
                         EditorMode::VerifyReload
@@ -1008,11 +1016,11 @@ fn process_find(
                 }
             }
         }
-        key!(CONTROL, 'f') => {
+        key!(CONTROL, 'f') | key!(F(5)) => {
             *prompt = SearchPrompt::default();
             None
         }
-        key!(CONTROL, 'r') => {
+        key!(CONTROL, 'r') | key!(F(6)) => {
             match prompt.get_value() {
                 Some(search) => {
                     let mut matches = buffer.search_matches(area, &search);
@@ -1135,7 +1143,7 @@ fn process_select_matches(
                 }
             }
         }
-        key!(CONTROL, 'r') => {
+        key!(CONTROL, 'r') | key!(F(6)) => {
             buffer.clear_matches(alt, matches);
             if let Some((cursor, _)) = matches.get(*match_idx) {
                 buffer.set_cursor(*cursor);
@@ -1148,7 +1156,7 @@ fn process_select_matches(
                 match_idx: std::mem::take(match_idx),
             })
         }
-        key!(CONTROL, 'f') => Some(EditorMode::Find {
+        key!(CONTROL, 'f') | key!(F(5)) => Some(EditorMode::Find {
             prompt: SearchPrompt::default(),
             area: std::mem::take(area),
         }),

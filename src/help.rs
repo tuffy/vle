@@ -12,6 +12,7 @@ pub struct Keybinding {
     modifier: Option<&'static str>,
     keys: &'static [&'static str],
     action: &'static str,
+    f: &'static str,
 }
 
 const fn ctrl(keys: &'static [&'static str], action: &'static str) -> Keybinding {
@@ -19,6 +20,20 @@ const fn ctrl(keys: &'static [&'static str], action: &'static str) -> Keybinding
         modifier: Some("Ctrl"),
         keys,
         action,
+        f: "",
+    }
+}
+
+const fn ctrl_f(
+    keys: &'static [&'static str],
+    f: &'static str,
+    action: &'static str,
+) -> Keybinding {
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys,
+        action,
+        f,
     }
 }
 
@@ -27,6 +42,7 @@ const fn none(keys: &'static [&'static str], action: &'static str) -> Keybinding
         modifier: None,
         keys,
         action,
+        f: "",
     }
 }
 
@@ -46,7 +62,7 @@ pub fn help_message(keybindings: &[Keybinding]) -> ratatui::widgets::Paragraph<'
         (s > 0).then(|| Span::raw(std::iter::repeat_n(' ', s).collect::<String>()))
     }
 
-    let [action_width, _, mod_width, _] = field_widths(keybindings);
+    let [action_width, _, f_width, mod_width, _] = field_widths(keybindings);
 
     Paragraph::new(
         keybindings
@@ -56,9 +72,17 @@ pub fn help_message(keybindings: &[Keybinding]) -> ratatui::widgets::Paragraph<'
                 line.extend(spaces(action_width - k.action.width()));
                 line.push(Span::from(k.action));
                 line.push(Span::from(" : "));
+                if f_width > 0 {
+                    if k.f.is_empty() {
+                        line.extend(spaces(f_width));
+                    } else {
+                        line.push(key(k.f));
+                        line.extend(spaces(f_width.saturating_sub(k.f.width())));
+                    }
+                }
                 match k.modifier {
                     Some(modifier) => {
-                        line.extend(spaces(mod_width - (modifier.width() + 1)));
+                        line.extend(spaces(mod_width.saturating_sub(modifier.width() + 1)));
                         line.push(key(modifier));
                         line.push(Span::from("-"));
                     }
@@ -77,20 +101,22 @@ pub fn help_message(keybindings: &[Keybinding]) -> ratatui::widgets::Paragraph<'
     )
 }
 
-pub fn field_widths(keybindings: &[Keybinding]) -> [usize; 4] {
+pub fn field_widths(keybindings: &[Keybinding]) -> [usize; 5] {
     use unicode_width::UnicodeWidthStr;
 
     keybindings.iter().fold(
-        [0, 2, 0, 0],
-        |[action_len, _, mod_len, keys_len]: [usize; 4],
+        [0, 2, 0, 0, 0],
+        |[action_len, _, f_len, mod_len, keys_len]: [usize; 5],
          Keybinding {
              modifier,
              keys,
              action,
+             f,
          }: &Keybinding| {
             [
                 action_len.max(action.width()),
                 2,
+                f_len.max(if !f.is_empty() { f.width() + 1 } else { 0 }),
                 mod_len.max(match modifier {
                     Some(m) => m.width() + 1,
                     None => 0,
@@ -137,26 +163,28 @@ static LEFT: &str = "\u{2190}";
 static RIGHT: &str = "\u{2192}";
 
 pub static EDITING: &[Keybinding] = &[
-    ctrl(&["O"], "Open File"),
-    ctrl(&["L"], "Reload File"),
-    ctrl(&["S"], "Save File"),
-    ctrl(&["PgUp", "PgDn"], "Switch Buffer"),
-    ctrl(&["Q"], "Quit Buffer"),
-    ctrl(&[LEFT, DOWN, UP, RIGHT], "Open / Switch Pane"),
-    ctrl(&["N"], "Swap Panes"),
     Keybinding {
         modifier: Some("Shift"),
         keys: &[LEFT, DOWN, UP, RIGHT],
         action: "Highlight Text",
+        f: "",
     },
-    ctrl(&["W"], "Widen Selection to Lines"),
     ctrl(&["Home", "End"], "Start / End of Selection"),
-    ctrl(&["E"], "Handle Enveloped Items"),
     ctrl(&["X", "C", "V"], "Cut / Copy / Paste"),
     ctrl(&["Z", "Y"], "Undo / Redo"),
-    ctrl(&["P"], "Goto Matching Pair"),
-    ctrl(&["T"], "Goto Line"),
-    ctrl(&["F"], "Find Text"),
+    ctrl_f(&["O"], "F2", "Open File"),
+    ctrl_f(&["S"], "F3", "Save File"),
+    ctrl_f(&["T"], "F4", "Goto Line"),
+    ctrl_f(&["F"], "F5", "Find Text"),
+    // F6 is for replace text
+    ctrl_f(&["P"], "F7", "Goto Matching Pair"),
+    ctrl_f(&["E"], "F8", "Handle Enveloped Items"),
+    ctrl_f(&["W"], "F9", "Widen Selection to Lines"),
+    ctrl_f(&["N"], "F10", "Swap Panes"),
+    ctrl_f(&["L"], "F11", "Reload File"),
+    ctrl_f(&["Q"], "F12", "Quit Buffer"),
+    ctrl(&["PgUp", "PgDn"], "Switch Buffer"),
+    ctrl(&[LEFT, DOWN, UP, RIGHT], "Open / Switch Pane"),
 ];
 
 pub static VERIFY_SAVE: &[Keybinding] = &[
@@ -216,8 +244,8 @@ pub static FIND: &[Keybinding] = &[
     none(&[DOWN, RIGHT], "Select Next Match"),
     ctrl(&["V"], "Copy from Cut Buffer"),
     none(&["Del"], "Remove Selected Match"),
-    ctrl(&["R"], "Replace Selected Matches"),
-    ctrl(&["F"], "Begin New Find"),
+    ctrl_f(&["R"], "F6", "Replace Selected Matches"),
+    ctrl_f(&["F"], "F5", "Begin New Find"),
     none(&["Enter"], "Finish"),
 ];
 
@@ -225,5 +253,5 @@ pub static REPLACE_MATCHES: &[Keybinding] = &[
     none(&[UP, LEFT], "Select Previous Match"),
     none(&[DOWN, RIGHT], "Select Next Match"),
     ctrl(&["V"], "Copy from Cut Buffer"),
-    none(&["Enter", "Esc"], "Finish Replacement"),
+    none(&["Enter"], "Finish Replacement"),
 ];
