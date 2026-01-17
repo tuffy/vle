@@ -40,12 +40,12 @@ pub enum EditorMode {
     },
     SelectMatches {
         matches: Vec<(usize, usize)>,
-        match_idx: Option<usize>,
+        match_idx: usize,
         area: SearchArea,
     },
     ReplaceMatches {
         matches: Vec<(usize, usize)>,
-        match_idx: Option<usize>,
+        match_idx: usize,
     },
     Open {
         #[cfg(not(feature = "ssh"))]
@@ -958,7 +958,9 @@ fn process_find(
                                 })
                                 .map(|(_, (s, _))| (s, s))
                                 .collect(),
-                            match_idx,
+                            // incremental search should always place the cursor
+                            // on a match
+                            match_idx: match_idx?,
                         }
                     })
                 }
@@ -975,7 +977,8 @@ fn process_find(
                     } else {
                         let cursor = buffer.get_cursor();
                         EditorMode::SelectMatches {
-                            match_idx: matches.iter().position(|(s, _)| *s == cursor),
+                            // incremental search should always place the cursor on a match
+                            match_idx: matches.iter().position(|(s, _)| *s == cursor)?,
                             matches,
                             area: std::mem::take(area),
                         }
@@ -992,7 +995,7 @@ fn process_select_matches(
     buffer: &mut BufferContext,
     area: &mut SearchArea,
     matches: &mut Vec<(usize, usize)>,
-    match_idx: &mut Option<usize>,
+    match_idx: &mut usize,
     event: Event,
     alt: Option<AltCursor<'_>>,
 ) -> Option<EditorMode> {
@@ -1004,54 +1007,31 @@ fn process_select_matches(
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
-        }) => match match_idx {
-            Some(match_idx) => {
-                *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
-                if let Some((s, e)) = matches.get(*match_idx) {
-                    buffer.set_selection(*s, *e);
-                }
-                None
-            }
-            None => {
-                let cursor = buffer.get_cursor();
-                let (idx, (s, e)) = matches
-                    .iter()
-                    .enumerate()
-                    .rfind(|(_, (s, _))| *s < cursor)?;
-                *match_idx = Some(idx);
+        }) => {
+            *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
+            if let Some((s, e)) = matches.get(*match_idx) {
                 buffer.set_selection(*s, *e);
-                None
             }
-        },
+            None
+        }
         Event::Key(KeyEvent {
             code: KeyCode::Down | KeyCode::Right,
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
-        }) => match match_idx {
-            Some(match_idx) => {
-                *match_idx = (*match_idx + 1) % matches.len();
-                if let Some((s, e)) = matches.get(*match_idx) {
-                    buffer.set_selection(*s, *e);
-                }
-                None
-            }
-            None => {
-                let cursor = buffer.get_cursor();
-                let (idx, (s, e)) = matches.iter().enumerate().find(|(_, (s, _))| *s > cursor)?;
-                *match_idx = Some(idx);
+        }) => {
+            *match_idx = (*match_idx + 1) % matches.len();
+            if let Some((s, e)) = matches.get(*match_idx) {
                 buffer.set_selection(*s, *e);
-                None
             }
-        },
+            None
+        }
         Event::Key(KeyEvent {
             code: KeyCode::Backspace | KeyCode::Delete,
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
         }) => {
-            let match_idx = match_idx.as_mut()?;
-
             if *match_idx < matches.len() {
                 matches.remove(*match_idx);
             }
@@ -1068,7 +1048,7 @@ fn process_select_matches(
         }
         key!(CONTROL, 'r') => {
             buffer.clear_matches(alt, matches);
-            if let Some((cursor, _)) = match_idx.and_then(|idx| matches.get(idx)) {
+            if let Some((cursor, _)) = matches.get(*match_idx) {
                 buffer.set_cursor(*cursor);
             }
             Some(EditorMode::ReplaceMatches {
@@ -1092,7 +1072,7 @@ fn process_replace_matches(
     buffer: &mut BufferContext,
     cut_buffer: Option<&CutBuffer>,
     matches: &mut [(usize, usize)],
-    match_idx: &mut Option<usize>,
+    match_idx: &mut usize,
     event: Event,
     alt: Option<AltCursor<'_>>,
 ) -> Option<EditorMode> {
@@ -1128,46 +1108,25 @@ fn process_replace_matches(
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
-        }) => match match_idx {
-            Some(match_idx) => {
-                *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
-                if let Some((_, e)) = matches.get(*match_idx) {
-                    buffer.set_cursor(*e);
-                }
-                None
-            }
-            None => {
-                let cursor = buffer.get_cursor();
-                let (idx, (_, e)) = matches
-                    .iter()
-                    .enumerate()
-                    .rfind(|(_, (s, _))| *s < cursor)?;
-                *match_idx = Some(idx);
+        }) => {
+            *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
+            if let Some((_, e)) = matches.get(*match_idx) {
                 buffer.set_cursor(*e);
-                None
             }
-        },
+            None
+        }
         Event::Key(KeyEvent {
             code: KeyCode::Down | KeyCode::Right,
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
-        }) => match match_idx {
-            Some(match_idx) => {
-                *match_idx = (*match_idx + 1) % matches.len();
-                if let Some((_, e)) = matches.get(*match_idx) {
-                    buffer.set_cursor(*e);
-                }
-                None
-            }
-            None => {
-                let cursor = buffer.get_cursor();
-                let (idx, (_, e)) = matches.iter().enumerate().find(|(_, (s, _))| *s > cursor)?;
-                *match_idx = Some(idx);
+        }) => {
+            *match_idx = (*match_idx + 1) % matches.len();
+            if let Some((_, e)) = matches.get(*match_idx) {
                 buffer.set_cursor(*e);
-                None
             }
-        },
+            None
+        }
         _ => None,
     }
 }

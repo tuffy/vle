@@ -2880,26 +2880,16 @@ impl StatefulWidget for BufferWidget<'_> {
                 matches, match_idx, ..
             }) => {
                 render_help(text_area, buf, SELECT_MATCHES, |block| {
-                    block.title(match match_idx {
-                        Some(idx) => Cow::from(format!("Match {} / {}", *idx + 1, matches.len())),
-                        None => match matches.len() {
-                            1 => "1 Match".into(),
-                            n => format!("{n} Matches").into(),
-                        },
-                    })
+                    block.title(format!("Match {} / {}", *match_idx + 1, matches.len()))
                 });
             }
             Some(EditorMode::ReplaceMatches { matches, match_idx }) => {
                 render_help(text_area, buf, REPLACE_MATCHES, |block| {
-                    block.title(match match_idx {
-                        Some(idx) => {
-                            Cow::from(format!("Replacement {} / {}", *idx + 1, matches.len()))
-                        }
-                        None => match matches.len() {
-                            1 => "1 Replacement".into(),
-                            n => format!("{n} Replacements").into(),
-                        },
-                    })
+                    block.title(format!(
+                        "Replacement {} / {}",
+                        *match_idx + 1,
+                        matches.len()
+                    ))
                 });
             }
         }
