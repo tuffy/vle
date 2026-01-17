@@ -396,39 +396,6 @@ pub static FIND: &[Keybinding] = &[
         action: "Copy from Cut Buffer",
     },
     Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["R"],
-        action: "Replace Selected Matches",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["F"],
-        action: "Begin New Find",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["Enter"],
-        action: "Edit Selected Matches",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["Esc"],
-        action: "Cancel",
-    },
-];
-
-pub static SELECT_MATCHES: &[Keybinding] = &[
-    Keybinding {
-        modifier: None,
-        keys: &[UP, LEFT],
-        action: "Select Previous Match",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &[DOWN, RIGHT],
-        action: "Select Next Match",
-    },
-    Keybinding {
         modifier: None,
         keys: &["Del"],
         action: "Remove Selected Match",
@@ -445,8 +412,8 @@ pub static SELECT_MATCHES: &[Keybinding] = &[
     },
     Keybinding {
         modifier: None,
-        keys: &["Enter", "Esc"],
-        action: "Finish Find",
+        keys: &["Enter"],
+        action: "Finish",
     },
 ];
 

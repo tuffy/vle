@@ -41,6 +41,7 @@ pub enum EditorMode {
     SelectMatches {
         matches: Vec<(usize, usize)>,
         match_idx: usize,
+        prompt: SearchPrompt,
         area: SearchArea,
     },
     ReplaceMatches {
@@ -280,6 +281,7 @@ impl Editor {
                 EditorMode::SelectMatches {
                     matches,
                     match_idx,
+                    prompt,
                     area,
                 } => {
                     let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
@@ -287,7 +289,9 @@ impl Editor {
                     if let Some(buf) = cur_buf_list.current_mut()
                         && let Some(new_mode) = process_select_matches(
                             buf,
+                            self.cut_buffer.as_ref(),
                             area,
+                            prompt,
                             matches,
                             match_idx,
                             event,
@@ -916,10 +920,29 @@ fn process_find(
             kind: KeyEventKind::Press,
             ..
         }) => {
-            if let Err(()) = buffer.previous_match(area, &prompt.get_value()?) {
-                buffer.set_error("Not Found");
+            let search = prompt.get_value()?;
+            match buffer.previous_match(area, &search) {
+                Ok(()) => {
+                    let matches = buffer.search_matches(area, &search);
+                    Some(if matches.is_empty() {
+                        buffer.set_error("Not Found");
+                        EditorMode::default()
+                    } else {
+                        let cursor = buffer.get_cursor();
+                        EditorMode::SelectMatches {
+                            // incremental search should always place the cursor on a match
+                            match_idx: matches.iter().position(|(s, _)| *s == cursor)?,
+                            matches,
+                            prompt: std::mem::take(prompt),
+                            area: std::mem::take(area),
+                        }
+                    })
+                }
+                Err(()) => {
+                    buffer.set_error("Not Found");
+                    None
+                }
             }
-            None
         }
         Event::Key(KeyEvent {
             code: KeyCode::Down | KeyCode::Right,
@@ -927,10 +950,63 @@ fn process_find(
             kind: KeyEventKind::Press,
             ..
         }) => {
-            if let Err(()) = buffer.next_match(area, &prompt.get_value()?) {
-                buffer.set_error("Not Found");
+            let search = prompt.get_value()?;
+            match buffer.next_match(area, &search) {
+                Ok(()) => {
+                    let matches = buffer.search_matches(area, &search);
+                    Some(if matches.is_empty() {
+                        buffer.set_error("Not Found");
+                        EditorMode::default()
+                    } else {
+                        let cursor = buffer.get_cursor();
+                        EditorMode::SelectMatches {
+                            // incremental search should always place the cursor on a match
+                            match_idx: matches.iter().position(|(s, _)| *s == cursor)?,
+                            matches,
+                            prompt: std::mem::take(prompt),
+                            area: std::mem::take(area),
+                        }
+                    })
+                }
+                Err(()) => {
+                    buffer.set_error("Not Found");
+                    None
+                }
             }
-            None
+        }
+        event @ Event::Key(KeyEvent {
+            code: KeyCode::Delete,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            let search = prompt.get_value()?;
+            let mut matches = buffer.search_matches(area, &search);
+            if matches.is_empty() {
+                buffer.set_error("Not Found");
+                Some(EditorMode::default())
+            } else {
+                let cursor = buffer.get_cursor();
+                let mut match_idx = matches.iter().position(|(s, _)| *s == cursor)?;
+                match process_select_matches(
+                    buffer,
+                    cut_buffer,
+                    area,
+                    prompt,
+                    &mut matches,
+                    &mut match_idx,
+                    event,
+                    alt,
+                ) {
+                    value @ Some(_) => value,
+                    None => Some(EditorMode::SelectMatches {
+                        match_idx,
+                        matches,
+                        prompt: std::mem::take(prompt),
+                        area: std::mem::take(area),
+                    }),
+                }
+            }
         }
         key!(CONTROL, 'f') => {
             *prompt = SearchPrompt::default();
@@ -967,33 +1043,19 @@ fn process_find(
                 None => Some(EditorMode::default()), // no search term
             }
         }
-        key!(Enter) => {
-            match prompt.get_value() {
-                Some(search) => {
-                    let matches = buffer.search_matches(area, &search);
-                    Some(if matches.is_empty() {
-                        buffer.set_error("Not Found");
-                        EditorMode::default()
-                    } else {
-                        let cursor = buffer.get_cursor();
-                        EditorMode::SelectMatches {
-                            // incremental search should always place the cursor on a match
-                            match_idx: matches.iter().position(|(s, _)| *s == cursor)?,
-                            matches,
-                            area: std::mem::take(area),
-                        }
-                    })
-                }
-                None => Some(EditorMode::default()), // no search term
-            }
-        }
+        key!(Enter) => Some(EditorMode::default()),
         _ => None, // ignore other events
     }
 }
 
+// Yes, I know this has too many arguments,
+// but having to split a lot of borrows will do that.
+#[allow(clippy::too_many_arguments)]
 fn process_select_matches(
     buffer: &mut BufferContext,
+    cut_buffer: Option<&CutBuffer>,
     area: &mut SearchArea,
+    prompt: &mut SearchPrompt,
     matches: &mut Vec<(usize, usize)>,
     match_idx: &mut usize,
     event: Event,
@@ -1002,6 +1064,33 @@ fn process_select_matches(
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
     match event {
+        event @ Event::Key(KeyEvent {
+            code: KeyCode::Char(_),
+            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        })
+        | event @ Event::Key(KeyEvent {
+            code: KeyCode::Backspace,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        })
+        | event @ Event::Key(KeyEvent {
+            code: KeyCode::Char('v'),
+            modifiers: KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press,
+            ..
+        })
+        | event @ Event::Paste(_) => {
+            match process_find(buffer, cut_buffer, area, prompt, event, alt) {
+                value @ Some(_) => value,
+                None => Some(EditorMode::Find {
+                    area: std::mem::take(area),
+                    prompt: std::mem::take(prompt),
+                }),
+            }
+        }
         Event::Key(KeyEvent {
             code: KeyCode::Left | KeyCode::Up,
             modifiers: KeyModifiers::NONE,
@@ -1027,7 +1116,7 @@ fn process_select_matches(
             None
         }
         Event::Key(KeyEvent {
-            code: KeyCode::Backspace | KeyCode::Delete,
+            code: KeyCode::Delete,
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..

@@ -2103,7 +2103,7 @@ impl StatefulWidget for BufferWidget<'_> {
         state: &mut BufferContext,
     ) {
         use crate::help::{
-            CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE, SELECT_MATCHES,
+            CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE,
             SURROUND_WITH, VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
         use crate::syntax::{HighlightState, Highlighter};
@@ -2492,6 +2492,30 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
+        fn render_find_prompt(
+            text_area: ratatui::layout::Rect,
+            buf: &mut ratatui::buffer::Buffer,
+            prompt: &crate::prompt::SearchPrompt,
+        ) {
+            use crate::prompt::SearchPrompt;
+            use unicode_width::UnicodeWidthStr;
+
+            let [_, line_area] = Layout::vertical([Min(0), Length(3)]).areas(text_area);
+            let [line_area, _] =
+                Layout::horizontal([Length(SearchPrompt::MAX_WIDTH + 2), Min(0)]).areas(line_area);
+            ratatui::widgets::Clear.render(line_area, buf);
+            let prompt = prompt.to_string();
+            let prompt_width = prompt.width() as u16;
+            Paragraph::new(prompt)
+                .scroll((0, prompt_width.saturating_sub(SearchPrompt::MAX_WIDTH)))
+                .block(
+                    Block::bordered()
+                        .border_type(BorderType::Rounded)
+                        .title("Find"),
+                )
+                .render(line_area, buf);
+        }
+
         if let Some(EditorMode::Open { chooser }) = self.mode {
             // file selection mode overrides main editing mode
             use crate::files::FileChooser;
@@ -2854,35 +2878,21 @@ impl StatefulWidget for BufferWidget<'_> {
                     .render(line_area, buf);
             }
             Some(EditorMode::Find { prompt, .. }) => {
-                use crate::prompt::SearchPrompt;
-                use unicode_width::UnicodeWidthStr;
-
                 render_help(text_area, buf, FIND, |b| b);
-
-                let [_, line_area] = Layout::vertical([Min(0), Length(3)]).areas(text_area);
-                let [line_area, _] =
-                    Layout::horizontal([Length(SearchPrompt::MAX_WIDTH + 2), Min(0)])
-                        .areas(line_area);
-                ratatui::widgets::Clear.render(line_area, buf);
-                let prompt = prompt.to_string();
-                let prompt_width = prompt.width() as u16;
-                Paragraph::new(prompt)
-                    .scroll((0, prompt_width.saturating_sub(SearchPrompt::MAX_WIDTH)))
-                    .block(
-                        Block::bordered()
-                            .border_type(BorderType::Rounded)
-                            .title("Find"),
-                    )
-                    .render(line_area, buf);
+                render_find_prompt(text_area, buf, prompt);
             }
-            Some(EditorMode::Open { .. }) => { /* already handled, above */ }
             Some(EditorMode::SelectMatches {
-                matches, match_idx, ..
+                matches,
+                match_idx,
+                prompt,
+                ..
             }) => {
-                render_help(text_area, buf, SELECT_MATCHES, |block| {
+                render_help(text_area, buf, FIND, |block| {
                     block.title(format!("Match {} / {}", *match_idx + 1, matches.len()))
                 });
+                render_find_prompt(text_area, buf, prompt);
             }
+            Some(EditorMode::Open { .. }) => { /* already handled, above */ }
             Some(EditorMode::ReplaceMatches { matches, match_idx }) => {
                 render_help(text_area, buf, REPLACE_MATCHES, |block| {
                     block.title(format!(
