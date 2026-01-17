@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! A Nano-like editor with an emphasis on modern features
+//! An exercise in minimalist text editing
 
 #![forbid(unsafe_code)]
 

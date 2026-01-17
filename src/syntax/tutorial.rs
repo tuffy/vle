@@ -19,6 +19,7 @@ enum TutorialToken {
     #[token("\\ V /  __/ |  | |_| | | |___| | |_| |_| |  __/ | |__| (_| | | || (_) | |")]
     #[token("\\_/ \\___|_|   \\__, | |_____|_|\\__|\\__|_|\\___| |_____\\__,_|_|\\__\\___/|_|")]
     #[token("|___/")]
+    #[token("- An Exercise in Minimalist Text Editing -")]
     Title,
     #[token("F1")]
     #[token("F2")]
