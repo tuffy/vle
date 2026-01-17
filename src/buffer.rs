@@ -1209,31 +1209,27 @@ impl BufferContext {
         }
     }
 
-    pub fn select_inside(
-        &mut self,
-        alt: Option<AltCursor<'_>>,
-        (start, end): (char, char),
-        stack: Option<(char, char)>,
-    ) {
-        match &mut self.selection {
+    pub fn select_inside(&mut self, (start, end): (char, char), stack: Option<(char, char)>) {
+        let buf = self.buffer.borrow();
+        let (stack_back, stack_forward) = match stack {
+            Some((back, forward)) => (Some(back), Some(forward)),
+            None => (None, None),
+        };
+
+        match self.selection {
             Some(selection) => {
-                let mut buf = self.buffer.borrow_mut();
-                buf.log_undo(self.cursor, self.cursor_column);
-                perform_surround(
-                    &mut buf.rope.get_mut(),
-                    &mut self.cursor,
-                    &mut self.cursor_column,
-                    selection,
-                    alt,
-                    [start, end],
-                )
+                let (sel_start, sel_end) = reorder(self.cursor, selection);
+                if let (Some(start), Some(end)) = (
+                    sel_start.checked_sub(1).and_then(|sel_start| {
+                        select_next_char::<false>(&buf.rope, sel_start, start, stack_back)
+                    }),
+                    select_next_char::<true>(&buf.rope, sel_end + 1, end, stack_forward),
+                ) {
+                    self.selection = Some(start);
+                    self.cursor = end;
+                }
             }
             None => {
-                let buf = self.buffer.borrow();
-                let (stack_back, stack_forward) = match stack {
-                    Some((back, forward)) => (Some(back), Some(forward)),
-                    None => (None, None),
-                };
                 if let (Some(start), Some(end)) = (
                     select_next_char::<false>(&buf.rope, self.cursor, start, stack_back),
                     select_next_char::<true>(&buf.rope, self.cursor, end, stack_forward),
@@ -1242,26 +1238,6 @@ impl BufferContext {
                     self.cursor = end;
                 }
             }
-        }
-    }
-
-    /// Returns true if selection is active and surround characters
-    /// are deleted
-    pub fn delete_surround(&mut self, alt: Option<AltCursor<'_>>) -> bool {
-        match &mut self.selection {
-            Some(selection) => {
-                let mut buf = self.buffer.borrow_mut();
-                buf.log_undo(self.cursor, self.cursor_column);
-                delete_surround(
-                    &mut buf.rope.get_mut(),
-                    &mut self.cursor,
-                    &mut self.cursor_column,
-                    selection,
-                    alt,
-                )
-                .is_ok()
-            }
-            None => false,
         }
     }
 
@@ -1331,7 +1307,18 @@ impl BufferContext {
             }
         }
 
-        rope.chars_at(self.cursor)
+        let (chars, offset) = match self.selection {
+            None => (rope.chars_at(self.cursor), self.cursor),
+            Some(selection) => {
+                let offset = self.cursor.max(selection) + 1;
+                (
+                    (offset <= rope.len_chars()).then(|| rope.chars_at(offset))?,
+                    offset,
+                )
+            }
+        };
+
+        chars
             .zip(0..)
             .find(|(c, _)| match c {
                 '(' => {
@@ -1357,7 +1344,7 @@ impl BufferContext {
                 '"' | '\'' => true,
                 _ => false,
             })
-            .map(|(c, pos)| (c, self.cursor + pos))
+            .map(|(c, pos)| (c, offset + pos))
     }
 
     /// Attempts to find previous pairing character
@@ -1380,7 +1367,14 @@ impl BufferContext {
             }
         }
 
-        let mut chars = rope.chars_at(self.cursor);
+        let (mut chars, offset) = match self.selection {
+            None => (rope.chars_at(self.cursor), self.cursor),
+            Some(selection) => {
+                let offset = self.cursor.min(selection).checked_sub(1)?;
+                (rope.chars_at(offset), offset)
+            }
+        };
+
         chars.reverse();
         chars
             .zip(0..)
@@ -1408,7 +1402,7 @@ impl BufferContext {
                 '"' | '\'' => true,
                 _ => false,
             })
-            .map(|(c, pos)| (c, self.cursor - pos))
+            .map(|(c, pos)| (c, offset - pos))
     }
 
     pub fn select_whole_lines(&mut self) {
@@ -2103,8 +2097,8 @@ impl StatefulWidget for BufferWidget<'_> {
         state: &mut BufferContext,
     ) {
         use crate::help::{
-            CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE, SURROUND_WITH,
-            VERIFY_RELOAD, VERIFY_SAVE, render_help,
+            CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE, VERIFY_RELOAD,
+            VERIFY_SAVE, render_help,
         };
         use crate::syntax::{HighlightState, Highlighter};
         use ratatui::{
@@ -2850,16 +2844,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(EditorMode::SelectInside) => {
-                render_help(
-                    text_area,
-                    buf,
-                    if state.selection.is_some() {
-                        SURROUND_WITH
-                    } else {
-                        SELECT_INSIDE
-                    },
-                    |b| b,
-                );
+                render_help(text_area, buf, SELECT_INSIDE, |b| b);
             }
             Some(EditorMode::SelectLine { prompt }) => {
                 render_help(text_area, buf, SELECT_LINE, |b| b);

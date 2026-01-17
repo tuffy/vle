@@ -178,7 +178,7 @@ pub static EDITING: &[Keybinding] = &[
     ctrl_f(&["F"], "F5", "Find Text"),
     // F6 is for replace text
     ctrl_f(&["P"], "F7", "Goto Matching Pair"),
-    ctrl_f(&["E"], "F8", "Handle Enveloped Items"),
+    ctrl_f(&["E"], "F8", "Select Inside Pair"),
     ctrl_f(&["W"], "F9", "Widen Selection to Lines"),
     ctrl_f(&["N"], "F10", "Swap Panes"),
     ctrl_f(&["L"], "F11", "Reload File"),
@@ -200,17 +200,6 @@ pub static VERIFY_RELOAD: &[Keybinding] = &[
 pub static CONFIRM_CLOSE: &[Keybinding] = &[
     none(&["Y"], "Yes, Close Without Saving"),
     none(&["N"], "No, Do Not Close"),
-];
-
-pub static SURROUND_WITH: &[Keybinding] = &[
-    none(&["(", ")"], "Surround With ( \u{2026} )"),
-    none(&["[", "]"], "Surround With [ \u{2026} ]"),
-    none(&["{", "}"], "Surround With { \u{2026} }"),
-    none(&["<", ">"], "Surround With < \u{2026} >"),
-    none(&["\""], "Surround With \" \u{2026} \""),
-    none(&["'"], "Surround With ' \u{2026} '"),
-    none(&["Del"], "Delete Surround"),
-    none(&["Esc"], "Cancel"),
 ];
 
 pub static SELECT_INSIDE: &[Keybinding] = &[
