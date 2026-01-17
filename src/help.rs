@@ -14,6 +14,22 @@ pub struct Keybinding {
     action: &'static str,
 }
 
+const fn ctrl(keys: &'static [&'static str], action: &'static str) -> Keybinding {
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys,
+        action,
+    }
+}
+
+const fn none(keys: &'static [&'static str], action: &'static str) -> Keybinding {
+    Keybinding {
+        modifier: None,
+        keys,
+        action,
+    }
+}
+
 pub fn help_message(keybindings: &[Keybinding]) -> ratatui::widgets::Paragraph<'_> {
     use ratatui::{
         style::{Modifier, Style},
@@ -121,321 +137,93 @@ static LEFT: &str = "\u{2190}";
 static RIGHT: &str = "\u{2192}";
 
 pub static EDITING: &[Keybinding] = &[
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["O"],
-        action: "Open File",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["L"],
-        action: "Reload File",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["S"],
-        action: "Save File",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["PgUp", "PgDn"],
-        action: "Switch Buffer",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["Q"],
-        action: "Quit Buffer",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &[LEFT, DOWN, UP, RIGHT],
-        action: "Open / Switch Pane",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["N"],
-        action: "Swap Panes",
-    },
+    ctrl(&["O"], "Open File"),
+    ctrl(&["L"], "Reload File"),
+    ctrl(&["S"], "Save File"),
+    ctrl(&["PgUp", "PgDn"], "Switch Buffer"),
+    ctrl(&["Q"], "Quit Buffer"),
+    ctrl(&[LEFT, DOWN, UP, RIGHT], "Open / Switch Pane"),
+    ctrl(&["N"], "Swap Panes"),
     Keybinding {
         modifier: Some("Shift"),
         keys: &[LEFT, DOWN, UP, RIGHT],
         action: "Highlight Text",
     },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["W"],
-        action: "Widen Selection to Lines",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["Home", "End"],
-        action: "Start / End of Selection",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["E"],
-        action: "Handle Enveloped Items",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["X", "C", "V"],
-        action: "Cut / Copy / Paste",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["Z", "Y"],
-        action: "Undo / Redo",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["P"],
-        action: "Goto Matching Pair",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["T"],
-        action: "Goto Line",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["F"],
-        action: "Find Text",
-    },
+    ctrl(&["W"], "Widen Selection to Lines"),
+    ctrl(&["Home", "End"], "Start / End of Selection"),
+    ctrl(&["E"], "Handle Enveloped Items"),
+    ctrl(&["X", "C", "V"], "Cut / Copy / Paste"),
+    ctrl(&["Z", "Y"], "Undo / Redo"),
+    ctrl(&["P"], "Goto Matching Pair"),
+    ctrl(&["T"], "Goto Line"),
+    ctrl(&["F"], "Find Text"),
 ];
 
 pub static VERIFY_SAVE: &[Keybinding] = &[
-    Keybinding {
-        modifier: None,
-        keys: &["Y"],
-        action: "Yes, Overwrite Contents",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["N"],
-        action: "No, Do Not Save",
-    },
+    none(&["Y"], "Yes, Overwrite Contents"),
+    none(&["N"], "No, Do Not Save"),
 ];
 
 pub static VERIFY_RELOAD: &[Keybinding] = &[
-    Keybinding {
-        modifier: None,
-        keys: &["Y"],
-        action: "Yes, Overwrite Buffer From Disk",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["N"],
-        action: "No, Do Not Overwrite",
-    },
+    none(&["Y"], "Yes, Overwrite Buffer From Disk"),
+    none(&["N"], "No, Do Not Overwrite"),
 ];
 
 pub static CONFIRM_CLOSE: &[Keybinding] = &[
-    Keybinding {
-        modifier: None,
-        keys: &["Y"],
-        action: "Yes, Close Without Saving",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["N"],
-        action: "No, Do Not Close",
-    },
+    none(&["Y"], "Yes, Close Without Saving"),
+    none(&["N"], "No, Do Not Close"),
 ];
 
 pub static SURROUND_WITH: &[Keybinding] = &[
-    Keybinding {
-        modifier: None,
-        keys: &["(", ")"],
-        action: "Surround With ( \u{2026} )",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["[", "]"],
-        action: "Surround With [ \u{2026} ]",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["{", "}"],
-        action: "Surround With { \u{2026} }",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["<", ">"],
-        action: "Surround With < \u{2026} >",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["\""],
-        action: "Surround With \" \u{2026} \"",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["'"],
-        action: "Surround With ' \u{2026} '",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["Del"],
-        action: "Delete Surround",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["Esc"],
-        action: "Cancel",
-    },
+    none(&["(", ")"], "Surround With ( \u{2026} )"),
+    none(&["[", "]"], "Surround With [ \u{2026} ]"),
+    none(&["{", "}"], "Surround With { \u{2026} }"),
+    none(&["<", ">"], "Surround With < \u{2026} >"),
+    none(&["\""], "Surround With \" \u{2026} \""),
+    none(&["'"], "Surround With ' \u{2026} '"),
+    none(&["Del"], "Delete Surround"),
+    none(&["Esc"], "Cancel"),
 ];
 
 pub static SELECT_INSIDE: &[Keybinding] = &[
-    Keybinding {
-        modifier: None,
-        keys: &["(", ")"],
-        action: "Select Inside ( \u{2026} )",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["[", "]"],
-        action: "Select Inside [ \u{2026} ]",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["{", "}"],
-        action: "Select Inside { \u{2026} }",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["<", ">"],
-        action: "Select Inside < \u{2026} >",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["\""],
-        action: "Select Inside \" \u{2026} \"",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["'"],
-        action: "Select Inside ' \u{2026} '",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["Esc"],
-        action: "Cancel",
-    },
+    none(&["(", ")"], "Select Inside ( \u{2026} )"),
+    none(&["[", "]"], "Select Inside [ \u{2026} ]"),
+    none(&["{", "}"], "Select Inside { \u{2026} }"),
+    none(&["<", ">"], "Select Inside < \u{2026} >"),
+    none(&["\""], "Select Inside \" \u{2026} \""),
+    none(&["'"], "Select Inside ' \u{2026} '"),
+    none(&["Esc"], "Cancel"),
 ];
 
 pub static SELECT_LINE: &[Keybinding] = &[
-    Keybinding {
-        modifier: None,
-        keys: &["Enter"],
-        action: "Select Line",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["Home"],
-        action: "Goto First Line",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["End"],
-        action: "Goto Last Line",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["Esc"],
-        action: "Cancel",
-    },
+    none(&["Enter"], "Select Line"),
+    none(&["Home"], "Goto First Line"),
+    none(&["End"], "Goto Last Line"),
+    none(&["Esc"], "Cancel"),
 ];
 
 pub static OPEN_FILE: &[Keybinding] = &[
-    Keybinding {
-        modifier: None,
-        keys: &[DOWN, UP],
-        action: "Navigate Entries",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &[LEFT],
-        action: "Up Directory",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &[RIGHT],
-        action: "Down Directory",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["Tab"],
-        action: "Toggle File to Open",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["Enter"],
-        action: "Select File(s)",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["Esc"],
-        action: "Cancel",
-    },
+    none(&[DOWN, UP], "Navigate Entries"),
+    none(&[LEFT], "Up Directory"),
+    none(&[RIGHT], "Down Directory"),
+    none(&["Tab"], "Toggle File to Open"),
+    none(&["Enter"], "Select File(s)"),
+    none(&["Esc"], "Cancel"),
 ];
 
 pub static FIND: &[Keybinding] = &[
-    Keybinding {
-        modifier: None,
-        keys: &[UP, LEFT],
-        action: "Select Previous Match",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &[DOWN, RIGHT],
-        action: "Select Next Match",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["V"],
-        action: "Copy from Cut Buffer",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["Del"],
-        action: "Remove Selected Match",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["R"],
-        action: "Replace Selected Matches",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["F"],
-        action: "Begin New Find",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["Enter"],
-        action: "Finish",
-    },
+    none(&[UP, LEFT], "Select Previous Match"),
+    none(&[DOWN, RIGHT], "Select Next Match"),
+    ctrl(&["V"], "Copy from Cut Buffer"),
+    none(&["Del"], "Remove Selected Match"),
+    ctrl(&["R"], "Replace Selected Matches"),
+    ctrl(&["F"], "Begin New Find"),
+    none(&["Enter"], "Finish"),
 ];
 
 pub static REPLACE_MATCHES: &[Keybinding] = &[
-    Keybinding {
-        modifier: None,
-        keys: &[UP, LEFT],
-        action: "Select Previous Match",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &[DOWN, RIGHT],
-        action: "Select Next Match",
-    },
-    Keybinding {
-        modifier: Some("Ctrl"),
-        keys: &["V"],
-        action: "Copy from Cut Buffer",
-    },
-    Keybinding {
-        modifier: None,
-        keys: &["Enter", "Esc"],
-        action: "Finish Replacement",
-    },
+    none(&[UP, LEFT], "Select Previous Match"),
+    none(&[DOWN, RIGHT], "Select Next Match"),
+    ctrl(&["V"], "Copy from Cut Buffer"),
+    none(&["Enter", "Esc"], "Finish Replacement"),
 ];

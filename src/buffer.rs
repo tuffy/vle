@@ -2103,8 +2103,8 @@ impl StatefulWidget for BufferWidget<'_> {
         state: &mut BufferContext,
     ) {
         use crate::help::{
-            CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE,
-            SURROUND_WITH, VERIFY_RELOAD, VERIFY_SAVE, render_help,
+            CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE, SURROUND_WITH,
+            VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
         use crate::syntax::{HighlightState, Highlighter};
         use ratatui::{
