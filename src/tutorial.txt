@@ -77,7 +77,7 @@ marker, and then repeatedly Del until it matches the line below it.
 
 As you've made changes to this buffer, you'll notice an
 asterisk (*) next to its title at the bottom. This indicates
-the buffer has unsaved changes. Ctrl-S saves the current file.
+the buffer has unsaved changes. Ctrl-S/F3 saves the current file.
 Go ahead and try it now (this tutorial buffer is special
 and isn't actually written to disk, but will behave as if it was).
 Once saved, the asterisk will disappear until the next change is made.
@@ -146,10 +146,8 @@ Text surrounded by characters like " or ( are a common
 occurence in programming, so this editor provides a
 handy "enveloped items" mode for dealing with it.
 
-When no selection is active, Ctrl-E will attempt
-to select inside of surrounded text, prompting
-for which pair of characters you want to select inside of
-if it can't figure out which ones you mean.
+When no selection is active, Ctrl-E/F8 will attempt
+to select inside of text surrounded by pairs.
 
 Once a selection is active, we can cut or copy it
 like any other selection. Or, we may even simply
@@ -157,12 +155,26 @@ start typing new text to delete the selection and replace
 it with what we've typed.
 
 Try moving your cursor somewhere inside the long string
-(it doesn't matter where), then hit Ctrl-E.
+(it doesn't matter where), then hit Ctrl-E/F8.
 Once the selection is active, type in the string
 we want instead.
 
 >>> "a long string we would rather delete and replace"
     "the correct string"
+
+
+Typing Ctrl-E/F8 multiple times will expand outward
+from inner nested values to outer ones.
+
+>>> { "try Ctrl-E/F8 twice in this area then type new text" }
+    {new text}
+
+
+If it can't figure out which pair of characters you mean,
+it will prompt for which ones to expand into.
+
+>>> { ( [ try Ctrl-E/F8 here, then the curly bracket key ) ] }
+    {fixed text}
 
 
 If a selection is active, typing a surround character
@@ -184,7 +196,7 @@ set of surrounding characters.
 
 Try moving your cursor inside the parenthesized text
 (again, it doesn't matter where),
-then use Ctrl-E to select inside the parentheses.
+then use Ctrl-E/F8 to select inside the parentheses.
 Finally, Del will delete the surrounding parentheses.
 All in far fewer keystrokes than trying to navigate
 and delete them one at a time.
@@ -211,7 +223,7 @@ way back to the buffer's state before you undid anything.
 ## Navigating to a Line
 
 Often, you'll find you've made an error at a specific line
-in a file. Ctrl-T brings up a prompt asking for which
+in a file. Ctrl-T/F4 brings up a prompt asking for which
 line you'd like to go to. Going to line 208 will bring
 you to the beginning of this section.
 
@@ -225,11 +237,11 @@ Sometimes you'll find your cursor is at one end of a
 matching pair of things, and you'd like to navigate
 to the other end without counting all the intervening
 opening and ending characters by hand. This is where
-Ctrl-P comes in handy.
+Ctrl-P/F7 comes in handy.
 
 Try placing your cursor at the starting { and
-use Ctrl-P to jump all the way to the end.
-From there, you're free to use Ctrl-P to jump
+use Ctrl-P/F7 to jump all the way to the end.
+From there, you're free to use Ctrl-P/F7 to jump
 all the way back to its matching opening character
 at the beginning.
 
@@ -253,7 +265,7 @@ direction to go.
 
 Sometimes we want to locate text in a file
 but don't know exactly which line it's on.
-Ctrl-F prompts for text to search for.
+Ctrl-F/F5 prompts for text to search for.
 
 Searching proceeds incrementally forward
 as more characters are added to the prompt.
@@ -261,31 +273,15 @@ But you're always free to use the arrow keys
 to cycle forward or backward through the existing
 matches.
 
-From here, one can hit Enter to enter match selection mode,
-Ctrl-R to replace all existing matches,
-or Esc to exit find mode.
-
-
-## Selecting Matches
-
-Match selection mode works much like find mode
-in that we can use arrow keys to cycle between matches,
-but the search text is now fixed.
-
-From this mode, we can use Del to remove selected matches,
-continue on to text replacement with Ctrl-R,
-or just exit altogether with Esc.
-
-Sometimes we want to replace matched text, but not all matches.
-This mode to cull unwanted replacement candidates
-allows us to omit some of them without having to query
-for each candidate individually.
+From here, one can hit Enter to finish finding,
+Del to remove a match from the set of matches,
+or Ctrl-R/F6 to replace all selected matches.
 
 
 ## Replacing Text
 
-Using Ctrl-R from find or selection mode deletes
-all the highlighted matches and prompts us for a new value.
+Using Ctrl-R/F6 from find mode deletes all the highlighted
+matches and prompts us for a new value.
 Note that replace mode doesn't offer a text box
 for the replacement; the replacement text is inserted
 where all the matches were simultaneously and is
@@ -293,10 +289,10 @@ completed with the Enter key.
 
 Let's walk through this whole process.
 
-Start with Ctrl-F to find three instances of the word to replace.
+Start with Ctrl-F/F5 to find three instances of the word to replace.
 This will highlight all three instances of that word, below.
 
-Next, type Ctrl-R to replace those three instances,
+Next, type Ctrl-R/F6 to replace those three instances,
 which will remove them from the text.
 
 Finally, type "fixed" to replace all three instances
@@ -312,7 +308,7 @@ and hit Enter when finished.
 
 We've been working entirely within the tutorial buffer thus far.
 However, we may want to work with multiple files at the same time.
-Ctrl-O goes into an "open file" mode which allows us to
+Ctrl-O/F2 goes into an "open file" mode which allows us to
 navigate to an existing file on disk or provide a filename
 for a new file to create. Each file is opened into its own buffer.
 
@@ -323,7 +319,7 @@ Buffers can be cycled using Ctrl-PgUp and Ctrl-PgDn,
 and the buffer's filename will be indicated in its title
 on the upper left.
 
-Unneeded buffers can be closed using Ctrl-Q, and the editor
+Unneeded buffers can be closed using Ctrl-Q/F12, and the editor
 will exit once the final buffer is closed.
 
 
@@ -341,7 +337,7 @@ Or, Ctrl-↑ or Ctrl-↓ divides a single window into two wide
 top-and-bottom sections which we can navigate between using
 Ctrl-↑ or Ctrl-↓. Ctrl-← and Ctrl-→ restores a single window mode.
 
-When a window is split into two panes, Ctrl-N will swap their
+When a window is split into two panes, Ctrl-N/F10 will swap their
 positions onscreen.
 
 

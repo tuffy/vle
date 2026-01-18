@@ -21,8 +21,7 @@ enum TutorialToken {
     #[token("|___/")]
     #[token("- An Exercise in Minimalist Text Editing -")]
     Title,
-    #[token("F1")]
-    #[token("F2")]
+    #[regex("F[0-9]{1,2}")]
     #[token("\u{2190}")]
     #[token("\u{2191}")]
     #[token("\u{2192}")]
@@ -80,6 +79,8 @@ enum TutorialToken {
     #[token("    println!(\"a is {a}\");")]
     #[token("    println!(\"b is {b}\");")]
     #[token("    println!(\"c is {c}\");")]
+    #[token(">>> {new text}")]
+    #[token(">>> {fixed text}")]
     Correct,
     #[regex(">>> .+", allow_greedy = true)]
     #[token("println!(\"a is {a}\");")]
