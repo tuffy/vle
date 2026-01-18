@@ -599,9 +599,10 @@ impl BufferContext {
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
-        match c {
-            '(' => match &mut self.selection {
-                Some(selection) => perform_surround(
+
+        match &mut self.selection {
+            Some(selection) => match c {
+                '(' => perform_surround(
                     &mut rope,
                     &mut self.cursor,
                     &mut self.cursor_column,
@@ -609,15 +610,7 @@ impl BufferContext {
                     alt,
                     ['(', ')'],
                 ),
-                None => {
-                    rope.insert(self.cursor, "()");
-                    Secondary::new(alt, |a| a >= self.cursor).update(|pos| *pos += 2);
-                    self.cursor += 1;
-                    self.cursor_column += 1;
-                }
-            },
-            '[' => match &mut self.selection {
-                Some(selection) => perform_surround(
+                '[' => perform_surround(
                     &mut rope,
                     &mut self.cursor,
                     &mut self.cursor_column,
@@ -625,15 +618,7 @@ impl BufferContext {
                     alt,
                     ['[', ']'],
                 ),
-                None => {
-                    rope.insert(self.cursor, "[]");
-                    Secondary::new(alt, |a| a >= self.cursor).update(|pos| *pos += 2);
-                    self.cursor += 1;
-                    self.cursor_column += 1;
-                }
-            },
-            '{' => match &mut self.selection {
-                Some(selection) => perform_surround(
+                '{' => perform_surround(
                     &mut rope,
                     &mut self.cursor,
                     &mut self.cursor_column,
@@ -641,15 +626,7 @@ impl BufferContext {
                     alt,
                     ['{', '}'],
                 ),
-                None => {
-                    rope.insert(self.cursor, "{}");
-                    Secondary::new(alt, |a| a >= self.cursor).update(|pos| *pos += 2);
-                    self.cursor += 1;
-                    self.cursor_column += 1;
-                }
-            },
-            '\"' => match &mut self.selection {
-                Some(selection) => perform_surround(
+                '\"' => perform_surround(
                     &mut rope,
                     &mut self.cursor,
                     &mut self.cursor_column,
@@ -657,15 +634,7 @@ impl BufferContext {
                     alt,
                     ['\"', '\"'],
                 ),
-                None => {
-                    rope.insert(self.cursor, "\"\"");
-                    Secondary::new(alt, |a| a >= self.cursor).update(|pos| *pos += 2);
-                    self.cursor += 1;
-                    self.cursor_column += 1;
-                }
-            },
-            c @ '\'' => match &mut self.selection {
-                Some(selection) => perform_surround(
+                '\'' => perform_surround(
                     &mut rope,
                     &mut self.cursor,
                     &mut self.cursor_column,
@@ -673,44 +642,27 @@ impl BufferContext {
                     alt,
                     ['\'', '\''],
                 ),
-                None => {
-                    rope.insert_char(self.cursor, c);
-                    Secondary::new(alt, |a| a >= self.cursor).update(|pos| *pos += 1);
-                    self.cursor += 1;
-                    self.cursor_column += 1;
-                }
-            },
-            c @ '<' | c @ '>' => match &mut self.selection {
-                Some(selection) => perform_surround(
-                    &mut rope,
-                    &mut self.cursor,
-                    &mut self.cursor_column,
-                    selection,
-                    alt,
-                    ['<', '>'],
-                ),
-                None => {
-                    rope.insert_char(self.cursor, c);
-                    Secondary::new(alt, |a| a >= self.cursor).update(|pos| *pos += 1);
-                    self.cursor += 1;
-                    self.cursor_column += 1;
-                }
-            },
-            c => {
-                let mut alt = Secondary::new(alt, |a| a >= self.cursor);
-                if let Some(selection) = self.selection.take() {
+                _ => {
+                    let mut alt = Secondary::new(alt, |a| a >= self.cursor.min(*selection));
                     zap_selection(
                         &mut rope,
                         &mut self.cursor,
                         &mut self.cursor_column,
-                        selection,
+                        *selection,
                         &mut alt,
                     );
+                    self.selection = None;
+                    rope.insert_char(self.cursor, c);
+                    self.cursor += 1;
+                    self.cursor_column += 1;
+                    alt += 1;
                 }
+            },
+            None => {
                 rope.insert_char(self.cursor, c);
                 self.cursor += 1;
                 self.cursor_column += 1;
-                alt += 1;
+                Secondary::new(alt, |a| a >= self.cursor).update(|pos| *pos += 1);
             }
         }
     }
@@ -778,64 +730,17 @@ impl BufferContext {
     }
 
     pub fn backspace(&mut self, alt: Option<AltCursor<'_>>) {
-        use std::cmp::Ordering;
-
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
-
-        let update = |pos: &mut usize| match self.cursor.cmp(pos) {
-            Ordering::Less => {
-                *pos -= 2;
-            }
-            Ordering::Equal => {
-                *pos -= 1;
-            }
-            Ordering::Greater => { /* do nothing */ }
-        };
 
         match self.selection.take() {
             None => {
                 let mut alt = Secondary::new(alt, |a| a >= self.cursor);
                 if let Some(prev) = self.cursor.checked_sub(1)
-                    && match rope.get_char(prev) {
-                        Some('(') if rope.get_char(self.cursor) == Some(')') => {
-                            let removed = rope.try_remove(prev..=self.cursor).is_ok();
-                            if removed {
-                                alt.update(|pos| update(pos));
-                            }
-                            removed
-                        }
-                        Some('[') if rope.get_char(self.cursor) == Some(']') => {
-                            let removed = rope.try_remove(prev..=self.cursor).is_ok();
-                            if removed {
-                                alt.update(|pos| update(pos));
-                            }
-                            removed
-                        }
-                        Some('{') if rope.get_char(self.cursor) == Some('}') => {
-                            let removed = rope.try_remove(prev..=self.cursor).is_ok();
-                            if removed {
-                                alt.update(|pos| update(pos));
-                            }
-                            removed
-                        }
-                        Some('"') if rope.get_char(self.cursor) == Some('"') => {
-                            let removed = rope.try_remove(prev..=self.cursor).is_ok();
-                            if removed {
-                                alt.update(|pos| update(pos));
-                            }
-                            removed
-                        }
-                        _ => {
-                            let removed = rope.try_remove(prev..self.cursor).is_ok();
-                            if removed {
-                                alt -= 1;
-                            }
-                            removed
-                        }
-                    }
+                    && rope.try_remove(prev..self.cursor).is_ok()
                 {
+                    alt -= 1;
                     self.cursor -= 1;
                     self.cursor_column = cursor_column(&rope, self.cursor);
                 }
