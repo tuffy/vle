@@ -224,7 +224,7 @@ way back to the buffer's state before you undid anything.
 
 Often, you'll find you've made an error at a specific line
 in a file. Ctrl-T/F4 brings up a prompt asking for which
-line you'd like to go to. Going to line 208 will bring
+line you'd like to go to. Going to line 223 will bring
 you to the beginning of this section.
 
 In addition, you may use Home and End within the "goto line"

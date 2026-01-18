@@ -18,6 +18,7 @@ mod js;
 mod json;
 mod makefile;
 mod markdown;
+mod patch;
 mod php;
 mod python;
 mod rust;
@@ -107,6 +108,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("yaml") => Box::new(yaml::Yaml),
         Some("java") => Box::new(java::Java),
         Some("go") => Box::new(go::Go),
+        Some("patch" | "diff") => Box::new(patch::Patch),
         _ => Box::new(DefaultHighlighter),
     }
 }
@@ -162,7 +164,6 @@ macro_rules! highlighter {
 
 // TODO - add cmake syntax
 // TODO - add lua syntax
-// TODO - add patch syntax
 // TODO - add perl syntax
 // TODO - add sh syntax
 // TODO - add tex syntax
