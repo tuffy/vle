@@ -1310,6 +1310,25 @@ impl BufferContext {
             .map(|(c, pos)| (c, offset - pos))
     }
 
+    pub fn auto_pair(&mut self, alt: Option<AltCursor<'_>>) {
+        if let Some(pair) = self.prev_pairing_char().and_then(|(c, _)| match c {
+            '(' => Some(')'),
+            '[' => Some(']'),
+            '{' => Some('}'),
+            '<' => Some('>'),
+            c @ '"' | c @ '\'' => Some(c),
+            _ => None,
+        }) {
+            let mut buf = self.buffer.borrow_mut();
+            buf.log_undo(self.cursor, self.cursor_column);
+            let mut rope = buf.rope.get_mut();
+            let mut secondary = Secondary::new(alt, |a| a >= self.cursor);
+            rope.insert_char(self.cursor, pair);
+            self.selection = None;
+            secondary += 1;
+        }
+    }
+
     pub fn select_whole_lines(&mut self) {
         let buf = &mut self.buffer.borrow_mut();
         let rope = &buf.rope;
