@@ -185,7 +185,6 @@ pub static EDITING: &[Keybinding] = &[
     ctrl_f(&["Q"], "F12", "Quit Buffer"),
     ctrl(&["PgUp", "PgDn"], "Switch Buffer"),
     ctrl(&[LEFT, DOWN, UP, RIGHT], "Open / Switch Pane"),
-    ctrl_f(&["Space"], "Ins", "Auto-Pair"),
 ];
 
 pub static VERIFY_SAVE: &[Keybinding] = &[

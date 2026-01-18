@@ -651,13 +651,6 @@ impl Editor {
                     self.mode = new_mode;
                 }
             }
-            Event::Key(KeyEvent {
-                code: KeyCode::Insert,
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                ..
-            })
-            | key!(CONTROL, ' ') => self.update_buffer_at(|b, a| b.auto_pair(a)),
             Event::Paste(pasted) => {
                 self.update_buffer_at(|b, a| b.paste(a, &pasted.into()));
             }
