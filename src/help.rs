@@ -180,7 +180,7 @@ pub static EDITING: &[Keybinding] = &[
     ctrl_f(&["P"], "F7", "Goto Matching Pair"),
     ctrl_f(&["E"], "F8", "Select Inside Pair"),
     ctrl_f(&["W"], "F9", "Widen Selection to Lines"),
-    ctrl_f(&["N"], "F10", "Swap Panes"),
+    // TODO - invent F10 binding
     ctrl_f(&["L"], "F11", "Reload File"),
     ctrl_f(&["Q"], "F12", "Quit Buffer"),
     ctrl(&["PgUp", "PgDn"], "Switch Buffer"),

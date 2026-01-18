@@ -491,31 +491,6 @@ impl Editor {
                     };
                 }
             },
-            key!(CONTROL, 'n') | key!(F(10)) => {
-                match &mut self.layout {
-                    Layout::Horizontal { top, bottom, which } => {
-                        self.layout = Layout::Horizontal {
-                            top: std::mem::take(bottom),
-                            bottom: std::mem::take(top),
-                            which: match which {
-                                HorizontalPos::Top => HorizontalPos::Bottom,
-                                HorizontalPos::Bottom => HorizontalPos::Top,
-                            },
-                        };
-                    }
-                    Layout::Vertical { left, right, which } => {
-                        self.layout = Layout::Vertical {
-                            left: std::mem::take(right),
-                            right: std::mem::take(left),
-                            which: match which {
-                                VerticalPos::Left => VerticalPos::Right,
-                                VerticalPos::Right => VerticalPos::Left,
-                            },
-                        };
-                    }
-                    Layout::Single(..) | Layout::SingleHidden { .. } => { /* do nothing */ }
-                }
-            }
             Event::Key(KeyEvent {
                 code: KeyCode::Up,
                 modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
