@@ -1813,8 +1813,8 @@ fn select_next_char<const FORWARD: bool>(
         Some(stack) => {
             let mut stacked = 0;
             chars
-                .enumerate()
-                .filter(|(_, c)| {
+                .zip(0..)
+                .find(|(c, _)| {
                     if *c == target {
                         if stacked > 0 {
                             stacked -= 1;
@@ -1824,13 +1824,12 @@ fn select_next_char<const FORWARD: bool>(
                         }
                     } else if *c == stack {
                         stacked += 1;
-                        true
+                        false
                     } else {
-                        true
+                        false
                     }
                 })
-                .find_map(|(idx, c)| (c == target).then_some(idx))
-                .map(|pos| if FORWARD { cursor + pos } else { cursor - pos })
+                .map(|(_, pos)| if FORWARD { cursor + pos } else { cursor - pos })
         }
     }
 }
