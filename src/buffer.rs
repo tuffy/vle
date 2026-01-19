@@ -686,6 +686,7 @@ impl BufferContext {
             Some(selection) => {
                 if let Some(pasted) = cut_buffer {
                     let mut buf = self.buffer.borrow_mut();
+                    buf.log_undo(self.cursor, self.cursor_column);
                     let (selection_start, selection_end) = reorder(self.cursor, *selection);
                     let cut_range = selection_start..selection_end;
                     let mut rope = buf.rope.get_mut();
