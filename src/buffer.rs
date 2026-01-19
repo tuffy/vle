@@ -1215,7 +1215,13 @@ impl BufferContext {
         let (chars, offset) = match self.selection {
             None => (rope.chars_at(self.cursor), self.cursor),
             Some(selection) => {
-                let offset = self.cursor.max(selection) + 1;
+                let start = self.cursor.max(selection);
+                let offset = match rope.get_char(start) {
+                    Some(c @ ')' | c @ ']' | c @ '}' | c @ '>' | c @ '"' | c @ '\'') => {
+                        return Some((c, start + 1));
+                    }
+                    _ => start + 1,
+                };
                 (
                     (offset <= rope.len_chars()).then(|| rope.chars_at(offset))?,
                     offset,
@@ -1275,7 +1281,13 @@ impl BufferContext {
         let (mut chars, offset) = match self.selection {
             None => (rope.chars_at(self.cursor), self.cursor),
             Some(selection) => {
-                let offset = self.cursor.min(selection).checked_sub(1)?;
+                let start = self.cursor.min(selection).checked_sub(1)?;
+                let offset = match rope.get_char(start) {
+                    Some(c @ '(' | c @ '[' | c @ '{' | c @ '<' | c @ '"' | c @ '\'') => {
+                        return Some((c, start));
+                    }
+                    _ => start,
+                };
                 (rope.chars_at(offset), offset)
             }
         };

@@ -164,9 +164,10 @@ we want instead.
 
 
 Typing Ctrl-E/F8 multiple times will expand outward
-from inner nested values to outer ones.
+from inner nested values, to the paired characters themselves,
+and then to the next pair of enclosing characters.
 
->>> { "try Ctrl-E/F8 twice in this area then type new text" }
+>>> { "try Ctrl-E/F8 thrice in this area then type new text" }
     {new text}
 
 
