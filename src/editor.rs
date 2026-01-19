@@ -204,7 +204,7 @@ impl Editor {
         }
     }
 
-    fn perform_paste(&mut self) {
+    /*fn perform_paste(&mut self) {
         if let Some(cut_buffer) = &self.cut_buffer
             && let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut()
             && let cur_idx = cur_buf_list.current_index()
@@ -217,7 +217,7 @@ impl Editor {
                 cut_buffer,
             );
         }
-    }
+    }*/
 
     pub fn process_event(&mut self, event: Event) {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -555,10 +555,24 @@ impl Editor {
             key!(Backspace) => self.update_buffer_at(|b, a| b.backspace(a)),
             key!(Delete) => self.update_buffer_at(|b, a| b.delete(a)),
             key!(Enter) => self.update_buffer_at(|b, a| b.newline(a)),
-            key!(CONTROL, 'w') | key!(F(9)) => self.update_buffer(|b| b.select_whole_lines()),
+            key!(CONTROL, 'w') | key!(F(10)) => self.update_buffer(|b| b.select_whole_lines()),
             key!(CONTROL, 'x') => self.perform_cut(),
             key!(CONTROL, 'c') => self.perform_copy(),
-            key!(CONTROL, 'v') => self.perform_paste(),
+            key!(CONTROL, 'v') => {
+                let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
+                let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
+                if let Some(primary) = primary.current_mut() {
+                    primary.paste(secondary.map(|s| s.alt_cursor()), &mut self.cut_buffer);
+                }
+            }
+            Event::Paste(pasted) => {
+                self.cut_buffer = Some(pasted.into());
+                let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
+                let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
+                if let Some(primary) = primary.current_mut() {
+                    primary.paste(secondary.map(|s| s.alt_cursor()), &mut self.cut_buffer);
+                }
+            }
             key!(CONTROL, 'z') => self.update_buffer(|b| b.perform_undo()),
             key!(CONTROL, 'y') => self.update_buffer(|b| b.perform_redo()),
             key!(CONTROL, 's') | key!(F(3)) => {
@@ -650,9 +664,6 @@ impl Editor {
                 }) {
                     self.mode = new_mode;
                 }
-            }
-            Event::Paste(pasted) => {
-                self.update_buffer_at(|b, a| b.paste(a, &pasted.into()));
             }
             _ => { /* ignore other events */ }
         }

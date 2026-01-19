@@ -667,7 +667,56 @@ impl BufferContext {
         }
     }
 
-    pub fn paste(&mut self, alt: Option<AltCursor<'_>>, pasted: &CutBuffer) {
+    pub fn paste(&mut self, alt: Option<AltCursor<'_>>, cut_buffer: &mut Option<CutBuffer>) {
+        match self.selection.as_mut() {
+            None => {
+                if let Some(pasted) = cut_buffer {
+                    // No active selection, so paste as-is
+                    let mut buf = self.buffer.borrow_mut();
+                    buf.log_undo(self.cursor, self.cursor_column);
+                    let mut rope = buf.rope.get_mut();
+                    let mut alt = Secondary::new(alt, |a| a >= self.cursor);
+                    if rope.try_insert(self.cursor, &pasted.data).is_ok() {
+                        self.cursor += pasted.chars_len;
+                        alt += pasted.chars_len;
+                        self.cursor_column = cursor_column(&rope, self.cursor);
+                    }
+                }
+            }
+            Some(selection) => {
+                if let Some(pasted) = cut_buffer {
+                    let mut buf = self.buffer.borrow_mut();
+                    let (selection_start, selection_end) = reorder(self.cursor, *selection);
+                    let cut_range = selection_start..selection_end;
+                    let mut rope = buf.rope.get_mut();
+                    let mut alt = Secondary::new(alt, |a| a >= selection_start);
+
+                    if let Some(cut) = rope.get_slice(cut_range.clone()).map(|slice| slice.into()) {
+                        // cut out part of rope we want
+                        rope.remove(cut_range.clone());
+                        alt.update(|pos| {
+                            if (cut_range.clone()).contains(pos) {
+                                *pos = selection_start;
+                            } else {
+                                *pos -= selection_end - selection_start;
+                            }
+                        });
+                        self.cursor = selection_start;
+
+                        // insert contents of cut buffer
+                        // and transfer cut rope into cut buffer
+                        let pasted = std::mem::replace(pasted, cut);
+                        if rope.try_insert(self.cursor, &pasted.data).is_ok() {
+                            alt += pasted.chars_len;
+                            self.selection = Some(selection_start);
+                            self.cursor = selection_start + pasted.chars_len;
+                            self.cursor_column = cursor_column(&rope, self.cursor);
+                        }
+                    }
+                }
+            }
+        }
+        /*
         let mut buf = self.buffer.borrow_mut();
         buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
@@ -682,11 +731,8 @@ impl BufferContext {
                 &mut alt,
             );
         }
-        if rope.try_insert(self.cursor, &pasted.data).is_ok() {
-            self.cursor += pasted.chars_len;
-            alt += pasted.chars_len;
-            self.cursor_column = cursor_column(&rope, self.cursor);
-        }
+
+        */
     }
 
     pub fn newline(&mut self, alt: Option<AltCursor<'_>>) {

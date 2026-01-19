@@ -11,7 +11,7 @@ of having to remember which key combination to use or what
 mode the editor is in at any given time.
 
 Let's try a different approach and see just how *few* features we need.
-By restricting our feature set to around fifteen powerful features,
+By restricting our feature set to less than twenty powerful features,
 we can devote more mental effort to our projects and less mental
 effort to our tools.
 
