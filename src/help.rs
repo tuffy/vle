@@ -163,15 +163,6 @@ static LEFT: &str = "\u{2190}";
 static RIGHT: &str = "\u{2192}";
 
 pub static EDITING: &[Keybinding] = &[
-    Keybinding {
-        modifier: Some("Shift"),
-        keys: &[LEFT, DOWN, UP, RIGHT],
-        action: "Highlight Text",
-        f: "",
-    },
-    ctrl(&["Home", "End"], "Start / End of Selection"),
-    ctrl(&["X", "C", "V"], "Cut / Copy / Paste"),
-    ctrl(&["Z", "Y"], "Undo / Redo"),
     ctrl_f(&["O"], "F2", "Open File"),
     ctrl_f(&["S"], "F3", "Save File"),
     ctrl_f(&["T"], "F4", "Goto Line"),
@@ -183,6 +174,15 @@ pub static EDITING: &[Keybinding] = &[
     // TODO - invent F10 binding
     ctrl_f(&["L"], "F11", "Reload File"),
     ctrl_f(&["Q"], "F12", "Quit Buffer"),
+    Keybinding {
+        modifier: Some("Shift"),
+        keys: &[LEFT, DOWN, UP, RIGHT],
+        action: "Highlight Text",
+        f: "",
+    },
+    ctrl(&["Home", "End"], "Start / End of Selection"),
+    ctrl(&["X", "C", "V"], "Cut / Copy / Paste"),
+    ctrl(&["Z", "Y"], "Undo / Redo"),
     ctrl(&["PgUp", "PgDn"], "Switch Buffer"),
     ctrl(&[LEFT, DOWN, UP, RIGHT], "Open / Switch Pane"),
 ];
