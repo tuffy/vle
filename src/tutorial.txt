@@ -100,6 +100,9 @@ And use cut-and-paste to reorder the sentences in the line below.
 >>> Sentence 2. Sentence 1.
     Sentence 1. Sentence 2.
 
+If a selection is active, pasting will swap the contents of
+the cut buffer and pasted region.
+
 
 ## Navigating a Selection
 
