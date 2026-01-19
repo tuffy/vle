@@ -717,23 +717,6 @@ impl BufferContext {
                 }
             }
         }
-        /*
-        let mut buf = self.buffer.borrow_mut();
-        buf.log_undo(self.cursor, self.cursor_column);
-        let mut rope = buf.rope.get_mut();
-        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
-
-        if let Some(selection) = self.selection.take() {
-            zap_selection(
-                &mut rope,
-                &mut self.cursor,
-                &mut self.cursor_column,
-                selection,
-                &mut alt,
-            );
-        }
-
-        */
     }
 
     pub fn newline(&mut self, alt: Option<AltCursor<'_>>) {
