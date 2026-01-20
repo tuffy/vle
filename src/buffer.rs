@@ -204,6 +204,10 @@ impl Source {
 }
 
 mod private {
+    use crate::buffer::Buffer;
+    use std::cell::{RefCell, RefMut};
+    use std::rc::Rc;
+
     pub struct Rope {
         rope: ropey::Rope,  // the primary data rope
         saved: ropey::Rope, // the rope's contents on disk
@@ -276,10 +280,67 @@ mod private {
             *self.modified = self.rope != self.saved;
         }
     }
+
+    pub struct BufferCell(Rc<RefCell<Buffer>>);
+
+    impl BufferCell {
+        pub fn borrow_update(&mut self, cursor: usize, cursor_column: usize) -> RefMut<'_, Buffer> {
+            use crate::buffer::{BufferState, Undo};
+
+            let mut buf = self.0.borrow_mut();
+            if let None | Some(Undo { finished: true, .. }) = buf.undo.last() {
+                let rope = buf.rope.clone();
+                buf.undo.push(Undo {
+                    state: BufferState {
+                        rope,
+                        cursor,
+                        cursor_column,
+                    },
+                    finished: false,
+                });
+                buf.redo.clear();
+            }
+            buf
+        }
+
+        pub fn borrow_move(&mut self) -> MoveHandle<'_> {
+            MoveHandle(self.0.borrow_mut())
+        }
+    }
+
+    impl From<Buffer> for BufferCell {
+        fn from(buffer: Buffer) -> Self {
+            BufferCell(Rc::new(RefCell::new(buffer)))
+        }
+    }
+
+    pub struct MoveHandle<'b>(RefMut<'b, Buffer>);
+
+    impl std::ops::Deref for MoveHandle<'_> {
+        type Target = Buffer;
+
+        fn deref(&self) -> &Buffer {
+            &self.0
+        }
+    }
+
+    impl std::ops::DerefMut for MoveHandle<'_> {
+        fn deref_mut(&mut self) -> &mut Buffer {
+            &mut self.0
+        }
+    }
+
+    impl Drop for MoveHandle<'_> {
+        fn drop(&mut self) {
+            if let Some(last) = self.0.undo.last_mut() {
+                last.finished = true;
+            }
+        }
+    }
 }
 
 /// A buffer corresponding to a file on disk (either local or remote)
-struct Buffer {
+pub struct Buffer {
     source: Source,               // the source file
     endings: LineEndings,         // the source file's line endings
     saved: Option<SystemTime>,    // when the file was last saved
