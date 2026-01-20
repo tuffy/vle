@@ -222,7 +222,7 @@ pub static OPEN_FILE: &[Keybinding] = &[
     none(&[DOWN, UP], "Navigate Entries"),
     none(&[LEFT], "Up Directory"),
     none(&[RIGHT], "Down Directory"),
-    none(&["Tab"], "Toggle File to Open"),
+    ctrl(&["Space"], "Toggle File to Open"),
     none(&["Enter"], "Select File(s)"),
     none(&["Esc"], "Cancel"),
 ];

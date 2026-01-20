@@ -852,7 +852,7 @@ fn process_open_file<S: ChooserSource>(
             chooser.pop();
             None
         }
-        key!(Tab) => {
+        key!(CONTROL, ' ') => {
             chooser.toggle_selected();
             None
         }
