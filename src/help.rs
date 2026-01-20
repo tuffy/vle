@@ -172,7 +172,7 @@ pub static EDITING: &[Keybinding] = &[
     ctrl_f(&["E"], "F8", "Select Inside Pair"),
     ctrl_f(&["W"], "F9", "Widen Selection to Lines"),
     ctrl_f(&["L"], "F11", "Reload File"),
-    ctrl_f(&["Q"], "F12", "Quit Buffer"),
+    ctrl_f(&["Q"], "F12", "Quit File"),
     Keybinding {
         modifier: Some("Shift"),
         keys: &[LEFT, DOWN, UP, RIGHT],
@@ -182,7 +182,7 @@ pub static EDITING: &[Keybinding] = &[
     ctrl(&["Home", "End"], "Start / End of Selection"),
     ctrl(&["X", "C", "V"], "Cut / Copy / Paste"),
     ctrl(&["Z", "Y"], "Undo / Redo"),
-    ctrl(&["PgUp", "PgDn"], "Switch Buffer"),
+    ctrl(&["PgUp", "PgDn"], "Switch File"),
     ctrl(&[LEFT, DOWN, UP, RIGHT], "Open / Switch Pane"),
 ];
 
