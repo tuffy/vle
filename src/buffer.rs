@@ -1279,6 +1279,42 @@ impl BufferContext {
             | (Some('<'), Some('>'))
             | (Some('"'), Some('"'))
             | (Some('\''), Some('\'')) => Some((start, end + 1)),
+            (_, Some(')')) => {
+                select_next_char::<false>(rope, start, '(', Some(')')).map(|start| (start, end))
+            }
+            (Some('('), _) => {
+                select_next_char::<true>(rope, end, ')', Some('(')).map(|end| (start + 1, end))
+            }
+            (_, Some(']')) => {
+                select_next_char::<false>(rope, start, '[', Some(']')).map(|start| (start, end))
+            }
+            (Some('['), _) => {
+                select_next_char::<true>(rope, end, ']', Some('[')).map(|end| (start + 1, end))
+            }
+            (_, Some('}')) => {
+                select_next_char::<false>(rope, start, '{', Some('}')).map(|start| (start, end))
+            }
+            (Some('{'), _) => {
+                select_next_char::<true>(rope, end, '}', Some('{')).map(|end| (start + 1, end))
+            }
+            (_, Some('>')) => {
+                select_next_char::<false>(rope, start, '<', Some('>')).map(|start| (start, end))
+            }
+            (Some('<'), _) => {
+                select_next_char::<true>(rope, end, '>', Some('<')).map(|end| (start + 1, end))
+            }
+            (_, Some('"')) => {
+                select_next_char::<false>(rope, start, '"', None).map(|start| (start, end))
+            }
+            (Some('"'), _) => {
+                select_next_char::<true>(rope, end, '"', None).map(|end| (start + 1, end))
+            }
+            (_, Some('\'')) => {
+                select_next_char::<false>(rope, start, '\'', None).map(|start| (start, end))
+            }
+            (Some('\''), _) => {
+                select_next_char::<true>(rope, end, '\'', None).map(|end| (start + 1, end))
+            }
             _ => match (
                 prev_pairing_char(rope, start),
                 next_pairing_char(rope, end + 1),
@@ -1767,8 +1803,6 @@ fn select_next_char<const FORWARD: bool>(
 /// (closing parens, quotes, etc.)
 /// returning the character and its character position
 pub fn next_pairing_char(rope: &ropey::Rope, offset: usize) -> Option<(char, usize)> {
-    // let buf = &self.buffer.borrow();
-    // let rope = &buf.rope;
     let mut stacked_paren = 0;
     let mut stacked_square_bracket = 0;
     let mut stacked_curly_bracket = 0;
