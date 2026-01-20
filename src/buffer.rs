@@ -1270,6 +1270,22 @@ impl BufferContext {
         }
     }
 
+    /// Attempts to auto pair set, returning Ok if successful
+    pub fn try_auto_pair(&mut self) -> Result<(), ()> {
+        match (self.prev_pairing_char(), self.next_pairing_char()) {
+            (Some(('(', start)), Some((')', end)))
+            | (Some(('[', start)), Some((']', end)))
+            | (Some(('{', start)), Some(('}', end)))
+            | (Some(('<', start)), Some(('>', end)))
+            | (Some(('"', start)), Some(('"', end)))
+            | (Some(('\'', start)), Some(('\'', end))) => {
+                self.set_selection_end(start, end);
+                Ok(())
+            }
+            _ => Err(()),
+        }
+    }
+
     /// Attempts to find next pairing character
     /// (closing parens, quotes, etc.)
     /// returning the character and its character position
@@ -1293,13 +1309,7 @@ impl BufferContext {
         let (chars, offset) = match self.selection {
             None => (rope.chars_at(self.cursor), self.cursor),
             Some(selection) => {
-                let start = self.cursor.max(selection);
-                let offset = match rope.get_char(start) {
-                    Some(c @ ')' | c @ ']' | c @ '}' | c @ '>' | c @ '"' | c @ '\'') => {
-                        return Some((c, start + 1));
-                    }
-                    _ => start + 1,
-                };
+                let offset = self.cursor.max(selection) + 1;
                 (
                     (offset <= rope.len_chars()).then(|| rope.chars_at(offset))?,
                     offset,
@@ -1359,13 +1369,7 @@ impl BufferContext {
         let (mut chars, offset) = match self.selection {
             None => (rope.chars_at(self.cursor), self.cursor),
             Some(selection) => {
-                let start = self.cursor.min(selection).checked_sub(1)?;
-                let offset = match rope.get_char(start) {
-                    Some(c @ '(' | c @ '[' | c @ '{' | c @ '<' | c @ '"' | c @ '\'') => {
-                        return Some((c, start));
-                    }
-                    _ => start,
-                };
+                let offset = self.cursor.min(selection).checked_sub(1)?;
                 (rope.chars_at(offset), offset)
             }
         };

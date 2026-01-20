@@ -569,20 +569,9 @@ impl Editor {
             key!(SHIFT, BackTab) => self.update_buffer_at(|b, a| b.un_indent(a)),
             key!(CONTROL, 'p') | key!(F(7)) => self.update_buffer(|b| b.select_matching_paren()),
             key!(CONTROL, 'e') | key!(F(8)) => {
-                if let Some(false) =
-                    self.on_buffer(|b| match (b.prev_pairing_char(), b.next_pairing_char()) {
-                        (Some(('(', start)), Some((')', end)))
-                        | (Some(('[', start)), Some((']', end)))
-                        | (Some(('{', start)), Some(('}', end)))
-                        | (Some(('<', start)), Some(('>', end)))
-                        | (Some(('"', start)), Some(('"', end)))
-                        | (Some(('\'', start)), Some(('\'', end))) => {
-                            b.set_selection_end(start, end);
-                            true
-                        }
-                        _ => false,
-                    })
-                {
+                // if both ends are exactly on pairing chars, shift both out one
+                // otherwise, seek to next best char
+                if let Some(Err(())) = self.on_buffer(|b| b.try_auto_pair()) {
                     self.mode = EditorMode::SelectInside;
                 }
             }
