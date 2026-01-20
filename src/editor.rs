@@ -204,21 +204,6 @@ impl Editor {
         }
     }
 
-    /*fn perform_paste(&mut self) {
-        if let Some(cut_buffer) = &self.cut_buffer
-            && let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut()
-            && let cur_idx = cur_buf_list.current_index()
-            && let Some(buffer) = cur_buf_list.current_mut()
-        {
-            buffer.paste(
-                alt_buf_list
-                    .and_then(|l| l.get_mut(cur_idx))
-                    .map(|b| b.alt_cursor()),
-                cut_buffer,
-            );
-        }
-    }*/
-
     pub fn process_event(&mut self, event: Event) {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
