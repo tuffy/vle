@@ -1272,23 +1272,35 @@ impl BufferContext {
         };
         let start = start.checked_sub(1).ok_or(())?;
 
-        match (prev_pairing_char(rope, start), next_pairing_char(rope, end + 1)) {
-            (Some(('(', start)), Some((')', end)))
-            | (Some(('[', start)), Some((']', end)))
-            | (Some(('{', start)), Some(('}', end)))
-            | (Some(('<', start)), Some(('>', end)))
-            | (Some(('"', start)), Some(('"', end)))
-            | (Some(('\'', start)), Some(('\'', end))) => {
+        match match (rope.get_char(start), rope.get_char(end)) {
+            (Some('('), Some(')'))
+            | (Some('['), Some(']'))
+            | (Some('{'), Some('}'))
+            | (Some('<'), Some('>'))
+            | (Some('"'), Some('"'))
+            | (Some('\''), Some('\'')) => Some((start, end + 1)),
+            _ => match (
+                prev_pairing_char(rope, start),
+                next_pairing_char(rope, end + 1),
+            ) {
+                (Some(('(', start)), Some((')', end)))
+                | (Some(('[', start)), Some((']', end)))
+                | (Some(('{', start)), Some(('}', end)))
+                | (Some(('<', start)), Some(('>', end)))
+                | (Some(('"', start)), Some(('"', end)))
+                | (Some(('\'', start)), Some(('\'', end))) => Some((start, end)),
+                _ => None,
+            },
+        } {
+            Some((start, end)) => {
                 self.cursor = end;
                 self.selection = Some(start);
                 self.cursor_column = cursor_column(rope, self.cursor);
                 Ok(())
             }
-            _ => Err(()),
+            None => Err(()),
         }
     }
-
-
 
     pub fn select_whole_lines(&mut self) {
         let buf = &mut self.buffer.borrow_move();
