@@ -284,7 +284,11 @@ mod private {
     pub struct BufferCell(Rc<RefCell<Buffer>>);
 
     impl BufferCell {
-        pub fn borrow_update(&mut self, cursor: usize, cursor_column: usize) -> RefMut<'_, Buffer> {
+        pub fn borrow_mut(&self) -> RefMut<'_, Buffer> {
+            self.0.borrow_mut()
+        }
+
+        pub fn borrow_update(&self, cursor: usize, cursor_column: usize) -> RefMut<'_, Buffer> {
             use crate::buffer::{BufferState, Undo};
 
             let mut buf = self.0.borrow_mut();
@@ -303,7 +307,7 @@ mod private {
             buf
         }
 
-        pub fn borrow_move(&mut self) -> MoveHandle<'_> {
+        pub fn borrow_move(&self) -> MoveHandle<'_> {
             MoveHandle(self.0.borrow_mut())
         }
     }
