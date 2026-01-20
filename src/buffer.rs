@@ -547,14 +547,6 @@ impl BufferContext {
         self.cursor_column = cursor_column(&buf.rope, self.cursor);
     }
 
-    pub fn set_selection_end(&mut self, start: usize, end: usize) {
-        assert!(end >= start);
-        let buf = self.buffer.borrow();
-        self.cursor = end;
-        self.selection = Some(start);
-        self.cursor_column = cursor_column(&buf.rope, self.cursor);
-    }
-
     pub fn clear_selection(&mut self) {
         self.selection = None;
     }
@@ -1272,137 +1264,31 @@ impl BufferContext {
 
     /// Attempts to auto pair set, returning Ok if successful
     pub fn try_auto_pair(&mut self) -> Result<(), ()> {
-        match (self.prev_pairing_char(), self.next_pairing_char()) {
+        let buf = self.buffer.borrow();
+        let rope = &buf.rope;
+        let (start, end) = match self.selection {
+            Some(selection) => reorder(self.cursor, selection),
+            None => (self.cursor, self.cursor),
+        };
+        let start = start.checked_sub(1).ok_or(())?;
+
+        match (prev_pairing_char(rope, start), next_pairing_char(rope, end + 1)) {
             (Some(('(', start)), Some((')', end)))
             | (Some(('[', start)), Some((']', end)))
             | (Some(('{', start)), Some(('}', end)))
             | (Some(('<', start)), Some(('>', end)))
             | (Some(('"', start)), Some(('"', end)))
             | (Some(('\'', start)), Some(('\'', end))) => {
-                self.set_selection_end(start, end);
+                self.cursor = end;
+                self.selection = Some(start);
+                self.cursor_column = cursor_column(rope, self.cursor);
                 Ok(())
             }
             _ => Err(()),
         }
     }
 
-    /// Attempts to find next pairing character
-    /// (closing parens, quotes, etc.)
-    /// returning the character and its character position
-    pub fn next_pairing_char(&self) -> Option<(char, usize)> {
-        let buf = &self.buffer.borrow();
-        let rope = &buf.rope;
-        let mut stacked_paren = 0;
-        let mut stacked_square_bracket = 0;
-        let mut stacked_curly_bracket = 0;
-        let mut stacked_angle_bracket = 0;
 
-        fn checked_dec(i: &mut usize) -> bool {
-            if *i > 0 {
-                *i -= 1;
-                false
-            } else {
-                true
-            }
-        }
-
-        let (chars, offset) = match self.selection {
-            None => (rope.chars_at(self.cursor), self.cursor),
-            Some(selection) => {
-                let offset = self.cursor.max(selection) + 1;
-                (
-                    (offset <= rope.len_chars()).then(|| rope.chars_at(offset))?,
-                    offset,
-                )
-            }
-        };
-
-        chars
-            .zip(0..)
-            .find(|(c, _)| match c {
-                '(' => {
-                    stacked_paren += 1;
-                    false
-                }
-                '[' => {
-                    stacked_square_bracket += 1;
-                    false
-                }
-                '{' => {
-                    stacked_curly_bracket += 1;
-                    false
-                }
-                '<' => {
-                    stacked_angle_bracket += 1;
-                    false
-                }
-                ')' => checked_dec(&mut stacked_paren),
-                ']' => checked_dec(&mut stacked_square_bracket),
-                '}' => checked_dec(&mut stacked_curly_bracket),
-                '>' => checked_dec(&mut stacked_angle_bracket),
-                '"' | '\'' => true,
-                _ => false,
-            })
-            .map(|(c, pos)| (c, offset + pos))
-    }
-
-    /// Attempts to find previous pairing character
-    /// (opening parens, quotes, etc.)
-    /// returning the character and its character position
-    pub fn prev_pairing_char(&self) -> Option<(char, usize)> {
-        let buf = &self.buffer.borrow();
-        let rope = &buf.rope;
-        let mut stacked_paren = 0;
-        let mut stacked_square_bracket = 0;
-        let mut stacked_curly_bracket = 0;
-        let mut stacked_angle_bracket = 0;
-
-        fn checked_dec(i: &mut usize) -> bool {
-            if *i > 0 {
-                *i -= 1;
-                false
-            } else {
-                true
-            }
-        }
-
-        let (mut chars, offset) = match self.selection {
-            None => (rope.chars_at(self.cursor), self.cursor),
-            Some(selection) => {
-                let offset = self.cursor.min(selection).checked_sub(1)?;
-                (rope.chars_at(offset), offset)
-            }
-        };
-
-        chars.reverse();
-        chars
-            .zip(0..)
-            .find(|(c, _)| match c {
-                ')' => {
-                    stacked_paren += 1;
-                    false
-                }
-                ']' => {
-                    stacked_square_bracket += 1;
-                    false
-                }
-                '}' => {
-                    stacked_curly_bracket += 1;
-                    false
-                }
-                '>' => {
-                    stacked_angle_bracket += 1;
-                    false
-                }
-                '(' => checked_dec(&mut stacked_paren),
-                '[' => checked_dec(&mut stacked_square_bracket),
-                '{' => checked_dec(&mut stacked_curly_bracket),
-                '<' => checked_dec(&mut stacked_angle_bracket),
-                '"' | '\'' => true,
-                _ => false,
-            })
-            .map(|(c, pos)| (c, offset - pos))
-    }
 
     pub fn select_whole_lines(&mut self) {
         let buf = &mut self.buffer.borrow_move();
@@ -1863,6 +1749,104 @@ fn select_next_char<const FORWARD: bool>(
                 .map(|(_, pos)| if FORWARD { cursor + pos } else { cursor - pos })
         }
     }
+}
+
+/// Attempts to find next pairing character
+/// (closing parens, quotes, etc.)
+/// returning the character and its character position
+pub fn next_pairing_char(rope: &ropey::Rope, offset: usize) -> Option<(char, usize)> {
+    // let buf = &self.buffer.borrow();
+    // let rope = &buf.rope;
+    let mut stacked_paren = 0;
+    let mut stacked_square_bracket = 0;
+    let mut stacked_curly_bracket = 0;
+    let mut stacked_angle_bracket = 0;
+
+    fn checked_dec(i: &mut usize) -> bool {
+        if *i > 0 {
+            *i -= 1;
+            false
+        } else {
+            true
+        }
+    }
+
+    rope.chars_at(offset)
+        .zip(0..)
+        .find(|(c, _)| match c {
+            '(' => {
+                stacked_paren += 1;
+                false
+            }
+            '[' => {
+                stacked_square_bracket += 1;
+                false
+            }
+            '{' => {
+                stacked_curly_bracket += 1;
+                false
+            }
+            '<' => {
+                stacked_angle_bracket += 1;
+                false
+            }
+            ')' => checked_dec(&mut stacked_paren),
+            ']' => checked_dec(&mut stacked_square_bracket),
+            '}' => checked_dec(&mut stacked_curly_bracket),
+            '>' => checked_dec(&mut stacked_angle_bracket),
+            '"' | '\'' => true,
+            _ => false,
+        })
+        .map(|(c, pos)| (c, offset + pos))
+}
+
+/// Attempts to find previous pairing character
+/// (opening parens, quotes, etc.)
+/// returning the character and its character position
+pub fn prev_pairing_char(rope: &ropey::Rope, offset: usize) -> Option<(char, usize)> {
+    let mut stacked_paren = 0;
+    let mut stacked_square_bracket = 0;
+    let mut stacked_curly_bracket = 0;
+    let mut stacked_angle_bracket = 0;
+
+    fn checked_dec(i: &mut usize) -> bool {
+        if *i > 0 {
+            *i -= 1;
+            false
+        } else {
+            true
+        }
+    }
+
+    let mut chars = rope.chars_at(offset);
+    chars.reverse();
+    chars
+        .zip(0..)
+        .find(|(c, _)| match c {
+            ')' => {
+                stacked_paren += 1;
+                false
+            }
+            ']' => {
+                stacked_square_bracket += 1;
+                false
+            }
+            '}' => {
+                stacked_curly_bracket += 1;
+                false
+            }
+            '>' => {
+                stacked_angle_bracket += 1;
+                false
+            }
+            '(' => checked_dec(&mut stacked_paren),
+            '[' => checked_dec(&mut stacked_square_bracket),
+            '{' => checked_dec(&mut stacked_curly_bracket),
+            '<' => checked_dec(&mut stacked_angle_bracket),
+            '"' | '\'' => true,
+            _ => false,
+        })
+        .map(|(c, pos)| (c, offset - pos))
 }
 
 fn perform_surround(
