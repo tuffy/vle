@@ -205,7 +205,7 @@ impl Source {
 
 mod private {
     use crate::buffer::Buffer;
-    use std::cell::{RefCell, RefMut};
+    use std::cell::{Ref, RefCell, RefMut};
     use std::rc::Rc;
 
     pub struct Rope {
@@ -281,11 +281,20 @@ mod private {
         }
     }
 
+    #[derive(Clone)]
     pub struct BufferCell(Rc<RefCell<Buffer>>);
 
     impl BufferCell {
+        pub fn id(&self) -> crate::buffer::BufferId {
+            crate::buffer::BufferId(Rc::clone(&self.0))
+        }
+
         pub fn borrow_mut(&self) -> RefMut<'_, Buffer> {
             self.0.borrow_mut()
+        }
+
+        pub fn borrow(&self) -> Ref<'_, Buffer> {
+            self.0.borrow()
         }
 
         pub fn borrow_update(&self, cursor: usize, cursor_column: usize) -> RefMut<'_, Buffer> {
@@ -396,7 +405,9 @@ impl Buffer {
         patch_rope(&mut self.rope.get_mut(), reloaded);
         self.rope.save();
         self.saved = saved;
-        log_movement(&mut self.undo);
+        if let Some(last) = self.undo.last_mut() {
+            last.finished = true;
+        }
         Ok(())
     }
 
@@ -416,7 +427,9 @@ impl Buffer {
             self.source.save_data(&rope, self.endings)?
         };
         self.rope.save();
-        log_movement(&mut self.undo);
+        if let Some(last) = self.undo.last_mut() {
+            last.finished = true;
+        }
         Ok(())
     }
 
@@ -437,29 +450,23 @@ impl Buffer {
     pub fn last_saved(&self) -> Option<SystemTime> {
         self.saved
     }
-
-    fn log_undo(&mut self, cursor: usize, cursor_column: usize) {
-        if let None | Some(Undo { finished: true, .. }) = self.undo.last() {
-            self.undo.push(Undo {
-                state: BufferState {
-                    rope: self.rope.clone(),
-                    cursor,
-                    cursor_column,
-                },
-                finished: false,
-            });
-            self.redo.clear();
-        }
-    }
 }
 
 #[derive(Clone)]
 pub struct BufferId(Rc<RefCell<Buffer>>);
 
+impl Eq for BufferId {}
+
+impl PartialEq for BufferId {
+    fn eq(&self, rhs: &BufferId) -> bool {
+        Rc::ptr_eq(&self.0, &rhs.0)
+    }
+}
+
 /// A buffer with additional context on a per-view basis
 #[derive(Clone)]
 pub struct BufferContext {
-    buffer: Rc<RefCell<Buffer>>,
+    buffer: private::BufferCell,
     tabs_required: bool,            // whether the format demands actual tabs
     tab_substitution: String,       // spaces to substitute for tabs
     viewport_height: usize,         // viewport's current height in lines
@@ -478,7 +485,7 @@ pub struct BufferContext {
 
 impl BufferContext {
     pub fn id(&self) -> BufferId {
-        BufferId(Rc::clone(&self.buffer))
+        self.buffer.id()
     }
 
     pub fn modified(&self) -> bool {
@@ -578,11 +585,10 @@ impl BufferContext {
     }
 
     pub fn cursor_up(&mut self, lines: usize, selecting: bool) {
-        let mut buf = self.buffer.borrow_mut();
+        let buf = self.buffer.borrow_move();
         if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
             let previous_line = current_line.saturating_sub(lines);
             if let Some((prev_start, prev_end)) = line_char_range(&buf.rope, previous_line) {
-                log_movement(&mut buf.undo);
                 update_selection(&mut self.selection, self.cursor, selecting);
                 self.cursor = (prev_start + self.cursor_column).min(prev_end);
             }
@@ -590,11 +596,10 @@ impl BufferContext {
     }
 
     pub fn cursor_down(&mut self, lines: usize, selecting: bool) {
-        let mut buf = self.buffer.borrow_mut();
+        let buf = self.buffer.borrow_move();
         if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor) {
             let next_line = (current_line + lines).min(buf.rope.len_lines().saturating_sub(1));
             if let Some((next_start, next_end)) = line_char_range(&buf.rope, next_line) {
-                log_movement(&mut buf.undo);
                 update_selection(&mut self.selection, self.cursor, selecting);
                 self.cursor = (next_start + self.cursor_column).min(next_end);
             }
@@ -602,27 +607,24 @@ impl BufferContext {
     }
 
     pub fn cursor_back(&mut self, selecting: bool) {
-        let mut buf = self.buffer.borrow_mut();
+        let buf = self.buffer.borrow_move();
         update_selection(&mut self.selection, self.cursor, selecting);
         self.cursor = self.cursor.saturating_sub(1);
         self.cursor_column = cursor_column(&buf.rope, self.cursor);
-        log_movement(&mut buf.undo);
     }
 
     pub fn cursor_forward(&mut self, selecting: bool) {
-        let mut buf = self.buffer.borrow_mut();
+        let buf = self.buffer.borrow_move();
         update_selection(&mut self.selection, self.cursor, selecting);
         self.cursor = (self.cursor + 1).min(buf.rope.len_chars());
         self.cursor_column = cursor_column(&buf.rope, self.cursor);
-        log_movement(&mut buf.undo);
     }
 
     pub fn cursor_home(&mut self, selecting: bool) {
-        let mut buf = self.buffer.borrow_mut();
+        let buf = self.buffer.borrow_move();
         if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor)
             && let Some((home, _)) = line_char_range(&buf.rope, current_line)
         {
-            log_movement(&mut buf.undo);
             update_selection(&mut self.selection, self.cursor, selecting);
             self.cursor = home;
             self.cursor_column = 0;
@@ -630,11 +632,10 @@ impl BufferContext {
     }
 
     pub fn cursor_end(&mut self, selecting: bool) {
-        let mut buf = self.buffer.borrow_mut();
+        let buf = self.buffer.borrow_move();
         if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor)
             && let Some((_, end)) = line_char_range(&buf.rope, current_line)
         {
-            log_movement(&mut buf.undo);
             update_selection(&mut self.selection, self.cursor, selecting);
             self.cursor_column += end - self.cursor;
             self.cursor = end;
@@ -646,10 +647,9 @@ impl BufferContext {
     }
 
     pub fn select_line(&mut self, line: usize) {
-        let mut buf = self.buffer.borrow_mut();
+        let buf = self.buffer.borrow_move();
         match buf.rope.try_line_to_char(line) {
             Ok(cursor) => {
-                log_movement(&mut buf.undo);
                 self.cursor_column = 0;
                 self.cursor = cursor;
                 self.selection = None;
@@ -661,8 +661,7 @@ impl BufferContext {
     }
 
     pub fn insert_char(&mut self, alt: Option<AltCursor<'_>>, c: char) {
-        let mut buf = self.buffer.borrow_mut();
-        buf.log_undo(self.cursor, self.cursor_column);
+        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
 
         match &mut self.selection {
@@ -737,8 +736,7 @@ impl BufferContext {
             None => {
                 if let Some(pasted) = cut_buffer {
                     // No active selection, so paste as-is
-                    let mut buf = self.buffer.borrow_mut();
-                    buf.log_undo(self.cursor, self.cursor_column);
+                    let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
                     let mut rope = buf.rope.get_mut();
                     let mut alt = Secondary::new(alt, |a| a >= self.cursor);
                     if rope.try_insert(self.cursor, &pasted.data).is_ok() {
@@ -750,8 +748,7 @@ impl BufferContext {
             }
             Some(selection) => {
                 if let Some(pasted) = cut_buffer {
-                    let mut buf = self.buffer.borrow_mut();
-                    buf.log_undo(self.cursor, self.cursor_column);
+                    let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
                     let (selection_start, selection_end) = reorder(self.cursor, *selection);
                     let cut_range = selection_start..selection_end;
                     let mut rope = buf.rope.get_mut();
@@ -785,7 +782,7 @@ impl BufferContext {
     }
 
     pub fn newline(&mut self, alt: Option<AltCursor<'_>>) {
-        let mut buf = self.buffer.borrow_mut();
+        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let indent_char = if self.tabs_required { '\t' } else { ' ' };
         let mut alt = Secondary::new(alt, |a| a >= self.cursor);
 
@@ -801,7 +798,6 @@ impl BufferContext {
             None => (0, false),
         };
 
-        buf.log_undo(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
 
         // if the whole line is indent, insert newline *before* indent
@@ -825,8 +821,7 @@ impl BufferContext {
     }
 
     pub fn backspace(&mut self, alt: Option<AltCursor<'_>>) {
-        let mut buf = self.buffer.borrow_mut();
-        buf.log_undo(self.cursor, self.cursor_column);
+        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
 
         match self.selection.take() {
@@ -854,8 +849,7 @@ impl BufferContext {
     }
 
     pub fn delete(&mut self, alt: Option<AltCursor<'_>>) {
-        let buf = &mut self.buffer.borrow_mut();
-        buf.log_undo(self.cursor, self.cursor_column);
+        let buf = &mut self.buffer.borrow_update(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
 
         match &mut self.selection {
@@ -900,8 +894,7 @@ impl BufferContext {
     pub fn take_selection(&mut self, alt: Option<AltCursor<'_>>) -> Option<CutBuffer> {
         let selection = self.selection.take()?;
         let (selection_start, selection_end) = reorder(self.cursor, selection);
-        let mut buf = self.buffer.borrow_mut();
-        buf.log_undo(self.cursor, self.cursor_column);
+        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
         let mut alt = Secondary::new(alt, |a| a >= selection_start);
 
@@ -938,7 +931,7 @@ impl BufferContext {
     }
 
     pub fn next_or_current_match(&mut self, area: &SearchArea, term: &str) -> Result<(), ()> {
-        let mut buf = self.buffer.borrow_mut();
+        let buf = self.buffer.borrow_move();
         let rope = &buf.rope;
         let (behind, ahead) = area.split(rope, self.cursor);
 
@@ -959,7 +952,6 @@ impl BufferContext {
         self.cursor = start;
         self.selection = Some(end);
         self.cursor_column = cursor_column(rope, self.cursor);
-        log_movement(&mut buf.undo);
 
         Ok(())
     }
@@ -982,7 +974,7 @@ impl BufferContext {
             }
         }
 
-        let mut buf = self.buffer.borrow_mut();
+        let buf = self.buffer.borrow_move();
         let rope = &buf.rope;
         let (behind, ahead) = area.split(rope, self.cursor);
 
@@ -1005,7 +997,6 @@ impl BufferContext {
         self.cursor = start;
         self.selection = Some(end);
         self.cursor_column = cursor_column(rope, self.cursor);
-        log_movement(&mut buf.undo);
 
         Ok(())
     }
@@ -1013,7 +1004,7 @@ impl BufferContext {
     /// Updates position to next match
     /// Returns Err if no match found
     pub fn previous_match(&mut self, area: &SearchArea, term: &str) -> Result<(), ()> {
-        let mut buf = self.buffer.borrow_mut();
+        let buf = self.buffer.borrow_move();
         let rope = &buf.rope;
         let (behind, ahead) = area.split(rope, self.cursor);
 
@@ -1038,7 +1029,6 @@ impl BufferContext {
         self.cursor = start;
         self.selection = Some(end);
         self.cursor_column = cursor_column(rope, self.cursor);
-        log_movement(&mut buf.undo);
 
         Ok(())
     }
@@ -1085,9 +1075,7 @@ impl BufferContext {
             false => self.tab_substitution.as_str(),
             true => "\t",
         };
-        let mut buf = self.buffer.borrow_mut();
-
-        buf.log_undo(self.cursor, self.cursor_column);
+        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
 
         match self.selection {
             None => {
@@ -1136,7 +1124,7 @@ impl BufferContext {
             false => self.tab_substitution.as_str(),
             true => "\t",
         };
-        let mut buf = self.buffer.borrow_mut();
+        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
 
         match self.selection {
             None => {
@@ -1153,7 +1141,6 @@ impl BufferContext {
                         .take(indent.len())
                         .eq(indent.chars())
                 {
-                    buf.log_undo(self.cursor, self.cursor_column);
                     let mut rope = buf.rope.get_mut();
                     rope.remove(line_start..line_start + indent.len());
                     self.cursor = line_start;
@@ -1184,7 +1171,6 @@ impl BufferContext {
                         .take(indent.len())
                         .eq(indent.chars())
                 }) {
-                    buf.log_undo(self.cursor, self.cursor_column);
                     let mut rope = buf.rope.get_mut();
 
                     for line in unindent_lines.iter().rev() {
@@ -1242,29 +1228,27 @@ impl BufferContext {
     }
 
     pub fn cursor_to_selection_start(&mut self) {
-        let mut buf = self.buffer.borrow_mut();
+        let buf = self.buffer.borrow_move();
         if let Some(selection) = &mut self.selection
             && self.cursor > *selection
         {
             std::mem::swap(selection, &mut self.cursor);
             self.cursor_column = cursor_column(&buf.rope, self.cursor);
-            log_movement(&mut buf.undo);
         }
     }
 
     pub fn cursor_to_selection_end(&mut self) {
-        let mut buf = self.buffer.borrow_mut();
+        let buf = self.buffer.borrow_move();
         if let Some(selection) = &mut self.selection
             && self.cursor < *selection
         {
             std::mem::swap(selection, &mut self.cursor);
             self.cursor_column = cursor_column(&buf.rope, self.cursor);
-            log_movement(&mut buf.undo);
         }
     }
 
     pub fn select_matching_paren(&mut self) {
-        let mut buf = self.buffer.borrow_mut();
+        let buf = self.buffer.borrow_move();
 
         if let Some(new_pos) = buf.rope.get_char(self.cursor).and_then(|c| match c {
             '(' => select_next_char::<true>(&buf.rope, self.cursor + 1, ')', Some('(')),
@@ -1281,7 +1265,6 @@ impl BufferContext {
                 .map(|c| c.saturating_sub(1)),
             _ => None,
         }) {
-            log_movement(&mut buf.undo);
             self.cursor = new_pos;
             self.selection = None;
         }
@@ -1418,7 +1401,7 @@ impl BufferContext {
     }
 
     pub fn select_whole_lines(&mut self) {
-        let buf = &mut self.buffer.borrow_mut();
+        let buf = &mut self.buffer.borrow_move();
         let rope = &buf.rope;
 
         match self.selection {
@@ -1433,7 +1416,6 @@ impl BufferContext {
                     self.selection = Some(start);
                     self.cursor = end;
                     self.cursor_column = cursor_column(rope, self.cursor);
-                    log_movement(&mut buf.undo);
                 }
             }
             Some(selection) => {
@@ -1499,8 +1481,7 @@ impl BufferContext {
         alt: Option<AltCursor<'_>>,
         mut matches: &mut [(usize, usize)],
     ) {
-        let mut buf = self.buffer.borrow_mut();
-        buf.log_undo(self.cursor, self.cursor_column);
+        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
         let mut alt = Secondary::new(alt, |_| true);
 
@@ -1547,8 +1528,7 @@ impl BufferContext {
         mut matches: &mut [(usize, usize)],
         c: char,
     ) {
-        let mut buf = self.buffer.borrow_mut();
-        buf.log_undo(self.cursor, self.cursor_column);
+        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
         let mut alt = Secondary::new(alt, |_| true);
 
@@ -1595,8 +1575,7 @@ impl BufferContext {
         mut matches: &mut [(usize, usize)],
         s: &str,
     ) {
-        let mut buf = self.buffer.borrow_mut();
-        buf.log_undo(self.cursor, self.cursor_column);
+        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
         let mut alt = Secondary::new(alt, |_| true);
 
@@ -1644,8 +1623,7 @@ impl BufferContext {
         alt: Option<AltCursor<'_>>,
         mut matches: &mut [(usize, usize)],
     ) {
-        let mut buf = self.buffer.borrow_mut();
-        buf.log_undo(self.cursor, self.cursor_column);
+        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
         let mut alt = Secondary::new(alt, |_| true);
 
@@ -1948,7 +1926,7 @@ impl From<Buffer> for BufferContext {
         Self {
             tab_substitution: std::iter::repeat_n(' ', spaces_per_tab).collect(),
             tabs_required: var("VLE_ALWAYS_TAB").is_ok() || buffer.syntax.tabs_required(),
-            buffer: Rc::new(RefCell::new(buffer)),
+            buffer: buffer.into(),
             viewport_height: 0,
             cursor: 0,
             cursor_column: 0,
@@ -2003,15 +1981,10 @@ impl BufferList {
     pub fn remove(&mut self, buffer: &BufferId) {
         let current_id = self.buffers.get(self.current).map(|buf| buf.id());
 
-        self.buffers
-            .retain(|buf| !Rc::ptr_eq(&buf.buffer, &buffer.0));
+        self.buffers.retain(|buf| buf.buffer.id() != *buffer);
 
         self.current = current_id
-            .and_then(|id| {
-                self.buffers
-                    .iter()
-                    .position(|buf| Rc::ptr_eq(&buf.buffer, &id.0))
-            })
+            .and_then(|id| self.buffers.iter().position(|buf| buf.buffer.id() == id))
             .unwrap_or(self.buffers.len().saturating_sub(1));
     }
 
@@ -2990,12 +2963,6 @@ struct BufferState {
 struct Undo {
     state: BufferState,
     finished: bool, // whether we've done any movement since undo added
-}
-
-fn log_movement(undo: &mut [Undo]) {
-    if let Some(last) = undo.last_mut() {
-        last.finished = true;
-    }
 }
 
 #[derive(Clone)]
