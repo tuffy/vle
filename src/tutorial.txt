@@ -341,9 +341,6 @@ Or, Ctrl-↑ or Ctrl-↓ divides a single window into two wide
 top-and-bottom sections which we can navigate between using
 Ctrl-↑ or Ctrl-↓. Ctrl-← and Ctrl-→ restores a single window mode.
 
-When a window is split into two panes, Ctrl-N/F10 will swap their
-positions onscreen.
-
 
 # Closing Thoughts
 
