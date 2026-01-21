@@ -164,8 +164,15 @@ macro_rules! highlighter {
     };
 }
 
+// TODO - add c++ syntax
 // TODO - add cmake syntax
+// TODO - add dot syntax
+// TODO - add fish syntax
+// TODO - add ini syntax
 // TODO - add lua syntax
 // TODO - add perl syntax
 // TODO - add sh syntax
+// TODO - add swift syntax
 // TODO - add tex syntax
+// TODO - add toml syntax
+// TODO - add zig syntax
