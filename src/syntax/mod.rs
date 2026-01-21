@@ -24,6 +24,7 @@ mod php;
 mod python;
 mod rust;
 mod sql;
+mod toml;
 mod tutorial;
 mod xml;
 mod yaml;
@@ -111,6 +112,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("go") => Box::new(go::Go),
         Some("patch" | "diff") => Box::new(patch::Patch),
         Some("csv") => Box::new(csv::Csv),
+        Some("toml") => Box::new(toml::Toml),
         _ => Box::new(DefaultHighlighter),
     }
 }
@@ -174,5 +176,4 @@ macro_rules! highlighter {
 // TODO - add sh syntax
 // TODO - add swift syntax
 // TODO - add tex syntax
-// TODO - add toml syntax
 // TODO - add zig syntax
