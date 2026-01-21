@@ -12,42 +12,35 @@ use ratatui::style::Color;
 
 #[derive(Logos, Debug)]
 #[logos(skip r"[ \t\n]+")]
-enum TomlToken {
-    #[token("{")]
-    #[token("}")]
-    #[token("[")]
-    #[token("]")]
-    Encloser,
+enum IniToken {
     #[regex("[[:alpha:]][[:alpha:][:digit:]_-]*?\\s*?=\\s*?")]
     Key,
-    #[token("true")]
-    #[token("false")]
-    #[regex(r#"\"[^\"]*\""#)]
-    Value,
+    #[regex(";.*", allow_greedy = true)]
     #[regex("#.*", allow_greedy = true)]
     Comment,
+    #[regex("\\[.+\\]", allow_greedy = true)]
+    Section,
 }
 
-impl TryFrom<TomlToken> for Color {
+impl TryFrom<IniToken> for Color {
     type Error = ();
 
-    fn try_from(t: TomlToken) -> Result<Color, ()> {
+    fn try_from(t: IniToken) -> Result<Color, ()> {
         match t {
-            TomlToken::Encloser => Ok(Color::Red),
-            TomlToken::Key => Ok(Color::Blue),
-            TomlToken::Value => Ok(Color::Green),
-            TomlToken::Comment => Ok(Color::LightRed),
+            IniToken::Key => Ok(Color::Blue),
+            IniToken::Comment => Ok(Color::LightRed),
+            IniToken::Section => Ok(Color::Green),
         }
     }
 }
 
 #[derive(Debug)]
-pub struct Toml;
+pub struct Ini;
 
-impl std::fmt::Display for Toml {
+impl std::fmt::Display for Ini {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         "TOML".fmt(f)
     }
 }
 
-highlighter!(Toml, TomlToken);
+highlighter!(Ini, IniToken);

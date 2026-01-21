@@ -14,6 +14,7 @@ mod css;
 mod csv;
 mod go;
 mod html;
+mod ini;
 mod java;
 mod js;
 mod json;
@@ -113,6 +114,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("patch" | "diff") => Box::new(patch::Patch),
         Some("csv") => Box::new(csv::Csv),
         Some("toml") => Box::new(toml::Toml),
+        Some("ini") => Box::new(ini::Ini),
         _ => Box::new(DefaultHighlighter),
     }
 }
@@ -170,7 +172,6 @@ macro_rules! highlighter {
 // TODO - add cmake syntax
 // TODO - add dot syntax
 // TODO - add fish syntax
-// TODO - add ini syntax
 // TODO - add lua syntax
 // TODO - add perl syntax
 // TODO - add sh syntax
