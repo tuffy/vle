@@ -1003,22 +1003,12 @@ fn process_find(
                         EditorMode::default()
                     } else {
                         let cursor = buffer.get_cursor();
-                        let mut match_idx = None;
+                        // incremental search should always place the cursor on a match
+                        let match_idx = matches.iter().position(|(s, _)| *s == cursor)?;
                         buffer.clear_matches(alt, &mut matches);
                         EditorMode::ReplaceMatches {
-                            matches: matches
-                                .into_iter()
-                                .enumerate()
-                                .inspect(|(idx, (s, _))| {
-                                    if *s == cursor {
-                                        match_idx = Some(*idx);
-                                    }
-                                })
-                                .map(|(_, (s, _))| (s, s))
-                                .collect(),
-                            // incremental search should always place the cursor
-                            // on a match
-                            match_idx: match_idx?,
+                            matches: matches.into_iter().map(|(s, _)| (s, s)).collect(),
+                            match_idx,
                         }
                     })
                 }
