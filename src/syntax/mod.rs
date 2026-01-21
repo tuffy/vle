@@ -25,6 +25,7 @@ mod patch;
 mod php;
 mod python;
 mod rust;
+mod sh;
 mod sql;
 mod toml;
 mod tutorial;
@@ -117,6 +118,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("toml") => Box::new(toml::Toml),
         Some("ini") => Box::new(ini::Ini),
         Some("fish") => Box::new(fish::Fish),
+        Some("sh") => Box::new(sh::Shell),
         _ => Box::new(DefaultHighlighter),
     }
 }
@@ -175,7 +177,6 @@ macro_rules! highlighter {
 // TODO - add dot syntax
 // TODO - add lua syntax
 // TODO - add perl syntax
-// TODO - add sh syntax
 // TODO - add swift syntax
 // TODO - add tex syntax
 // TODO - add zig syntax
