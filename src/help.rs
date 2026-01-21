@@ -162,7 +162,6 @@ static DOWN: &str = "\u{2193}";
 static LEFT: &str = "\u{2190}";
 static RIGHT: &str = "\u{2192}";
 
-// TODO - update verbiage if already split
 pub static EDITING_UNSPLIT: &[Keybinding] = &[
     ctrl_f(&["O"], "F2", "Open File"),
     ctrl_f(&["S"], "F3", "Save File"),
@@ -185,7 +184,6 @@ pub static EDITING_UNSPLIT: &[Keybinding] = &[
     ctrl(&["X", "C", "V"], "Cut / Copy / Paste"),
     ctrl(&["Z", "Y"], "Undo / Redo"),
     ctrl(&["PgUp", "PgDn"], "Switch File"),
-    // ctrl(&[LEFT, DOWN, UP, RIGHT], "Switch Pane"),
 ];
 
 pub static EDITING_HORIZONTAL: &[Keybinding] = &[
