@@ -27,6 +27,7 @@ pub enum EditorMode {
     Editing,
     VerifySave,
     VerifyReload,
+    SplitPane,
     ConfirmClose {
         buffer: BufferId,
     },
@@ -301,6 +302,7 @@ impl Editor {
                         self.mode = new_mode;
                     }
                 }
+                EditorMode::SplitPane => self.process_split_pane(event),
             },
         }
     }
@@ -320,162 +322,56 @@ impl Editor {
             }
             key!(CONTROL, PageUp) => self.layout.previous_buffer(),
             key!(CONTROL, PageDown) => self.layout.next_buffer(),
-            key!(CONTROL, Left) => match &mut self.layout {
-                Layout::Vertical { which, .. } => {
+            key!(CONTROL, 'n') | key!(F(10)) => match &mut self.layout {
+                Layout::Vertical {
+                    left: buf,
+                    right: alt,
+                    which: VerticalPos::Left,
+                }
+                | Layout::Vertical {
+                    left: alt,
+                    right: buf,
+                    which: VerticalPos::Right,
+                }
+                | Layout::Horizontal {
+                    top: buf,
+                    bottom: alt,
+                    which: HorizontalPos::Top,
+                }
+                | Layout::Horizontal {
+                    top: alt,
+                    bottom: buf,
+                    which: HorizontalPos::Bottom,
+                } => {
+                    self.layout = Layout::SingleHidden {
+                        visible: std::mem::take(buf),
+                        hidden: std::mem::take(alt),
+                    };
+                }
+                _ => {
+                    self.mode = EditorMode::SplitPane;
+                }
+            },
+            key!(CONTROL, Left) => {
+                if let Layout::Vertical { which, .. } = &mut self.layout {
                     *which = VerticalPos::Left;
                 }
-                Layout::Single(buffer) => {
-                    self.layout = Layout::Vertical {
-                        left: buffer.clone(),
-                        right: std::mem::take(buffer),
-                        which: VerticalPos::Left,
-                    };
-                }
-                Layout::SingleHidden { visible, hidden } => {
-                    self.layout = Layout::Vertical {
-                        left: std::mem::take(visible),
-                        right: std::mem::take(hidden),
-                        which: VerticalPos::Left,
-                    };
-                }
-                Layout::Horizontal {
-                    top,
-                    bottom,
-                    which: HorizontalPos::Top,
-                } => {
-                    self.layout = Layout::SingleHidden {
-                        visible: std::mem::take(top),
-                        hidden: std::mem::take(bottom),
-                    };
-                }
-                Layout::Horizontal {
-                    top,
-                    bottom,
-                    which: HorizontalPos::Bottom,
-                } => {
-                    self.layout = Layout::SingleHidden {
-                        visible: std::mem::take(bottom),
-                        hidden: std::mem::take(top),
-                    };
-                }
-            },
-            key!(CONTROL, Right) => match &mut self.layout {
-                Layout::Vertical { which, .. } => {
+            }
+            key!(CONTROL, Right) => {
+                if let Layout::Vertical { which, .. } = &mut self.layout {
                     *which = VerticalPos::Right;
                 }
-                Layout::Single(buffer) => {
-                    self.layout = Layout::Vertical {
-                        left: buffer.clone(),
-                        right: std::mem::take(buffer),
-                        which: VerticalPos::Right,
-                    };
-                }
-                Layout::SingleHidden { visible, hidden } => {
-                    self.layout = Layout::Vertical {
-                        left: std::mem::take(hidden),
-                        right: std::mem::take(visible),
-                        which: VerticalPos::Right,
-                    };
-                }
-                Layout::Horizontal {
-                    top,
-                    bottom,
-                    which: HorizontalPos::Top,
-                } => {
-                    self.layout = Layout::SingleHidden {
-                        visible: std::mem::take(top),
-                        hidden: std::mem::take(bottom),
-                    };
-                }
-                Layout::Horizontal {
-                    top,
-                    bottom,
-                    which: HorizontalPos::Bottom,
-                } => {
-                    self.layout = Layout::SingleHidden {
-                        visible: std::mem::take(bottom),
-                        hidden: std::mem::take(top),
-                    };
-                }
-            },
-            key!(CONTROL, Up) => match &mut self.layout {
-                Layout::Horizontal { which, .. } => {
+            }
+            key!(CONTROL, Up) => {
+                if let Layout::Horizontal { which, .. } = &mut self.layout {
                     *which = HorizontalPos::Top;
                 }
-                Layout::Single(buffer) => {
-                    self.layout = Layout::Horizontal {
-                        top: buffer.clone(),
-                        bottom: std::mem::take(buffer),
-                        which: HorizontalPos::Top,
-                    }
-                }
-                Layout::SingleHidden { visible, hidden } => {
-                    self.layout = Layout::Horizontal {
-                        top: std::mem::take(visible),
-                        bottom: std::mem::take(hidden),
-                        which: HorizontalPos::Top,
-                    }
-                }
-                Layout::Vertical {
-                    left,
-                    right,
-                    which: VerticalPos::Left,
-                } => {
-                    self.layout = Layout::SingleHidden {
-                        visible: std::mem::take(left),
-                        hidden: std::mem::take(right),
-                    };
-                }
-                Layout::Vertical {
-                    left,
-                    right,
-                    which: VerticalPos::Right,
-                } => {
-                    self.layout = Layout::SingleHidden {
-                        visible: std::mem::take(right),
-                        hidden: std::mem::take(left),
-                    };
-                }
-            },
-            key!(CONTROL, Down) => match &mut self.layout {
-                Layout::Horizontal { which, .. } => {
+            }
+            key!(CONTROL, Down) => {
+                if let Layout::Horizontal { which, .. } = &mut self.layout {
                     *which = HorizontalPos::Bottom;
                 }
-                Layout::Single(buffer) => {
-                    self.layout = Layout::Horizontal {
-                        top: buffer.clone(),
-                        bottom: std::mem::take(buffer),
-                        which: HorizontalPos::Bottom,
-                    }
-                }
-                Layout::SingleHidden { visible, hidden } => {
-                    self.layout = Layout::Horizontal {
-                        top: std::mem::take(hidden),
-                        bottom: std::mem::take(visible),
-                        which: HorizontalPos::Bottom,
-                    }
-                }
-                Layout::Vertical {
-                    left,
-                    right,
-                    which: VerticalPos::Left,
-                } => {
-                    self.layout = Layout::SingleHidden {
-                        visible: std::mem::take(left),
-                        hidden: std::mem::take(right),
-                    };
-                }
-                Layout::Vertical {
-                    left,
-                    right,
-                    which: VerticalPos::Right,
-                } => {
-                    self.layout = Layout::SingleHidden {
-                        visible: std::mem::take(right),
-                        hidden: std::mem::take(left),
-                    };
-                }
-            },
+            }
             Event::Key(KeyEvent {
                 code: KeyCode::Up,
                 modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
@@ -540,7 +436,7 @@ impl Editor {
             key!(Backspace) => self.update_buffer_at(|b, a| b.backspace(a)),
             key!(Delete) => self.update_buffer_at(|b, a| b.delete(a)),
             key!(Enter) => self.update_buffer_at(|b, a| b.newline(a)),
-            key!(CONTROL, 'w') | key!(F(10)) => self.update_buffer(|b| b.select_whole_lines()),
+            key!(CONTROL, 'w') | key!(F(9)) => self.update_buffer(|b| b.select_whole_lines()),
             key!(CONTROL, 'x') => self.perform_cut(),
             key!(CONTROL, 'c') => self.perform_copy(),
             key!(CONTROL, 'v') => {
@@ -690,6 +586,90 @@ impl Editor {
                 // cancel reload
                 self.mode = EditorMode::default();
             }
+            _ => { /* ignore other events */ }
+        }
+    }
+
+    fn process_split_pane(&mut self, event: Event) {
+        use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+        match event {
+            key!(Up) => match &mut self.layout {
+                Layout::Single(buffer) => {
+                    self.layout = Layout::Horizontal {
+                        bottom: buffer.clone(),
+                        top: std::mem::take(buffer),
+                        which: HorizontalPos::Top,
+                    };
+                    self.mode = EditorMode::default();
+                }
+                Layout::SingleHidden { visible, hidden } => {
+                    self.layout = Layout::Horizontal {
+                        top: std::mem::take(visible),
+                        bottom: std::mem::take(hidden),
+                        which: HorizontalPos::Top,
+                    };
+                    self.mode = EditorMode::default();
+                }
+                _ => { /* ignore other events */ }
+            },
+            key!(Down) => match &mut self.layout {
+                Layout::Single(buffer) => {
+                    self.layout = Layout::Horizontal {
+                        top: buffer.clone(),
+                        bottom: std::mem::take(buffer),
+                        which: HorizontalPos::Bottom,
+                    };
+                    self.mode = EditorMode::default();
+                }
+                Layout::SingleHidden { visible, hidden } => {
+                    self.layout = Layout::Horizontal {
+                        top: std::mem::take(hidden),
+                        bottom: std::mem::take(visible),
+                        which: HorizontalPos::Bottom,
+                    };
+                    self.mode = EditorMode::default();
+                }
+                _ => { /* ignore other events */ }
+            },
+            key!(Left) => match &mut self.layout {
+                Layout::Single(buffer) => {
+                    self.layout = Layout::Vertical {
+                        right: buffer.clone(),
+                        left: std::mem::take(buffer),
+                        which: VerticalPos::Left,
+                    };
+                    self.mode = EditorMode::default();
+                }
+                Layout::SingleHidden { visible, hidden } => {
+                    self.layout = Layout::Vertical {
+                        left: std::mem::take(visible),
+                        right: std::mem::take(hidden),
+                        which: VerticalPos::Left,
+                    };
+                    self.mode = EditorMode::default();
+                }
+                _ => { /* ignore other events */ }
+            },
+            key!(Right) => match &mut self.layout {
+                Layout::Single(buffer) => {
+                    self.layout = Layout::Vertical {
+                        right: buffer.clone(),
+                        left: std::mem::take(buffer),
+                        which: VerticalPos::Right,
+                    };
+                    self.mode = EditorMode::default();
+                }
+                Layout::SingleHidden { visible, hidden } => {
+                    self.layout = Layout::Vertical {
+                        right: std::mem::take(visible),
+                        left: std::mem::take(hidden),
+                        which: VerticalPos::Right,
+                    };
+                    self.mode = EditorMode::default();
+                }
+                _ => { /* ignore other events */ }
+            },
             _ => { /* ignore other events */ }
         }
     }
@@ -1236,6 +1216,13 @@ enum VerticalPos {
     Right,
 }
 
+#[derive(Copy, Clone)]
+pub enum EditorLayout {
+    Single,
+    Horizontal,
+    Vertical,
+}
+
 enum Layout {
     Single(BufferList),
     Horizontal {
@@ -1533,6 +1520,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                 if let Some(buffer) = single.current_mut() {
                     BufferWidget {
                         mode: Some(mode),
+                        layout: EditorLayout::Single,
                         show_help,
                         buffer_index,
                         total_buffers,
@@ -1557,6 +1545,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                             HorizontalPos::Top => Some(mode),
                             HorizontalPos::Bottom => None,
                         },
+                        layout: EditorLayout::Horizontal,
                         show_help: show_help && !matches!(which, HorizontalPos::Top),
                         buffer_index: top_index,
                         total_buffers: top_total,
@@ -1569,6 +1558,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                             HorizontalPos::Top => None,
                             HorizontalPos::Bottom => Some(mode),
                         },
+                        layout: EditorLayout::Horizontal,
                         show_help: show_help && !matches!(which, HorizontalPos::Bottom),
                         buffer_index: bottom_index,
                         total_buffers: bottom_total,
@@ -1593,6 +1583,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                             VerticalPos::Left => Some(mode),
                             VerticalPos::Right => None,
                         },
+                        layout: EditorLayout::Vertical,
                         show_help: show_help && !matches!(which, VerticalPos::Left),
                         buffer_index: left_index,
                         total_buffers: left_total,
@@ -1605,6 +1596,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                             VerticalPos::Left => None,
                             VerticalPos::Right => Some(mode),
                         },
+                        layout: EditorLayout::Vertical,
                         show_help: show_help && !matches!(which, VerticalPos::Right),
                         buffer_index: right_index,
                         total_buffers: right_total,

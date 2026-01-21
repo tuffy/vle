@@ -333,13 +333,14 @@ It's often handy to see multiple buffers open side-by-side
 simultaneously - or even two different places in the same buffer.
 This is where the panes feature comes in handy.
 
-Ctrl-← or Ctrl-→ divides a single window into two tall
+Ctrl-N/F10 prompts for how one wishes to split a single pane in two.
+← or → divides a single window into two tall
 side-by-side sections which we can navigate between using
-Ctrl-← and Ctrl-→. Ctrl-↑ and Ctrl-↓ restores a single window mode.
+Ctrl-← and Ctrl-→. Ctrl-N/F10 again restores single window mode.
 
-Or, Ctrl-↑ or Ctrl-↓ divides a single window into two wide
-top-and-bottom sections which we can navigate between using
-Ctrl-↑ or Ctrl-↓. Ctrl-← and Ctrl-→ restores a single window mode.
+Alternatively, Ctrl-N/F10 and then ↑ or ↓ divides a single window
+into two wide top-and-bottom sections which we can navigate between using
+Ctrl-↑ or Ctrl-↓. Ctrl-N/F10 again restores single window mode.
 
 
 # Closing Thoughts

@@ -2128,6 +2128,7 @@ impl BufferList {
 
 pub struct BufferWidget<'e> {
     pub mode: Option<&'e mut EditorMode>,
+    pub layout: crate::editor::EditorLayout,
     pub show_help: bool,
     pub buffer_index: usize,
     pub total_buffers: usize,
@@ -2147,8 +2148,8 @@ impl StatefulWidget for BufferWidget<'_> {
         state: &mut BufferContext,
     ) {
         use crate::help::{
-            CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE, VERIFY_RELOAD,
-            VERIFY_SAVE, render_help,
+            CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE, SPLIT_PANE,
+            VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
         use crate::syntax::{HighlightState, Highlighter};
         use ratatui::{
@@ -2854,19 +2855,31 @@ impl StatefulWidget for BufferWidget<'_> {
 
         match self.mode {
             None | Some(EditorMode::Editing) => {
+                use crate::editor::EditorLayout;
+                use crate::help::{EDITING_HORIZONTAL, EDITING_UNSPLIT, EDITING_VERTICAL};
+
                 if self.show_help {
-                    crate::help::render_help(text_area, buf, crate::help::EDITING, |b| {
-                        b.title_top("Keybindings").title_bottom(
-                            Line::from(vec![
-                                Span::styled(
-                                    "F1",
-                                    Style::default().add_modifier(Modifier::REVERSED),
-                                ),
-                                Span::raw(" to toggle"),
-                            ])
-                            .centered(),
-                        )
-                    });
+                    crate::help::render_help(
+                        text_area,
+                        buf,
+                        match self.layout {
+                            EditorLayout::Single => EDITING_UNSPLIT,
+                            EditorLayout::Horizontal => EDITING_HORIZONTAL,
+                            EditorLayout::Vertical => EDITING_VERTICAL,
+                        }, /*crate::help::EDITING*/
+                        |b| {
+                            b.title_top("Keybindings").title_bottom(
+                                Line::from(vec![
+                                    Span::styled(
+                                        "F1",
+                                        Style::default().add_modifier(Modifier::REVERSED),
+                                    ),
+                                    Span::raw(" to toggle"),
+                                ])
+                                .centered(),
+                            )
+                        },
+                    );
                 }
             }
             Some(EditorMode::ConfirmClose { .. }) => {
@@ -2884,6 +2897,9 @@ impl StatefulWidget for BufferWidget<'_> {
                     buf,
                     BufferMessage::Error("Buffer changed on disk. Really save?".into()),
                 );
+            }
+            Some(EditorMode::SplitPane) => {
+                render_help(text_area, buf, SPLIT_PANE, |b| b);
             }
             Some(EditorMode::VerifyReload) => {
                 render_help(text_area, buf, VERIFY_RELOAD, |b| b);
