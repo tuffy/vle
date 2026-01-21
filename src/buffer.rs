@@ -1279,42 +1279,30 @@ impl BufferContext {
             | (Some('<'), Some('>'))
             | (Some('"'), Some('"'))
             | (Some('\''), Some('\'')) => Some((start, end + 1)),
-            (_, Some(')')) => {
-                select_next_char::<false>(rope, start, '(', Some(')')).map(|start| (start, end))
-            }
-            (Some('('), _) => {
-                select_next_char::<true>(rope, end, ')', Some('(')).map(|end| (start + 1, end))
-            }
-            (_, Some(']')) => {
-                select_next_char::<false>(rope, start, '[', Some(']')).map(|start| (start, end))
-            }
-            (Some('['), _) => {
-                select_next_char::<true>(rope, end, ']', Some('[')).map(|end| (start + 1, end))
-            }
-            (_, Some('}')) => {
-                select_next_char::<false>(rope, start, '{', Some('}')).map(|start| (start, end))
-            }
-            (Some('{'), _) => {
-                select_next_char::<true>(rope, end, '}', Some('{')).map(|end| (start + 1, end))
-            }
-            (_, Some('>')) => {
-                select_next_char::<false>(rope, start, '<', Some('>')).map(|start| (start, end))
-            }
-            (Some('<'), _) => {
-                select_next_char::<true>(rope, end, '>', Some('<')).map(|end| (start + 1, end))
-            }
-            (_, Some('"')) => {
-                select_next_char::<false>(rope, start, '"', None).map(|start| (start, end))
-            }
-            (Some('"'), _) => {
-                select_next_char::<true>(rope, end, '"', None).map(|end| (start + 1, end))
-            }
-            (_, Some('\'')) => {
-                select_next_char::<false>(rope, start, '\'', None).map(|start| (start, end))
-            }
-            (Some('\''), _) => {
-                select_next_char::<true>(rope, end, '\'', None).map(|end| (start + 1, end))
-            }
+            (_, Some(')')) => prev_pairing_char(rope, end)
+                .and_then(|(c, start)| (c == '(').then_some((start, end))),
+            (Some('('), _) => next_pairing_char(rope, end)
+                .and_then(|(c, end)| (c == ')').then_some((start + 1, end))),
+            (_, Some(']')) => prev_pairing_char(rope, end)
+                .and_then(|(c, start)| (c == '[').then_some((start, end))),
+            (Some('['), _) => next_pairing_char(rope, end)
+                .and_then(|(c, end)| (c == ']').then_some((start + 1, end))),
+            (_, Some('}')) => prev_pairing_char(rope, end)
+                .and_then(|(c, start)| (c == '{').then_some((start, end))),
+            (Some('{'), _) => next_pairing_char(rope, end)
+                .and_then(|(c, end)| (c == '}').then_some((start + 1, end))),
+            (_, Some('>')) => prev_pairing_char(rope, end)
+                .and_then(|(c, start)| (c == '<').then_some((start, end))),
+            (Some('<'), _) => next_pairing_char(rope, end)
+                .and_then(|(c, end)| (c == '>').then_some((start + 1, end))),
+            (_, Some('"')) => prev_pairing_char(rope, end)
+                .and_then(|(c, start)| (c == '"').then_some((start, end))),
+            (Some('"'), _) => next_pairing_char(rope, end)
+                .and_then(|(c, end)| (c == '"').then_some((start + 1, end))),
+            (_, Some('\'')) => prev_pairing_char(rope, end)
+                .and_then(|(c, start)| (c == '\'').then_some((start, end))),
+            (Some('\''), _) => next_pairing_char(rope, end)
+                .and_then(|(c, end)| (c == '\'').then_some((start + 1, end))),
             _ => match (
                 prev_pairing_char(rope, start),
                 next_pairing_char(rope, end + 1),
