@@ -11,6 +11,7 @@ use ratatui::style::Color;
 
 mod c;
 mod css;
+mod csv;
 mod go;
 mod html;
 mod java;
@@ -109,6 +110,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("java") => Box::new(java::Java),
         Some("go") => Box::new(go::Go),
         Some("patch" | "diff") => Box::new(patch::Patch),
+        Some("csv") => Box::new(csv::Csv),
         _ => Box::new(DefaultHighlighter),
     }
 }
