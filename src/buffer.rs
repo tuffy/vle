@@ -16,6 +16,14 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::SystemTime;
 
+static SPACES_PER_TAB: std::sync::LazyLock<usize> = std::sync::LazyLock::new(|| {
+    std::env::var("VLE_SPACES_PER_TAB")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .filter(|s| (1..=16).contains(s))
+        .unwrap_or(4)
+});
+
 pub enum Source {
     Local(PathBuf),
     #[cfg(feature = "ssh")]
@@ -582,7 +590,8 @@ impl BufferContext {
             let previous_line = current_line.saturating_sub(lines);
             if let Some((prev_start, prev_end)) = line_char_range(&buf.rope, previous_line) {
                 update_selection(&mut self.selection, self.cursor, selecting);
-                self.cursor = (prev_start + self.cursor_column).min(prev_end);
+                self.cursor =
+                    apply_cursor_column(&buf.rope, self.cursor_column, prev_start, prev_end);
             }
         }
     }
@@ -593,7 +602,8 @@ impl BufferContext {
             let next_line = (current_line + lines).min(buf.rope.len_lines().saturating_sub(1));
             if let Some((next_start, next_end)) = line_char_range(&buf.rope, next_line) {
                 update_selection(&mut self.selection, self.cursor, selecting);
-                self.cursor = (next_start + self.cursor_column).min(next_end);
+                self.cursor =
+                    apply_cursor_column(&buf.rope, self.cursor_column, next_start, next_end);
             }
         }
     }
@@ -629,8 +639,8 @@ impl BufferContext {
             && let Some((_, end)) = line_char_range(&buf.rope, current_line)
         {
             update_selection(&mut self.selection, self.cursor, selecting);
-            self.cursor_column += end - self.cursor;
             self.cursor = end;
+            self.cursor_column = cursor_column(&buf.rope, self.cursor);
         }
     }
 
@@ -653,6 +663,8 @@ impl BufferContext {
     }
 
     pub fn insert_char(&mut self, alt: Option<AltCursor<'_>>, c: char) {
+        use unicode_width::UnicodeWidthChar;
+
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
 
@@ -710,14 +722,14 @@ impl BufferContext {
                     self.selection = None;
                     rope.insert_char(self.cursor, c);
                     self.cursor += 1;
-                    self.cursor_column += 1;
+                    self.cursor_column += c.width().unwrap_or(1);
                     alt += 1;
                 }
             },
             None => {
                 rope.insert_char(self.cursor, c);
                 self.cursor += 1;
-                self.cursor_column += 1;
+                self.cursor_column += c.width().unwrap_or(1);
                 Secondary::new(alt, |a| a >= self.cursor).update(|pos| *pos += 1);
             }
         }
@@ -1702,11 +1714,49 @@ fn selected_lines(
 // Given cursor position from start of rope,
 // return that cursor's column in line
 fn cursor_column(rope: &ropey::Rope, cursor: usize) -> usize {
+    use unicode_width::UnicodeWidthChar;
+
     rope.try_char_to_line(cursor)
         .ok()
         .and_then(|line| rope.try_line_to_char(line).ok())
-        .and_then(|line_start| cursor.checked_sub(line_start))
+        .map(|line_start| {
+            rope.chars_at(line_start)
+                .take(cursor.saturating_sub(line_start))
+                .map(|c| match c {
+                    '\t' => *SPACES_PER_TAB,
+                    c => c.width().unwrap_or(1),
+                })
+                .sum()
+        })
         .unwrap_or(0)
+}
+
+/// Given desired cursor column and line boundaries,
+/// returns cursor's absolute position in rope
+fn apply_cursor_column(
+    rope: &ropey::Rope,
+    mut cursor_column: usize,
+    mut line_start: usize,
+    line_end: usize,
+) -> usize {
+    use unicode_width::UnicodeWidthChar;
+
+    let mut chars = rope.chars_at(line_start);
+    while cursor_column > 0 && line_start < line_end {
+        match chars.next() {
+            Some('\t') => {
+                cursor_column = cursor_column.saturating_sub(*SPACES_PER_TAB);
+                line_start += 1;
+            }
+            Some(c) => {
+                cursor_column = cursor_column.saturating_sub(c.width().unwrap_or(1));
+                line_start += 1;
+            }
+            None => break,
+        }
+    }
+
+    line_start
 }
 
 // Returns characters from the cursor's line start
@@ -1939,14 +1989,8 @@ impl From<Buffer> for BufferContext {
         use crate::syntax::Highlighter;
         use std::env::var;
 
-        let spaces_per_tab: usize = var("VLE_SPACES_PER_TAB")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .filter(|s| (1..=16).contains(s))
-            .unwrap_or(4);
-
         Self {
-            tab_substitution: std::iter::repeat_n(' ', spaces_per_tab).collect(),
+            tab_substitution: std::iter::repeat_n(' ', *SPACES_PER_TAB).collect(),
             tabs_required: var("VLE_ALWAYS_TAB").is_ok() || buffer.syntax.tabs_required(),
             buffer: buffer.into(),
             viewport_height: 0,
