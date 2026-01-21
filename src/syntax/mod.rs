@@ -12,6 +12,7 @@ use ratatui::style::Color;
 mod c;
 mod css;
 mod csv;
+mod fish;
 mod go;
 mod html;
 mod ini;
@@ -115,6 +116,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("csv") => Box::new(csv::Csv),
         Some("toml") => Box::new(toml::Toml),
         Some("ini") => Box::new(ini::Ini),
+        Some("fish") => Box::new(fish::Fish),
         _ => Box::new(DefaultHighlighter),
     }
 }
@@ -171,7 +173,6 @@ macro_rules! highlighter {
 // TODO - add c++ syntax
 // TODO - add cmake syntax
 // TODO - add dot syntax
-// TODO - add fish syntax
 // TODO - add lua syntax
 // TODO - add perl syntax
 // TODO - add sh syntax
