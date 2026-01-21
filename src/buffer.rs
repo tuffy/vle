@@ -1279,27 +1279,27 @@ impl BufferContext {
             | (Some('<'), Some('>'))
             | (Some('"'), Some('"'))
             | (Some('\''), Some('\'')) => Some((start, end + 1)),
-            (_, Some(')')) => prev_pairing_char(rope, end)
+            (_, Some(')')) => prev_pairing_char(rope, start)
                 .and_then(|(c, start)| (c == '(').then_some((start, end))),
             (Some('('), _) => next_pairing_char(rope, end)
                 .and_then(|(c, end)| (c == ')').then_some((start + 1, end))),
-            (_, Some(']')) => prev_pairing_char(rope, end)
+            (_, Some(']')) => prev_pairing_char(rope, start)
                 .and_then(|(c, start)| (c == '[').then_some((start, end))),
             (Some('['), _) => next_pairing_char(rope, end)
                 .and_then(|(c, end)| (c == ']').then_some((start + 1, end))),
-            (_, Some('}')) => prev_pairing_char(rope, end)
+            (_, Some('}')) => prev_pairing_char(rope, start)
                 .and_then(|(c, start)| (c == '{').then_some((start, end))),
             (Some('{'), _) => next_pairing_char(rope, end)
                 .and_then(|(c, end)| (c == '}').then_some((start + 1, end))),
-            (_, Some('>')) => prev_pairing_char(rope, end)
+            (_, Some('>')) => prev_pairing_char(rope, start)
                 .and_then(|(c, start)| (c == '<').then_some((start, end))),
             (Some('<'), _) => next_pairing_char(rope, end)
                 .and_then(|(c, end)| (c == '>').then_some((start + 1, end))),
-            (_, Some('"')) => prev_pairing_char(rope, end)
+            (_, Some('"')) => prev_pairing_char(rope, start)
                 .and_then(|(c, start)| (c == '"').then_some((start, end))),
             (Some('"'), _) => next_pairing_char(rope, end)
                 .and_then(|(c, end)| (c == '"').then_some((start + 1, end))),
-            (_, Some('\'')) => prev_pairing_char(rope, end)
+            (_, Some('\'')) => prev_pairing_char(rope, start)
                 .and_then(|(c, start)| (c == '\'').then_some((start, end))),
             (Some('\''), _) => next_pairing_char(rope, end)
                 .and_then(|(c, end)| (c == '\'').then_some((start + 1, end))),
