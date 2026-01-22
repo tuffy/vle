@@ -4,6 +4,11 @@ description = "An exercise in minimalist text editing"
 version = "0.19.0"
 edition = "2024"
 license = "MIT/Apache-2.0"
+keywords = ["editor", "terminal", "text-editor"]
+categories = ["development-tools", "text-editors"]
+authors = ["Brian Langenberger <bjl@usa.net>"]
+# repository = "TODO"
+# homepage = "TODO"
 
 [[bin]]
 name = "vle"
