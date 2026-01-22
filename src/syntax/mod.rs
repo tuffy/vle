@@ -29,6 +29,7 @@ mod rust;
 mod sh;
 mod sql;
 mod swift;
+mod tex;
 mod toml;
 mod tutorial;
 mod xml;
@@ -125,6 +126,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("zig") => Box::new(zig::Zig),
         Some("swift") => Box::new(swift::Swift),
         Some("pl" | "pm") => Box::new(perl::Perl),
+        Some("tex") => Box::new(tex::Tex),
         _ => Box::new(DefaultHighlighter),
     }
 }
@@ -179,4 +181,3 @@ macro_rules! highlighter {
 }
 
 // TODO - add c++ syntax
-// TODO - add tex syntax
