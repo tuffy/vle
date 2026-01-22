@@ -177,8 +177,7 @@ macro_rules! highlighter {
 }
 
 // TODO - add c++ syntax
-// TODO - add cmake syntax
-// TODO - add dot syntax
 // TODO - add lua syntax
 // TODO - add perl syntax
 // TODO - add tex syntax
+// TODO - add typescript syntax
