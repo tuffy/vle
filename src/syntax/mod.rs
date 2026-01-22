@@ -22,6 +22,7 @@ mod json;
 mod makefile;
 mod markdown;
 mod patch;
+mod perl;
 mod php;
 mod python;
 mod rust;
@@ -123,6 +124,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("sh") => Box::new(sh::Shell),
         Some("zig") => Box::new(zig::Zig),
         Some("swift") => Box::new(swift::Swift),
+        Some("pl" | "pm") => Box::new(perl::Perl),
         _ => Box::new(DefaultHighlighter),
     }
 }
@@ -177,7 +179,4 @@ macro_rules! highlighter {
 }
 
 // TODO - add c++ syntax
-// TODO - add lua syntax
-// TODO - add perl syntax
 // TODO - add tex syntax
-// TODO - add typescript syntax
