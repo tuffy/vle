@@ -86,6 +86,7 @@ enum CToken {
     #[token("#pragma")]
     #[token("#else")]
     #[token("#endif")]
+    #[token("#undef")]
     Preprocessor,
 }
 

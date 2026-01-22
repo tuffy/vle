@@ -10,6 +10,7 @@ use crate::buffer::Source;
 use ratatui::style::Color;
 
 mod c;
+mod cpp;
 mod css;
 mod csv;
 mod fish;
@@ -105,6 +106,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         },
         Some("rs") => Box::new(rust::Rust),
         Some("c" | "h" | "C" | "H") => Box::new(c::C),
+        Some("cpp" | "cc" | "cxx" | "c++" | "hh" | "hpp" | "hxx" | "h++") => Box::new(cpp::Cpp),
         Some("py") => Box::new(python::Python),
         Some("json") => Box::new(json::Json),
         Some("md") => Box::new(markdown::Markdown),
@@ -179,5 +181,3 @@ macro_rules! highlighter {
         }
     };
 }
-
-// TODO - add c++ syntax
