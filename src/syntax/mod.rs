@@ -27,6 +27,7 @@ mod python;
 mod rust;
 mod sh;
 mod sql;
+mod swift;
 mod toml;
 mod tutorial;
 mod xml;
@@ -121,6 +122,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("fish") => Box::new(fish::Fish),
         Some("sh") => Box::new(sh::Shell),
         Some("zig") => Box::new(zig::Zig),
+        Some("swift") => Box::new(swift::Swift),
         _ => Box::new(DefaultHighlighter),
     }
 }
@@ -179,5 +181,4 @@ macro_rules! highlighter {
 // TODO - add dot syntax
 // TODO - add lua syntax
 // TODO - add perl syntax
-// TODO - add swift syntax
 // TODO - add tex syntax
