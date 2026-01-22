@@ -31,6 +31,7 @@ mod toml;
 mod tutorial;
 mod xml;
 mod yaml;
+mod zig;
 
 #[derive(Default)]
 pub enum HighlightState {
@@ -119,6 +120,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("ini") => Box::new(ini::Ini),
         Some("fish") => Box::new(fish::Fish),
         Some("sh") => Box::new(sh::Shell),
+        Some("zig") => Box::new(zig::Zig),
         _ => Box::new(DefaultHighlighter),
     }
 }
@@ -179,4 +181,3 @@ macro_rules! highlighter {
 // TODO - add perl syntax
 // TODO - add swift syntax
 // TODO - add tex syntax
-// TODO - add zig syntax

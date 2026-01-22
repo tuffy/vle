@@ -103,7 +103,7 @@ macro_rules! key {
 pub struct Editor {
     layout: Layout,
     mode: EditorMode,
-    cut_buffer: Option<CutBuffer>, // cut buffer shared globally across editor
+    cut_buffer: Option<CutBuffer>,
     show_help: bool,
     #[cfg(feature = "ssh")]
     remote: Option<ssh2::Session>,
