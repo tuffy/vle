@@ -38,17 +38,20 @@ are done via simple environment variables.
 | Goto Matching Pair             | `F7`  | `Ctrl-P`                   |
 | Select Inside Pair             | `F8`  | `Ctrl-E`                   |
 | Widen Selection to Whole Lines | `F9`  | `Ctrl-W`                   |
+| Split/Un-Split Pane            | `F10` | `Ctrl-N`                   |
 | Reload File                    | `F11` | `Ctrl-L`                   |
-| Quit Buffer                    | `F12` | `Ctrl-Q`                   |
+| Quit File                      | `F12` | `Ctrl-Q`                   |
 | Highlight Text                 |       | `Shift-Arrows`             |
-| Start/End of Selection         |       | `Ctrl-Home` `Ctrl-End`     |
-| Cut/Copy/Paste                 |       | `Ctrl-X` `Ctrl-C` `Ctrl-V` |
-| Undo/Redo                      |       | `Ctrl-Z` `Ctrl-Y`          |
+| Start / End of Selection       |       | `Ctrl-Home` `Ctrl-End`     |
+| Cut / Copy / Paste             |       | `Ctrl-X` `Ctrl-C` `Ctrl-V` |
+| Undo / Redo                    |       | `Ctrl-Z` `Ctrl-Y`          |
 | Switch Buffer                  |       | `Ctrl-PgUp` `Ctrl-PgDn`    |
-| Open/Switch Pane               |       | `Ctrl-Arrows`              |
+| Switch Pane                    |       | `Ctrl-Arrows`              |
 
 Because we have so few features, non-navigational features
 have alternative `Ctrl`-based and `F`-based keybindings.
+This also helps maintain compatibility with terminal multiplexers
+which have many of their own dedicated `Ctrl` bindings.
 
 ## Open Files
 
@@ -126,6 +129,13 @@ automatically, it will prompt for which set to use.
 If the start and end points of the selection are not at
 the start and end of a line, this widens the selection until it is.
 
+## Split Pane
+
+Divides a single large window into two separate panes,
+either horizontally or vertically.
+Each pane may contain a different buffer, or different
+locations within the same buffer.
+
 ## Reload File
 
 Performs the inverse of a file save; updates our text to
@@ -143,11 +153,49 @@ The editor quits once all buffers have been closed.
 
 # Configuration
 
-  With very little to configure, VLE doesn't use a config file at all.
-  Any configuration is performed with two environmental variables:
+With very little to configure, VLE doesn't use a config file at all.
+Any configuration is performed with two environmental variables:
 
-  - `VLE_SPACES_PER_TAB` - the number of spaces to output per tab
-  - `VLE_ALWAYS_TAB` - whether to always insert literal tabs
+- `VLE_SPACES_PER_TAB` - the number of spaces to output per tab
+- `VLE_ALWAYS_TAB` - whether to always insert literal tabs
 
-  No config file means there's one less thing to install,
-  learn the format of, modify or break.
+No config file means there's one less thing to install,
+learn the format of, modify or break.
+
+# Syntax Highlighting
+
+VLE has syntax has built-in syntax highlighting for the following
+languages / file formats:
+
+- Bourne Shell
+- C
+- C++
+- CSS
+- CSV
+- Fish Shell
+- Go
+- HTML
+- INI
+- Java
+- JavaScript
+- JSON
+- Makefile
+- Markdown
+- Patch
+- Perl
+- PHP
+- Python
+- Rust
+- SQL
+- Swift
+- (La)TeX
+- TOML
+- XML
+- YAML
+- Zig
+
+Syntax highlighting is done relatively naively with an emphasis
+on colorizing known keywords, strings, etc.
+For elements like multi-line comments, VLE may not colorize
+everything if the comment's starting point is offscreen.
+This is a known limitation that may be fixed in the future.

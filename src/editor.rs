@@ -465,8 +465,6 @@ impl Editor {
             key!(SHIFT, BackTab) => self.update_buffer_at(|b, a| b.un_indent(a)),
             key!(CONTROL, 'p') | key!(F(7)) => self.update_buffer(|b| b.select_matching_paren()),
             key!(CONTROL, 'e') | key!(F(8)) => {
-                // if both ends are exactly on pairing chars, shift both out one
-                // otherwise, seek to next best char
                 if let Some(Err(())) = self.on_buffer(|b| b.try_auto_pair()) {
                     self.mode = EditorMode::SelectInside;
                 }

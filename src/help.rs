@@ -288,8 +288,8 @@ pub static FIND: &[Keybinding] = &[
     none(&[DOWN, RIGHT], "Select Next Match"),
     ctrl(&["V"], "Copy from Cut Buffer"),
     none(&["Del"], "Remove Selected Match"),
-    ctrl_f(&["R"], "F6", "Replace Selected Matches"),
     ctrl_f(&["F"], "F5", "Begin New Find"),
+    ctrl_f(&["R"], "F6", "Replace Selected Matches"),
     none(&["Enter"], "Finish"),
 ];
 
