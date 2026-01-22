@@ -1218,7 +1218,7 @@ impl BufferContext {
                     sel_start.checked_sub(1).and_then(|sel_start| {
                         select_next_char::<false>(&buf.rope, sel_start, start, stack_back)
                     }),
-                    select_next_char::<true>(&buf.rope, sel_end + 1, end, stack_forward),
+                    select_next_char::<true>(&buf.rope, sel_end, end, stack_forward),
                 ) {
                     self.selection = Some(start);
                     self.cursor = end;
