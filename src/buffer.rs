@@ -779,6 +779,11 @@ impl BufferContext {
                             self.cursor = selection_start + pasted.chars_len;
                             self.cursor_column = cursor_column(&rope, self.cursor);
                         }
+
+                        // display indicator
+                        self.message = Some(BufferMessage::Notice(
+                            "swapped cut buffer with selection".into(),
+                        ));
                     }
                 }
             }
