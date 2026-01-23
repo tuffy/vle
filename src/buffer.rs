@@ -2125,18 +2125,12 @@ impl BufferList {
     pub fn get_mut(&mut self, idx: usize) -> Option<&mut BufferContext> {
         self.buffers.get_mut(idx)
     }
-
-    pub fn total_buffers(&self) -> usize {
-        self.buffers.len()
-    }
 }
 
 pub struct BufferWidget<'e> {
     pub mode: Option<&'e mut EditorMode>,
     pub layout: crate::editor::EditorLayout,
     pub show_help: bool,
-    pub buffer_index: usize,
-    pub total_buffers: usize,
 }
 
 impl BufferWidget<'_> {
@@ -2585,16 +2579,6 @@ impl StatefulWidget for BufferWidget<'_> {
             } else {
                 BorderType::Plain
             })
-            .title_bottom(border_title(
-                // total_buffers can't be 0, so ilog10 won't panic
-                format!(
-                    "{:0width$}/{}",
-                    self.buffer_index + 1,
-                    self.total_buffers,
-                    width = self.total_buffers.ilog10() as usize + 1
-                ),
-                self.mode.is_some(),
-            ))
             .title_bottom(border_title(
                 if buffer.modified() {
                     format!("{} *", buffer.source.name())
