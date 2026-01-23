@@ -2574,23 +2574,9 @@ impl StatefulWidget for BufferWidget<'_> {
             buf: &mut ratatui::buffer::Buffer,
             prompt: &crate::prompt::SearchPrompt,
         ) {
-            use crate::prompt::SearchPrompt;
-            use unicode_width::UnicodeWidthStr;
-
-            let [_, line_area] = Layout::vertical([Min(0), Length(3)]).areas(text_area);
-            let [line_area, _] =
-                Layout::horizontal([Length(SearchPrompt::MAX_WIDTH + 2), Min(0)]).areas(line_area);
-            ratatui::widgets::Clear.render(line_area, buf);
-            let prompt = prompt.to_string();
-            let prompt_width = prompt.width() as u16;
-            Paragraph::new(prompt)
-                .scroll((0, prompt_width.saturating_sub(SearchPrompt::MAX_WIDTH)))
-                .block(
-                    Block::bordered()
-                        .border_type(BorderType::Rounded)
-                        .title("Find"),
-                )
-                .render(line_area, buf);
+            if prompt.is_empty() {
+                render_message(text_area, buf, BufferMessage::Notice("Find?".into()));
+            }
         }
 
         if let Some(EditorMode::Open { chooser }) = self.mode {
@@ -2622,8 +2608,9 @@ impl StatefulWidget for BufferWidget<'_> {
             ));
 
         let block = match buffer.endings.name() {
-            Some(name) => block
-                .title_top(border_title(name.to_string(), self.mode.is_some()).right_aligned()),
+            Some(name) => {
+                block.title_top(border_title(name.to_string(), self.mode.is_some()).right_aligned())
+            }
             None => block,
         };
 
@@ -2639,7 +2626,7 @@ impl StatefulWidget for BufferWidget<'_> {
                             Err(_) => format!("{}", line + 1),
                         },
                         Err(_) => "???".to_string(),
-                    }
+                    },
                 },
                 self.mode.is_some(),
             )

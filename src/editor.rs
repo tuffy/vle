@@ -856,6 +856,10 @@ fn process_find(
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
+    fn not_found(query: String) -> String {
+        format!("Not Found : {query}")
+    }
+
     match event {
         Event::Key(KeyEvent {
             code: KeyCode::Char(c),
@@ -864,24 +868,27 @@ fn process_find(
             ..
         }) => {
             prompt.push(c);
-            if let Err(()) = buffer.next_or_current_match(area, &prompt.get_value()?) {
-                buffer.set_error("Not Found");
+            let query = prompt.get_value()?;
+            if let Err(()) = buffer.next_or_current_match(area, &query) {
+                buffer.set_error(not_found(query));
             }
             None
         }
         key!(CONTROL, 'v') => {
             if let Some(buf) = cut_buffer {
                 prompt.extend(buf.as_str());
-                if let Err(()) = buffer.next_or_current_match(area, &prompt.get_value()?) {
-                    buffer.set_error("Not Found");
+                let query = prompt.get_value()?;
+                if let Err(()) = buffer.next_or_current_match(area, &query) {
+                    buffer.set_error(not_found(query));
                 }
             }
             None
         }
         Event::Paste(pasted) => {
             prompt.extend(&pasted);
-            if let Err(()) = buffer.next_or_current_match(area, &prompt.get_value()?) {
-                buffer.set_error("Not Found");
+            let query = prompt.get_value()?;
+            if let Err(()) = buffer.next_or_current_match(area, &query) {
+                buffer.set_error(not_found(query));
             }
             None
         }
@@ -889,8 +896,11 @@ fn process_find(
             prompt.pop();
             if prompt.is_empty() {
                 buffer.clear_selection();
-            } else if let Err(()) = buffer.next_or_current_match(area, &prompt.get_value()?) {
-                buffer.set_error("Not Found");
+            } else {
+                let query = prompt.get_value()?;
+                if let Err(()) = buffer.next_or_current_match(area, &query) {
+                    buffer.set_error(not_found(query));
+                }
             }
             None
         }
@@ -905,7 +915,7 @@ fn process_find(
                 Ok(()) => {
                     let matches = buffer.search_matches(area, &search);
                     Some(if matches.is_empty() {
-                        buffer.set_error("Not Found");
+                        buffer.set_error(not_found(search));
                         EditorMode::default()
                     } else {
                         let cursor = buffer.get_cursor();
@@ -919,7 +929,7 @@ fn process_find(
                     })
                 }
                 Err(()) => {
-                    buffer.set_error("Not Found");
+                    buffer.set_error(not_found(search));
                     None
                 }
             }
@@ -1409,7 +1419,7 @@ impl Layout {
                     x: text_area.width,
                     y: 0,
                 }),
-                EditorMode::Find { prompt, .. } => Some(Position {
+                /*EditorMode::Find { prompt, .. } => Some(Position {
                     x: text_area.x
                         + prompt
                             .width()
@@ -1417,7 +1427,7 @@ impl Layout {
                             .min(text_area.width.saturating_sub(2))
                         + 1,
                     y: text_area.y + text_area.height.saturating_sub(2),
-                }),
+                }),*/
                 EditorMode::Open { chooser } => {
                     let (x, y) = chooser.cursor_position();
                     Some(Position {

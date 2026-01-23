@@ -12,8 +12,6 @@ pub struct SearchPrompt {
 }
 
 impl SearchPrompt {
-    pub const MAX_WIDTH: u16 = 30;
-
     pub fn push(&mut self, c: char) {
         self.value.push(c);
     }
@@ -28,12 +26,6 @@ impl SearchPrompt {
 
     pub fn get_value(&self) -> Option<String> {
         (!self.value.is_empty()).then(|| self.value.iter().copied().collect())
-    }
-
-    pub fn width(&self) -> u16 {
-        use unicode_width::UnicodeWidthStr;
-
-        self.to_string().width().try_into().unwrap()
     }
 
     pub fn is_empty(&self) -> bool {
