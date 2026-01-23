@@ -78,7 +78,17 @@ impl ChooserSource for SshSource {
     fn read_dir(&self, dir: &Path) -> Result<Vec<Entry>, Self::Error> {
         self.remote
             .readdir(dir)
-            .map(|entries| entries.into_iter().map(Entry::from).collect())
+            .map(|entries| {
+                entries
+                    .into_iter()
+                    .map(|(pb, _)| {
+                        Entry::from((
+                            self.remote.stat(&pb).map(|s| s.is_dir()).unwrap_or(false),
+                            pb,
+                        ))
+                    })
+                    .collect()
+            })
             .map(|mut entries: Vec<Entry>| {
                 entries.sort_unstable_by(|x, y| {
                     x.is_dir.cmp(&y.is_dir).reverse().then(x.path.cmp(&y.path))
@@ -505,7 +515,10 @@ impl TryFrom<std::fs::DirEntry> for Entry {
     type Error = std::io::Error;
 
     fn try_from(entry: std::fs::DirEntry) -> std::io::Result<Self> {
-        let is_dir = entry.metadata()?.is_dir();
+        let path = entry.path();
+        let is_dir = std::fs::metadata(&path)
+            .map(|m| m.is_dir())
+            .unwrap_or(false);
         Ok(Self {
             name: match is_dir {
                 false => entry.file_name().display().to_string(),
@@ -515,16 +528,15 @@ impl TryFrom<std::fs::DirEntry> for Entry {
                     std::path::MAIN_SEPARATOR,
                 ),
             },
-            path: entry.path(),
             is_dir,
+            path,
         })
     }
 }
 
 #[cfg(feature = "ssh")]
-impl From<(PathBuf, ssh2::FileStat)> for Entry {
-    fn from((path, stat): (PathBuf, ssh2::FileStat)) -> Self {
-        let is_dir = stat.is_dir();
+impl From<(bool, PathBuf)> for Entry {
+    fn from((is_dir, path): (bool, PathBuf)) -> Self {
         Self {
             name: match is_dir {
                 false => path
