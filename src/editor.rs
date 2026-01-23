@@ -830,7 +830,7 @@ fn process_open_file<S: ChooserSource>(
             chooser.pop();
             None
         }
-        key!(CONTROL, ' ') => {
+        key!(Tab) => {
             chooser.toggle_selected();
             None
         }
@@ -1389,6 +1389,7 @@ impl Layout {
     }
 
     fn cursor_position(&self, area: Rect, mode: &EditorMode) -> Option<Position> {
+        use ratatui::layout::Constraint::{Length, Min};
         use ratatui::layout::{Constraint, Layout};
 
         // generate a duplicate of our existing block layout
@@ -1398,13 +1399,10 @@ impl Layout {
             (row, col): (usize, usize),
             mode: &EditorMode,
         ) -> Option<Position> {
-            use ratatui::{
-                layout::Constraint::{Length, Min},
-                widgets::{Block, Borders},
-            };
+            use ratatui::widgets::{Block, Borders};
 
             let [text_area, _] = Layout::horizontal([Min(0), Length(1)])
-                .areas(Block::bordered().borders(Borders::BOTTOM).inner(area));
+                .areas(Block::bordered().borders(Borders::TOP).inner(area));
 
             match mode {
                 EditorMode::SelectLine { prompt } => Some(Position {
@@ -1445,6 +1443,14 @@ impl Layout {
                 }
             }
         }
+
+        let area = match self.selected_buffer_list().has_tabs() {
+            true => {
+                let [_, widget_area] = Layout::vertical([Length(1), Min(0)]).areas(area);
+                widget_area
+            }
+            false => area,
+        };
 
         match self {
             Self::Single(buf) | Self::SingleHidden { visible: buf, .. } => buf
@@ -1490,13 +1496,33 @@ impl StatefulWidget for LayoutWidget<'_> {
 
     fn render(
         self,
-        area: ratatui::layout::Rect,
+        mut area: ratatui::layout::Rect,
         buf: &mut ratatui::buffer::Buffer,
         layout: &mut Layout,
     ) {
         use crate::buffer::BufferWidget;
 
         let Self { mode, show_help } = self;
+
+        if let Some((index, tabs)) = layout.selected_buffer_list().tabs() {
+            use ratatui::{
+                layout::{
+                    Constraint::{Length, Min},
+                    Layout,
+                },
+                style::Style,
+                symbols,
+                widgets::{Tabs, Widget},
+            };
+
+            let [tabs_area, layout_area] = Layout::vertical([Length(1), Min(0)]).areas(area);
+            Tabs::new(tabs)
+                .highlight_style(Style::default().bold().underlined())
+                .divider(symbols::DOT)
+                .select(index)
+                .render(tabs_area, buf);
+            area = layout_area;
+        }
 
         match layout {
             Layout::Single(single)

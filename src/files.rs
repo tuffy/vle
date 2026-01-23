@@ -186,8 +186,8 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
 
         let block = Block::bordered()
             .border_type(BorderType::Thick)
-            .borders(Borders::BOTTOM)
-            .title_bottom(Line::from(vec![
+            .borders(Borders::TOP)
+            .title_top(Line::from(vec![
                 Span::raw("\u{252b}"),
                 Span::styled(state.dir.display().to_string(), Style::default().bold()),
                 Span::raw("\u{2523}"),

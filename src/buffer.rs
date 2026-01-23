@@ -78,6 +78,22 @@ impl Source {
         }
     }
 
+    /// Used to display in the tab bar
+    fn short_name(&self) -> Cow<'_, str> {
+        match self {
+            Self::Local(path) => path
+                .file_prefix()
+                .map(|s| s.to_string_lossy())
+                .unwrap_or_else(|| "???".into()),
+            #[cfg(feature = "ssh")]
+            Self::Ssh { path, .. } => path
+                .file_prefix()
+                .map(|s| s.to_string_lossy())
+                .unwrap_or_else(|| "???".into()),
+            Self::Tutorial => "Welcome!".into(),
+        }
+    }
+
     /// Used to determine syntax highlighting
     pub fn file_name(&self) -> Option<Cow<'_, str>> {
         match self {
@@ -2125,6 +2141,23 @@ impl BufferList {
     pub fn get_mut(&mut self, idx: usize) -> Option<&mut BufferContext> {
         self.buffers.get_mut(idx)
     }
+
+    /// If more than one buffer open, returns selected index and Vec of tab names
+    pub fn tabs(&self) -> Option<(usize, Vec<String>)> {
+        (self.buffers.len() > 1).then(|| {
+            (
+                self.current,
+                self.buffers
+                    .iter()
+                    .map(|b| b.buffer.borrow().source.short_name().into_owned())
+                    .collect(),
+            )
+        })
+    }
+
+    pub fn has_tabs(&self) -> bool {
+        self.buffers.len() > 1
+    }
 }
 
 pub struct BufferWidget<'e> {
@@ -2573,13 +2606,13 @@ impl StatefulWidget for BufferWidget<'_> {
         let syntax = &buffer.syntax;
 
         let block = Block::bordered()
-            .borders(Borders::BOTTOM)
+            .borders(Borders::TOP)
             .border_type(if self.mode.is_some() {
                 BorderType::Thick
             } else {
                 BorderType::Plain
             })
-            .title_bottom(border_title(
+            .title_top(border_title(
                 if buffer.modified() {
                     format!("{} *", buffer.source.name())
                 } else {
@@ -2594,7 +2627,7 @@ impl StatefulWidget for BufferWidget<'_> {
             None => block,
         };
 
-        let block = block.title_bottom(
+        let block = block.title_top(
             border_title(
                 match buffer.rope.try_char_to_line(state.cursor) {
                     Ok(line) => format!("{}", (line + 1)),
