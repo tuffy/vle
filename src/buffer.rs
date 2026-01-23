@@ -2623,7 +2623,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
         let block = match buffer.endings.name() {
             Some(name) => block
-                .title_bottom(border_title(name.to_string(), self.mode.is_some()).right_aligned()),
+                .title_top(border_title(name.to_string(), self.mode.is_some()).right_aligned()),
             None => block,
         };
 
