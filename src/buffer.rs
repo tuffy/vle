@@ -2630,7 +2630,12 @@ impl StatefulWidget for BufferWidget<'_> {
         let block = block.title_top(
             border_title(
                 match buffer.rope.try_char_to_line(state.cursor) {
-                    Ok(line) => format!("{}", (line + 1)),
+                    Ok(line) => match buffer.rope.try_line_to_char(line) {
+                        Ok(line_start) => {
+                            format!("{}:{}", line + 1, (state.cursor - line_start) + 1)
+                        }
+                        Err(_) => format!("{}", line + 1),
+                    },
                     Err(_) => "???".to_string(),
                 },
                 self.mode.is_some(),
