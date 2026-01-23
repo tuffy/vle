@@ -1405,9 +1405,9 @@ impl Layout {
                 .areas(Block::bordered().borders(Borders::TOP).inner(area));
 
             match mode {
-                EditorMode::SelectLine { prompt } => Some(Position {
-                    x: text_area.x + prompt.len() as u16 + 1,
-                    y: text_area.y + text_area.height.saturating_sub(2),
+                EditorMode::SelectLine { .. } => Some(Position {
+                    x: text_area.width,
+                    y: 0,
                 }),
                 EditorMode::Find { prompt, .. } => Some(Position {
                     x: text_area.x

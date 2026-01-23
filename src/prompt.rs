@@ -89,10 +89,6 @@ pub struct LinePrompt {
 impl LinePrompt {
     pub const MAX: usize = 9;
 
-    pub fn len(&self) -> usize {
-        self.line.len()
-    }
-
     pub fn push(&mut self, d: Digit) {
         if !(self.line.is_empty() && matches!(d, Digit::Digit0)) && self.line.len() < Self::MAX {
             self.line.push(d);

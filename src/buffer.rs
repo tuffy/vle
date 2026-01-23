@@ -2629,14 +2629,17 @@ impl StatefulWidget for BufferWidget<'_> {
 
         let block = block.title_top(
             border_title(
-                match buffer.rope.try_char_to_line(state.cursor) {
-                    Ok(line) => match buffer.rope.try_line_to_char(line) {
-                        Ok(line_start) => {
-                            format!("{}:{}", line + 1, (state.cursor - line_start) + 1)
-                        }
-                        Err(_) => format!("{}", line + 1),
-                    },
-                    Err(_) => "???".to_string(),
+                match self.mode {
+                    Some(EditorMode::SelectLine { prompt }) => prompt.to_string(),
+                    _ => match buffer.rope.try_char_to_line(state.cursor) {
+                        Ok(line) => match buffer.rope.try_line_to_char(line) {
+                            Ok(line_start) => {
+                                format!("{}:{}", line + 1, (state.cursor - line_start) + 1)
+                            }
+                            Err(_) => format!("{}", line + 1),
+                        },
+                        Err(_) => "???".to_string(),
+                    }
                 },
                 self.mode.is_some(),
             )
@@ -2939,21 +2942,8 @@ impl StatefulWidget for BufferWidget<'_> {
             Some(EditorMode::SelectInside) => {
                 render_help(text_area, buf, SELECT_INSIDE, |b| b);
             }
-            Some(EditorMode::SelectLine { prompt }) => {
+            Some(EditorMode::SelectLine { .. }) => {
                 render_help(text_area, buf, SELECT_LINE, |b| b);
-
-                let [_, line_area] = Layout::vertical([Min(0), Length(3)]).areas(text_area);
-                let [line_area, _] =
-                    Layout::horizontal([Length(crate::prompt::LinePrompt::MAX as u16 + 2), Min(0)])
-                        .areas(line_area);
-                ratatui::widgets::Clear.render(line_area, buf);
-                Paragraph::new(prompt.to_string())
-                    .block(
-                        Block::bordered()
-                            .border_type(BorderType::Rounded)
-                            .title("Goto Line"),
-                    )
-                    .render(line_area, buf);
             }
             Some(EditorMode::Find { prompt, .. }) => {
                 render_help(text_area, buf, FIND, |b| b);
