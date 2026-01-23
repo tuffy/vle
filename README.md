@@ -57,8 +57,8 @@ which have many of their own dedicated `Ctrl` bindings.
 
 Files to open can be provided on the command line,
 or via the open files dialog.  A filename can be provided
-if one needs to open a new file, one can select a file
-by navigating the filesystem interactively, or one can tag
+if one needs to open a new file. One can select a file
+by navigating the filesystem interactively. Or one can tag
 multiple files and open several of them simultaneously.
 
 ## Save File
@@ -194,7 +194,7 @@ languages / file formats:
 - YAML
 - Zig
 
-Syntax highlighting is done relatively naively with an emphasis
+Syntax highlighting is done naively with an emphasis
 on colorizing known keywords, strings, etc.
 For elements like multi-line comments, VLE may not colorize
 everything if the comment's starting point is offscreen.
