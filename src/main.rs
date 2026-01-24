@@ -39,11 +39,7 @@ fn main() {
                 loop {
                     match read()? {
                         Event::Mouse(MouseEvent {
-                            kind: MouseEventKind::Moved,
-                            ..
-                        })
-                        | Event::Mouse(MouseEvent {
-                            kind: MouseEventKind::Up(_),
+                            kind: MouseEventKind::Moved | MouseEventKind::Up(_),
                             ..
                         }) => { /* ignore mouse movement events */ }
                         event => break event,
