@@ -21,7 +21,7 @@ mod syntax;
 use editor::Editor;
 
 fn main() {
-    use crossterm::event::read;
+    use crossterm::event::{Event, MouseEvent, MouseEventKind, read};
 
     let mut editor = match open_editor() {
         Ok(editor) => editor,
@@ -34,7 +34,18 @@ fn main() {
     if let Err(err) = execute_terminal(|terminal| {
         while editor.has_open_buffers() {
             let area = editor.display(terminal)?;
-            editor.process_event(area, read()?);
+            editor.process_event(
+                area,
+                loop {
+                    match read()? {
+                        Event::Mouse(MouseEvent {
+                            kind: MouseEventKind::Moved,
+                            ..
+                        }) => { /* ignore mouse movement events */ }
+                        event => break event,
+                    }
+                },
+            );
         }
 
         Ok(())
