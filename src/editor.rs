@@ -1564,6 +1564,7 @@ impl Layout {
     /// Given an onscreen row and column, sets focus somewhere
     /// in the editor if possible.
     fn set_cursor_focus(&mut self, mut area: Rect, position: Position) {
+        use ratatui::layout::Constraint;
         use ratatui::layout::{
             Constraint::{Length, Min},
             Layout,
@@ -1591,6 +1592,36 @@ impl Layout {
                 return;
             }
             area = layout_area;
+        }
+
+        match self {
+            Self::Single(_) | Self::SingleHidden { .. } => {
+                // TODO - place cursor in open buffer
+            }
+            Self::Horizontal { which, .. } => {
+                let [top_area, bottom_area] =
+                    Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
+
+                if top_area.contains(position) {
+                    *which = HorizontalPos::Top;
+                    // TODO - place cursor in top buffer
+                } else if bottom_area.contains(position) {
+                    *which = HorizontalPos::Bottom;
+                    // TODO - place ccursor in bottom buffer
+                }
+            }
+            Self::Vertical { which, .. } => {
+                let [left_area, right_area] =
+                    Layout::horizontal(Constraint::from_fills([1, 1])).areas(area);
+
+                if left_area.contains(position) {
+                    *which = VerticalPos::Left;
+                    // TODO - place cursor in left buffer
+                } else if right_area.contains(position) {
+                    *which = VerticalPos::Right;
+                    // TODO - place cursor in right buffer
+                }
+            }
         }
     }
 }
