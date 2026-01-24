@@ -308,7 +308,10 @@ impl Editor {
     }
 
     fn process_normal_event(&mut self, event: Event) {
-        use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+        use crossterm::event::{
+            Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent,
+            MouseEventKind,
+        };
 
         match event {
             key!(CONTROL, 'q') | key!(F(12)) => {
@@ -532,6 +535,42 @@ impl Editor {
                 }) {
                     self.mode = new_mode;
                 }
+            }
+            Event::Mouse(MouseEvent {
+                kind: MouseEventKind::ScrollDown,
+                modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
+                ..
+            }) => {
+                self.update_buffer(|b| b.cursor_down(1, modifiers.contains(KeyModifiers::SHIFT)));
+            }
+            Event::Mouse(MouseEvent {
+                kind: MouseEventKind::ScrollUp,
+                modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
+                ..
+            }) => {
+                self.update_buffer(|b| b.cursor_up(1, modifiers.contains(KeyModifiers::SHIFT)));
+            }
+            Event::Mouse(MouseEvent {
+                kind: MouseEventKind::ScrollLeft,
+                modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
+                ..
+            }) => {
+                self.update_buffer(|b| b.cursor_back(modifiers.contains(KeyModifiers::SHIFT)));
+            }
+            Event::Mouse(MouseEvent {
+                kind: MouseEventKind::ScrollRight,
+                modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
+                ..
+            }) => {
+                self.update_buffer(|b| b.cursor_forward(modifiers.contains(KeyModifiers::SHIFT)));
+            }
+            Event::Mouse(MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column,
+                row,
+                ..
+            }) => {
+                self.layout.set_cursor_focus(row, column);
             }
             _ => { /* ignore other events */ }
         }
@@ -854,7 +893,9 @@ fn process_find(
     event: Event,
     alt: Option<AltCursor<'_>>,
 ) -> Option<EditorMode> {
-    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+    use crossterm::event::{
+        Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
+    };
 
     fn not_found(query: String) -> String {
         format!("Not Found : {query}")
@@ -909,6 +950,10 @@ fn process_find(
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
+        })
+        | Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            ..
         }) => {
             let search = prompt.get_value()?;
             match buffer.previous_match(area, &search) {
@@ -938,6 +983,10 @@ fn process_find(
             code: KeyCode::Down | KeyCode::Right,
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
+            ..
+        })
+        | Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
             ..
         }) => {
             let search = prompt.get_value()?;
@@ -1041,7 +1090,9 @@ fn process_select_matches(
     event: Event,
     alt: Option<AltCursor<'_>>,
 ) -> Option<EditorMode> {
-    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+    use crossterm::event::{
+        Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
+    };
 
     match event {
         event @ Event::Key(KeyEvent {
@@ -1076,6 +1127,10 @@ fn process_select_matches(
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
+        })
+        | Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            ..
         }) => {
             *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
             if let Some((s, e)) = matches.get(*match_idx) {
@@ -1087,6 +1142,10 @@ fn process_select_matches(
             code: KeyCode::Down | KeyCode::Right,
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
+            ..
+        })
+        | Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
             ..
         }) => {
             *match_idx = (*match_idx + 1) % matches.len();
@@ -1145,7 +1204,9 @@ fn process_replace_matches(
     event: Event,
     alt: Option<AltCursor<'_>>,
 ) -> Option<EditorMode> {
-    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+    use crossterm::event::{
+        Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
+    };
 
     match event {
         Event::Key(KeyEvent {
@@ -1177,6 +1238,10 @@ fn process_replace_matches(
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
+        })
+        | Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            ..
         }) => {
             *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
             if let Some((_, e)) = matches.get(*match_idx) {
@@ -1188,6 +1253,10 @@ fn process_replace_matches(
             code: KeyCode::Down | KeyCode::Right,
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
+            ..
+        })
+        | Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
             ..
         }) => {
             *match_idx = (*match_idx + 1) % matches.len();
@@ -1486,6 +1555,14 @@ impl Layout {
                 }
             }
         }
+    }
+
+    /// The inverse of cursor_position
+    ///
+    /// Given an onscreen row and column, sets focus somewhere
+    /// in the editor if possible.
+    fn set_cursor_focus(&mut self, row: u16, column: u16) {
+        todo!()
     }
 }
 

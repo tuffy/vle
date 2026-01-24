@@ -156,12 +156,21 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
 fn execute_terminal<T>(
     f: impl FnOnce(&mut ratatui::DefaultTerminal) -> std::io::Result<T>,
 ) -> std::io::Result<T> {
-    use crossterm::{event::EnableBracketedPaste, execute};
+    use crossterm::{
+        event::{
+            DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+        },
+        execute,
+    };
 
     let mut term = ratatui::init();
-    execute!(std::io::stdout(), EnableBracketedPaste)?;
+    execute!(std::io::stdout(), EnableBracketedPaste, EnableMouseCapture)?;
     let result = f(&mut term);
-    execute!(std::io::stdout(), EnableBracketedPaste)?;
+    execute!(
+        std::io::stdout(),
+        DisableBracketedPaste,
+        DisableMouseCapture
+    )?;
     ratatui::restore();
     result
 }
