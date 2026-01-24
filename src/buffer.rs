@@ -644,6 +644,7 @@ impl BufferContext {
 
             // the column we're aiming for, in onscreen characters
             let mut desired_col: usize = (starting_col + col).into();
+            self.cursor_column = desired_col;
 
             let col_chars = rope
                 .try_line_to_char(line)
