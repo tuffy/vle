@@ -1419,15 +1419,6 @@ impl Layout {
                     x: text_area.width,
                     y: 0,
                 }),
-                /*EditorMode::Find { prompt, .. } => Some(Position {
-                    x: text_area.x
-                        + prompt
-                            .width()
-                            .min(SearchPrompt::MAX_WIDTH)
-                            .min(text_area.width.saturating_sub(2))
-                        + 1,
-                    y: text_area.y + text_area.height.saturating_sub(2),
-                }),*/
                 EditorMode::Open { chooser } => {
                     let (x, y) = chooser.cursor_position();
                     Some(Position {

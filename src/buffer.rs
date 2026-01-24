@@ -2883,7 +2883,7 @@ impl StatefulWidget for BufferWidget<'_> {
                             EditorLayout::Single => EDITING_UNSPLIT,
                             EditorLayout::Horizontal => EDITING_HORIZONTAL,
                             EditorLayout::Vertical => EDITING_VERTICAL,
-                        }, /*crate::help::EDITING*/
+                        },
                         |b| {
                             b.title_top("Keybindings").title_bottom(
                                 Line::from(vec![
