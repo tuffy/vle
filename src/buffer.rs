@@ -9,7 +9,10 @@
 use crate::editor::EditorMode;
 use crate::endings::LineEndings;
 use crate::syntax::Highlighter;
-use ratatui::widgets::StatefulWidget;
+use ratatui::{
+    layout::{Position, Rect},
+    widgets::StatefulWidget,
+};
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -598,6 +601,35 @@ impl BufferContext {
                 })
                 .sum(),
         ))
+    }
+
+    fn set_cursor_focus(&mut self, area: Rect, position: Position) {
+        use ratatui::{
+            layout::{
+                Constraint::{Length, Min},
+                Layout,
+            },
+            widgets::{Block, Borders},
+        };
+
+        // rebuild layout from BufferWidget
+        let [text_area, _] = Layout::horizontal([Min(0), Length(1)])
+            .areas(Block::bordered().borders(Borders::TOP).inner(area));
+
+        if text_area.contains(position) {
+            let buffer = self.buffer.borrow();
+            let rope = &buffer.rope;
+            let row = position.y.saturating_sub(text_area.y);
+            let _col = position.x.saturating_sub(text_area.x); // TODO - apply this
+
+            let current_line = rope.try_char_to_line(self.cursor).ok();
+            let viewport_line: usize = current_line
+                .map(|line| line.saturating_sub(self.viewport_height / 2))
+                .unwrap_or(0);
+            let line = viewport_line + usize::from(row);
+            self.cursor = rope.try_line_to_char(line).unwrap_or(rope.len_chars());
+            self.selection = None;
+        }
     }
 
     pub fn cursor_up(&mut self, lines: usize, selecting: bool) {
@@ -2108,6 +2140,12 @@ impl BufferList {
             .map(|(row, col)| ((buf.viewport_height / 2).min(row), col))
     }
 
+    pub fn set_cursor_focus(&mut self, area: Rect, position: Position) {
+        if let Some(buf) = self.current_mut() {
+            buf.set_cursor_focus(area, position);
+        }
+    }
+
     pub fn update_buf(&mut self, f: impl FnOnce(&mut BufferContext)) {
         if let Some(buf) = self.current_mut() {
             f(buf);
@@ -2179,12 +2217,7 @@ impl BufferWidget<'_> {
 impl StatefulWidget for BufferWidget<'_> {
     type State = BufferContext;
 
-    fn render(
-        self,
-        area: ratatui::layout::Rect,
-        buf: &mut ratatui::buffer::Buffer,
-        state: &mut BufferContext,
-    ) {
+    fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer, state: &mut BufferContext) {
         use crate::help::{
             CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE, SPLIT_PANE,
             VERIFY_RELOAD, VERIFY_SAVE, render_help,
@@ -2576,7 +2609,7 @@ impl StatefulWidget for BufferWidget<'_> {
         }
 
         fn render_find_prompt(
-            text_area: ratatui::layout::Rect,
+            text_area: Rect,
             buf: &mut ratatui::buffer::Buffer,
             prompt: &crate::prompt::SearchPrompt,
         ) {
@@ -2971,11 +3004,7 @@ impl StatefulWidget for BufferWidget<'_> {
     }
 }
 
-pub fn render_message(
-    area: ratatui::layout::Rect,
-    buf: &mut ratatui::buffer::Buffer,
-    message: BufferMessage,
-) {
+pub fn render_message(area: Rect, buf: &mut ratatui::buffer::Buffer, message: BufferMessage) {
     use ratatui::{
         layout::{
             Constraint::{Length, Min},

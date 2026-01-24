@@ -1595,31 +1595,34 @@ impl Layout {
         }
 
         match self {
-            Self::Single(_) | Self::SingleHidden { .. } => {
-                // TODO - place cursor in open buffer
+            Self::Single(buffer)
+            | Self::SingleHidden {
+                visible: buffer, ..
+            } => {
+                buffer.set_cursor_focus(area, position);
             }
-            Self::Horizontal { which, .. } => {
+            Self::Horizontal { top, bottom, which } => {
                 let [top_area, bottom_area] =
                     Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
 
                 if top_area.contains(position) {
                     *which = HorizontalPos::Top;
-                    // TODO - place cursor in top buffer
+                    top.set_cursor_focus(top_area, position);
                 } else if bottom_area.contains(position) {
                     *which = HorizontalPos::Bottom;
-                    // TODO - place ccursor in bottom buffer
+                    bottom.set_cursor_focus(bottom_area, position);
                 }
             }
-            Self::Vertical { which, .. } => {
+            Self::Vertical { left, right, which } => {
                 let [left_area, right_area] =
                     Layout::horizontal(Constraint::from_fills([1, 1])).areas(area);
 
                 if left_area.contains(position) {
                     *which = VerticalPos::Left;
-                    // TODO - place cursor in left buffer
+                    left.set_cursor_focus(left_area, position);
                 } else if right_area.contains(position) {
                     *which = VerticalPos::Right;
-                    // TODO - place cursor in right buffer
+                    right.set_cursor_focus(right_area, position);
                 }
             }
         }

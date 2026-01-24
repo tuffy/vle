@@ -41,6 +41,10 @@ fn main() {
                         Event::Mouse(MouseEvent {
                             kind: MouseEventKind::Moved,
                             ..
+                        })
+                        | Event::Mouse(MouseEvent {
+                            kind: MouseEventKind::Up(_),
+                            ..
                         }) => { /* ignore mouse movement events */ }
                         event => break event,
                     }
