@@ -139,7 +139,8 @@ impl Editor {
         self.layout.has_open_buffers()
     }
 
-    pub fn display(&mut self, term: &mut ratatui::DefaultTerminal) -> std::io::Result<()> {
+    /// Returns size of frame
+    pub fn display(&mut self, term: &mut ratatui::DefaultTerminal) -> std::io::Result<Rect> {
         term.draw(|frame| {
             let area = frame.area();
             frame.render_stateful_widget(
@@ -156,7 +157,7 @@ impl Editor {
                     .unwrap_or_default(),
             );
         })
-        .map(|_| ())
+        .map(|completed_frame| completed_frame.area)
     }
 
     fn update_buffer(&mut self, f: impl FnOnce(&mut crate::buffer::BufferContext)) {
@@ -205,7 +206,7 @@ impl Editor {
         }
     }
 
-    pub fn process_event(&mut self, event: Event) {
+    pub fn process_event(&mut self, area: Rect, event: Event) {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
         match event {
@@ -221,7 +222,7 @@ impl Editor {
                 self.show_help = !self.show_help;
             }
             event => match &mut self.mode {
-                EditorMode::Editing => self.process_normal_event(event),
+                EditorMode::Editing => self.process_normal_event(area, event),
                 EditorMode::ConfirmClose { buffer } => {
                     let buffer = buffer.clone();
                     self.process_confirm_close(event, buffer)
@@ -307,7 +308,7 @@ impl Editor {
         }
     }
 
-    fn process_normal_event(&mut self, event: Event) {
+    fn process_normal_event(&mut self, area: Rect, event: Event) {
         use crossterm::event::{
             Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent,
             MouseEventKind,
@@ -570,7 +571,8 @@ impl Editor {
                 row,
                 ..
             }) => {
-                self.layout.set_cursor_focus(row, column);
+                self.layout
+                    .set_cursor_focus(area, Position { y: row, x: column });
             }
             _ => { /* ignore other events */ }
         }
@@ -1561,8 +1563,35 @@ impl Layout {
     ///
     /// Given an onscreen row and column, sets focus somewhere
     /// in the editor if possible.
-    fn set_cursor_focus(&mut self, row: u16, column: u16) {
-        todo!()
+    fn set_cursor_focus(&mut self, mut area: Rect, position: Position) {
+        use ratatui::layout::{
+            Constraint::{Length, Min},
+            Layout,
+        };
+
+        if let Some((_, tabs)) = self.selected_buffer_list().tabs() {
+            let [tabs_area, layout_area] = Layout::vertical([Length(1), Min(0)]).areas(area);
+            if tabs_area.contains(position) {
+                let mut col = position.x;
+                for (index, tab) in tabs.into_iter().enumerate() {
+                    use unicode_width::UnicodeWidthStr;
+
+                    let tab_width = tab.width() as u16 + 2; // +2 for padding
+                    if col <= tab_width {
+                        self.selected_buffer_list_mut().set_index(index);
+                        return;
+                    } else {
+                        // +1 for separator
+                        col = match col.checked_sub(tab_width + 1) {
+                            Some(col) => col,
+                            None => return,
+                        };
+                    }
+                }
+                return;
+            }
+            area = layout_area;
+        }
     }
 }
 

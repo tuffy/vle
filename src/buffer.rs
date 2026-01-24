@@ -2138,6 +2138,12 @@ impl BufferList {
         self.current
     }
 
+    pub fn set_index(&mut self, index: usize) {
+        if index < self.buffers.len() {
+            self.current = index;
+        }
+    }
+
     pub fn get_mut(&mut self, idx: usize) -> Option<&mut BufferContext> {
         self.buffers.get_mut(idx)
     }

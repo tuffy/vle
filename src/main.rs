@@ -33,8 +33,8 @@ fn main() {
 
     if let Err(err) = execute_terminal(|terminal| {
         while editor.has_open_buffers() {
-            editor.display(terminal)?;
-            editor.process_event(read()?);
+            let area = editor.display(terminal)?;
+            editor.process_event(area, read()?);
         }
 
         Ok(())
