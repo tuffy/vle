@@ -1415,9 +1415,11 @@ impl Layout {
                 .areas(Block::bordered().borders(Borders::TOP).inner(area));
 
             match mode {
+                // SelectLine pushes the cursor up into the title bar,
+                // which is why its Y coordinate subtracts one
                 EditorMode::SelectLine { .. } => Some(Position {
-                    x: text_area.width,
-                    y: 0,
+                    x: text_area.x + text_area.width,
+                    y: text_area.y.saturating_sub(1),
                 }),
                 EditorMode::Open { chooser } => {
                     let (x, y) = chooser.cursor_position();
