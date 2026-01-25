@@ -196,6 +196,3 @@ languages / file formats:
 
 Syntax highlighting is done naively with an emphasis
 on colorizing known keywords, strings, etc.
-For elements like multi-line comments, VLE may not colorize
-everything if the comment's starting point is offscreen.
-This is a known limitation that may be fixed in the future.

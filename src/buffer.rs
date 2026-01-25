@@ -2268,7 +2268,7 @@ impl StatefulWidget for BufferWidget<'_> {
             CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE, SPLIT_PANE,
             VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
-        use crate::syntax::{HighlightState, Highlighter};
+        use crate::syntax::{HighlightState, Highlighter, MultiComment};
         use ratatui::{
             layout::{
                 Constraint::{Length, Min},
@@ -2731,10 +2731,23 @@ impl StatefulWidget for BufferWidget<'_> {
 
         state.viewport_height = text_area.height.into();
 
+        let mut hlstate: HighlightState = syntax
+            .multicomment()
+            .and_then(|has_multicomment| {
+                rope.lines_at(viewport_line)
+                    .take(area.height.into())
+                    .find_map(|line| {
+                        has_multicomment(&Cow::from(line)).map(|multicomment| match multicomment {
+                            MultiComment::Start => HighlightState::Normal,
+                            MultiComment::End => HighlightState::Commenting,
+                        })
+                    })
+            })
+            .unwrap_or_default();
+
         Paragraph::new(match self.mode {
             Some(EditorMode::Find { prompt, .. }) if !prompt.is_empty() => {
                 let searching = prompt.get_value().unwrap_or_default();
-                let mut hlstate = HighlightState::default();
 
                 match state.selection {
                     // no selection, so highlight matches only
@@ -2815,7 +2828,6 @@ impl StatefulWidget for BufferWidget<'_> {
             }
             Some(EditorMode::SelectMatches { matches, .. }) => {
                 let mut matches = matches.iter().copied().collect();
-                let mut hlstate = HighlightState::default();
 
                 match state.selection {
                     // no selection, so highlight matches only
@@ -2849,7 +2861,6 @@ impl StatefulWidget for BufferWidget<'_> {
                     // highlight both matches *and* selection
                     Some(selection) => {
                         let (selection_start, selection_end) = reorder(state.cursor, selection);
-                        let mut hlstate = HighlightState::default();
 
                         rope.lines_at(viewport_line)
                             .zip(viewport_line..)
@@ -2884,8 +2895,6 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
             _ => {
-                let mut hlstate = HighlightState::default();
-
                 match state.selection {
                     // no selection, so nothing to highlight
                     None => rope

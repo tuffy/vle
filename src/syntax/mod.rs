@@ -44,6 +44,12 @@ pub enum HighlightState {
     Commenting,
 }
 
+/// A multi-line comment start or end
+pub enum MultiComment {
+    Start,
+    End,
+}
+
 /// Implemented for different syntax highlighters
 pub trait Highlighter: std::fmt::Debug + std::fmt::Display {
     /// Yields portions of the string to highlight in a particular color
@@ -58,6 +64,13 @@ pub trait Highlighter: std::fmt::Debug + std::fmt::Display {
     fn tabs_required(&self) -> bool {
         false
     }
+
+    /// If format supports multi-line comments,
+    /// returns function which returns the first one that
+    /// exists in a line, if any
+    fn multicomment(&self) -> Option<fn(&str) -> Option<MultiComment>> {
+        None
+    }
 }
 
 impl Highlighter for Box<dyn Highlighter> {
@@ -71,6 +84,10 @@ impl Highlighter for Box<dyn Highlighter> {
 
     fn tabs_required(&self) -> bool {
         Box::as_ref(self).tabs_required()
+    }
+
+    fn multicomment(&self) -> Option<fn(&str) -> Option<MultiComment>> {
+        Box::as_ref(self).multicomment()
     }
 }
 
@@ -177,6 +194,18 @@ macro_rules! highlighter {
                         }),
                     }
                 }))
+            }
+
+            fn multicomment(&self) -> Option<fn(&str) -> Option<$crate::syntax::MultiComment>> {
+                use $crate::syntax::MultiComment;
+
+                Some(|s: &str| {
+                    <$token>::lexer(s).find_map(|token| match token {
+                        Ok(<$token>::$comment_start) => Some(MultiComment::Start),
+                        Ok(<$token>::$comment_end) => Some(MultiComment::End),
+                        _ => None,
+                    })
+                })
             }
         }
     };
