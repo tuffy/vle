@@ -589,14 +589,13 @@ impl BufferContext {
         let rope = &self.buffer.borrow().rope;
         let line = rope.try_char_to_line(self.cursor).ok()?;
         let line_start = rope.try_line_to_char(line).ok()?;
-        let spaces_per_tab = self.tab_substitution.len();
 
         Some((
             line,
             rope.chars_at(line_start)
                 .take(self.cursor.checked_sub(line_start)?)
                 .map(|c| match c {
-                    '\t' => spaces_per_tab,
+                    '\t' => *SPACES_PER_TAB,
                     c => c.width().unwrap_or(0),
                 })
                 .sum(),
