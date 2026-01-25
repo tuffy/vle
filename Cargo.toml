@@ -1,6 +1,6 @@
 [package]
 name = "vle"
-description = "An exercise in minimalist text editing"
+description = "Very Little Editor"
 version = "0.21.0"
 edition = "2024"
 license = "MIT/Apache-2.0"
