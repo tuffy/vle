@@ -886,9 +886,26 @@ impl BufferContext {
     pub fn newline(&mut self, alt: Option<AltCursor<'_>>) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let indent_char = if self.tabs_required { '\t' } else { ' ' };
-        let mut alt = Secondary::new(alt, |a| a >= self.cursor);
+        let mut rope = buf.rope.get_mut();
 
-        let (indent, all_indent) = match line_start_to_cursor(&buf.rope, self.cursor) {
+        let mut alt = match self.selection.take() {
+            Some(selection) => {
+                let mut secondary = Secondary::new(alt, |a| a >= self.cursor.min(selection));
+
+                zap_selection(
+                    &mut rope,
+                    &mut self.cursor,
+                    &mut self.cursor_column,
+                    selection,
+                    &mut secondary,
+                );
+
+                secondary
+            }
+            None => Secondary::new(alt, |a| a >= self.cursor),
+        };
+
+        let (indent, all_indent) = match line_start_to_cursor(&rope, self.cursor) {
             Some(iter) => {
                 let mut iter = iter.peekable();
                 let mut indent = 0;
@@ -899,8 +916,6 @@ impl BufferContext {
             }
             None => (0, false),
         };
-
-        let mut rope = buf.rope.get_mut();
 
         // if the whole line is indent, insert newline *before* indent
         // instead of adding a fresh indentation
