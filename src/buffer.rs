@@ -716,6 +716,7 @@ impl BufferContext {
     }
 
     pub fn cursor_home(&mut self, selecting: bool) {
+        // TODO - provide Nano-style Smart Home behavior
         let buf = self.buffer.borrow_move();
         if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor)
             && let Some((home, _)) = line_char_range(&buf.rope, current_line)
@@ -1950,6 +1951,38 @@ fn select_next_char<const FORWARD: bool>(
     }
 }
 
+fn select_limited_next_char<const FORWARD: bool>(
+    rope: &ropey::Rope,
+    cursor: usize,
+    target: char,
+    stack: char,
+    limit: usize,
+) -> Option<usize> {
+    let mut chars = rope.chars_at(cursor);
+    if !FORWARD {
+        chars.reverse();
+    }
+    let mut stacked = 0;
+    chars
+        .zip(0..limit)
+        .find(|(c, _)| {
+            if *c == target {
+                if stacked > 0 {
+                    stacked -= 1;
+                    false
+                } else {
+                    true
+                }
+            } else if *c == stack {
+                stacked += 1;
+                false
+            } else {
+                false
+            }
+        })
+        .map(|(_, pos)| if FORWARD { cursor + pos } else { cursor - pos })
+}
+
 /// Attempts to find next pairing character
 /// (closing parens, quotes, etc.)
 /// returning the character and its character position
@@ -2598,9 +2631,9 @@ impl StatefulWidget for BufferWidget<'_> {
             colorized: Vec<Span<'s>>,
             (line_start, line_end): (usize, usize),
             (selection_start, selection_end): (usize, usize),
-        ) -> Line<'s> {
+        ) -> Vec<Span<'s>> {
             if selection_end <= line_start || selection_start >= line_end {
-                colorized.into()
+                colorized
             } else {
                 let mut colorized = VecDeque::from(colorized);
                 let mut highlighted = Vec::with_capacity(colorized.len());
@@ -2624,8 +2657,29 @@ impl StatefulWidget for BufferWidget<'_> {
                 // output any remaining characters verbatim
                 highlighted.extend(colorized);
 
-                highlighted.into()
+                highlighted
             }
+        }
+
+        fn highlight_paren<'s>(
+            colorized: Vec<Span<'s>>,
+            (line_start, line_end): (usize, usize),
+            paren: Option<usize>,
+        ) -> Vec<Span<'s>> {
+            let Some(paren_offset) = paren
+                .and_then(|p| p.checked_sub(line_start))
+                .filter(|p| *p <= line_end - line_start)
+            else {
+                return colorized;
+            };
+            let mut colorized: VecDeque<_> = colorized.into();
+            let mut highlighted = Vec::with_capacity(colorized.len());
+            extract(&mut colorized, paren_offset, &mut highlighted, |s| s);
+            extract(&mut colorized, 1, &mut highlighted, |s| {
+                s.style(Style::new().bg(Color::Yellow))
+            });
+            highlighted.extend(colorized);
+            highlighted
         }
 
         fn line_matches(
@@ -2759,6 +2813,44 @@ impl StatefulWidget for BufferWidget<'_> {
             })
             .unwrap_or_default();
 
+        // we're technically only viewing half of the viewport most of the time
+        // but it's okay for the viewport_size to be a bit larger than necessary
+        let viewport_size = rope.try_line_to_char(current_line.unwrap_or(0) + state.viewport_height)
+            .unwrap_or(rope.len_chars())
+            .saturating_sub(rope.try_line_to_char(viewport_line).unwrap_or(0));
+
+        let matching_paren: Option<usize> = match rope.get_char(state.cursor) {
+            Some('(') => {
+                select_limited_next_char::<true>(rope, state.cursor + 1, ')', '(', viewport_size)
+            }
+            Some('[') => {
+                select_limited_next_char::<true>(rope, state.cursor + 1, ']', '[', viewport_size)
+            }
+            Some('{') => {
+                select_limited_next_char::<true>(rope, state.cursor + 1, '}', '{', viewport_size)
+            }
+            Some('<') => {
+                select_limited_next_char::<true>(rope, state.cursor + 1, '>', '<', viewport_size)
+            }
+            Some(')') => {
+                select_limited_next_char::<false>(rope, state.cursor, '(', ')', viewport_size)
+                    .map(|c| c.saturating_sub(1))
+            }
+            Some(']') => {
+                select_limited_next_char::<false>(rope, state.cursor, '[', ']', viewport_size)
+                    .map(|c| c.saturating_sub(1))
+            }
+            Some('}') => {
+                select_limited_next_char::<false>(rope, state.cursor, '{', '}', viewport_size)
+                    .map(|c| c.saturating_sub(1))
+            }
+            Some('>') => {
+                select_limited_next_char::<false>(rope, state.cursor, '<', '>', viewport_size)
+                    .map(|c| c.saturating_sub(1))
+            }
+            _ => None,
+        };
+
         Paragraph::new(match self.mode {
             Some(EditorMode::Find { prompt, .. }) if !prompt.is_empty() => {
                 let searching = prompt.get_value().unwrap_or_default();
@@ -2831,6 +2923,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                             (line_start, line_end),
                                             (selection_start, selection_end),
                                         )
+                                        .into()
                                     }
                                 },
                             )
@@ -2899,7 +2992,8 @@ impl StatefulWidget for BufferWidget<'_> {
                                         ),
                                         (line_start, line_end),
                                         (selection_start, selection_end),
-                                    ),
+                                    )
+                                    .into(),
                                 },
                             )
                             .map(|line| widen_tabs(line, &state.tab_substitution))
@@ -2914,14 +3008,28 @@ impl StatefulWidget for BufferWidget<'_> {
                     None => rope
                         .lines_at(viewport_line)
                         .zip(viewport_line..)
-                        .map(|(line, line_number)| {
-                            Line::from(colorize(
-                                syntax,
-                                &mut hlstate,
-                                Cow::from(line),
-                                Some(line_number) == current_line,
-                            ))
-                        })
+                        .map(
+                            |(line, line_number)| match line_char_range(rope, line_number) {
+                                None => colorize(
+                                    syntax,
+                                    &mut hlstate,
+                                    Cow::from(line),
+                                    Some(line_number) == current_line,
+                                )
+                                .into(),
+                                Some((line_start, line_end)) => highlight_paren(
+                                    colorize(
+                                        syntax,
+                                        &mut hlstate,
+                                        Cow::from(line),
+                                        Some(line_number) == current_line,
+                                    ),
+                                    (line_start, line_end),
+                                    matching_paren,
+                                )
+                                .into(),
+                            },
+                        )
                         .map(|line| widen_tabs(line, &state.tab_substitution))
                         .take(area.height.into())
                         .collect::<Vec<_>>(),
@@ -2939,16 +3047,21 @@ impl StatefulWidget for BufferWidget<'_> {
                                         Cow::from(line),
                                         Some(line_number) == current_line,
                                     )),
-                                    Some((line_start, line_end)) => highlight_selection(
-                                        colorize(
-                                            syntax,
-                                            &mut hlstate,
-                                            Cow::from(line),
-                                            Some(line_number) == current_line,
+                                    Some((line_start, line_end)) => highlight_paren(
+                                        highlight_selection(
+                                            colorize(
+                                                syntax,
+                                                &mut hlstate,
+                                                Cow::from(line),
+                                                Some(line_number) == current_line,
+                                            ),
+                                            (line_start, line_end),
+                                            (selection_start, selection_end),
                                         ),
                                         (line_start, line_end),
-                                        (selection_start, selection_end),
-                                    ),
+                                        matching_paren,
+                                    )
+                                    .into(),
                                 },
                             )
                             .map(|line| widen_tabs(line, &state.tab_substitution))
