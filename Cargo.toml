@@ -24,7 +24,6 @@ imara-diff = "0.2"
 logos = "0.16"
 ratatui = "0.30"
 ropey = "1.6"
-unicode-truncate = "2.0"
 unicode-width = "0.2"
 ssh2 = { version = "0.9", optional = true }
 inquire = { version = "0.9", optional = true }
