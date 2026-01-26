@@ -716,14 +716,42 @@ impl BufferContext {
     }
 
     pub fn cursor_home(&mut self, selecting: bool) {
-        // TODO - provide Nano-style Smart Home behavior
         let buf = self.buffer.borrow_move();
         if let Ok(current_line) = buf.rope.try_char_to_line(self.cursor)
             && let Some((home, _)) = line_char_range(&buf.rope, current_line)
         {
+            use unicode_width::UnicodeWidthChar;
+
+            let indent_char = if self.tabs_required { '\t' } else { ' ' };
+
             update_selection(&mut self.selection, self.cursor, selecting);
-            self.cursor = home;
-            self.cursor_column = 0;
+
+            match line_chars(&buf.rope, self.cursor) {
+                Some(iter) => {
+                    let mut iter = iter.peekable();
+                    let mut indent = home;
+                    let mut cursor_column = 0;
+                    while let Some(c) = iter.next_if(|c| *c == indent_char) {
+                        indent += 1;
+                        cursor_column += match c {
+                            '\t' => *SPACES_PER_TAB,
+                            c => c.width().unwrap_or(1),
+                        };
+                    }
+
+                    if self.cursor == indent {
+                        self.cursor = home;
+                        self.cursor_column = 0;
+                    } else {
+                        self.cursor = indent;
+                        self.cursor_column = cursor_column;
+                    }
+                }
+                None => {
+                    self.cursor = home;
+                    self.cursor_column = 0;
+                }
+            }
         }
     }
 
@@ -1882,6 +1910,12 @@ fn line_start_to_cursor(rope: &ropey::Rope, cursor: usize) -> Option<impl Iterat
         .map(|iter| iter.take(cursor - start))
 }
 
+/// Returns all characters in cursor's line
+fn line_chars(rope: &ropey::Rope, cursor: usize) -> Option<impl Iterator<Item = char>> {
+    line_char_range(rope, rope.try_char_to_line(cursor).ok()?)
+        .and_then(|(start, end)| rope.get_chars_at(start).map(|iter| iter.take(end - start)))
+}
+
 // If we move the cursor without performing a selection, clear the selection
 // If we move the cursor while performing a selection, set the selection if necessary
 fn update_selection(selection: &mut Option<usize>, cursor: usize, selecting: bool) {
@@ -2815,7 +2849,8 @@ impl StatefulWidget for BufferWidget<'_> {
 
         // we're technically only viewing half of the viewport most of the time
         // but it's okay for the viewport_size to be a bit larger than necessary
-        let viewport_size = rope.try_line_to_char(current_line.unwrap_or(0) + state.viewport_height)
+        let viewport_size = rope
+            .try_line_to_char(current_line.unwrap_or(0) + state.viewport_height)
             .unwrap_or(rope.len_chars())
             .saturating_sub(rope.try_line_to_char(viewport_line).unwrap_or(0));
 
