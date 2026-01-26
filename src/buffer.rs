@@ -27,6 +27,9 @@ static SPACES_PER_TAB: std::sync::LazyLock<usize> = std::sync::LazyLock::new(|| 
         .unwrap_or(4)
 });
 
+static ALWAYS_TAB: std::sync::LazyLock<bool> =
+    std::sync::LazyLock::new(|| std::env::var("VLE_ALWAYS_TAB").is_ok());
+
 pub enum Source {
     Local(PathBuf),
     #[cfg(feature = "ssh")]
@@ -2167,11 +2170,10 @@ fn delete_surround<'s>(
 impl From<Buffer> for BufferContext {
     fn from(buffer: Buffer) -> Self {
         use crate::syntax::Highlighter;
-        use std::env::var;
 
         Self {
             tab_substitution: std::iter::repeat_n(' ', *SPACES_PER_TAB).collect(),
-            tabs_required: var("VLE_ALWAYS_TAB").is_ok() || buffer.syntax.tabs_required(),
+            tabs_required: *ALWAYS_TAB || buffer.syntax.tabs_required(),
             buffer: buffer.into(),
             viewport_height: 0,
             cursor: 0,
