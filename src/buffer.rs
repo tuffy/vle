@@ -2472,7 +2472,7 @@ impl StatefulWidget for BufferWidget<'_> {
         }
 
         fn extract<'s>(
-            colorized: &mut VecDeque<Span<'s>>,
+            input: &mut VecDeque<Span<'s>>,
             mut characters: usize,
             output: &mut Vec<Span<'s>>,
             map: impl Fn(Span<'s>) -> Span<'s>,
@@ -2495,7 +2495,7 @@ impl StatefulWidget for BufferWidget<'_> {
             }
 
             while characters > 0 {
-                let Some(span) = colorized.pop_front() else {
+                let Some(span) = input.pop_front() else {
                     return;
                 };
                 let span_width = span.content.chars().count();
@@ -2504,7 +2504,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     output.push(map(span));
                 } else {
                     let (prefix, suffix) = split_cow(span.content, characters);
-                    colorized.push_front(Span {
+                    input.push_front(Span {
                         style: span.style,
                         content: suffix,
                     });
