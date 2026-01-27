@@ -32,17 +32,17 @@ are done via simple environment variables.
 
 | Action                         | Shortcut       | Shortcut                           |
 |-------------------------------:|----------------|------------------------------------|
-| Open File                      | <kbd>F2</kbd>  | <kbd>Ctrl</kbd>-<kbd>O</kdb>       |
-| Save File                      | <kbd>F3</kbd>  | <kbd>Ctrl</kbd>-<kbd>S</kdb>       |
-| Goto Line                      | <kbd>F4</kbd>  | <kbd>Ctrl</kbd>-<kbd>T</kdb>       |
-| Find Text                      | <kbd>F5</kbd>  | <kbd>Ctrl</kbd>-<kbd>F</kdb>       |
-| Replace Text                   | <kbd>F6</kbd>  | <kbd>Ctrl</kbd>-<kbd>R</kdb>       |
-| Goto Matching Pair             | <kbd>F7</kbd>  | <kbd>Ctrl</kbd>-<kbd>P</kdb>       |
-| Select Inside Pair             | <kbd>F8</kbd>  | <kbd>Ctrl</kbd>-<kbd>E</kdb>       |
-| Widen Selection to Whole Lines | <kbd>F9</kbd>  | <kbd>Ctrl</kbd>-<kbd>W</kdb>       |
-| Split/Un-Split Pane            | <kbd>F10</kbd> | <kbd>Ctrl</kbd>-<kbd>N</kdb>       |
-| Reload File                    | <kbd>F11</kbd> | <kbd>Ctrl</kbd>-<kbd>L</kdb>       |
-| Quit File                      | <kbd>F12</kbd> | <kbd>Ctrl</kbd>-<kbd>Q</kdb>       |
+| Open File                      | <kbd>F2</kbd>  | <kbd>Ctrl</kbd>-<kbd>O</kbd>       |
+| Save File                      | <kbd>F3</kbd>  | <kbd>Ctrl</kbd>-<kbd>S</kbd>       |
+| Goto Line                      | <kbd>F4</kbd>  | <kbd>Ctrl</kbd>-<kbd>T</kbd>       |
+| Find Text                      | <kbd>F5</kbd>  | <kbd>Ctrl</kbd>-<kbd>F</kbd>       |
+| Replace Text                   | <kbd>F6</kbd>  | <kbd>Ctrl</kbd>-<kbd>R</kbd>       |
+| Goto Matching Pair             | <kbd>F7</kbd>  | <kbd>Ctrl</kbd>-<kbd>P</kbd>       |
+| Select Inside Pair             | <kbd>F8</kbd>  | <kbd>Ctrl</kbd>-<kbd>E</kbd>       |
+| Widen Selection to Whole Lines | <kbd>F9</kbd>  | <kbd>Ctrl</kbd>-<kbd>W</kbd>       |
+| Split/Un-Split Pane            | <kbd>F10</kbd> | <kbd>Ctrl</kbd>-<kbd>N</kbd>       |
+| Reload File                    | <kbd>F11</kbd> | <kbd>Ctrl</kbd>-<kbd>L</kbd>       |
+| Quit File                      | <kbd>F12</kbd> | <kbd>Ctrl</kbd>-<kbd>Q</kbd>       |
 | Highlight Text                 |                | <kbd>Shift</kbd>-<kbd>Arrows</kbd> |
 | Start                          |                | <kbd>Ctrl</kbd>-<kbd>Home</kbd>    |
 | End of Selection               |                | <kbd>Ctrl</kbd>-<kbd>End</kbd>     |
