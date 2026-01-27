@@ -15,6 +15,7 @@ use ratatui::{
 };
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::ops::Range;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::SystemTime;
@@ -1536,14 +1537,13 @@ impl BufferContext {
         }
     }
 
-    /// Given the whole text to search (maybe a subset of rope),
-    /// the byte offset of that whole text (maybe 0) and a search term,
+    /// Given the whole text to search
     /// returns Vec of match ranges, in characters
     pub fn search_matches(
         &self,
         SearchArea { text: whole_text }: &SearchArea,
         term: &str,
-    ) -> Vec<(usize, usize)> {
+    ) -> Vec<Range<usize>> {
         let buf = self.buffer.borrow();
         let rope = &buf.rope;
 
@@ -1551,19 +1551,12 @@ impl BufferContext {
             .match_indices(term)
             .map(|(start_byte, s)| (start_byte, start_byte + s.len()))
             .filter_map(|(s, e)| {
-                Some((
-                    rope.try_byte_to_char(s).ok()?,
-                    rope.try_byte_to_char(e).ok()?,
-                ))
+                Some(rope.try_byte_to_char(s).ok()?..rope.try_byte_to_char(e).ok()?)
             })
             .collect()
     }
 
-    pub fn clear_matches(
-        &mut self,
-        alt: Option<AltCursor<'_>>,
-        mut matches: &mut [(usize, usize)],
-    ) {
+    pub fn clear_matches(&mut self, alt: Option<AltCursor<'_>>, mut matches: &mut [Range<usize>]) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
         let mut alt = Secondary::new(alt, |_| true);
@@ -1571,32 +1564,35 @@ impl BufferContext {
         loop {
             match matches {
                 [] => break,
-                [(s, e)] => {
-                    let _ = rope.try_remove(*s..*e);
-                    if *s <= self.cursor {
-                        self.cursor = self.cursor.saturating_sub((*e - *s).min(self.cursor - *s));
+                [r] => {
+                    let _ = rope.try_remove(r.clone());
+                    if r.start <= self.cursor {
+                        self.cursor = self
+                            .cursor
+                            .saturating_sub((r.end - r.start).min(self.cursor - r.start));
                     }
                     alt.update(|cursor| {
-                        if *s <= *cursor {
-                            *cursor = cursor.saturating_sub((*e - *s).min(*cursor - *s));
+                        if r.start <= *cursor {
+                            *cursor =
+                                cursor.saturating_sub((r.end - r.start).min(*cursor - r.start));
                         }
                     });
                     break;
                 }
-                [(s, e), rest @ ..] => {
-                    let len = *e - *s;
-                    let _ = rope.try_remove(*s..*e);
-                    if *s <= self.cursor {
-                        self.cursor = self.cursor.saturating_sub(len.min(self.cursor - *s));
+                [r, rest @ ..] => {
+                    let len = r.end - r.start;
+                    let _ = rope.try_remove(r.clone());
+                    if r.start <= self.cursor {
+                        self.cursor = self.cursor.saturating_sub(len.min(self.cursor - r.start));
                     }
                     alt.update(|cursor| {
-                        if *s <= *cursor {
-                            *cursor = cursor.saturating_sub(len.min(*cursor - *s));
+                        if r.start <= *cursor {
+                            *cursor = cursor.saturating_sub(len.min(*cursor - r.start));
                         }
                     });
-                    for (s, e) in rest.iter_mut() {
-                        *s -= len;
-                        *e -= len;
+                    for r in rest.iter_mut() {
+                        r.start -= len;
+                        r.end -= len;
                     }
                     matches = rest;
                 }
@@ -1608,7 +1604,7 @@ impl BufferContext {
     pub fn multi_insert_char(
         &mut self,
         alt: Option<AltCursor<'_>>,
-        mut matches: &mut [(usize, usize)],
+        mut matches: &mut [Range<usize>],
         c: char,
     ) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
@@ -1618,33 +1614,33 @@ impl BufferContext {
         loop {
             match matches {
                 [] => break,
-                [(_, cursor)] => {
-                    rope.insert_char(*cursor, c);
-                    if *cursor <= self.cursor {
+                [r] => {
+                    rope.insert_char(r.end, c);
+                    if r.end <= self.cursor {
                         self.cursor += 1;
                     }
                     alt.update(|a| {
-                        if *cursor <= *a {
+                        if r.end <= *a {
                             *a += 1;
                         }
                     });
-                    *cursor += 1;
+                    r.end += 1;
                     break;
                 }
-                [(_, cursor), rest @ ..] => {
-                    rope.insert_char(*cursor, c);
-                    if *cursor <= self.cursor {
+                [r, rest @ ..] => {
+                    rope.insert_char(r.end, c);
+                    if r.end <= self.cursor {
                         self.cursor += 1;
                     }
                     alt.update(|a| {
-                        if *cursor <= *a {
+                        if r.end <= *a {
                             *a += 1;
                         }
                     });
-                    *cursor += 1;
-                    for (s, e) in rest.iter_mut() {
-                        *s += 1;
-                        *e += 1;
+                    r.end += 1;
+                    for r in rest.iter_mut() {
+                        r.start += 1;
+                        r.end += 1;
                     }
                     matches = rest;
                 }
@@ -1655,7 +1651,7 @@ impl BufferContext {
     pub fn multi_insert_string(
         &mut self,
         alt: Option<AltCursor<'_>>,
-        mut matches: &mut [(usize, usize)],
+        mut matches: &mut [Range<usize>],
         s: &str,
     ) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
@@ -1667,33 +1663,33 @@ impl BufferContext {
         loop {
             match matches {
                 [] => break,
-                [(_, cursor)] => {
-                    rope.insert(*cursor, s);
-                    if *cursor <= self.cursor {
+                [r] => {
+                    rope.insert(r.end, s);
+                    if r.end <= self.cursor {
                         self.cursor += chars_len;
                     }
                     alt.update(|a| {
-                        if *cursor <= *a {
+                        if r.end <= *a {
                             *a += chars_len;
                         }
                     });
-                    *cursor += chars_len;
+                    r.end += chars_len;
                     break;
                 }
-                [(_, cursor), rest @ ..] => {
-                    rope.insert(*cursor, s);
-                    if *cursor <= self.cursor {
+                [r, rest @ ..] => {
+                    rope.insert(r.end, s);
+                    if r.end <= self.cursor {
                         self.cursor += chars_len;
                     }
                     alt.update(|a| {
-                        if *cursor <= *a {
+                        if r.end <= *a {
                             *a += chars_len;
                         }
                     });
-                    *cursor += chars_len;
-                    for (s, e) in rest.iter_mut() {
-                        *s += chars_len;
-                        *e += chars_len;
+                    r.end += chars_len;
+                    for r in rest.iter_mut() {
+                        r.start += chars_len;
+                        r.end += chars_len;
                     }
                     matches = rest;
                 }
@@ -1704,7 +1700,7 @@ impl BufferContext {
     pub fn multi_backspace(
         &mut self,
         alt: Option<AltCursor<'_>>,
-        mut matches: &mut [(usize, usize)],
+        mut matches: &mut [Range<usize>],
     ) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
@@ -1713,36 +1709,36 @@ impl BufferContext {
         loop {
             match matches {
                 [] => break,
-                [(s, e)] => {
-                    if *e > *s {
-                        let _ = rope.try_remove((*e - 1)..*e);
-                        if *s <= self.cursor {
+                [r] => {
+                    if r.end > r.start {
+                        let _ = rope.try_remove((r.end - 1)..r.end);
+                        if r.start <= self.cursor {
                             self.cursor = self.cursor.saturating_sub(1);
                         }
                         alt.update(|a| {
-                            if *s <= *a {
+                            if r.start <= *a {
                                 *a = a.saturating_sub(1);
                             }
                         });
-                        *e -= 1;
+                        r.end -= 1;
                     }
                     break;
                 }
-                [(s, e), rest @ ..] => {
-                    if *e > *s {
-                        let _ = rope.try_remove((*e - 1)..*e);
-                        if *s <= self.cursor {
+                [r, rest @ ..] => {
+                    if r.end > r.start {
+                        let _ = rope.try_remove((r.end - 1)..r.end);
+                        if r.start <= self.cursor {
                             self.cursor = self.cursor.saturating_sub(1);
                         }
                         alt.update(|a| {
-                            if *s <= *a {
+                            if r.start <= *a {
                                 *a = a.saturating_sub(1);
                             }
                         });
-                        *e -= 1;
-                        for (s, e) in rest.iter_mut() {
-                            *s -= 1;
-                            *e -= 1;
+                        r.end -= 1;
+                        for r in rest.iter_mut() {
+                            r.start -= 1;
+                            r.end -= 1;
                         }
                         matches = rest;
                     } else {
@@ -2591,7 +2587,7 @@ impl StatefulWidget for BufferWidget<'_> {
         fn highlight_matches<'s>(
             colorized: Vec<Span<'s>>,
             line_range: RangeInclusive<usize>,
-            matches: &mut VecDeque<(usize, usize)>,
+            matches: &mut VecDeque<Range<usize>>,
         ) -> Vec<Span<'s>> {
             // A trivial abstraction to make working
             // simultaneously with both line and match ranges
@@ -2601,17 +2597,20 @@ impl StatefulWidget for BufferWidget<'_> {
                 end: usize,
             }
 
-            impl From<(usize, usize)> for IntRange {
+            impl From<Range<usize>> for IntRange {
                 #[inline]
-                fn from((start, end): (usize, usize)) -> Self {
-                    Self { start, end }
+                fn from(r: Range<usize>) -> Self {
+                    Self {
+                        start: r.start,
+                        end: r.end,
+                    }
                 }
             }
 
-            impl From<IntRange> for (usize, usize) {
+            impl From<IntRange> for Range<usize> {
                 #[inline]
                 fn from(IntRange { start, end }: IntRange) -> Self {
-                    (start, end)
+                    start..end
                 }
             }
 
@@ -2758,7 +2757,7 @@ impl StatefulWidget for BufferWidget<'_> {
             line_start: usize,
             line: &str,
             search: &str,
-        ) -> VecDeque<(usize, usize)> {
+        ) -> VecDeque<Range<usize>> {
             let line_byte_start = rope.char_to_byte(line_start);
 
             line.match_indices(search)
@@ -2769,10 +2768,10 @@ impl StatefulWidget for BufferWidget<'_> {
                     )
                 })
                 .filter_map(|(byte_start, byte_end)| {
-                    Some((
-                        rope.try_byte_to_char(byte_start).ok()?,
-                        rope.try_byte_to_char(byte_end).ok()?,
-                    ))
+                    Some(
+                        rope.try_byte_to_char(byte_start).ok()?
+                            ..rope.try_byte_to_char(byte_end).ok()?,
+                    )
                 })
                 .collect()
         }
@@ -2975,7 +2974,8 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
             Some(EditorMode::SelectMatches { matches, .. }) => {
-                let mut matches = matches.iter().copied().collect();
+                // let mut matches = matches.iter().copied().collect();
+                let mut matches = matches.clone().into();
 
                 match state.selection {
                     // no selection, so highlight matches only

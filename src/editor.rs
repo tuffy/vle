@@ -18,6 +18,7 @@ use ratatui::{
     layout::{Position, Rect},
     widgets::StatefulWidget,
 };
+use std::ops::Range;
 
 const PAGE_SIZE: usize = 25;
 
@@ -40,13 +41,13 @@ pub enum EditorMode {
         area: SearchArea,
     },
     SelectMatches {
-        matches: Vec<(usize, usize)>,
+        matches: Vec<Range<usize>>,
         match_idx: usize,
         prompt: SearchPrompt,
         area: SearchArea,
     },
     ReplaceMatches {
-        matches: Vec<(usize, usize)>,
+        matches: Vec<Range<usize>>,
         match_idx: usize,
     },
     Open {
@@ -968,7 +969,7 @@ fn process_find(
                         let cursor = buffer.get_cursor();
                         EditorMode::SelectMatches {
                             // incremental search should always place the cursor on a match
-                            match_idx: matches.iter().position(|(s, _)| *s == cursor)?,
+                            match_idx: matches.iter().position(|r| r.start == cursor)?,
                             matches,
                             prompt: std::mem::take(prompt),
                             area: std::mem::take(area),
@@ -1002,7 +1003,7 @@ fn process_find(
                         let cursor = buffer.get_cursor();
                         EditorMode::SelectMatches {
                             // incremental search should always place the cursor on a match
-                            match_idx: matches.iter().position(|(s, _)| *s == cursor)?,
+                            match_idx: matches.iter().position(|r| r.start == cursor)?,
                             matches,
                             prompt: std::mem::take(prompt),
                             area: std::mem::take(area),
@@ -1028,7 +1029,7 @@ fn process_find(
                 Some(EditorMode::default())
             } else {
                 let cursor = buffer.get_cursor();
-                let mut match_idx = matches.iter().position(|(s, _)| *s == cursor)?;
+                let mut match_idx = matches.iter().position(|r| r.start == cursor)?;
                 match process_select_matches(
                     buffer,
                     cut_buffer,
@@ -1063,10 +1064,10 @@ fn process_find(
                     } else {
                         let cursor = buffer.get_cursor();
                         // incremental search should always place the cursor on a match
-                        let match_idx = matches.iter().position(|(s, _)| *s == cursor)?;
+                        let match_idx = matches.iter().position(|r| r.start == cursor)?;
                         buffer.clear_matches(alt, &mut matches);
                         EditorMode::ReplaceMatches {
-                            matches: matches.into_iter().map(|(s, _)| (s, s)).collect(),
+                            matches: matches.into_iter().map(|r| r.start..r.start).collect(),
                             match_idx,
                         }
                     })
@@ -1087,7 +1088,7 @@ fn process_select_matches(
     cut_buffer: Option<&CutBuffer>,
     area: &mut SearchArea,
     prompt: &mut SearchPrompt,
-    matches: &mut Vec<(usize, usize)>,
+    matches: &mut Vec<Range<usize>>,
     match_idx: &mut usize,
     event: Event,
     alt: Option<AltCursor<'_>>,
@@ -1135,8 +1136,8 @@ fn process_select_matches(
             ..
         }) => {
             *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
-            if let Some((s, e)) = matches.get(*match_idx) {
-                buffer.set_selection(*s, *e);
+            if let Some(r) = matches.get(*match_idx) {
+                buffer.set_selection(r.start, r.end);
             }
             None
         }
@@ -1151,8 +1152,8 @@ fn process_select_matches(
             ..
         }) => {
             *match_idx = (*match_idx + 1) % matches.len();
-            if let Some((s, e)) = matches.get(*match_idx) {
-                buffer.set_selection(*s, *e);
+            if let Some(r) = matches.get(*match_idx) {
+                buffer.set_selection(r.start, r.end);
             }
             None
         }
@@ -1169,8 +1170,8 @@ fn process_select_matches(
                 None => Some(EditorMode::default()),
                 Some(new_max) => {
                     *match_idx = (*match_idx).min(new_max);
-                    if let Some((s, e)) = matches.get(*match_idx) {
-                        buffer.set_selection(*s, *e);
+                    if let Some(r) = matches.get(*match_idx) {
+                        buffer.set_selection(r.start, r.end);
                     }
                     None
                 }
@@ -1178,13 +1179,13 @@ fn process_select_matches(
         }
         key!(CONTROL, 'r') | key!(F(6)) => {
             buffer.clear_matches(alt, matches);
-            if let Some((cursor, _)) = matches.get(*match_idx) {
-                buffer.set_cursor(*cursor);
+            if let Some(r) = matches.get(*match_idx) {
+                buffer.set_cursor(r.start);
             }
             Some(EditorMode::ReplaceMatches {
                 matches: std::mem::take(matches)
                     .into_iter()
-                    .map(|(s, _)| (s, s))
+                    .map(|r| r.start..r.start)
                     .collect(),
                 match_idx: std::mem::take(match_idx),
             })
@@ -1201,7 +1202,7 @@ fn process_select_matches(
 fn process_replace_matches(
     buffer: &mut BufferContext,
     cut_buffer: Option<&CutBuffer>,
-    matches: &mut [(usize, usize)],
+    matches: &mut [Range<usize>],
     match_idx: &mut usize,
     event: Event,
     alt: Option<AltCursor<'_>>,
@@ -1246,8 +1247,8 @@ fn process_replace_matches(
             ..
         }) => {
             *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
-            if let Some((_, e)) = matches.get(*match_idx) {
-                buffer.set_cursor(*e);
+            if let Some(r) = matches.get(*match_idx) {
+                buffer.set_cursor(r.end);
             }
             None
         }
@@ -1262,8 +1263,8 @@ fn process_replace_matches(
             ..
         }) => {
             *match_idx = (*match_idx + 1) % matches.len();
-            if let Some((_, e)) = matches.get(*match_idx) {
-                buffer.set_cursor(*e);
+            if let Some(r) = matches.get(*match_idx) {
+                buffer.set_cursor(r.end);
             }
             None
         }
