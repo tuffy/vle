@@ -19,7 +19,9 @@ effort to our tools.
 
 Installing VLE from source can be done using Cargo:
 
-    cargo install vle
+```bash
+cargo install vle
+```
 
 VLE compiles to a single self-contained binary which contains everything.
 Its syntax highlighting for different languages are built-in
@@ -28,32 +30,37 @@ are done via simple environment variables.
 
 # Keybindings and Features
 
-| Action                         | Keys  | Keys                       |
-|-------------------------------:|-------|----------------------------|
-| Open File                      | `F2`  | `Ctrl-O`                   |
-| Save File                      | `F3`  | `Ctrl-S`                   |
-| Goto Line                      | `F4`  | `Ctrl-T`                   |
-| Find Text                      | `F5`  | `Ctrl-F`                   |
-| Replace Text                   | `F6`  | `Ctrl-R`                   |
-| Goto Matching Pair             | `F7`  | `Ctrl-P`                   |
-| Select Inside Pair             | `F8`  | `Ctrl-E`                   |
-| Widen Selection to Whole Lines | `F9`  | `Ctrl-W`                   |
-| Split/Un-Split Pane            | `F10` | `Ctrl-N`                   |
-| Reload File                    | `F11` | `Ctrl-L`                   |
-| Quit File                      | `F12` | `Ctrl-Q`                   |
-| Highlight Text                 |       | `Shift-Arrows`             |
-| Start / End of Selection       |       | `Ctrl-Home` `Ctrl-End`     |
-| Cut / Copy / Paste             |       | `Ctrl-X` `Ctrl-C` `Ctrl-V` |
-| Undo / Redo                    |       | `Ctrl-Z` `Ctrl-Y`          |
-| Switch Buffer                  |       | `Ctrl-PgUp` `Ctrl-PgDn`    |
-| Switch Pane                    |       | `Ctrl-Arrows`              |
+| Action                         | Shortcut       | Shortcut                           |
+|-------------------------------:|----------------|------------------------------------|
+| Open File                      | <kbd>F2</kbd>  | <kbd>Ctrl</kbd>-<kbd>O</kdb>       |
+| Save File                      | <kbd>F3</kbd>  | <kbd>Ctrl</kbd>-<kbd>S</kdb>       |
+| Goto Line                      | <kbd>F4</kbd>  | <kbd>Ctrl</kbd>-<kbd>T</kdb>       |
+| Find Text                      | <kbd>F5</kbd>  | <kbd>Ctrl</kbd>-<kbd>F</kdb>       |
+| Replace Text                   | <kbd>F6</kbd>  | <kbd>Ctrl</kbd>-<kbd>R</kdb>       |
+| Goto Matching Pair             | <kbd>F7</kbd>  | <kbd>Ctrl</kbd>-<kbd>P</kdb>       |
+| Select Inside Pair             | <kbd>F8</kbd>  | <kbd>Ctrl</kbd>-<kbd>E</kdb>       |
+| Widen Selection to Whole Lines | <kbd>F9</kbd>  | <kbd>Ctrl</kbd>-<kbd>W</kdb>       |
+| Split/Un-Split Pane            | <kbd>F10/<kbd> | <kbd>Ctrl</kbd>-<kbd>N</kdb>       |
+| Reload File                    | <kbd>F11/<kbd> | <kbd>Ctrl</kbd>-<kbd>L</kdb>       |
+| Quit File                      | <kbd>F12/<kbd> | <kbd>Ctrl</kbd>-<kbd>Q</kdb>       |
+| Highlight Text                 |                | <kbd>Shift</kbd>-<kbd>Arrows</kbd> |
+| Start                          |                | <kbd>Ctrl</kbd>-<kbd>Home<kbd>     |
+| End of Selection               |                | <kbd>Ctrl</kbd>-<kbd>End</kbd>     |
+| Cut                            |                | <kbd>Ctrl</kbd>-<kbd>X<kbd>        |
+| Copy                           |                | <kbd>Ctrl</kbd>-<kbd>C<kbd>        |
+| Paste                          |                | <kbd>Ctrl</kbd>-<kbd>V</kbd>       |
+| Undo                           |                | <kbd>Ctrl</kbd>-<kbd>Z</kbd>       |
+| Redo                           |                | <kbd>Ctrl</kbd>-<kbd>Y</kbd>       |
+| Previous Buffer                |                | <kbd>Ctrl</kbd>-<kbd>PgUp<kbd>     |
+| Next Buffer                    |                | <kbd>Ctrl</kbd>-<kbd>PgDn</kbd>    |
+| Switch Pane                    |                | <kbd>Ctrl</kbd>-<kbd>Arrows</kbd/> |
 
 Because we have so few features, non-navigational features
-have alternative `Ctrl`-based and `F`-based keybindings.
+have alternative <kbd>Ctrl<kbd>-based and <kbd>F<kbd>-based keybindings.
 This also helps maintain compatibility with terminal multiplexers
-which have many of their own dedicated `Ctrl` bindings.
+which have many of their own dedicated <kbd>Ctrl<kbd> bindings.
 
-## Open Files
+## Open File
 
 Files to open can be provided on the command line,
 or via the open files dialog.  A filename can be provided
@@ -93,7 +100,7 @@ Searches incrementally forward to the next possible match
 as more text is entered.
 Use arrow keys to cycle forward or backward through
 all possible matches in the file.
-The `Del` key can be used to cull matches from the match list.
+The <kbd>Del<kbd> key can be used to cull matches from the match list.
 
 ## Replace Text
 
@@ -108,9 +115,9 @@ during the replacement process.
 ## Goto Matching Pair
 
 When the cursor is positioned at some directional
-paired character (such as `(`, `[`, `{`, `<`),
+paired character (such as <kbd>(</kbd>, <kbd>[</kbd>, <kbd>{</kbd>, <kbd>&lt;</kbd>),
 this will jump forward or backward to its paired counterpart
-(`)`, `]`, `}`, `>`).
+(<kbd>)</kbd>, <kbd>]</kbd>, <kbd>}</kbd>, <kbd>&gt;</kbd>).
 
 ## Select Inside Pair
 
@@ -196,3 +203,23 @@ languages / file formats:
 
 Syntax highlighting is done naively with an emphasis
 on colorizing known keywords, strings, etc.
+but may handle all cases since it doesn't do
+rigorous syntax analysis.
+
+# Why Another Editor?
+
+I've tried *a lot* of different text editors over the years,
+all with their own strengths and weaknesses.
+But I could never find the exact text editor I was looking for.
+Some were a little too overcomplicated.
+Some were a little too primitive.
+So rather than continue a seemingly endless search
+for the exact right text editor for me, I decided to write my own
+by mixing necessary features (like file saving) and those
+that impressed me in other editors (like splitting panes
+or selecting inside quotes).
+
+Whether it's the editor for you depends on your needs and tastes.
+But VLE has been developed exclusively with itself since version 0.2,
+so I can confidently say that it's good enough for projects
+at least as large as itself.
