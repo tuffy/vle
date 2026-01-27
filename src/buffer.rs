@@ -2439,8 +2439,6 @@ impl StatefulWidget for BufferWidget<'_> {
                 fn extract_range(&self, range: std::ops::Range<usize>) -> Self;
 
                 fn extract_range_from(&self, range: std::ops::RangeFrom<usize>) -> Self;
-
-                fn is_empty(&self) -> bool;
             }
 
             impl<'s> FromRange<'s> for &'s str {
@@ -2450,9 +2448,6 @@ impl StatefulWidget for BufferWidget<'_> {
                 fn extract_range_from(&self, range: std::ops::RangeFrom<usize>) -> Self {
                     &self[range]
                 }
-                fn is_empty(&self) -> bool {
-                    str::is_empty(self)
-                }
             }
 
             impl FromRange<'static> for String {
@@ -2461,9 +2456,6 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
                 fn extract_range_from(&self, range: std::ops::RangeFrom<usize>) -> Self {
                     self[range].to_string()
-                }
-                fn is_empty(&self) -> bool {
-                    String::is_empty(self)
                 }
             }
 
@@ -2486,7 +2478,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     idx = range.end;
                 }
                 let last = text.extract_range_from(idx..);
-                if !last.is_empty() {
+                if !last.as_ref().is_empty() {
                     elements.push(Span::raw(last));
                 }
                 elements
