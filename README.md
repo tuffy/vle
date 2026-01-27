@@ -40,25 +40,25 @@ are done via simple environment variables.
 | Goto Matching Pair             | <kbd>F7</kbd>  | <kbd>Ctrl</kbd>-<kbd>P</kdb>       |
 | Select Inside Pair             | <kbd>F8</kbd>  | <kbd>Ctrl</kbd>-<kbd>E</kdb>       |
 | Widen Selection to Whole Lines | <kbd>F9</kbd>  | <kbd>Ctrl</kbd>-<kbd>W</kdb>       |
-| Split/Un-Split Pane            | <kbd>F10/<kbd> | <kbd>Ctrl</kbd>-<kbd>N</kdb>       |
-| Reload File                    | <kbd>F11/<kbd> | <kbd>Ctrl</kbd>-<kbd>L</kdb>       |
-| Quit File                      | <kbd>F12/<kbd> | <kbd>Ctrl</kbd>-<kbd>Q</kdb>       |
+| Split/Un-Split Pane            | <kbd>F10</kbd> | <kbd>Ctrl</kbd>-<kbd>N</kdb>       |
+| Reload File                    | <kbd>F11</kbd> | <kbd>Ctrl</kbd>-<kbd>L</kdb>       |
+| Quit File                      | <kbd>F12</kbd> | <kbd>Ctrl</kbd>-<kbd>Q</kdb>       |
 | Highlight Text                 |                | <kbd>Shift</kbd>-<kbd>Arrows</kbd> |
-| Start                          |                | <kbd>Ctrl</kbd>-<kbd>Home<kbd>     |
+| Start                          |                | <kbd>Ctrl</kbd>-<kbd>Home</kbd>    |
 | End of Selection               |                | <kbd>Ctrl</kbd>-<kbd>End</kbd>     |
-| Cut                            |                | <kbd>Ctrl</kbd>-<kbd>X<kbd>        |
-| Copy                           |                | <kbd>Ctrl</kbd>-<kbd>C<kbd>        |
+| Cut                            |                | <kbd>Ctrl</kbd>-<kbd>X</kbd>       |
+| Copy                           |                | <kbd>Ctrl</kbd>-<kbd>C</kbd>       |
 | Paste                          |                | <kbd>Ctrl</kbd>-<kbd>V</kbd>       |
 | Undo                           |                | <kbd>Ctrl</kbd>-<kbd>Z</kbd>       |
 | Redo                           |                | <kbd>Ctrl</kbd>-<kbd>Y</kbd>       |
-| Previous Buffer                |                | <kbd>Ctrl</kbd>-<kbd>PgUp<kbd>     |
+| Previous Buffer                |                | <kbd>Ctrl</kbd>-<kbd>PgUp</kbd>    |
 | Next Buffer                    |                | <kbd>Ctrl</kbd>-<kbd>PgDn</kbd>    |
 | Switch Pane                    |                | <kbd>Ctrl</kbd>-<kbd>Arrows</kbd/> |
 
 Because we have so few features, non-navigational features
-have alternative <kbd>Ctrl<kbd>-based and <kbd>F<kbd>-based keybindings.
+have alternative <kbd>Ctrl</kbd>-based and <kbd>F</kbd>-based keybindings.
 This also helps maintain compatibility with terminal multiplexers
-which have many of their own dedicated <kbd>Ctrl<kbd> bindings.
+which have many of their own dedicated <kbd>Ctrl</kbd> bindings.
 
 ## Open File
 
@@ -100,7 +100,7 @@ Searches incrementally forward to the next possible match
 as more text is entered.
 Use arrow keys to cycle forward or backward through
 all possible matches in the file.
-The <kbd>Del<kbd> key can be used to cull matches from the match list.
+The <kbd>Del</kbd> key can be used to cull matches from the match list.
 
 ## Replace Text
 
