@@ -2366,11 +2366,41 @@ impl StatefulWidget for BufferWidget<'_> {
         };
         use std::borrow::Cow;
         use std::collections::VecDeque;
+        use std::ops::RangeInclusive;
 
         const EDITING: Style = Style::new().add_modifier(Modifier::REVERSED);
         const HIGHLIGHTED: Style = Style::new()
             .fg(Color::Yellow)
             .add_modifier(Modifier::REVERSED);
+
+        struct EditorLine<'s> {
+            line: Cow<'s, str>,
+            range: RangeInclusive<usize>, // range in rope in characters
+        }
+
+        impl<'s> EditorLine<'s> {
+            fn iter(rope: &'s ropey::Rope, start_line: usize) -> impl Iterator<Item = Self> {
+                let mut lines = rope.lines_at(start_line);
+                let mut line_start_numbers = start_line..;
+                let mut line_starts = std::iter::from_fn(move || {
+                    line_start_numbers
+                        .next()
+                        .and_then(|l| rope.try_line_to_char(l).ok())
+                })
+                .peekable();
+
+                std::iter::from_fn(move || {
+                    Some(EditorLine {
+                        line: Cow::from(lines.next()?),
+                        range: line_starts.next()?
+                            ..=line_starts
+                                .peek()
+                                .map(|e| e.saturating_sub(1))
+                                .unwrap_or_else(|| rope.len_chars() + 1),
+                    })
+                })
+            }
+        }
 
         fn widen_tabs<'l>(mut input: Line<'l>, tab_substitution: &str) -> Line<'l> {
             fn tabs_to_spaces(s: &mut Cow<'_, str>, tab_substitution: &str) {
@@ -2408,6 +2438,8 @@ impl StatefulWidget for BufferWidget<'_> {
                     }
                 }
             }
+
+            // TODO - should find some way to make these generic
 
             fn colorize_str<'s, S: Highlighter>(
                 syntax: &S,
@@ -2558,7 +2590,7 @@ impl StatefulWidget for BufferWidget<'_> {
         // and returns text in those ranges highlighted in blue
         fn highlight_matches<'s>(
             colorized: Vec<Span<'s>>,
-            (line_start, line_end): (usize, usize),
+            line_range: RangeInclusive<usize>,
             matches: &mut VecDeque<(usize, usize)>,
         ) -> Vec<Span<'s>> {
             // A trivial abstraction to make working
@@ -2610,6 +2642,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
 
+            let (line_start, line_end) = line_range.into_inner();
             let mut colorized = VecDeque::from(colorized);
             let mut highlighted = Vec::with_capacity(colorized.len());
             let mut line_range = IntRange {
@@ -2665,9 +2698,10 @@ impl StatefulWidget for BufferWidget<'_> {
         // portion highlighted, if necessary
         fn highlight_selection<'s>(
             colorized: Vec<Span<'s>>,
-            (line_start, line_end): (usize, usize),
+            line_range: RangeInclusive<usize>,
             (selection_start, selection_end): (usize, usize),
         ) -> Vec<Span<'s>> {
+            let (line_start, line_end) = line_range.into_inner();
             if selection_end <= line_start || selection_start >= line_end {
                 colorized
             } else {
@@ -2699,9 +2733,10 @@ impl StatefulWidget for BufferWidget<'_> {
 
         fn highlight_paren<'s>(
             colorized: Vec<Span<'s>>,
-            (line_start, line_end): (usize, usize),
+            line_range: RangeInclusive<usize>,
             paren: Option<usize>,
         ) -> Vec<Span<'s>> {
+            let (line_start, line_end) = line_range.into_inner();
             let Some(paren_offset) = paren
                 .and_then(|p| p.checked_sub(line_start))
                 .filter(|p| *p <= line_end - line_start)
@@ -2894,35 +2929,17 @@ impl StatefulWidget for BufferWidget<'_> {
 
                 match state.selection {
                     // no selection, so highlight matches only
-                    None => rope
-                        .lines_at(viewport_line)
-                        .zip(viewport_line..)
-                        .map(
-                            |(line, line_number)| match line_char_range(rope, line_number) {
-                                None => Line::from(colorize(
-                                    syntax,
-                                    &mut hlstate,
-                                    Cow::from(line),
-                                    Some(line_number) == current_line,
-                                )),
-                                Some((line_start, line_end)) => {
-                                    let line = Cow::from(line);
-                                    let mut matches =
-                                        line_matches(rope, line_start, &line, &searching);
-                                    highlight_matches(
-                                        colorize(
-                                            syntax,
-                                            &mut hlstate,
-                                            line,
-                                            Some(line_number) == current_line,
-                                        ),
-                                        (line_start, line_end),
-                                        &mut matches,
-                                    )
-                                    .into()
-                                }
-                            },
-                        )
+                    None => EditorLine::iter(rope, viewport_line)
+                        .map(|EditorLine { line, range }| {
+                            let mut matches = line_matches(rope, *range.start(), &line, &searching);
+
+                            highlight_matches(
+                                colorize(syntax, &mut hlstate, line, range.contains(&state.cursor)),
+                                range,
+                                &mut matches,
+                            )
+                            .into()
+                        })
                         .map(|line| widen_tabs(line, &state.tab_substitution))
                         .take(area.height.into())
                         .collect::<Vec<_>>(),
@@ -2930,40 +2947,27 @@ impl StatefulWidget for BufferWidget<'_> {
                     Some(selection) => {
                         let (selection_start, selection_end) = reorder(state.cursor, selection);
 
-                        rope.lines_at(viewport_line)
-                            .zip(viewport_line..)
-                            .map(
-                                |(line, line_number)| match line_char_range(rope, line_number) {
-                                    None => Line::from(colorize(
-                                        syntax,
-                                        &mut hlstate,
-                                        Cow::from(line),
-                                        Some(line_number) == current_line,
-                                    )),
-                                    Some((line_start, line_end)) => {
-                                        let line = Cow::from(line);
+                        EditorLine::iter(rope, viewport_line)
+                            .map(|EditorLine { line, range }| {
+                                let mut matches =
+                                    line_matches(rope, *range.start(), &line, &searching);
 
-                                        let mut matches =
-                                            line_matches(rope, line_start, &line, &searching);
-
-                                        highlight_selection(
-                                            highlight_matches(
-                                                colorize(
-                                                    syntax,
-                                                    &mut hlstate,
-                                                    line,
-                                                    Some(line_number) == current_line,
-                                                ),
-                                                (line_start, line_end),
-                                                &mut matches,
-                                            ),
-                                            (line_start, line_end),
-                                            (selection_start, selection_end),
-                                        )
-                                        .into()
-                                    }
-                                },
-                            )
+                                highlight_selection(
+                                    highlight_matches(
+                                        colorize(
+                                            syntax,
+                                            &mut hlstate,
+                                            line,
+                                            range.contains(&state.cursor),
+                                        ),
+                                        range.clone(),
+                                        &mut matches,
+                                    ),
+                                    range.clone(),
+                                    (selection_start, selection_end),
+                                )
+                                .into()
+                            })
                             .map(|line| widen_tabs(line, &state.tab_substitution))
                             .take(area.height.into())
                             .collect::<Vec<_>>()
@@ -2975,30 +2979,15 @@ impl StatefulWidget for BufferWidget<'_> {
 
                 match state.selection {
                     // no selection, so highlight matches only
-                    None => rope
-                        .lines_at(viewport_line)
-                        .zip(viewport_line..)
-                        .map(
-                            |(line, line_number)| match line_char_range(rope, line_number) {
-                                None => Line::from(colorize(
-                                    syntax,
-                                    &mut hlstate,
-                                    Cow::from(line),
-                                    Some(line_number) == current_line,
-                                )),
-                                Some((line_start, line_end)) => highlight_matches(
-                                    colorize(
-                                        syntax,
-                                        &mut hlstate,
-                                        Cow::from(line),
-                                        Some(line_number) == current_line,
-                                    ),
-                                    (line_start, line_end),
-                                    &mut matches,
-                                )
-                                .into(),
-                            },
-                        )
+                    None => EditorLine::iter(rope, viewport_line)
+                        .map(|EditorLine { line, range }| {
+                            highlight_matches(
+                                colorize(syntax, &mut hlstate, line, range.contains(&state.cursor)),
+                                range,
+                                &mut matches,
+                            )
+                            .into()
+                        })
                         .map(|line| widen_tabs(line, &state.tab_substitution))
                         .take(area.height.into())
                         .collect::<Vec<_>>(),
@@ -3006,33 +2995,24 @@ impl StatefulWidget for BufferWidget<'_> {
                     Some(selection) => {
                         let (selection_start, selection_end) = reorder(state.cursor, selection);
 
-                        rope.lines_at(viewport_line)
-                            .zip(viewport_line..)
-                            .map(
-                                |(line, line_number)| match line_char_range(rope, line_number) {
-                                    None => Line::from(colorize(
-                                        syntax,
-                                        &mut hlstate,
-                                        Cow::from(line),
-                                        Some(line_number) == current_line,
-                                    )),
-                                    Some((line_start, line_end)) => highlight_selection(
-                                        highlight_matches(
-                                            colorize(
-                                                syntax,
-                                                &mut hlstate,
-                                                Cow::from(line),
-                                                Some(line_number) == current_line,
-                                            ),
-                                            (line_start, line_end),
-                                            &mut matches,
+                        EditorLine::iter(rope, viewport_line)
+                            .map(|EditorLine { line, range }| {
+                                highlight_selection(
+                                    highlight_matches(
+                                        colorize(
+                                            syntax,
+                                            &mut hlstate,
+                                            line,
+                                            range.contains(&state.cursor),
                                         ),
-                                        (line_start, line_end),
-                                        (selection_start, selection_end),
-                                    )
-                                    .into(),
-                                },
-                            )
+                                        range.clone(),
+                                        &mut matches,
+                                    ),
+                                    range.clone(),
+                                    (selection_start, selection_end),
+                                )
+                                .into()
+                            })
                             .map(|line| widen_tabs(line, &state.tab_substitution))
                             .take(area.height.into())
                             .collect::<Vec<_>>()
@@ -3042,31 +3022,15 @@ impl StatefulWidget for BufferWidget<'_> {
             _ => {
                 match state.selection {
                     // no selection, so nothing to highlight
-                    None => rope
-                        .lines_at(viewport_line)
-                        .zip(viewport_line..)
-                        .map(
-                            |(line, line_number)| match line_char_range(rope, line_number) {
-                                None => colorize(
-                                    syntax,
-                                    &mut hlstate,
-                                    Cow::from(line),
-                                    Some(line_number) == current_line,
-                                )
-                                .into(),
-                                Some((line_start, line_end)) => highlight_paren(
-                                    colorize(
-                                        syntax,
-                                        &mut hlstate,
-                                        Cow::from(line),
-                                        Some(line_number) == current_line,
-                                    ),
-                                    (line_start, line_end),
-                                    matching_paren,
-                                )
-                                .into(),
-                            },
-                        )
+                    None => EditorLine::iter(rope, viewport_line)
+                        .map(|EditorLine { line, range }| {
+                            highlight_paren(
+                                colorize(syntax, &mut hlstate, line, range.contains(&state.cursor)),
+                                range,
+                                matching_paren,
+                            )
+                            .into()
+                        })
                         .map(|line| widen_tabs(line, &state.tab_substitution))
                         .take(area.height.into())
                         .collect::<Vec<_>>(),
@@ -3074,33 +3038,24 @@ impl StatefulWidget for BufferWidget<'_> {
                     Some(selection) => {
                         let (selection_start, selection_end) = reorder(state.cursor, selection);
 
-                        rope.lines_at(viewport_line)
-                            .zip(viewport_line..)
-                            .map(
-                                |(line, line_number)| match line_char_range(rope, line_number) {
-                                    None => Line::from(colorize(
-                                        syntax,
-                                        &mut hlstate,
-                                        Cow::from(line),
-                                        Some(line_number) == current_line,
-                                    )),
-                                    Some((line_start, line_end)) => highlight_paren(
-                                        highlight_selection(
-                                            colorize(
-                                                syntax,
-                                                &mut hlstate,
-                                                Cow::from(line),
-                                                Some(line_number) == current_line,
-                                            ),
-                                            (line_start, line_end),
-                                            (selection_start, selection_end),
+                        EditorLine::iter(rope, viewport_line)
+                            .map(|EditorLine { line, range }| {
+                                highlight_paren(
+                                    highlight_selection(
+                                        colorize(
+                                            syntax,
+                                            &mut hlstate,
+                                            line,
+                                            range.contains(&state.cursor),
                                         ),
-                                        (line_start, line_end),
-                                        matching_paren,
-                                    )
-                                    .into(),
-                                },
-                            )
+                                        range.clone(),
+                                        (selection_start, selection_end),
+                                    ),
+                                    range,
+                                    matching_paren,
+                                )
+                                .into()
+                            })
                             .map(|line| widen_tabs(line, &state.tab_substitution))
                             .take(area.height.into())
                             .collect::<Vec<_>>()
