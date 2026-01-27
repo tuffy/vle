@@ -2435,50 +2435,57 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
 
-            // TODO - should find some way to make these generic
+            trait FromRange<'s>: Sized + Into<Cow<'s, str>> + AsRef<str> {
+                fn extract_range(&self, range: std::ops::Range<usize>) -> Self;
 
-            fn colorize_str<'s, S: Highlighter>(
-                syntax: &S,
-                state: &mut HighlightState,
-                text: &'s str,
-            ) -> Vec<Span<'s>> {
-                let mut elements = vec![];
-                let mut idx = 0;
-                for (color, range) in syntax.highlight(text, state) {
-                    if idx < range.start {
-                        elements.push(Span::raw(&text[idx..range.start]));
-                    }
-                    elements.push(Span::styled(
-                        &text[range.clone()],
-                        Style::default().fg(color),
-                    ));
-                    idx = range.end;
-                }
-                let last = &text[idx..];
-                if !last.is_empty() {
-                    elements.push(Span::raw(last));
-                }
-                elements
+                fn extract_range_from(&self, range: std::ops::RangeFrom<usize>) -> Self;
+
+                fn is_empty(&self) -> bool;
             }
 
-            fn colorize_string<S: Highlighter>(
+            impl<'s> FromRange<'s> for &'s str {
+                fn extract_range(&self, range: std::ops::Range<usize>) -> Self {
+                    &self[range]
+                }
+                fn extract_range_from(&self, range: std::ops::RangeFrom<usize>) -> Self {
+                    &self[range]
+                }
+                fn is_empty(&self) -> bool {
+                    str::is_empty(self)
+                }
+            }
+
+            impl FromRange<'static> for String {
+                fn extract_range(&self, range: std::ops::Range<usize>) -> Self {
+                    self[range].to_string()
+                }
+                fn extract_range_from(&self, range: std::ops::RangeFrom<usize>) -> Self {
+                    self[range].to_string()
+                }
+                fn is_empty(&self) -> bool {
+                    String::is_empty(self)
+                }
+            }
+
+            /// Colorizes &str or String to spans based on syntax
+            fn colorize_s<'r, R: FromRange<'r>, S: Highlighter>(
                 syntax: &S,
                 state: &mut HighlightState,
-                text: String,
-            ) -> Vec<Span<'static>> {
+                text: R,
+            ) -> Vec<Span<'r>> {
                 let mut elements = vec![];
                 let mut idx = 0;
-                for (color, range) in syntax.highlight(&text, state) {
+                for (color, range) in syntax.highlight(text.as_ref(), state) {
                     if idx < range.start {
-                        elements.push(Span::raw(text[idx..range.start].to_string()));
+                        elements.push(Span::raw(text.extract_range(idx..range.start)));
                     }
                     elements.push(Span::styled(
-                        text[range.clone()].to_string(),
+                        text.extract_range(range.clone()),
                         Style::default().fg(color),
                     ));
                     idx = range.end;
                 }
-                let last = text[idx..].to_string();
+                let last = text.extract_range_from(idx..);
                 if !last.is_empty() {
                     elements.push(Span::raw(last));
                 }
@@ -2524,13 +2531,13 @@ impl StatefulWidget for BufferWidget<'_> {
 
             if current_line {
                 match text {
-                    Cow::Borrowed(s) => colorize_str(syntax, state, s.trim_end_matches('\n')),
-                    Cow::Owned(s) => colorize_string(syntax, state, trim_string_matches(s, '\n')),
+                    Cow::Borrowed(s) => colorize_s(syntax, state, s.trim_end_matches('\n')),
+                    Cow::Owned(s) => colorize_s(syntax, state, trim_string_matches(s, '\n')),
                 }
             } else {
                 highlight_trailing_whitespace(match text {
-                    Cow::Borrowed(s) => colorize_str(syntax, state, s.trim_end_matches('\n')),
-                    Cow::Owned(s) => colorize_string(syntax, state, trim_string_matches(s, '\n')),
+                    Cow::Borrowed(s) => colorize_s(syntax, state, s.trim_end_matches('\n')),
+                    Cow::Owned(s) => colorize_s(syntax, state, trim_string_matches(s, '\n')),
                 })
             }
         }
