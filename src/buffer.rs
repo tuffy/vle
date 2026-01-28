@@ -1541,15 +1541,23 @@ impl BufferContext {
     /// returns Vec of match ranges, in characters
     pub fn search_matches(
         &self,
-        SearchArea { text: whole_text }: &SearchArea,
+        area: &SearchArea,
         term: &str,
+        split_point: usize,
     ) -> Vec<Range<usize>> {
         let buf = self.buffer.borrow();
         let rope = &buf.rope;
+        let (behind, ahead) = area.split(rope, split_point);
 
-        whole_text
+        behind
             .match_indices(term)
             .map(|(start_byte, s)| (start_byte, start_byte + s.len()))
+            .chain(ahead.match_indices(term).map(|(start_byte, s)| {
+                (
+                    behind.len() + start_byte,
+                    behind.len() + start_byte + s.len(),
+                )
+            }))
             .filter_map(|(s, e)| {
                 Some(rope.try_byte_to_char(s).ok()?..rope.try_byte_to_char(e).ok()?)
             })

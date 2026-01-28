@@ -37,10 +37,12 @@ pub enum EditorMode {
         prompt: LinePrompt,
     },
     Find {
+        split: usize,
         prompt: SearchPrompt,
         area: SearchArea,
     },
     SelectMatches {
+        split: usize,
         matches: Vec<Range<usize>>,
         match_idx: usize,
         prompt: SearchPrompt,
@@ -243,12 +245,17 @@ impl Editor {
                         self.mode = new_mode;
                     }
                 }
-                EditorMode::Find { prompt, area } => {
+                EditorMode::Find {
+                    prompt,
+                    area,
+                    split,
+                } => {
                     let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
                     let cur_idx = cur_buf_list.current_index();
                     if let Some(buf) = cur_buf_list.current_mut()
                         && let Some(new_mode) = process_find(
                             buf,
+                            *split,
                             self.cut_buffer.as_ref(),
                             area,
                             prompt,
@@ -262,6 +269,7 @@ impl Editor {
                     }
                 }
                 EditorMode::SelectMatches {
+                    split,
                     matches,
                     match_idx,
                     prompt,
@@ -272,6 +280,7 @@ impl Editor {
                     if let Some(buf) = cur_buf_list.current_mut()
                         && let Some(new_mode) = process_select_matches(
                             buf,
+                            *split,
                             self.cut_buffer.as_ref(),
                             area,
                             prompt,
@@ -481,6 +490,7 @@ impl Editor {
             }
             key!(CONTROL, 'f') | key!(F(5)) => {
                 if let Some(find) = self.on_buffer(|b| EditorMode::Find {
+                    split: b.get_cursor(),
                     area: b.search_area(),
                     prompt: SearchPrompt::default(),
                 }) {
@@ -890,6 +900,7 @@ fn process_open_file<S: ChooserSource>(
 
 fn process_find(
     buffer: &mut BufferContext,
+    split: usize,
     cut_buffer: Option<&CutBuffer>,
     area: &mut SearchArea,
     prompt: &mut SearchPrompt,
@@ -961,7 +972,7 @@ fn process_find(
             let search = prompt.get_value()?;
             match buffer.previous_match(area, &search) {
                 Ok(()) => {
-                    let matches = buffer.search_matches(area, &search);
+                    let matches = buffer.search_matches(area, &search, split);
                     Some(if matches.is_empty() {
                         buffer.set_error(not_found(search));
                         EditorMode::default()
@@ -969,6 +980,7 @@ fn process_find(
                         let cursor = buffer.get_cursor();
                         EditorMode::SelectMatches {
                             // incremental search should always place the cursor on a match
+                            split,
                             match_idx: matches.iter().position(|r| r.start == cursor)?,
                             matches,
                             prompt: std::mem::take(prompt),
@@ -995,7 +1007,7 @@ fn process_find(
             let search = prompt.get_value()?;
             match buffer.next_match(area, &search) {
                 Ok(()) => {
-                    let matches = buffer.search_matches(area, &search);
+                    let matches = buffer.search_matches(area, &search, split);
                     Some(if matches.is_empty() {
                         buffer.set_error("Not Found");
                         EditorMode::default()
@@ -1003,6 +1015,7 @@ fn process_find(
                         let cursor = buffer.get_cursor();
                         EditorMode::SelectMatches {
                             // incremental search should always place the cursor on a match
+                            split,
                             match_idx: matches.iter().position(|r| r.start == cursor)?,
                             matches,
                             prompt: std::mem::take(prompt),
@@ -1023,7 +1036,7 @@ fn process_find(
             ..
         }) => {
             let search = prompt.get_value()?;
-            let mut matches = buffer.search_matches(area, &search);
+            let mut matches = buffer.search_matches(area, &search, split);
             if matches.is_empty() {
                 buffer.set_error("Not Found");
                 Some(EditorMode::default())
@@ -1032,6 +1045,7 @@ fn process_find(
                 let mut match_idx = matches.iter().position(|r| r.start == cursor)?;
                 match process_select_matches(
                     buffer,
+                    split,
                     cut_buffer,
                     area,
                     prompt,
@@ -1042,6 +1056,7 @@ fn process_find(
                 ) {
                     value @ Some(_) => value,
                     None => Some(EditorMode::SelectMatches {
+                        split,
                         match_idx,
                         matches,
                         prompt: std::mem::take(prompt),
@@ -1057,7 +1072,7 @@ fn process_find(
         key!(CONTROL, 'r') | key!(F(6)) => {
             match prompt.get_value() {
                 Some(search) => {
-                    let mut matches = buffer.search_matches(area, &search);
+                    let mut matches = buffer.search_matches(area, &search, split);
                     Some(if matches.is_empty() {
                         buffer.set_error("Not Found");
                         EditorMode::default()
@@ -1085,6 +1100,7 @@ fn process_find(
 #[allow(clippy::too_many_arguments)]
 fn process_select_matches(
     buffer: &mut BufferContext,
+    split: usize,
     cut_buffer: Option<&CutBuffer>,
     area: &mut SearchArea,
     prompt: &mut SearchPrompt,
@@ -1117,9 +1133,10 @@ fn process_select_matches(
             ..
         })
         | event @ Event::Paste(_) => {
-            match process_find(buffer, cut_buffer, area, prompt, event, alt) {
+            match process_find(buffer, split, cut_buffer, area, prompt, event, alt) {
                 value @ Some(_) => value,
                 None => Some(EditorMode::Find {
+                    split,
                     area: std::mem::take(area),
                     prompt: std::mem::take(prompt),
                 }),
@@ -1191,6 +1208,7 @@ fn process_select_matches(
             })
         }
         key!(CONTROL, 'f') | key!(F(5)) => Some(EditorMode::Find {
+            split,
             prompt: SearchPrompt::default(),
             area: std::mem::take(area),
         }),
