@@ -255,9 +255,14 @@ impl Editor {
                     }
                 }
                 EditorMode::BrowseMatches { matches, match_idx } => {
-                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
+                    let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
+                    let primary_idx = primary.current_index();
+                    if let Some(buf) = primary.current_mut()
                         && let Some(new_mode) = process_browse_matches(
                             buf,
+                            secondary
+                                .and_then(|l| l.get_mut(primary_idx))
+                                .map(|b| b.alt_cursor()),
                             matches,
                             match_idx,
                             event,
@@ -992,6 +997,7 @@ fn process_incremental_search(
 
 fn process_browse_matches(
     buffer: &mut BufferContext,
+    alt: Option<AltCursor<'_>>,
     matches: &mut Vec<Range<usize>>,
     match_idx: &mut usize,
     event: Event,
@@ -1054,6 +1060,16 @@ fn process_browse_matches(
             }
         }
         key!(Enter) => Some(EditorMode::default()),
+        key!(CONTROL, 'r') | key!(F(6)) => {
+            buffer.clear_matches(alt, matches);
+            Some(EditorMode::ReplaceMatches {
+                matches: std::mem::take(matches)
+                    .into_iter()
+                    .map(|r| r.start..r.start)
+                    .collect(),
+                match_idx: std::mem::take(match_idx),
+            })
+        }
         _ => None,  // ignore other events
     }
 }
