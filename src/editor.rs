@@ -895,7 +895,7 @@ fn process_incremental_search(
         }) => {
             prompt.push(c);
             let query = prompt.get_value()?;
-            if let Err(err) = buffer.next_or_current_match(area, &query) {
+            if let Err(err) = buffer.next_or_current_match(area, query.as_str()) {
                 buffer.set_error(not_found(err));
             }
             None
@@ -904,7 +904,7 @@ fn process_incremental_search(
             if let Some(buf) = cut_buffer {
                 prompt.extend(buf.as_str());
                 let query = prompt.get_value()?;
-                if let Err(err) = buffer.next_or_current_match(area, &query) {
+                if let Err(err) = buffer.next_or_current_match(area, query.as_str()) {
                     buffer.set_error(not_found(err));
                 }
             }
@@ -913,7 +913,7 @@ fn process_incremental_search(
         Event::Paste(pasted) => {
             prompt.extend(&pasted);
             let query = prompt.get_value()?;
-            if let Err(err) = buffer.next_or_current_match(area, &query) {
+            if let Err(err) = buffer.next_or_current_match(area, query.as_str()) {
                 buffer.set_error(not_found(err));
             }
             None
@@ -924,7 +924,7 @@ fn process_incremental_search(
                 buffer.clear_selection();
             } else {
                 let query = prompt.get_value()?;
-                if let Err(err) = buffer.next_or_current_match(area, &query) {
+                if let Err(err) = buffer.next_or_current_match(area, query.as_str()) {
                     buffer.set_error(not_found(err));
                 }
             }
@@ -932,7 +932,7 @@ fn process_incremental_search(
         }
         key!(Enter) => {
             let query = prompt.get_value()?;
-            match buffer.all_matches(area, &query)? {
+            match buffer.all_matches(area, query.as_str()) {
                 Ok((match_idx, matches)) => Some(EditorMode::BrowseMatches { match_idx, matches }),
                 Err(err) => {
                     buffer.set_error(not_found(err));
@@ -1019,7 +1019,7 @@ fn process_browse_matches(
                 match_idx: std::mem::take(match_idx),
             })
         }
-        _ => None,  // ignore other events
+        _ => None, // ignore other events
     }
 }
 

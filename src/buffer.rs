@@ -1076,25 +1076,23 @@ impl BufferContext {
         }
     }
 
-    pub fn next_or_current_match<'s>(
+    pub fn next_or_current_match<'s, S: Searcher<'s>>(
         &mut self,
         area: &SearchArea,
-        term: &'s str,
-    ) -> Result<(), &'s str> {
+        term: S,
+    ) -> Result<(), S> {
         let buf = self.buffer.borrow_move();
         let rope = &buf.rope;
         let (behind, ahead) = area.split(rope, self.cursor);
 
-        let (start, end) = ahead
-            .match_indices(term)
-            .map(|(idx, string)| (idx + behind.len(), string))
-            .chain(behind.match_indices(term))
-            .next()
-            .map(|(idx, string)| (idx, idx + string.len()))
-            .and_then(|(start, end)| {
+        let (start, end) = term
+            .next_match(ahead)
+            .map(|(s, e)| (s + behind.len(), e + behind.len()))
+            .or_else(|| term.next_match(behind))
+            .and_then(|(s, e)| {
                 Some((
-                    rope.try_byte_to_char(start).ok()?,
-                    rope.try_byte_to_char(end).ok()?,
+                    rope.try_byte_to_char(s).ok()?,
+                    rope.try_byte_to_char(e).ok()?,
                 ))
             })
             .ok_or(term)?;
@@ -1106,30 +1104,23 @@ impl BufferContext {
         Ok(())
     }
 
-    /// Returns Some(Ok((current_idx, matches))) on success
-    /// Returns Some(Err(term)) if no matches found
-    /// Returns None if term is empty
-    pub fn all_matches<'s>(
+    /// Returns Ok((current_idx, matches)) on success
+    /// Returns Err(term) if no matches found
+    pub fn all_matches<'s, S: Searcher<'s>>(
         &self,
         area: &SearchArea,
-        term: &'s str,
-    ) -> Option<Result<(usize, Vec<Range<usize>>), &'s str>> {
-        if term.is_empty() {
-            return None;
-        }
-
+        term: S,
+    ) -> Result<(usize, Vec<Range<usize>>), S> {
         let buf = self.buffer.borrow_move();
         let rope = &buf.rope;
         let (behind, ahead) = area.split(rope, self.cursor);
 
-        let ahead_matches = ahead
-            .match_indices(term)
-            .filter_map(|(start, string)| {
+        let ahead_matches = term
+            .match_ranges(ahead)
+            .filter_map(|(start, end)| {
                 Some(
                     rope.try_byte_to_char(behind.len() + start).ok()?
-                        ..rope
-                            .try_byte_to_char(behind.len() + start + string.len())
-                            .ok()?,
+                        ..rope.try_byte_to_char(behind.len() + end).ok()?,
                 )
             })
             .collect::<Vec<_>>();
@@ -1137,22 +1128,19 @@ impl BufferContext {
         // incremental search should put us on top of the current match
         // and if there's nothing ahead of us, the term hasn't been found
         if ahead_matches.is_empty() {
-            return Some(Err(term));
+            return Err(term);
         }
 
-        let mut behind_matches = behind
-            .match_indices(term)
-            .filter_map(|(start, string)| {
-                Some(
-                    rope.try_byte_to_char(start).ok()?
-                        ..rope.try_byte_to_char(start + string.len()).ok()?,
-                )
+        let mut behind_matches = term
+            .match_ranges(behind)
+            .filter_map(|(start, end)| {
+                Some(rope.try_byte_to_char(start).ok()?..rope.try_byte_to_char(end).ok()?)
             })
             .collect::<Vec<_>>();
 
         let match_idx = behind_matches.len();
         behind_matches.extend(ahead_matches);
-        Some(Ok((match_idx, behind_matches)))
+        Ok((match_idx, behind_matches))
     }
 
     pub fn perform_undo(&mut self) {
@@ -1756,6 +1744,22 @@ impl std::ops::SubAssign<usize> for Secondary<'_> {
     }
 }
 
+pub trait Searcher<'s> {
+    /// Returns iterator of match ranges in bytes
+    fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize)>;
+
+    /// Returns next match as range in bytes, if present
+    fn next_match(&self, s: &str) -> Option<(usize, usize)> {
+        self.match_ranges(s).next()
+    }
+}
+
+impl<'s> Searcher<'s> for &'s str {
+    fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize)> {
+        s.match_indices(self).map(|(idx, s)| (idx, idx + s.len()))
+    }
+}
+
 /// Buffer has been modified since last save
 pub struct Modified;
 
@@ -2297,8 +2301,8 @@ impl StatefulWidget for BufferWidget<'_> {
 
     fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer, state: &mut BufferContext) {
         use crate::help::{
-            BROWSE_MATCHES, CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE, SPLIT_PANE,
-            VERIFY_RELOAD, VERIFY_SAVE, render_help,
+            BROWSE_MATCHES, CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE,
+            SPLIT_PANE, VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
         use crate::syntax::{HighlightState, Highlighter, MultiComment};
         use ratatui::{
