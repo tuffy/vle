@@ -2930,7 +2930,7 @@ impl StatefulWidget for BufferWidget<'_> {
         };
 
         Paragraph::new(match self.mode {
-            Some(EditorMode::Find { prompt, .. }) if !prompt.is_empty() => {
+            /*Some(EditorMode::Find { prompt, .. }) if !prompt.is_empty() => {
                 let searching = prompt.get_value().unwrap_or_default();
 
                 match state.selection {
@@ -2979,13 +2979,13 @@ impl StatefulWidget for BufferWidget<'_> {
                             .collect::<Vec<_>>()
                     }
                 }
-            }
-            Some(EditorMode::SelectMatches { matches, .. }) => {
-                // let mut matches = matches.iter().copied().collect();
+            }*/
+            Some(EditorMode::BrowseMatches { matches, .. }) => {
                 let mut matches = matches.clone().into();
 
                 match state.selection {
                     // no selection, so highlight matches only
+                    // (this shouldn't happen)
                     None => EditorLine::iter(rope, viewport_line)
                         .map(|EditorLine { line, range }| {
                             highlight_matches(
@@ -3152,20 +3152,16 @@ impl StatefulWidget for BufferWidget<'_> {
             Some(EditorMode::SelectLine { .. }) => {
                 render_help(text_area, buf, SELECT_LINE, |b| b);
             }
-            Some(EditorMode::Find { prompt, .. }) => {
+            Some(EditorMode::IncrementalSearch { prompt, .. }) => {
+                // TODO - update help text
                 render_help(text_area, buf, FIND, |b| b);
                 render_find_prompt(text_area, buf, prompt);
             }
-            Some(EditorMode::SelectMatches {
-                matches,
-                match_idx,
-                prompt,
-                ..
-            }) => {
+            Some(EditorMode::BrowseMatches { matches, match_idx }) => {
+                // TODO - update help text
                 render_help(text_area, buf, FIND, |block| {
                     block.title(format!("Match {} / {}", *match_idx + 1, matches.len()))
                 });
-                render_find_prompt(text_area, buf, prompt);
             }
             Some(EditorMode::Open { .. }) => { /* already handled, above */ }
             Some(EditorMode::ReplaceMatches { matches, match_idx }) => {

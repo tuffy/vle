@@ -36,17 +36,13 @@ pub enum EditorMode {
     SelectLine {
         prompt: LinePrompt,
     },
-    Find {
-        split: usize,
+    IncrementalSearch {
         prompt: SearchPrompt,
         area: SearchArea,
     },
-    SelectMatches {
-        split: usize,
+    BrowseMatches {
         matches: Vec<Range<usize>>,
         match_idx: usize,
-        prompt: SearchPrompt,
-        area: SearchArea,
     },
     ReplaceMatches {
         matches: Vec<Range<usize>>,
@@ -245,7 +241,15 @@ impl Editor {
                         self.mode = new_mode;
                     }
                 }
-                EditorMode::Find {
+                EditorMode::IncrementalSearch { prompt, area } => {
+                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
+                        && let Some(new_mode) = process_incremental_search(buf, self.cut_buffer.as_ref(), area, prompt, event)
+                    {
+                        self.mode = new_mode;
+                    }
+                }
+                EditorMode::BrowseMatches { .. } => { /* TODO - implement this */ }
+                /*EditorMode::Find {
                     prompt,
                     area,
                     split,
@@ -267,7 +271,8 @@ impl Editor {
                     {
                         self.mode = new_mode;
                     }
-                }
+                }*/
+                /*
                 EditorMode::SelectMatches {
                     split,
                     matches,
@@ -294,7 +299,7 @@ impl Editor {
                     {
                         self.mode = new_mode;
                     }
-                }
+                }*/
                 EditorMode::ReplaceMatches { matches, match_idx } => {
                     let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
                     let cur_idx = cur_buf_list.current_index();
@@ -489,8 +494,7 @@ impl Editor {
                 };
             }
             key!(CONTROL, 'f') | key!(F(5)) => {
-                if let Some(find) = self.on_buffer(|b| EditorMode::Find {
-                    split: b.get_cursor(),
+                if let Some(find) = self.on_buffer(|b| EditorMode::IncrementalSearch {
                     area: b.search_area(),
                     prompt: SearchPrompt::default(),
                 }) {
@@ -898,7 +902,69 @@ fn process_open_file<S: ChooserSource>(
     }
 }
 
-fn process_find(
+fn process_incremental_search(
+    buffer: &mut BufferContext,
+    cut_buffer: Option<&CutBuffer>,
+    area: &mut SearchArea,
+    prompt: &mut SearchPrompt,
+    event: Event,
+) -> Option<EditorMode> {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+    fn not_found(query: String) -> String {
+        format!("Not Found : {query}")
+    }
+
+    match event {
+        Event::Key(KeyEvent {
+            code: KeyCode::Char(c),
+            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            prompt.push(c);
+            let query = prompt.get_value()?;
+            if let Err(()) = buffer.next_or_current_match(area, &query) {
+                buffer.set_error(not_found(query));
+            }
+            None
+        }
+        key!(CONTROL, 'v') => {
+            if let Some(buf) = cut_buffer {
+                prompt.extend(buf.as_str());
+                let query = prompt.get_value()?;
+                if let Err(()) = buffer.next_or_current_match(area, &query) {
+                    buffer.set_error(not_found(query));
+                }
+            }
+            None
+        }
+        Event::Paste(pasted) => {
+            prompt.extend(&pasted);
+            let query = prompt.get_value()?;
+            if let Err(()) = buffer.next_or_current_match(area, &query) {
+                buffer.set_error(not_found(query));
+            }
+            None
+        }
+        key!(Backspace) => {
+            prompt.pop();
+            if prompt.is_empty() {
+                buffer.clear_selection();
+            } else {
+                let query = prompt.get_value()?;
+                if let Err(()) = buffer.next_or_current_match(area, &query) {
+                    buffer.set_error(not_found(query));
+                }
+            }
+            None
+        }
+        // TODO - have Enter goto browse mode
+        _ => None,  // ignore other events
+    }
+}
+
+/*fn process_find(
     buffer: &mut BufferContext,
     split: usize,
     cut_buffer: Option<&CutBuffer>,
@@ -1093,11 +1159,11 @@ fn process_find(
         key!(Enter) => Some(EditorMode::default()),
         _ => None, // ignore other events
     }
-}
+}*/
 
 // Yes, I know this has too many arguments,
 // but having to split a lot of borrows will do that.
-#[allow(clippy::too_many_arguments)]
+/*#[allow(clippy::too_many_arguments)]
 fn process_select_matches(
     buffer: &mut BufferContext,
     split: usize,
@@ -1215,7 +1281,7 @@ fn process_select_matches(
         key!(Enter) => Some(EditorMode::default()),
         _ => None, // ignore other events
     }
-}
+}*/
 
 fn process_replace_matches(
     buffer: &mut BufferContext,

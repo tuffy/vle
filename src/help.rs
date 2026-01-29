@@ -284,13 +284,9 @@ pub static OPEN_FILE: &[Keybinding] = &[
 ];
 
 pub static FIND: &[Keybinding] = &[
-    none(&[UP, LEFT], "Select Previous Match"),
-    none(&[DOWN, RIGHT], "Select Next Match"),
     ctrl(&["V"], "Copy from Cut Buffer"),
-    none(&["Del"], "Remove Selected Match"),
     ctrl_f(&["F"], "F5", "Begin New Find"),
-    ctrl_f(&["R"], "F6", "Replace Selected Matches"),
-    none(&["Enter"], "Finish"),
+    none(&["Enter"], "Browse All Matches"),
 ];
 
 pub static REPLACE_MATCHES: &[Keybinding] = &[
