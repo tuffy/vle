@@ -8,6 +8,7 @@
 
 use crate::editor::EditorMode;
 use crate::endings::LineEndings;
+use crate::prompt::{SearchPrompt, TextPrompt};
 use crate::syntax::Highlighter;
 use ratatui::{
     layout::{Position, Rect},
@@ -2727,7 +2728,7 @@ impl StatefulWidget for BufferWidget<'_> {
         fn render_find_prompt(
             text_area: Rect,
             buf: &mut ratatui::buffer::Buffer,
-            prompt: &crate::prompt::SearchPrompt,
+            prompt: &SearchPrompt,
         ) {
             if prompt.is_empty() {
                 render_message(text_area, buf, BufferMessage::Notice("Find?".into()));

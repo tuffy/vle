@@ -11,7 +11,7 @@ use crate::files::{EitherSource, SshSource};
 use crate::{
     buffer::{AltCursor, BufferContext, BufferId, BufferList, CutBuffer, SearchArea, Source},
     files::{ChooserSource, FileChooserState, LocalSource},
-    prompt::{LinePrompt, SearchPrompt},
+    prompt::{LinePrompt, SearchPrompt, TextPrompt},
 };
 use crossterm::event::Event;
 use ratatui::{
@@ -882,7 +882,7 @@ fn process_incremental_search(
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-    fn not_found(query: &str) -> String {
+    fn not_found<Q: std::fmt::Display>(query: Q) -> String {
         format!("Not Found : {query}")
     }
 
@@ -894,27 +894,39 @@ fn process_incremental_search(
             ..
         }) => {
             prompt.push(c);
-            let query = prompt.get_value()?;
-            if let Err(err) = buffer.next_or_current_match(area, query.as_str()) {
-                buffer.set_error(not_found(err));
+            match prompt.value()? {
+                Ok(query) => {
+                    if let Err(err) = buffer.next_or_current_match(area, query) {
+                        buffer.set_error(not_found(err));
+                    }
+                }
+                Err(err) => buffer.set_error(err.to_string()),
             }
             None
         }
         key!(CONTROL, 'v') => {
             if let Some(buf) = cut_buffer {
                 prompt.extend(buf.as_str());
-                let query = prompt.get_value()?;
-                if let Err(err) = buffer.next_or_current_match(area, query.as_str()) {
-                    buffer.set_error(not_found(err));
+                match prompt.value()? {
+                    Ok(query) => {
+                        if let Err(err) = buffer.next_or_current_match(area, query) {
+                            buffer.set_error(not_found(err));
+                        }
+                    }
+                    Err(err) => buffer.set_error(err.to_string()),
                 }
             }
             None
         }
         Event::Paste(pasted) => {
             prompt.extend(&pasted);
-            let query = prompt.get_value()?;
-            if let Err(err) = buffer.next_or_current_match(area, query.as_str()) {
-                buffer.set_error(not_found(err));
+            match prompt.value()? {
+                Ok(query) => {
+                    if let Err(err) = buffer.next_or_current_match(area, query) {
+                        buffer.set_error(not_found(err));
+                    }
+                }
+                Err(err) => buffer.set_error(err.to_string()),
             }
             None
         }
@@ -923,23 +935,30 @@ fn process_incremental_search(
             if prompt.is_empty() {
                 buffer.clear_selection();
             } else {
-                let query = prompt.get_value()?;
-                if let Err(err) = buffer.next_or_current_match(area, query.as_str()) {
-                    buffer.set_error(not_found(err));
+                match prompt.value()? {
+                    Ok(query) => {
+                        if let Err(err) = buffer.next_or_current_match(area, query) {
+                            buffer.set_error(not_found(err));
+                        }
+                    }
+                    Err(err) => buffer.set_error(err.to_string()),
                 }
             }
             None
         }
-        key!(Enter) => {
-            let query = prompt.get_value()?;
-            match buffer.all_matches(area, query.as_str()) {
+        key!(Enter) => match prompt.value()? {
+            Ok(query) => match buffer.all_matches(area, query) {
                 Ok((match_idx, matches)) => Some(EditorMode::BrowseMatches { match_idx, matches }),
                 Err(err) => {
                     buffer.set_error(not_found(err));
                     None
                 }
+            },
+            Err(err) => {
+                buffer.set_error(err.to_string());
+                None
             }
-        }
+        },
         _ => None, // ignore other events
     }
 }

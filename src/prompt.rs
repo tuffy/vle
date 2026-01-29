@@ -6,36 +6,75 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+pub trait TextPrompt: Default + std::fmt::Display {
+    type Value<'s>: crate::buffer::Searcher<'s>
+    where
+        Self: 's;
+
+    type Error: std::error::Error;
+
+    fn push(&mut self, c: char);
+
+    fn extend(&mut self, s: &str);
+
+    fn pop(&mut self) -> Option<char>;
+
+    fn is_empty(&self) -> bool;
+
+    /// Returns None if prompt is empty
+    /// Returns Some(Ok(value)) if prompt is populated and valid
+    /// Returns Some(Err(err)) if prompt is populated but invalid
+    fn value(&self) -> Option<Result<Self::Value<'_>, Self::Error>>;
+}
+
 #[derive(Default)]
 pub struct SearchPrompt {
-    value: Vec<char>,
+    chars: Vec<char>,
+    value: String,
 }
 
 impl SearchPrompt {
-    pub fn push(&mut self, c: char) {
-        self.value.push(c);
-    }
-
-    pub fn extend(&mut self, s: &str) {
-        self.value.extend(s.chars());
-    }
-
-    pub fn pop(&mut self) -> Option<char> {
-        self.value.pop()
-    }
-
-    pub fn get_value(&self) -> Option<String> {
-        (!self.value.is_empty()).then(|| self.value.iter().copied().collect())
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.value.is_empty()
+    fn recompile(&mut self) {
+        self.value = self.chars.iter().copied().collect();
     }
 }
 
 impl std::fmt::Display for SearchPrompt {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.get_value().unwrap_or_default().fmt(f)
+        self.value.fmt(f)
+    }
+}
+
+impl TextPrompt for SearchPrompt {
+    type Value<'s>
+        = &'s str
+    where
+        Self: 's;
+
+    type Error = std::convert::Infallible;
+
+    fn push(&mut self, c: char) {
+        self.chars.push(c);
+        self.recompile();
+    }
+
+    fn extend(&mut self, s: &str) {
+        self.chars.extend(s.chars());
+        self.recompile();
+    }
+
+    fn pop(&mut self) -> Option<char> {
+        let c = self.chars.pop();
+        self.recompile();
+        c
+    }
+
+    fn is_empty(&self) -> bool {
+        self.chars.is_empty()
+    }
+
+    fn value(&self) -> Option<Result<&str, Self::Error>> {
+        (!self.is_empty()).then_some(self.value.as_str()).map(Ok)
     }
 }
 
