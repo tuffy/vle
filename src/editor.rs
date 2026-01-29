@@ -292,17 +292,29 @@ impl Editor {
                     let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
                     let primary_idx = primary.current_index();
                     if let Some(buf) = primary.current_mut()
-                        && let Some(new_mode) = process_browse_matches(
-                            buf,
-                            secondary
-                                .and_then(|l| l.get_mut(primary_idx))
-                                .map(|b| b.alt_cursor()),
-                            matches,
-                            match_idx,
-                            event,
-                        )
+                        && let Some(new_mode) =
+                            process_browse_matches(buf, matches, match_idx, event)
                     {
-                        self.mode = new_mode;
+                        self.mode = match new_mode {
+                            NextModeBrowse::Default => EditorMode::default(),
+                            NextModeBrowse::Replace => {
+                                if let Some(buf) = primary.current_mut() {
+                                    buf.clear_matches(
+                                        secondary
+                                            .and_then(|l| l.get_mut(primary_idx))
+                                            .map(|b| b.alt_cursor()),
+                                        matches,
+                                    );
+                                }
+                                EditorMode::ReplaceMatches {
+                                    matches: std::mem::take(matches)
+                                        .into_iter()
+                                        .map(|(r, _)| r.start..r.start)
+                                        .collect(),
+                                    match_idx: std::mem::take(match_idx),
+                                }
+                            }
+                        };
                     }
                 }
                 EditorMode::ReplaceMatches { matches, match_idx } => {
@@ -1011,13 +1023,18 @@ fn process_incremental_search<'a, P: TextPrompt>(
     }
 }
 
+enum NextModeBrowse {
+    Default,
+    Replace,
+}
+
 fn process_browse_matches<P: Sized>(
     buffer: &mut BufferContext,
-    alt: Option<AltCursor<'_>>,
+    // alt: Option<AltCursor<'_>>,
     matches: &mut Vec<(Range<usize>, P)>,
     match_idx: &mut usize,
     event: Event,
-) -> Option<EditorMode> {
+) -> Option<NextModeBrowse> {
     use crossterm::event::{
         Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
     };
@@ -1065,7 +1082,7 @@ fn process_browse_matches<P: Sized>(
                 matches.remove(*match_idx);
             }
             match matches.len().checked_sub(1) {
-                None => Some(EditorMode::default()),
+                None => Some(NextModeBrowse::Default),
                 Some(new_max) => {
                     *match_idx = (*match_idx).min(new_max);
                     if let Some((r, _)) = matches.get(*match_idx) {
@@ -1075,17 +1092,8 @@ fn process_browse_matches<P: Sized>(
                 }
             }
         }
-        key!(Enter) => Some(EditorMode::default()),
-        key!(CONTROL, 'r') | key!(F(6)) => {
-            buffer.clear_matches(alt, matches);
-            Some(EditorMode::ReplaceMatches {
-                matches: std::mem::take(matches)
-                    .into_iter()
-                    .map(|(r, _)| r.start..r.start)
-                    .collect(),
-                match_idx: std::mem::take(match_idx),
-            })
-        }
+        key!(Enter) => Some(NextModeBrowse::Default),
+        key!(CONTROL, 'r') | key!(F(6)) => Some(NextModeBrowse::Replace),
         _ => None, // ignore other events
     }
 }
