@@ -562,10 +562,6 @@ impl BufferContext {
         }
     }
 
-    pub fn get_cursor(&self) -> usize {
-        self.cursor
-    }
-
     pub fn set_cursor(&mut self, cursor: usize) {
         self.cursor = cursor;
     }
@@ -1159,83 +1155,6 @@ impl BufferContext {
         Some(Ok((match_idx, behind_matches)))
     }
 
-    /// Updates position to next match
-    /// Returns Err if no match found
-    pub fn next_match(&mut self, area: &SearchArea, term: &str) -> Result<(), ()> {
-        fn last_resort<T>(
-            mut iter: impl Iterator<Item = T>,
-            avoid: impl FnOnce(&T) -> bool,
-        ) -> Option<T> {
-            let first = iter.next()?;
-            if avoid(&first) {
-                match iter.next() {
-                    None => Some(first),
-                    next @ Some(_) => next,
-                }
-            } else {
-                Some(first)
-            }
-        }
-
-        let buf = self.buffer.borrow_move();
-        let rope = &buf.rope;
-        let (behind, ahead) = area.split(rope, self.cursor);
-
-        let (start, end) = last_resort(
-            ahead
-                .match_indices(term)
-                .map(|(idx, string)| (idx + behind.len(), string))
-                .chain(behind.match_indices(term)),
-            |(idx, _)| *idx == behind.len(),
-        )
-        .map(|(idx, string)| (idx, idx + string.len()))
-        .and_then(|(start, end)| {
-            Some((
-                rope.try_byte_to_char(start).ok()?,
-                rope.try_byte_to_char(end).ok()?,
-            ))
-        })
-        .ok_or(())?;
-
-        self.cursor = start;
-        self.selection = Some(end);
-        self.cursor_column = cursor_column(rope, self.cursor);
-
-        Ok(())
-    }
-
-    /// Updates position to next match
-    /// Returns Err if no match found
-    pub fn previous_match(&mut self, area: &SearchArea, term: &str) -> Result<(), ()> {
-        let buf = self.buffer.borrow_move();
-        let rope = &buf.rope;
-        let (behind, ahead) = area.split(rope, self.cursor);
-
-        let (start, end) = behind
-            .rmatch_indices(term)
-            .next()
-            .or_else(|| {
-                ahead
-                    .rmatch_indices(term)
-                    .map(|(idx, string)| (idx + behind.len(), string))
-                    .next()
-            })
-            .map(|(idx, string)| (idx, idx + string.len()))
-            .and_then(|(start, end)| {
-                Some((
-                    rope.try_byte_to_char(start).ok()?,
-                    rope.try_byte_to_char(end).ok()?,
-                ))
-            })
-            .ok_or(())?;
-
-        self.cursor = start;
-        self.selection = Some(end);
-        self.cursor_column = cursor_column(rope, self.cursor);
-
-        Ok(())
-    }
-
     pub fn perform_undo(&mut self) {
         let mut buf = self.buffer.borrow_mut();
         match buf.undo.pop() {
@@ -1588,33 +1507,6 @@ impl BufferContext {
                 }
             }
         }
-    }
-
-    /// Given the whole text to search
-    /// returns Vec of match ranges, in characters
-    pub fn search_matches(
-        &self,
-        area: &SearchArea,
-        term: &str,
-        split_point: usize,
-    ) -> Vec<Range<usize>> {
-        let buf = self.buffer.borrow();
-        let rope = &buf.rope;
-        let (behind, ahead) = area.split(rope, split_point);
-
-        behind
-            .match_indices(term)
-            .map(|(start_byte, s)| (start_byte, start_byte + s.len()))
-            .chain(ahead.match_indices(term).map(|(start_byte, s)| {
-                (
-                    behind.len() + start_byte,
-                    behind.len() + start_byte + s.len(),
-                )
-            }))
-            .filter_map(|(s, e)| {
-                Some(rope.try_byte_to_char(s).ok()?..rope.try_byte_to_char(e).ok()?)
-            })
-            .collect()
     }
 
     pub fn clear_matches(&mut self, alt: Option<AltCursor<'_>>, mut matches: &mut [Range<usize>]) {
@@ -2959,56 +2851,6 @@ impl StatefulWidget for BufferWidget<'_> {
         };
 
         Paragraph::new(match self.mode {
-            /*Some(EditorMode::Find { prompt, .. }) if !prompt.is_empty() => {
-                let searching = prompt.get_value().unwrap_or_default();
-
-                match state.selection {
-                    // no selection, so highlight matches only
-                    None => EditorLine::iter(rope, viewport_line)
-                        .map(|EditorLine { line, range }| {
-                            let mut matches = line_matches(rope, *range.start(), &line, &searching);
-
-                            highlight_matches(
-                                colorize(syntax, &mut hlstate, line, range.contains(&state.cursor)),
-                                range,
-                                &mut matches,
-                            )
-                            .into()
-                        })
-                        .map(|line| widen_tabs(line, &state.tab_substitution))
-                        .take(area.height.into())
-                        .collect::<Vec<_>>(),
-                    // highlight both matches *and* selection
-                    Some(selection) => {
-                        let (selection_start, selection_end) = reorder(state.cursor, selection);
-
-                        EditorLine::iter(rope, viewport_line)
-                            .map(|EditorLine { line, range }| {
-                                let mut matches =
-                                    line_matches(rope, *range.start(), &line, &searching);
-
-                                highlight_selection(
-                                    highlight_matches(
-                                        colorize(
-                                            syntax,
-                                            &mut hlstate,
-                                            line,
-                                            range.contains(&state.cursor),
-                                        ),
-                                        range.clone(),
-                                        &mut matches,
-                                    ),
-                                    range.clone(),
-                                    (selection_start, selection_end),
-                                )
-                                .into()
-                            })
-                            .map(|line| widen_tabs(line, &state.tab_substitution))
-                            .take(area.height.into())
-                            .collect::<Vec<_>>()
-                    }
-                }
-            }*/
             Some(EditorMode::BrowseMatches { matches, .. }) => {
                 let mut matches = matches.clone().into();
 
