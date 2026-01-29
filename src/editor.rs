@@ -253,14 +253,17 @@ impl Editor {
                             area,
                             prompt,
                             event,
-                            |area| EditorMode::IncrementalSearchRegex {
+                        )
+                    {
+                        self.mode = match new_mode {
+                            NextModeIncremental::Alternate => EditorMode::IncrementalSearchRegex {
                                 prompt: SearchPromptRegex::default(),
                                 area: std::mem::take(area),
                             },
-                            |match_idx, matches| EditorMode::BrowseMatches { match_idx, matches },
-                        )
-                    {
-                        self.mode = new_mode;
+                            NextModeIncremental::Browse { match_idx, matches } => {
+                                EditorMode::BrowseMatches { match_idx, matches }
+                            }
+                        };
                     }
                 }
                 EditorMode::IncrementalSearchRegex { prompt, area } => {
@@ -271,15 +274,18 @@ impl Editor {
                             area,
                             prompt,
                             event,
-                            |area| EditorMode::IncrementalSearch {
-                                prompt: SearchPrompt::default(),
-                                area: std::mem::take(area),
-                            },
-                            |match_idx, matches| EditorMode::BrowseMatches { match_idx, matches },
                         )
                     {
                         // TODO - build a regex-specific BrowseMatches
-                        self.mode = new_mode;
+                        self.mode = match new_mode {
+                            NextModeIncremental::Alternate => EditorMode::IncrementalSearch {
+                                prompt: SearchPrompt::default(),
+                                area: std::mem::take(area),
+                            },
+                            NextModeIncremental::Browse { match_idx, matches } => {
+                                EditorMode::BrowseMatches { match_idx, matches }
+                            }
+                        };
                     }
                 }
                 EditorMode::BrowseMatches { matches, match_idx } => {
@@ -901,15 +907,22 @@ fn process_open_file<S: ChooserSource>(
     }
 }
 
+// which mode to switch to next
+enum NextModeIncremental {
+    Alternate,
+    Browse {
+        match_idx: usize,
+        matches: Vec<Range<usize>>,
+    },
+}
+
 fn process_incremental_search<'a, P: TextPrompt>(
     buffer: &mut BufferContext,
     cut_buffer: Option<&CutBuffer>,
     area: &'a mut SearchArea,
     prompt: &mut P,
     event: Event,
-    alt_mode: impl FnOnce(&'a mut SearchArea) -> EditorMode,
-    browse_mode: impl FnOnce(usize, Vec<Range<usize>>) -> EditorMode,
-) -> Option<EditorMode> {
+) -> Option<NextModeIncremental> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
     fn not_found<Q: std::fmt::Display>(query: Q) -> String {
@@ -978,7 +991,9 @@ fn process_incremental_search<'a, P: TextPrompt>(
         }
         key!(Enter) => match prompt.value()? {
             Ok(query) => match buffer.all_matches(area, query) {
-                Ok((match_idx, matches)) => Some(browse_mode(match_idx, matches)),
+                Ok((match_idx, matches)) => {
+                    Some(NextModeIncremental::Browse { match_idx, matches })
+                }
                 Err(err) => {
                     buffer.set_error(not_found(err));
                     None
@@ -989,7 +1004,7 @@ fn process_incremental_search<'a, P: TextPrompt>(
                 None
             }
         },
-        key!(Tab) => Some(alt_mode(area)),
+        key!(Tab) => Some(NextModeIncremental::Alternate),
         _ => None, // ignore other events
     }
 }
