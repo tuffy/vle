@@ -272,19 +272,26 @@ but don't know exactly which line it's on.
 Ctrl-F/F5 prompts for text to search for.
 
 Searching proceeds incrementally forward
-as more characters are added to the prompt.
-But you're always free to use the arrow keys
-to cycle forward or backward through the existing
-matches.
+as more characters are added to the prompt,
+looping around to the start of the file as needed
+to find the next match.
 
-From here, one can hit Enter to finish finding,
+When a match has been found, Enter allows
+one to browse all matching instances in the file.
+
+
+## Browsing Matches
+
+Browsing allows one to use the arrow keys to cycle
+through all possible matches.
+From this mode, Enter is used to finish browsing,
 Del to remove a match from the set of matches,
 or Ctrl-R/F6 to replace all selected matches.
 
 
 ## Replacing Text
 
-Using Ctrl-R/F6 from find mode deletes all the highlighted
+Using Ctrl-R/F6 from browse mode deletes all the highlighted
 matches and prompts us for a new value.
 Note that replace mode doesn't offer a text box
 for the replacement; the replacement text is inserted
@@ -293,8 +300,10 @@ completed with the Enter key.
 
 Let's walk through this whole process.
 
-Start with Ctrl-F/F5 to find three instances of the word to replace.
+Start with Ctrl-F/F5 to find the first instance of the word to replace.
 This will highlight all three instances of that word, below.
+
+Hit Enter to browse all three instances of that word.
 
 Next, type Ctrl-R/F6 to replace those three instances,
 which will remove them from the text.
