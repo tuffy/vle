@@ -2923,6 +2923,52 @@ impl StatefulWidget for BufferWidget<'_> {
                     }
                 }
             }
+            Some(EditorMode::BrowseMatchesRegex { matches, .. }) => {
+                let mut matches = matches.iter().map(|(r, _)| r.clone()).collect();
+
+                match state.selection {
+                    // no selection, so highlight matches only
+                    // (this shouldn't happen)
+                    None => EditorLine::iter(rope, viewport_line)
+                        .map(|EditorLine { line, range }| {
+                            highlight_matches(
+                                colorize(syntax, &mut hlstate, line, range.contains(&state.cursor)),
+                                range,
+                                &mut matches,
+                            )
+                            .into()
+                        })
+                        .map(|line| widen_tabs(line, &state.tab_substitution))
+                        .take(area.height.into())
+                        .collect::<Vec<_>>(),
+                    // highlight both matches *and* selection
+                    Some(selection) => {
+                        let (selection_start, selection_end) = reorder(state.cursor, selection);
+
+                        EditorLine::iter(rope, viewport_line)
+                            .map(|EditorLine { line, range }| {
+                                highlight_selection(
+                                    highlight_matches(
+                                        colorize(
+                                            syntax,
+                                            &mut hlstate,
+                                            line,
+                                            range.contains(&state.cursor),
+                                        ),
+                                        range.clone(),
+                                        &mut matches,
+                                    ),
+                                    range.clone(),
+                                    (selection_start, selection_end),
+                                )
+                                .into()
+                            })
+                            .map(|line| widen_tabs(line, &state.tab_substitution))
+                            .take(area.height.into())
+                            .collect::<Vec<_>>()
+                    }
+                }
+            }
             _ => {
                 match state.selection {
                     // no selection, so nothing to highlight
@@ -3064,6 +3110,12 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(EditorMode::BrowseMatches { matches, match_idx }) => {
+                render_help(text_area, buf, BROWSE_MATCHES, |block| {
+                    block.title(format!("Match {} / {}", *match_idx + 1, matches.len()))
+                });
+            }
+            Some(EditorMode::BrowseMatchesRegex { matches, match_idx }) => {
+                // TODO - build proper help message
                 render_help(text_area, buf, BROWSE_MATCHES, |block| {
                     block.title(format!("Match {} / {}", *match_idx + 1, matches.len()))
                 });

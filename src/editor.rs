@@ -48,6 +48,11 @@ pub enum EditorMode {
         matches: Vec<(Range<usize>, ())>,
         match_idx: usize,
     },
+    BrowseMatchesRegex {
+        // TODO - swap payload for Vec<Vec<String>>
+        matches: Vec<(Range<usize>, ())>,
+        match_idx: usize,
+    },
     ReplaceMatches {
         matches: Vec<Range<usize>>,
         match_idx: usize,
@@ -283,7 +288,7 @@ impl Editor {
                                 area: std::mem::take(area),
                             },
                             NextModeIncremental::Browse { match_idx, matches } => {
-                                EditorMode::BrowseMatches { match_idx, matches }
+                                EditorMode::BrowseMatchesRegex { match_idx, matches }
                             }
                         };
                     }
@@ -306,6 +311,36 @@ impl Editor {
                                         matches,
                                     );
                                 }
+                                EditorMode::ReplaceMatches {
+                                    matches: std::mem::take(matches)
+                                        .into_iter()
+                                        .map(|(r, _)| r.start..r.start)
+                                        .collect(),
+                                    match_idx: std::mem::take(match_idx),
+                                }
+                            }
+                        };
+                    }
+                }
+                EditorMode::BrowseMatchesRegex { matches, match_idx } => {
+                    let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
+                    let primary_idx = primary.current_index();
+                    if let Some(buf) = primary.current_mut()
+                        && let Some(new_mode) =
+                            process_browse_matches(buf, matches, match_idx, event)
+                    {
+                        self.mode = match new_mode {
+                            NextModeBrowse::Default => EditorMode::default(),
+                            NextModeBrowse::Replace => {
+                                if let Some(buf) = primary.current_mut() {
+                                    buf.clear_matches(
+                                        secondary
+                                            .and_then(|l| l.get_mut(primary_idx))
+                                            .map(|b| b.alt_cursor()),
+                                        matches,
+                                    );
+                                }
+                                // TODO - replace with regex-specific replace mode
                                 EditorMode::ReplaceMatches {
                                     matches: std::mem::take(matches)
                                         .into_iter()
