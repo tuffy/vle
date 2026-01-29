@@ -24,7 +24,7 @@ pub trait TextPrompt: Default + std::fmt::Display {
     /// Returns None if prompt is empty
     /// Returns Some(Ok(value)) if prompt is populated and valid
     /// Returns Some(Err(err)) if prompt is populated but invalid
-    fn value(&self) -> Option<Result<Self::Value<'_>, Self::Error>>;
+    fn value(&self) -> Option<Result<Self::Value<'_>, &'_ Self::Error>>;
 }
 
 #[derive(Default)]
@@ -73,7 +73,7 @@ impl TextPrompt for SearchPrompt {
         self.chars.is_empty()
     }
 
-    fn value(&self) -> Option<Result<&str, Self::Error>> {
+    fn value(&self) -> Option<Result<&str, &Self::Error>> {
         (!self.is_empty()).then_some(self.value.as_str()).map(Ok)
     }
 }
