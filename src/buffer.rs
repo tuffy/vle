@@ -1745,7 +1745,7 @@ impl std::ops::SubAssign<usize> for Secondary<'_> {
     }
 }
 
-pub trait Searcher<'s> {
+pub trait Searcher<'s>: std::fmt::Display {
     /// Returns iterator of match ranges in bytes
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize)>;
 

@@ -249,6 +249,7 @@ impl Editor {
                             area,
                             prompt,
                             event,
+                            |match_idx, matches| EditorMode::BrowseMatches { match_idx, matches },
                         )
                     {
                         self.mode = new_mode;
@@ -873,12 +874,13 @@ fn process_open_file<S: ChooserSource>(
     }
 }
 
-fn process_incremental_search(
+fn process_incremental_search<P: TextPrompt>(
     buffer: &mut BufferContext,
     cut_buffer: Option<&CutBuffer>,
     area: &mut SearchArea,
-    prompt: &mut SearchPrompt,
+    prompt: &mut P,
     event: Event,
+    browse_mode: impl FnOnce(usize, Vec<Range<usize>>) -> EditorMode,
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
@@ -948,7 +950,7 @@ fn process_incremental_search(
         }
         key!(Enter) => match prompt.value()? {
             Ok(query) => match buffer.all_matches(area, query) {
-                Ok((match_idx, matches)) => Some(EditorMode::BrowseMatches { match_idx, matches }),
+                Ok((match_idx, matches)) => Some(browse_mode(match_idx, matches)),
                 Err(err) => {
                     buffer.set_error(not_found(err));
                     None
