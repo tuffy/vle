@@ -11,7 +11,7 @@ use crate::files::{EitherSource, SshSource};
 use crate::{
     buffer::{AltCursor, BufferContext, BufferId, BufferList, CutBuffer, SearchArea, Source},
     files::{ChooserSource, FileChooserState, LocalSource},
-    prompt::{LinePrompt, SearchPrompt, TextPrompt},
+    prompt::{LinePrompt, SearchPrompt, SearchPromptRegex, TextPrompt},
 };
 use crossterm::event::Event;
 use ratatui::{
@@ -38,6 +38,10 @@ pub enum EditorMode {
     },
     IncrementalSearch {
         prompt: SearchPrompt,
+        area: SearchArea,
+    },
+    IncrementalSearchRegex {
+        prompt: SearchPromptRegex,
         area: SearchArea,
     },
     BrowseMatches {
@@ -249,9 +253,32 @@ impl Editor {
                             area,
                             prompt,
                             event,
+                            |area| EditorMode::IncrementalSearchRegex {
+                                prompt: SearchPromptRegex::default(),
+                                area: std::mem::take(area),
+                            },
                             |match_idx, matches| EditorMode::BrowseMatches { match_idx, matches },
                         )
                     {
+                        self.mode = new_mode;
+                    }
+                }
+                EditorMode::IncrementalSearchRegex { prompt, area } => {
+                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
+                        && let Some(new_mode) = process_incremental_search(
+                            buf,
+                            self.cut_buffer.as_ref(),
+                            area,
+                            prompt,
+                            event,
+                            |area| EditorMode::IncrementalSearch {
+                                prompt: SearchPrompt::default(),
+                                area: std::mem::take(area),
+                            },
+                            |match_idx, matches| EditorMode::BrowseMatches { match_idx, matches },
+                        )
+                    {
+                        // TODO - build a regex-specific BrowseMatches
                         self.mode = new_mode;
                     }
                 }
@@ -874,12 +901,13 @@ fn process_open_file<S: ChooserSource>(
     }
 }
 
-fn process_incremental_search<P: TextPrompt>(
+fn process_incremental_search<'a, P: TextPrompt>(
     buffer: &mut BufferContext,
     cut_buffer: Option<&CutBuffer>,
-    area: &mut SearchArea,
+    area: &'a mut SearchArea,
     prompt: &mut P,
     event: Event,
+    alt_mode: impl FnOnce(&'a mut SearchArea) -> EditorMode,
     browse_mode: impl FnOnce(usize, Vec<Range<usize>>) -> EditorMode,
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -961,6 +989,7 @@ fn process_incremental_search<P: TextPrompt>(
                 None
             }
         },
+        key!(Tab) => Some(alt_mode(area)),
         _ => None, // ignore other events
     }
 }

@@ -78,6 +78,64 @@ impl TextPrompt for SearchPrompt {
     }
 }
 
+#[derive(Default)]
+pub struct SearchPromptRegex {
+    chars: Vec<char>,
+    value: Option<Result<regex_lite::Regex, regex_lite::Error>>,
+}
+
+impl SearchPromptRegex {
+    fn recompile(&mut self) {
+        self.value = (!self.chars.is_empty()).then(|| {
+            let s = self.chars.iter().copied().collect::<String>();
+            regex_lite::Regex::new(&s)
+        })
+    }
+}
+
+impl std::fmt::Display for SearchPromptRegex {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.chars.iter().try_for_each(|c| c.fmt(f))
+    }
+}
+
+impl TextPrompt for SearchPromptRegex {
+    type Value<'s>
+        = &'s regex_lite::Regex
+    where
+        Self: 's;
+
+    type Error = regex_lite::Error;
+
+    fn push(&mut self, c: char) {
+        self.chars.push(c);
+        self.recompile();
+    }
+
+    fn extend(&mut self, s: &str) {
+        self.chars.extend(s.chars());
+        self.recompile();
+    }
+
+    fn pop(&mut self) -> Option<char> {
+        let c = self.chars.pop();
+        self.recompile();
+        c
+    }
+
+    fn is_empty(&self) -> bool {
+        self.chars.is_empty()
+    }
+
+    fn value(&self) -> Option<Result<&regex_lite::Regex, &Self::Error>> {
+        match &self.value {
+            Some(Ok(value)) => Some(Ok(value)),
+            Some(Err(err)) => Some(Err(err)),
+            None => None,
+        }
+    }
+}
+
 #[derive(Copy, Clone)]
 pub enum Digit {
     Digit0 = 0,

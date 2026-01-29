@@ -1761,6 +1761,12 @@ impl<'s> Searcher<'s> for &'s str {
     }
 }
 
+impl<'s> Searcher<'s> for &'s regex_lite::Regex {
+    fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize)> {
+        self.find_iter(s).map(|m| (m.start(), m.end()))
+    }
+}
+
 /// Buffer has been modified since last save
 pub struct Modified;
 
@@ -3031,6 +3037,16 @@ impl StatefulWidget for BufferWidget<'_> {
             Some(EditorMode::IncrementalSearch { prompt, .. }) => {
                 render_help(text_area, buf, FIND, |b| b);
                 render_find_prompt(text_area, buf, prompt);
+            }
+            Some(EditorMode::IncrementalSearchRegex { prompt, .. }) => {
+                // TODO - build proper regex help message
+                render_help(text_area, buf, FIND, |b| b);
+                // TODO - build proper regex prompt
+                render_message(
+                    text_area,
+                    buf,
+                    BufferMessage::Notice(prompt.to_string().into()),
+                );
             }
             Some(EditorMode::BrowseMatches { matches, match_idx }) => {
                 render_help(text_area, buf, BROWSE_MATCHES, |block| {
