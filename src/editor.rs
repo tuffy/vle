@@ -243,12 +243,29 @@ impl Editor {
                 }
                 EditorMode::IncrementalSearch { prompt, area } => {
                     if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                        && let Some(new_mode) = process_incremental_search(buf, self.cut_buffer.as_ref(), area, prompt, event)
+                        && let Some(new_mode) = process_incremental_search(
+                            buf,
+                            self.cut_buffer.as_ref(),
+                            area,
+                            prompt,
+                            event,
+                        )
                     {
                         self.mode = new_mode;
                     }
                 }
-                EditorMode::BrowseMatches { .. } => { /* TODO - implement this */ }
+                EditorMode::BrowseMatches { matches, match_idx } => {
+                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
+                        && let Some(new_mode) = process_browse_matches(
+                            buf,
+                            matches,
+                            match_idx,
+                            event,
+                        )
+                    {
+                        self.mode = new_mode;
+                    }
+                }
                 /*EditorMode::Find {
                     prompt,
                     area,
@@ -911,7 +928,7 @@ fn process_incremental_search(
 ) -> Option<EditorMode> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-    fn not_found(query: String) -> String {
+    fn not_found(query: &str) -> String {
         format!("Not Found : {query}")
     }
 
@@ -924,8 +941,8 @@ fn process_incremental_search(
         }) => {
             prompt.push(c);
             let query = prompt.get_value()?;
-            if let Err(()) = buffer.next_or_current_match(area, &query) {
-                buffer.set_error(not_found(query));
+            if let Err(err) = buffer.next_or_current_match(area, &query) {
+                buffer.set_error(not_found(err));
             }
             None
         }
@@ -933,8 +950,8 @@ fn process_incremental_search(
             if let Some(buf) = cut_buffer {
                 prompt.extend(buf.as_str());
                 let query = prompt.get_value()?;
-                if let Err(()) = buffer.next_or_current_match(area, &query) {
-                    buffer.set_error(not_found(query));
+                if let Err(err) = buffer.next_or_current_match(area, &query) {
+                    buffer.set_error(not_found(err));
                 }
             }
             None
@@ -942,8 +959,8 @@ fn process_incremental_search(
         Event::Paste(pasted) => {
             prompt.extend(&pasted);
             let query = prompt.get_value()?;
-            if let Err(()) = buffer.next_or_current_match(area, &query) {
-                buffer.set_error(not_found(query));
+            if let Err(err) = buffer.next_or_current_match(area, &query) {
+                buffer.set_error(not_found(err));
             }
             None
         }
@@ -953,13 +970,90 @@ fn process_incremental_search(
                 buffer.clear_selection();
             } else {
                 let query = prompt.get_value()?;
-                if let Err(()) = buffer.next_or_current_match(area, &query) {
-                    buffer.set_error(not_found(query));
+                if let Err(err) = buffer.next_or_current_match(area, &query) {
+                    buffer.set_error(not_found(err));
                 }
             }
             None
         }
-        // TODO - have Enter goto browse mode
+        key!(Enter) => {
+            let query = prompt.get_value()?;
+            match buffer.all_matches(area, &query)? {
+                Ok((match_idx, matches)) => Some(EditorMode::BrowseMatches { match_idx, matches }),
+                Err(err) => {
+                    buffer.set_error(not_found(err));
+                    None
+                }
+            }
+        }
+        _ => None, // ignore other events
+    }
+}
+
+fn process_browse_matches(
+    buffer: &mut BufferContext,
+    matches: &mut Vec<Range<usize>>,
+    match_idx: &mut usize,
+    event: Event,
+) -> Option<EditorMode> {
+    use crossterm::event::{
+        Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
+    };
+
+    match event {
+        Event::Key(KeyEvent {
+            code: KeyCode::Left | KeyCode::Up,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        })
+        | Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            ..
+        }) => {
+            *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
+            if let Some(r) = matches.get(*match_idx) {
+                buffer.set_selection(r.start, r.end);
+            }
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Down | KeyCode::Right,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        })
+        | Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            ..
+        }) => {
+            *match_idx = (*match_idx + 1) % matches.len();
+            if let Some(r) = matches.get(*match_idx) {
+                buffer.set_selection(r.start, r.end);
+            }
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Delete,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            if *match_idx < matches.len() {
+                matches.remove(*match_idx);
+            }
+            match matches.len().checked_sub(1) {
+                None => Some(EditorMode::default()),
+                Some(new_max) => {
+                    *match_idx = (*match_idx).min(new_max);
+                    if let Some(r) = matches.get(*match_idx) {
+                        buffer.set_selection(r.start, r.end);
+                    }
+                    None
+                }
+            }
+        }
+        key!(Enter) => Some(EditorMode::default()),
         _ => None,  // ignore other events
     }
 }

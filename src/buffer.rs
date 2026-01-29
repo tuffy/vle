@@ -1080,7 +1080,11 @@ impl BufferContext {
         }
     }
 
-    pub fn next_or_current_match(&mut self, area: &SearchArea, term: &str) -> Result<(), ()> {
+    pub fn next_or_current_match<'s>(
+        &mut self,
+        area: &SearchArea,
+        term: &'s str,
+    ) -> Result<(), &'s str> {
         let buf = self.buffer.borrow_move();
         let rope = &buf.rope;
         let (behind, ahead) = area.split(rope, self.cursor);
@@ -1097,13 +1101,62 @@ impl BufferContext {
                     rope.try_byte_to_char(end).ok()?,
                 ))
             })
-            .ok_or(())?;
+            .ok_or(term)?;
 
         self.cursor = start;
         self.selection = Some(end);
         self.cursor_column = cursor_column(rope, self.cursor);
 
         Ok(())
+    }
+
+    /// Returns Some(Ok((current_idx, matches))) on success
+    /// Returns Some(Err(term)) if no matches found
+    /// Returns None if term is empty
+    pub fn all_matches<'s>(
+        &self,
+        area: &SearchArea,
+        term: &'s str,
+    ) -> Option<Result<(usize, Vec<Range<usize>>), &'s str>> {
+        if term.is_empty() {
+            return None;
+        }
+
+        let buf = self.buffer.borrow_move();
+        let rope = &buf.rope;
+        let (behind, ahead) = area.split(rope, self.cursor);
+
+        let ahead_matches = ahead
+            .match_indices(term)
+            .filter_map(|(start, string)| {
+                Some(
+                    rope.try_byte_to_char(behind.len() + start).ok()?
+                        ..rope
+                            .try_byte_to_char(behind.len() + start + string.len())
+                            .ok()?,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        // incremental search should put us on top of the current match
+        // and if there's nothing ahead of us, the term hasn't been found
+        if ahead_matches.is_empty() {
+            return Some(Err(term));
+        }
+
+        let mut behind_matches = behind
+            .match_indices(term)
+            .filter_map(|(start, string)| {
+                Some(
+                    rope.try_byte_to_char(start).ok()?
+                        ..rope.try_byte_to_char(start + string.len()).ok()?,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let match_idx = behind_matches.len();
+        behind_matches.extend(ahead_matches);
+        Some(Ok((match_idx, behind_matches)))
     }
 
     /// Updates position to next match
@@ -2352,7 +2405,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
     fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer, state: &mut BufferContext) {
         use crate::help::{
-            CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE, SPLIT_PANE,
+            BROWSE_MATCHES, CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE, SPLIT_PANE,
             VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
         use crate::syntax::{HighlightState, Highlighter, MultiComment};
@@ -2759,30 +2812,6 @@ impl StatefulWidget for BufferWidget<'_> {
             highlighted
         }
 
-        fn line_matches(
-            rope: &ropey::Rope,
-            line_start: usize,
-            line: &str,
-            search: &str,
-        ) -> VecDeque<Range<usize>> {
-            let line_byte_start = rope.char_to_byte(line_start);
-
-            line.match_indices(search)
-                .map(|(byte_idx, string)| {
-                    (
-                        byte_idx + line_byte_start,
-                        byte_idx + line_byte_start + string.len(),
-                    )
-                })
-                .filter_map(|(byte_start, byte_end)| {
-                    Some(
-                        rope.try_byte_to_char(byte_start).ok()?
-                            ..rope.try_byte_to_char(byte_end).ok()?,
-                    )
-                })
-                .collect()
-        }
-
         fn border_title(title: String, active: bool) -> Line<'static> {
             if active {
                 Line::from(vec![
@@ -3153,13 +3182,11 @@ impl StatefulWidget for BufferWidget<'_> {
                 render_help(text_area, buf, SELECT_LINE, |b| b);
             }
             Some(EditorMode::IncrementalSearch { prompt, .. }) => {
-                // TODO - update help text
                 render_help(text_area, buf, FIND, |b| b);
                 render_find_prompt(text_area, buf, prompt);
             }
             Some(EditorMode::BrowseMatches { matches, match_idx }) => {
-                // TODO - update help text
-                render_help(text_area, buf, FIND, |block| {
+                render_help(text_area, buf, BROWSE_MATCHES, |block| {
                     block.title(format!("Match {} / {}", *match_idx + 1, matches.len()))
                 });
             }

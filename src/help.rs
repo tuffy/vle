@@ -289,6 +289,14 @@ pub static FIND: &[Keybinding] = &[
     none(&["Enter"], "Browse All Matches"),
 ];
 
+pub static BROWSE_MATCHES: &[Keybinding] = &[
+    none(&[UP, LEFT], "Previous Match"),
+    none(&[DOWN, RIGHT], "Next Match"),
+    none(&["Del"], "Remove Match"),
+    ctrl_f(&["R"], "F6", "Replace Matches"),
+    none(&["Enter"], "Finish"),
+];
+
 pub static REPLACE_MATCHES: &[Keybinding] = &[
     none(&[UP, LEFT], "Select Previous Match"),
     none(&[DOWN, RIGHT], "Select Next Match"),
