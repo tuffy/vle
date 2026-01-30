@@ -1601,19 +1601,29 @@ impl BufferContext {
     pub fn multi_insert_string(
         &mut self,
         alt: Option<AltCursor<'_>>,
-        mut matches: &mut [Range<usize>],
+        matches: &mut [Range<usize>],
         s: &str,
+    ) {
+        self.multi_insert_strings(alt, matches, std::iter::repeat((s.chars().count(), s)))
+    }
+
+    pub fn multi_insert_strings<'s>(
+        &mut self,
+        alt: Option<AltCursor<'_>>,
+        mut matches: &mut [Range<usize>],
+        mut strings: impl Iterator<Item = (usize, &'s str)>,
     ) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
         let mut alt = Secondary::new(alt, |_| true);
 
-        let chars_len = s.chars().count();
-
         loop {
             match matches {
                 [] => break,
                 [r] => {
+                    let Some((chars_len, s)) = strings.next() else {
+                        return;
+                    };
                     rope.insert(r.end, s);
                     if r.end <= self.cursor {
                         self.cursor += chars_len;
@@ -1627,6 +1637,9 @@ impl BufferContext {
                     break;
                 }
                 [r, rest @ ..] => {
+                    let Some((chars_len, s)) = strings.next() else {
+                        return;
+                    };
                     rope.insert(r.end, s);
                     if r.end <= self.cursor {
                         self.cursor += chars_len;
@@ -2334,8 +2347,8 @@ impl StatefulWidget for BufferWidget<'_> {
 
     fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer, state: &mut BufferContext) {
         use crate::help::{
-            BROWSE_MATCHES, CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE,
-            SPLIT_PANE, VERIFY_RELOAD, VERIFY_SAVE, render_help,
+            BROWSE_MATCHES, CONFIRM_CLOSE, FIND, REGEX_PASTE, REPLACE_MATCHES, SELECT_INSIDE,
+            SELECT_LINE, SPLIT_PANE, VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
         use crate::syntax::{HighlightState, Highlighter, MultiComment};
         use ratatui::{
@@ -3130,6 +3143,10 @@ impl StatefulWidget for BufferWidget<'_> {
                         matches.len()
                     ))
                 });
+            }
+            Some(EditorMode::RegexPaste { .. }) => {
+                // TODO - build proper paste-specific help text
+                render_help(text_area, buf, REGEX_PASTE, |b| b);
             }
             Some(EditorMode::Open { .. }) => { /* already handled, above */ }
         }

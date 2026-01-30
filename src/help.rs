@@ -303,3 +303,5 @@ pub static REPLACE_MATCHES: &[Keybinding] = &[
     ctrl(&["V"], "Copy from Cut Buffer"),
     none(&["Enter"], "Finish Replacement"),
 ];
+
+pub static REGEX_PASTE: &[Keybinding] = &[ctrl(&["V"], "Copy from Cut Buffer")];
