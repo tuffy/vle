@@ -81,6 +81,10 @@ enum TutorialToken {
     #[token("    println!(\"c is {c}\");")]
     #[token(">>> {new text}")]
     #[token(">>> {fixed text}")]
+    #[token(">>> 1111,2222")]
+    #[token(">>> 333333,44")]
+    #[token(">>> 555,66666")]
+    #[token(">>> 7777777,8")]
     Correct,
     #[regex(">>> .+", allow_greedy = true)]
     #[token("println!(\"a is {a}\");")]
