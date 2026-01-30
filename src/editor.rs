@@ -1151,6 +1151,10 @@ fn process_incremental_search<'a, P: TextPrompt>(
                 None
             }
         },
+        key!(CONTROL, 'f') => {
+            *prompt = P::default();
+            None
+        }
         key!(Tab) => Some(NextModeIncremental::Alternate),
         _ => None, // ignore other events
     }
