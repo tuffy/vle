@@ -8,7 +8,7 @@
 
 use crate::editor::EditorMode;
 use crate::endings::LineEndings;
-use crate::prompt::{SearchPrompt, TextPrompt};
+use crate::prompt::{SearchPrompt, SearchPromptRegex, TextPrompt};
 use crate::syntax::Highlighter;
 use ratatui::{
     layout::{Position, Rect},
@@ -2347,8 +2347,9 @@ impl StatefulWidget for BufferWidget<'_> {
 
     fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer, state: &mut BufferContext) {
         use crate::help::{
-            BROWSE_MATCHES, CONFIRM_CLOSE, FIND, REGEX_PASTE, REPLACE_MATCHES, SELECT_INSIDE,
-            SELECT_LINE, SPLIT_PANE, VERIFY_RELOAD, VERIFY_SAVE, render_help,
+            BROWSE_MATCHES, CONFIRM_CLOSE, FIND, FIND_REGEX, REGEX_PASTE, REPLACE_MATCHES,
+            REPLACE_MATCHES_REGEX, SELECT_INSIDE, SELECT_LINE, SPLIT_PANE, VERIFY_RELOAD,
+            VERIFY_SAVE, render_help,
         };
         use crate::syntax::{HighlightState, Highlighter, MultiComment};
         use ratatui::{
@@ -2780,6 +2781,30 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
+        fn render_regex_find_prompt(
+            text_area: Rect,
+            buf: &mut ratatui::buffer::Buffer,
+            prompt: &SearchPromptRegex,
+        ) {
+            let [_, prompt_area] = Layout::vertical([Min(0), Length(3)]).areas(text_area);
+            let [prompt_area, _] = Layout::horizontal([Length(42), Min(0)]).areas(prompt_area);
+
+            // TODO - scroll if regex gets too long
+
+            ratatui::widgets::Clear.render(prompt_area, buf);
+            Paragraph::new(prompt.to_string())
+                .block(match prompt.value() {
+                    None | Some(Ok(_)) => Block::bordered()
+                        .border_type(BorderType::Rounded)
+                        .title("Regular Expression"),
+                    Some(Err(_)) => Block::bordered()
+                        .border_style(Style::new().red())
+                        .border_type(BorderType::Rounded)
+                        .title("Regular Expression"),
+                })
+                .render(prompt_area, buf);
+        }
+
         fn render_w_matches<'r, H: Highlighter>(
             area: Rect,
             state: &BufferContext,
@@ -3103,14 +3128,8 @@ impl StatefulWidget for BufferWidget<'_> {
                 render_find_prompt(text_area, buf, prompt);
             }
             Some(EditorMode::IncrementalSearchRegex { prompt, .. }) => {
-                // TODO - build proper regex help message
-                render_help(text_area, buf, FIND, |b| b);
-                // TODO - build proper regex prompt
-                render_message(
-                    text_area,
-                    buf,
-                    BufferMessage::Notice(prompt.to_string().into()),
-                );
+                render_help(text_area, buf, FIND_REGEX, |b| b);
+                render_regex_find_prompt(text_area, buf, prompt);
             }
             Some(EditorMode::BrowseMatches { matches, match_idx }) => {
                 render_help(text_area, buf, BROWSE_MATCHES, |block| {
@@ -3118,7 +3137,6 @@ impl StatefulWidget for BufferWidget<'_> {
                 });
             }
             Some(EditorMode::BrowseMatchesRegex { matches, match_idx }) => {
-                // TODO - build proper help message
                 render_help(text_area, buf, BROWSE_MATCHES, |block| {
                     block.title(format!("Match {} / {}", *match_idx + 1, matches.len()))
                 });
@@ -3135,8 +3153,7 @@ impl StatefulWidget for BufferWidget<'_> {
             Some(EditorMode::ReplaceMatchesRegex {
                 matches, match_idx, ..
             }) => {
-                // TODO - build regex-specific help text
-                render_help(text_area, buf, REPLACE_MATCHES, |block| {
+                render_help(text_area, buf, REPLACE_MATCHES_REGEX, |block| {
                     block.title(format!(
                         "Replacement {} / {}",
                         *match_idx + 1,
@@ -3144,9 +3161,18 @@ impl StatefulWidget for BufferWidget<'_> {
                     ))
                 });
             }
-            Some(EditorMode::RegexPaste { .. }) => {
-                // TODO - build proper paste-specific help text
-                render_help(text_area, buf, REGEX_PASTE, |b| b);
+            Some(EditorMode::RegexPaste { groups, .. }) => {
+                render_help(
+                    text_area,
+                    buf,
+                    REGEX_PASTE
+                        .iter()
+                        .copied()
+                        .take(1 + groups.get(0).map(|v| v.len()).unwrap_or(0))
+                        .collect::<Vec<_>>()
+                        .as_slice(),
+                    |b| b,
+                );
             }
             Some(EditorMode::Open { .. }) => { /* already handled, above */ }
         }

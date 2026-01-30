@@ -1100,39 +1100,27 @@ fn process_incremental_search<'a, P: TextPrompt>(
             ..
         }) => {
             prompt.push(c);
-            match prompt.value()? {
-                Ok(query) => {
-                    if let Err(err) = buffer.next_or_current_match(area, query) {
-                        buffer.set_error(not_found(err));
-                    }
-                }
-                Err(err) => buffer.set_error(err.to_string()),
+            let query = prompt.value()?.ok()?;
+            if let Err(err) = buffer.next_or_current_match(area, query) {
+                buffer.set_error(not_found(err));
             }
             None
         }
         key!(CONTROL, 'v') => {
             if let Some(buf) = cut_buffer {
                 prompt.extend(buf.as_str());
-                match prompt.value()? {
-                    Ok(query) => {
-                        if let Err(err) = buffer.next_or_current_match(area, query) {
-                            buffer.set_error(not_found(err));
-                        }
-                    }
-                    Err(err) => buffer.set_error(err.to_string()),
+                let query = prompt.value()?.ok()?;
+                if let Err(err) = buffer.next_or_current_match(area, query) {
+                    buffer.set_error(not_found(err));
                 }
             }
             None
         }
         Event::Paste(pasted) => {
             prompt.extend(&pasted);
-            match prompt.value()? {
-                Ok(query) => {
-                    if let Err(err) = buffer.next_or_current_match(area, query) {
-                        buffer.set_error(not_found(err));
-                    }
-                }
-                Err(err) => buffer.set_error(err.to_string()),
+            let query = prompt.value()?.ok()?;
+            if let Err(err) = buffer.next_or_current_match(area, query) {
+                buffer.set_error(not_found(err));
             }
             None
         }
@@ -1141,13 +1129,9 @@ fn process_incremental_search<'a, P: TextPrompt>(
             if prompt.is_empty() {
                 buffer.clear_selection();
             } else {
-                match prompt.value()? {
-                    Ok(query) => {
-                        if let Err(err) = buffer.next_or_current_match(area, query) {
-                            buffer.set_error(not_found(err));
-                        }
-                    }
-                    Err(err) => buffer.set_error(err.to_string()),
+                let query = prompt.value()?.ok()?;
+                if let Err(err) = buffer.next_or_current_match(area, query) {
+                    buffer.set_error(not_found(err));
                 }
             }
             None
@@ -1179,7 +1163,6 @@ enum NextModeBrowse {
 
 fn process_browse_matches<P: Sized>(
     buffer: &mut BufferContext,
-    // alt: Option<AltCursor<'_>>,
     matches: &mut Vec<(Range<usize>, P)>,
     match_idx: &mut usize,
     event: Event,
@@ -1515,6 +1498,8 @@ impl Layout {
     fn cursor_position(&self, area: Rect, mode: &EditorMode) -> Option<Position> {
         use ratatui::layout::Constraint::{Length, Min};
         use ratatui::layout::{Constraint, Layout};
+
+        // TODO - put cursor in regex find prompt
 
         // generate a duplicate of our existing block layout
         // and then apply cursor's position to it
