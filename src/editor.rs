@@ -1245,7 +1245,6 @@ fn process_browse_matches<P: Sized>(
     }
 }
 
-// TODO - have this return simple Finished/NotFinished enum
 fn process_replace_matches(
     buffer: &mut BufferContext,
     matches: &mut [Range<usize>],
