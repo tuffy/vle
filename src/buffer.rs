@@ -567,6 +567,17 @@ impl BufferContext {
         self.cursor = cursor;
     }
 
+    /// If selection is active, place the cursor first if not already
+    pub fn cursor_first(&mut self) {
+        if let Some(selection) = &mut self.selection
+            && self.cursor > *selection
+        {
+            let buf = self.buffer.borrow();
+            std::mem::swap(&mut self.cursor, selection);
+            self.cursor_column = cursor_column(&buf.rope, self.cursor);
+        }
+    }
+
     pub fn set_selection(&mut self, start: usize, end: usize) {
         assert!(end >= start);
         let buf = self.buffer.borrow();
@@ -1028,6 +1039,17 @@ impl BufferContext {
         }
     }
 
+    /// Returns selection without clearing it, if any
+    pub fn selection(&self) -> Option<String> {
+        let (selection_start, selection_end) = reorder(self.cursor, self.selection?);
+
+        self.buffer
+            .borrow()
+            .rope
+            .get_slice(selection_start..selection_end)
+            .map(|r| r.into())
+    }
+
     pub fn get_selection(&mut self) -> Option<CutBuffer> {
         let selection = self.selection.take()?;
         let (selection_start, selection_end) = reorder(self.cursor, selection);
@@ -1061,9 +1083,6 @@ impl BufferContext {
             })
     }
 
-    /// Returns offset in characters, data of area to search,
-    /// which may be the whole rope if no selection is active
-    /// Clears selection afterward.
     pub fn search_area(&mut self) -> SearchArea {
         let rope = &self.buffer.borrow().rope;
 
@@ -1783,6 +1802,15 @@ impl<'s> Searcher<'s> for &'s str {
 
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize, ())> {
         s.match_indices(self)
+            .map(|(idx, s)| (idx, idx + s.len(), ()))
+    }
+}
+
+impl Searcher<'static> for String {
+    type Payload = ();
+
+    fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize, ())> {
+        s.match_indices(self.as_str())
             .map(|(idx, s)| (idx, idx + s.len(), ()))
     }
 }

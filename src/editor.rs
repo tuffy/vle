@@ -660,9 +660,20 @@ impl Editor {
                 };
             }
             key!(CONTROL, 'f') | key!(F(5)) => {
-                if let Some(find) = self.on_buffer(|b| EditorMode::IncrementalSearch {
-                    area: b.search_area(),
-                    prompt: SearchPrompt::default(),
+                if let Some(Ok(find)) = self.on_buffer(|b| {
+                    let area = b.search_area();
+                    match b.selection() {
+                        None => Ok(EditorMode::IncrementalSearch {
+                            area,
+                            prompt: SearchPrompt::default(),
+                        }),
+                        Some(selection) => {
+                            b.cursor_first();
+                            b.all_matches(&area, selection).map(|(match_idx, matches)| {
+                                EditorMode::BrowseMatches { match_idx, matches }
+                            })
+                        }
+                    }
                 }) {
                     self.mode = find;
                 }
