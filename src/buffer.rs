@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::SystemTime;
 
-static SPACES_PER_TAB: std::sync::LazyLock<usize> = std::sync::LazyLock::new(|| {
+pub static SPACES_PER_TAB: std::sync::LazyLock<usize> = std::sync::LazyLock::new(|| {
     std::env::var("VLE_SPACES_PER_TAB")
         .ok()
         .and_then(|s| s.parse().ok())
@@ -2814,10 +2814,11 @@ impl StatefulWidget for BufferWidget<'_> {
             buf: &mut ratatui::buffer::Buffer,
             prompt: &SearchPromptRegex,
         ) {
-            let [_, prompt_area] = Layout::vertical([Min(0), Length(3)]).areas(text_area);
-            let [prompt_area, _] = Layout::horizontal([Length(42), Min(0)]).areas(prompt_area);
+            use crate::prompt::AREA_WIDTH;
 
-            // TODO - scroll if regex gets too long
+            let [_, prompt_area] = Layout::vertical([Min(0), Length(3)]).areas(text_area);
+            let [prompt_area, _] =
+                Layout::horizontal([Length(AREA_WIDTH + 2), Min(0)]).areas(prompt_area);
 
             ratatui::widgets::Clear.render(prompt_area, buf);
             Paragraph::new(prompt.to_string())
@@ -2830,6 +2831,10 @@ impl StatefulWidget for BufferWidget<'_> {
                         .border_type(BorderType::Rounded)
                         .title("Regular Expression"),
                 })
+                .scroll((
+                    0,
+                    prompt.cursor_position().saturating_sub(AREA_WIDTH.into()) as u16,
+                ))
                 .render(prompt_area, buf);
         }
 

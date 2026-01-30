@@ -1514,8 +1514,6 @@ impl Layout {
         use ratatui::layout::Constraint::{Length, Min};
         use ratatui::layout::{Constraint, Layout};
 
-        // TODO - put cursor in regex find prompt
-
         // generate a duplicate of our existing block layout
         // and then apply cursor's position to it
         fn apply_position(
@@ -1540,6 +1538,19 @@ impl Layout {
                     Some(Position {
                         x: text_area.x + x,
                         y: text_area.y + y,
+                    })
+                }
+                EditorMode::IncrementalSearchRegex { prompt, .. } => {
+                    use crate::prompt::AREA_WIDTH;
+
+                    let [_, prompt_area] = Layout::vertical([Min(0), Length(3)]).areas(text_area);
+                    let [prompt_area, _] =
+                        Layout::horizontal([Length(AREA_WIDTH + 2), Min(0)]).areas(prompt_area);
+                    let text_area = Block::bordered().inner(prompt_area);
+
+                    Some(Position {
+                        x: text_area.x + (prompt.cursor_position() as u16).min(text_area.width),
+                        y: text_area.y,
                     })
                 }
                 _ => {

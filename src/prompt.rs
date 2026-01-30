@@ -6,6 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+pub const AREA_WIDTH: u16 = 40;
+
 pub trait TextPrompt: Default + std::fmt::Display {
     type Value<'s>: crate::buffer::Searcher<'s>
     where
@@ -25,6 +27,21 @@ pub trait TextPrompt: Default + std::fmt::Display {
     /// Returns Some(Ok(value)) if prompt is populated and valid
     /// Returns Some(Err(err)) if prompt is populated but invalid
     fn value(&self) -> Option<Result<Self::Value<'_>, &'_ Self::Error>>;
+
+    /// Returns prompt's characters
+    fn chars(&self) -> impl Iterator<Item = char>;
+
+    /// Returns cursor position in columns
+    fn cursor_position(&self) -> usize {
+        use unicode_width::UnicodeWidthChar;
+
+        self.chars()
+            .map(|c| match c {
+                '\t' => *crate::buffer::SPACES_PER_TAB,
+                c => c.width().unwrap_or(0),
+            })
+            .sum()
+    }
 }
 
 #[derive(Default)]
@@ -75,6 +92,10 @@ impl TextPrompt for SearchPrompt {
 
     fn value(&self) -> Option<Result<&str, &Self::Error>> {
         (!self.is_empty()).then_some(self.value.as_str()).map(Ok)
+    }
+
+    fn chars(&self) -> impl Iterator<Item = char> {
+        self.chars.iter().copied()
     }
 }
 
@@ -133,6 +154,10 @@ impl TextPrompt for SearchPromptRegex {
             Some(Err(err)) => Some(Err(err)),
             None => None,
         }
+    }
+
+    fn chars(&self) -> impl Iterator<Item = char> {
+        self.chars.iter().copied()
     }
 }
 
