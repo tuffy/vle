@@ -1775,10 +1775,21 @@ impl<'s> Searcher<'s> for &'s str {
 }
 
 impl<'s> Searcher<'s> for &'s regex_lite::Regex {
-    type Payload = (); // TODO - include groups as Vec<Vec<String>>
+    type Payload = Vec<String>;
 
-    fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize, ())> {
-        self.find_iter(s).map(|m| (m.start(), m.end(), ()))
+    fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize, Vec<String>)> {
+        self.captures_iter(s).map(|c| {
+            let group_0 = c.get(0).unwrap(); // guaranteed to always have 1 group
+            let start = group_0.start();
+            let end = group_0.end();
+            (
+                start,
+                end,
+                c.iter()
+                    .map(|s| s.map(|m| m.as_str().to_string()).unwrap_or_default())
+                    .collect(),
+            )
+        })
     }
 }
 
@@ -3099,7 +3110,6 @@ impl StatefulWidget for BufferWidget<'_> {
                     block.title(format!("Match {} / {}", *match_idx + 1, matches.len()))
                 });
             }
-            Some(EditorMode::Open { .. }) => { /* already handled, above */ }
             Some(EditorMode::ReplaceMatches { matches, match_idx }) => {
                 render_help(text_area, buf, REPLACE_MATCHES, |block| {
                     block.title(format!(
@@ -3109,6 +3119,19 @@ impl StatefulWidget for BufferWidget<'_> {
                     ))
                 });
             }
+            Some(EditorMode::ReplaceMatchesRegex {
+                matches, match_idx, ..
+            }) => {
+                // TODO - build regex-specific help text
+                render_help(text_area, buf, REPLACE_MATCHES, |block| {
+                    block.title(format!(
+                        "Replacement {} / {}",
+                        *match_idx + 1,
+                        matches.len()
+                    ))
+                });
+            }
+            Some(EditorMode::Open { .. }) => { /* already handled, above */ }
         }
 
         if let Some(message) = state.message.take() {

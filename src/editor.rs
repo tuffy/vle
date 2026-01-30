@@ -49,13 +49,17 @@ pub enum EditorMode {
         match_idx: usize,
     },
     BrowseMatchesRegex {
-        // TODO - swap payload for Vec<Vec<String>>
-        matches: Vec<(Range<usize>, ())>,
+        matches: Vec<(Range<usize>, Vec<String>)>,
         match_idx: usize,
     },
     ReplaceMatches {
         matches: Vec<Range<usize>>,
         match_idx: usize,
+    },
+    ReplaceMatchesRegex {
+        matches: Vec<Range<usize>>,
+        match_idx: usize,
+        groups: Vec<Vec<String>>,
     },
     Open {
         #[cfg(not(feature = "ssh"))]
@@ -339,12 +343,15 @@ impl Editor {
                                         matches,
                                     );
                                 }
-                                // TODO - replace with regex-specific replace mode
-                                EditorMode::ReplaceMatches {
-                                    matches: std::mem::take(matches)
-                                        .into_iter()
-                                        .map(|(r, _)| r.start..r.start)
-                                        .collect(),
+
+                                let (matches, groups) = std::mem::take(matches)
+                                    .into_iter()
+                                    .map(|(r, p)| (r.start..r.start, p))
+                                    .unzip();
+
+                                EditorMode::ReplaceMatchesRegex {
+                                    matches,
+                                    groups,
                                     match_idx: std::mem::take(match_idx),
                                 }
                             }
@@ -366,6 +373,28 @@ impl Editor {
                                 .map(|b| b.alt_cursor()),
                         )
                     {
+                        // TODO - pull out paste event
+                        self.mode = new_mode;
+                    }
+                }
+                EditorMode::ReplaceMatchesRegex {
+                    matches, match_idx, ..
+                } => {
+                    let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
+                    let cur_idx = cur_buf_list.current_index();
+                    if let Some(buf) = cur_buf_list.current_mut()
+                        && let Some(new_mode) = process_replace_matches(
+                            buf,
+                            self.cut_buffer.as_ref(),
+                            matches,
+                            match_idx,
+                            event,
+                            alt_buf_list
+                                .and_then(|l| l.get_mut(cur_idx))
+                                .map(|b| b.alt_cursor()),
+                        )
+                    {
+                        // TODO - pull out paste event
                         self.mode = new_mode;
                     }
                 }
