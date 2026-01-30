@@ -160,7 +160,7 @@ impl Source {
                     Ok((f.metadata().and_then(|m| m.modified()).ok(), rope, endings))
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                    Ok((None, ropey::Rope::from("\n"), LineEndings::default()))
+                    Ok((None, ropey::Rope::default(), LineEndings::default()))
                 }
                 Err(e) => Err(e),
             },
@@ -177,7 +177,7 @@ impl Source {
                     ))
                 }
                 Err(e) if e.code() == ssh2::ErrorCode::SFTP(2) => {
-                    Ok((None, ropey::Rope::from("\n"), LineEndings::default()))
+                    Ok((None, ropey::Rope::default(), LineEndings::default()))
                 }
                 Err(e) => Err(e.into()),
             },
@@ -2404,11 +2404,13 @@ impl StatefulWidget for BufferWidget<'_> {
         struct EditorLine<'s> {
             line: Cow<'s, str>,
             range: RangeInclusive<usize>, // range in rope in characters
+            number: usize,                // line number, starting from 0
         }
 
         impl<'s> EditorLine<'s> {
             fn iter(rope: &'s ropey::Rope, start_line: usize) -> impl Iterator<Item = Self> {
                 let mut lines = rope.lines_at(start_line);
+                let mut line_numbers = start_line..;
                 let mut line_start_numbers = start_line..;
                 let mut line_starts = std::iter::from_fn(move || {
                     line_start_numbers
@@ -2425,6 +2427,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                 .peek()
                                 .map(|e| e.saturating_sub(1))
                                 .unwrap_or_else(|| rope.len_chars() + 1),
+                        number: line_numbers.next()?,
                     })
                 })
             }
@@ -2838,6 +2841,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 .render(prompt_area, buf);
         }
 
+        #[allow(clippy::too_many_arguments)]
         fn render_w_matches<'r, H: Highlighter>(
             area: Rect,
             state: &BufferContext,
@@ -2845,20 +2849,27 @@ impl StatefulWidget for BufferWidget<'_> {
             mut hlstate: HighlightState,
             rope: &'r ropey::Rope,
             viewport_line: usize,
+            current_line: Option<usize>,
             mut matches: VecDeque<Range<usize>>,
         ) -> Vec<ratatui::text::Line<'r>> {
             match state.selection {
                 // no selection, so highlight matches only
                 // (this shouldn't happen)
                 None => EditorLine::iter(rope, viewport_line)
-                    .map(|EditorLine { line, range }| {
-                        highlight_matches(
-                            colorize(syntax, &mut hlstate, line, range.contains(&state.cursor)),
-                            range,
-                            &mut matches,
-                        )
-                        .into()
-                    })
+                    .map(
+                        |EditorLine {
+                             line,
+                             range,
+                             number,
+                         }| {
+                            highlight_matches(
+                                colorize(syntax, &mut hlstate, line, current_line == Some(number)),
+                                range,
+                                &mut matches,
+                            )
+                            .into()
+                        },
+                    )
                     .map(|line| widen_tabs(line, &state.tab_substitution))
                     .take(area.height.into())
                     .collect::<Vec<_>>(),
@@ -2867,23 +2878,29 @@ impl StatefulWidget for BufferWidget<'_> {
                     let (selection_start, selection_end) = reorder(state.cursor, selection);
 
                     EditorLine::iter(rope, viewport_line)
-                        .map(|EditorLine { line, range }| {
-                            highlight_selection(
-                                highlight_matches(
-                                    colorize(
-                                        syntax,
-                                        &mut hlstate,
-                                        line,
-                                        range.contains(&state.cursor),
+                        .map(
+                            |EditorLine {
+                                 line,
+                                 range,
+                                 number,
+                             }| {
+                                highlight_selection(
+                                    highlight_matches(
+                                        colorize(
+                                            syntax,
+                                            &mut hlstate,
+                                            line,
+                                            current_line == Some(number),
+                                        ),
+                                        range.clone(),
+                                        &mut matches,
                                     ),
                                     range.clone(),
-                                    &mut matches,
-                                ),
-                                range.clone(),
-                                (selection_start, selection_end),
-                            )
-                            .into()
-                        })
+                                    (selection_start, selection_end),
+                                )
+                                .into()
+                            },
+                        )
                         .map(|line| widen_tabs(line, &state.tab_substitution))
                         .take(area.height.into())
                         .collect::<Vec<_>>()
@@ -3019,6 +3036,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 hlstate,
                 rope,
                 viewport_line,
+                current_line,
                 matches.iter().map(|(r, _)| r.clone()).collect(),
             ),
             Some(EditorMode::BrowseMatchesRegex { matches, .. }) => render_w_matches(
@@ -3028,20 +3046,32 @@ impl StatefulWidget for BufferWidget<'_> {
                 hlstate,
                 rope,
                 viewport_line,
+                current_line,
                 matches.iter().map(|(r, _)| r.clone()).collect(),
             ),
             _ => {
                 match state.selection {
                     // no selection, so nothing to highlight
                     None => EditorLine::iter(rope, viewport_line)
-                        .map(|EditorLine { line, range }| {
-                            highlight_paren(
-                                colorize(syntax, &mut hlstate, line, range.contains(&state.cursor)),
-                                range,
-                                matching_paren,
-                            )
-                            .into()
-                        })
+                        .map(
+                            |EditorLine {
+                                 line,
+                                 range,
+                                 number,
+                             }| {
+                                highlight_paren(
+                                    colorize(
+                                        syntax,
+                                        &mut hlstate,
+                                        line,
+                                        current_line == Some(number),
+                                    ),
+                                    range,
+                                    matching_paren,
+                                )
+                                .into()
+                            },
+                        )
                         .map(|line| widen_tabs(line, &state.tab_substitution))
                         .take(area.height.into())
                         .collect::<Vec<_>>(),
@@ -3050,23 +3080,29 @@ impl StatefulWidget for BufferWidget<'_> {
                         let (selection_start, selection_end) = reorder(state.cursor, selection);
 
                         EditorLine::iter(rope, viewport_line)
-                            .map(|EditorLine { line, range }| {
-                                highlight_paren(
-                                    highlight_selection(
-                                        colorize(
-                                            syntax,
-                                            &mut hlstate,
-                                            line,
-                                            range.contains(&state.cursor),
+                            .map(
+                                |EditorLine {
+                                     line,
+                                     range,
+                                     number,
+                                 }| {
+                                    highlight_paren(
+                                        highlight_selection(
+                                            colorize(
+                                                syntax,
+                                                &mut hlstate,
+                                                line,
+                                                current_line == Some(number),
+                                            ),
+                                            range.clone(),
+                                            (selection_start, selection_end),
                                         ),
-                                        range.clone(),
-                                        (selection_start, selection_end),
-                                    ),
-                                    range,
-                                    matching_paren,
-                                )
-                                .into()
-                            })
+                                        range,
+                                        matching_paren,
+                                    )
+                                    .into()
+                                },
+                            )
                             .map(|line| widen_tabs(line, &state.tab_substitution))
                             .take(area.height.into())
                             .collect::<Vec<_>>()
@@ -3201,7 +3237,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     REGEX_PASTE
                         .iter()
                         .copied()
-                        .take(1 + groups.get(0).map(|v| v.len()).unwrap_or(0))
+                        .take(1 + groups.first().map(|v| v.len()).unwrap_or(0))
                         .collect::<Vec<_>>()
                         .as_slice(),
                     |b| b,
