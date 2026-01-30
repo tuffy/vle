@@ -281,7 +281,6 @@ impl Editor {
                             event,
                         )
                     {
-                        // TODO - build a regex-specific BrowseMatches
                         self.mode = match new_mode {
                             NextModeIncremental::Alternate => EditorMode::IncrementalSearch {
                                 prompt: SearchPrompt::default(),

@@ -2756,6 +2756,59 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
+        fn render_w_matches<'r, H: Highlighter>(
+            area: Rect,
+            state: &BufferContext,
+            syntax: &H,
+            mut hlstate: HighlightState,
+            rope: &'r ropey::Rope,
+            viewport_line: usize,
+            mut matches: VecDeque<Range<usize>>,
+        ) -> Vec<ratatui::text::Line<'r>> {
+            match state.selection {
+                // no selection, so highlight matches only
+                // (this shouldn't happen)
+                None => EditorLine::iter(rope, viewport_line)
+                    .map(|EditorLine { line, range }| {
+                        highlight_matches(
+                            colorize(syntax, &mut hlstate, line, range.contains(&state.cursor)),
+                            range,
+                            &mut matches,
+                        )
+                        .into()
+                    })
+                    .map(|line| widen_tabs(line, &state.tab_substitution))
+                    .take(area.height.into())
+                    .collect::<Vec<_>>(),
+                // highlight both matches *and* selection
+                Some(selection) => {
+                    let (selection_start, selection_end) = reorder(state.cursor, selection);
+
+                    EditorLine::iter(rope, viewport_line)
+                        .map(|EditorLine { line, range }| {
+                            highlight_selection(
+                                highlight_matches(
+                                    colorize(
+                                        syntax,
+                                        &mut hlstate,
+                                        line,
+                                        range.contains(&state.cursor),
+                                    ),
+                                    range.clone(),
+                                    &mut matches,
+                                ),
+                                range.clone(),
+                                (selection_start, selection_end),
+                            )
+                            .into()
+                        })
+                        .map(|line| widen_tabs(line, &state.tab_substitution))
+                        .take(area.height.into())
+                        .collect::<Vec<_>>()
+                }
+            }
+        }
+
         if let Some(EditorMode::Open { chooser }) = self.mode {
             // file selection mode overrides main editing mode
             use crate::files::FileChooser;
@@ -2877,98 +2930,24 @@ impl StatefulWidget for BufferWidget<'_> {
         };
 
         Paragraph::new(match self.mode {
-            Some(EditorMode::BrowseMatches { matches, .. }) => {
-                let mut matches = matches.iter().map(|(r, _)| r.clone()).collect();
-
-                match state.selection {
-                    // no selection, so highlight matches only
-                    // (this shouldn't happen)
-                    None => EditorLine::iter(rope, viewport_line)
-                        .map(|EditorLine { line, range }| {
-                            highlight_matches(
-                                colorize(syntax, &mut hlstate, line, range.contains(&state.cursor)),
-                                range,
-                                &mut matches,
-                            )
-                            .into()
-                        })
-                        .map(|line| widen_tabs(line, &state.tab_substitution))
-                        .take(area.height.into())
-                        .collect::<Vec<_>>(),
-                    // highlight both matches *and* selection
-                    Some(selection) => {
-                        let (selection_start, selection_end) = reorder(state.cursor, selection);
-
-                        EditorLine::iter(rope, viewport_line)
-                            .map(|EditorLine { line, range }| {
-                                highlight_selection(
-                                    highlight_matches(
-                                        colorize(
-                                            syntax,
-                                            &mut hlstate,
-                                            line,
-                                            range.contains(&state.cursor),
-                                        ),
-                                        range.clone(),
-                                        &mut matches,
-                                    ),
-                                    range.clone(),
-                                    (selection_start, selection_end),
-                                )
-                                .into()
-                            })
-                            .map(|line| widen_tabs(line, &state.tab_substitution))
-                            .take(area.height.into())
-                            .collect::<Vec<_>>()
-                    }
-                }
-            }
-            Some(EditorMode::BrowseMatchesRegex { matches, .. }) => {
-                let mut matches = matches.iter().map(|(r, _)| r.clone()).collect();
-
-                match state.selection {
-                    // no selection, so highlight matches only
-                    // (this shouldn't happen)
-                    None => EditorLine::iter(rope, viewport_line)
-                        .map(|EditorLine { line, range }| {
-                            highlight_matches(
-                                colorize(syntax, &mut hlstate, line, range.contains(&state.cursor)),
-                                range,
-                                &mut matches,
-                            )
-                            .into()
-                        })
-                        .map(|line| widen_tabs(line, &state.tab_substitution))
-                        .take(area.height.into())
-                        .collect::<Vec<_>>(),
-                    // highlight both matches *and* selection
-                    Some(selection) => {
-                        let (selection_start, selection_end) = reorder(state.cursor, selection);
-
-                        EditorLine::iter(rope, viewport_line)
-                            .map(|EditorLine { line, range }| {
-                                highlight_selection(
-                                    highlight_matches(
-                                        colorize(
-                                            syntax,
-                                            &mut hlstate,
-                                            line,
-                                            range.contains(&state.cursor),
-                                        ),
-                                        range.clone(),
-                                        &mut matches,
-                                    ),
-                                    range.clone(),
-                                    (selection_start, selection_end),
-                                )
-                                .into()
-                            })
-                            .map(|line| widen_tabs(line, &state.tab_substitution))
-                            .take(area.height.into())
-                            .collect::<Vec<_>>()
-                    }
-                }
-            }
+            Some(EditorMode::BrowseMatches { matches, .. }) => render_w_matches(
+                area,
+                state,
+                syntax,
+                hlstate,
+                rope,
+                viewport_line,
+                matches.iter().map(|(r, _)| r.clone()).collect(),
+            ),
+            Some(EditorMode::BrowseMatchesRegex { matches, .. }) => render_w_matches(
+                area,
+                state,
+                syntax,
+                hlstate,
+                rope,
+                viewport_line,
+                matches.iter().map(|(r, _)| r.clone()).collect(),
+            ),
             _ => {
                 match state.selection {
                     // no selection, so nothing to highlight
