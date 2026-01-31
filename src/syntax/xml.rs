@@ -14,8 +14,10 @@ use ratatui::style::Color;
 #[logos(skip r"[ \t\n]+")]
 enum XmlToken {
     #[regex("<[[:alpha:]][[:alpha:][:digit:]_]*")]
+    #[regex("<![[:upper:]]+")]
     TagStart,
     #[regex("</[[:alpha:]][[:alpha:][:digit:]_]*>")]
+    #[token(">")]
     #[token("/>")]
     TagEnd,
     #[regex("[[:alpha:]][[:alpha:][:digit:]_]*=")]

@@ -116,6 +116,7 @@ enum CppToken {
     EndComment,
 
     #[regex(r#"\"([^\\\"]|\\.)*\""#)]
+    #[regex(r"'([^\\\']|\\.){0,1}'")]
     String,
 
     #[regex(r"0x[0-9a-fA-F]+[uU]?(|ll|LL)?")]

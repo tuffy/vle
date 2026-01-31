@@ -16,6 +16,7 @@ enum HtmlToken {
     #[regex("<[[:alpha:]][[:alpha:][:digit:]_]*>?")]
     TagStart,
     #[regex("</[[:alpha:]][[:alpha:][:digit:]_]*>")]
+    #[token(">")]
     #[token("/>")]
     TagEnd,
     #[regex("[[:alpha:]][[:alpha:][:digit:]_]*\\s*=\\s*")]
