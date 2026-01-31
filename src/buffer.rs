@@ -2388,7 +2388,7 @@ impl StatefulWidget for BufferWidget<'_> {
             style::{Color, Modifier, Style},
             text::{Line, Span},
             widgets::{
-                Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation,
+                Block, BorderType, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation,
                 ScrollbarState, Widget,
             },
         };
@@ -2823,7 +2823,7 @@ impl StatefulWidget for BufferWidget<'_> {
             let [prompt_area, _] =
                 Layout::horizontal([Length(AREA_WIDTH + 2), Min(0)]).areas(prompt_area);
 
-            ratatui::widgets::Clear.render(prompt_area, buf);
+            Clear.render(prompt_area, buf);
             Paragraph::new(prompt.to_string())
                 .block(match prompt.value() {
                     None | Some(Ok(_)) => Block::bordered()
@@ -3028,6 +3028,7 @@ impl StatefulWidget for BufferWidget<'_> {
             _ => None,
         };
 
+        Clear.render(text_area, buf);
         Paragraph::new(match self.mode {
             Some(EditorMode::BrowseMatches { matches, .. }) => render_w_matches(
                 area,
@@ -3259,7 +3260,7 @@ pub fn render_message(area: Rect, buf: &mut ratatui::buffer::Buffer, message: Bu
             Layout,
         },
         style::{Color, Style},
-        widgets::{Block, BorderType, Paragraph, Widget},
+        widgets::{Block, BorderType, Clear, Paragraph, Widget},
     };
     use unicode_width::UnicodeWidthStr;
 
@@ -3267,7 +3268,7 @@ pub fn render_message(area: Rect, buf: &mut ratatui::buffer::Buffer, message: Bu
     let [_, dialog_area, _] = Layout::horizontal([Min(0), Length(width + 2), Min(0)]).areas(area);
     let [_, dialog_area, _] = Layout::vertical([Min(0), Length(3), Min(0)]).areas(dialog_area);
 
-    ratatui::widgets::Clear.render(dialog_area, buf);
+    Clear.render(dialog_area, buf);
     Paragraph::new(message.as_str())
         .style(match message {
             BufferMessage::Notice(_) => Style::default(),
