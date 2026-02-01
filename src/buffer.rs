@@ -1130,7 +1130,7 @@ impl BufferContext {
             .collect::<Vec<_>>();
 
         let first_start: usize = matches.first().map(|(r, _)| r.start).ok_or(term)?;
-        let current_idx = matches.iter().filter(|(r, _)| r.end <= first_start).count();
+        let current_idx = matches.iter().filter(|(r, _)| r.end < first_start).count();
         matches.rotate_right(current_idx);
         Ok((current_idx, matches))
     }
@@ -2624,7 +2624,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
                 #[inline]
                 fn remaining(&self) -> usize {
-                    self.end - self.start
+                    self.end.saturating_sub(self.start)
                 }
 
                 #[inline]
