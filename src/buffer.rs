@@ -1096,7 +1096,7 @@ impl BufferContext {
         }
     }
 
-    pub fn next_or_current_match<'s, S: Searcher<'s>>(
+    pub fn next_or_current_match<'s, S: SearchTerm<'s>>(
         &mut self,
         area: &SearchArea,
         term: S,
@@ -1126,7 +1126,7 @@ impl BufferContext {
 
     /// Returns Ok((current_idx, matches)) on success
     /// Returns Err(term) if no matches found
-    pub fn all_matches<'s, S: Searcher<'s>>(
+    pub fn all_matches<'s, S: SearchTerm<'s>>(
         &self,
         area: &SearchArea,
         term: S,
@@ -1785,7 +1785,7 @@ impl std::ops::SubAssign<usize> for Secondary<'_> {
     }
 }
 
-pub trait Searcher<'s>: std::fmt::Display {
+pub trait SearchTerm<'s>: std::fmt::Display {
     type Payload: Sized;
 
     /// Returns iterator of match ranges in bytes
@@ -1797,7 +1797,7 @@ pub trait Searcher<'s>: std::fmt::Display {
     }
 }
 
-impl<'s> Searcher<'s> for &'s str {
+impl<'s> SearchTerm<'s> for &'s str {
     type Payload = ();
 
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize, ())> {
@@ -1806,7 +1806,7 @@ impl<'s> Searcher<'s> for &'s str {
     }
 }
 
-impl Searcher<'static> for String {
+impl SearchTerm<'static> for String {
     type Payload = ();
 
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize, ())> {
@@ -1815,7 +1815,7 @@ impl Searcher<'static> for String {
     }
 }
 
-impl<'s> Searcher<'s> for &'s regex_lite::Regex {
+impl<'s> SearchTerm<'s> for &'s regex_lite::Regex {
     type Payload = Vec<String>;
 
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize, Vec<String>)> {

@@ -9,7 +9,7 @@
 pub const AREA_WIDTH: u16 = 40;
 
 pub trait TextPrompt: Default + std::fmt::Display {
-    type Value<'s>: crate::buffer::Searcher<'s>
+    type Value<'s>: crate::buffer::SearchTerm<'s>
     where
         Self: 's;
 

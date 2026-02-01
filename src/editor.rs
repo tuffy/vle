@@ -1095,7 +1095,7 @@ fn process_incremental_search<'a, P: TextPrompt>(
     prompt: &'a mut P,
     event: Event,
 ) -> Option<
-    NextModeIncremental<<<P as TextPrompt>::Value<'a> as crate::buffer::Searcher<'a>>::Payload>,
+    NextModeIncremental<<<P as TextPrompt>::Value<'a> as crate::buffer::SearchTerm<'a>>::Payload>,
 > {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
