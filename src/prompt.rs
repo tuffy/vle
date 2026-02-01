@@ -6,8 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub const AREA_WIDTH: u16 = 40;
-
 pub trait TextPrompt: Default + std::fmt::Display {
     type Value<'s>: crate::buffer::SearchTerm<'s>
     where
@@ -27,21 +25,6 @@ pub trait TextPrompt: Default + std::fmt::Display {
     /// Returns Some(Ok(value)) if prompt is populated and valid
     /// Returns Some(Err(err)) if prompt is populated but invalid
     fn value(&self) -> Option<Result<Self::Value<'_>, &'_ Self::Error>>;
-
-    /// Returns prompt's characters
-    fn chars(&self) -> impl Iterator<Item = char>;
-
-    /// Returns cursor position in columns
-    fn cursor_position(&self) -> usize {
-        use unicode_width::UnicodeWidthChar;
-
-        self.chars()
-            .map(|c| match c {
-                '\t' => *crate::buffer::SPACES_PER_TAB,
-                c => c.width().unwrap_or(0),
-            })
-            .sum()
-    }
 }
 
 #[derive(Default)]
@@ -92,72 +75,6 @@ impl TextPrompt for SearchPrompt {
 
     fn value(&self) -> Option<Result<&str, &Self::Error>> {
         (!self.is_empty()).then_some(self.value.as_str()).map(Ok)
-    }
-
-    fn chars(&self) -> impl Iterator<Item = char> {
-        self.chars.iter().copied()
-    }
-}
-
-#[derive(Default)]
-pub struct SearchPromptRegex {
-    chars: Vec<char>,
-    value: Option<Result<regex_lite::Regex, regex_lite::Error>>,
-}
-
-impl SearchPromptRegex {
-    fn recompile(&mut self) {
-        self.value = (!self.chars.is_empty()).then(|| {
-            let s = self.chars.iter().copied().collect::<String>();
-            regex_lite::Regex::new(&s)
-        })
-    }
-}
-
-impl std::fmt::Display for SearchPromptRegex {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.chars.iter().try_for_each(|c| c.fmt(f))
-    }
-}
-
-impl TextPrompt for SearchPromptRegex {
-    type Value<'s>
-        = &'s regex_lite::Regex
-    where
-        Self: 's;
-
-    type Error = regex_lite::Error;
-
-    fn push(&mut self, c: char) {
-        self.chars.push(c);
-        self.recompile();
-    }
-
-    fn extend(&mut self, s: &str) {
-        self.chars.extend(s.chars());
-        self.recompile();
-    }
-
-    fn pop(&mut self) -> Option<char> {
-        let c = self.chars.pop();
-        self.recompile();
-        c
-    }
-
-    fn is_empty(&self) -> bool {
-        self.chars.is_empty()
-    }
-
-    fn value(&self) -> Option<Result<&regex_lite::Regex, &Self::Error>> {
-        match &self.value {
-            Some(Ok(value)) => Some(Ok(value)),
-            Some(Err(err)) => Some(Err(err)),
-            None => None,
-        }
-    }
-
-    fn chars(&self) -> impl Iterator<Item = char> {
-        self.chars.iter().copied()
     }
 }
 

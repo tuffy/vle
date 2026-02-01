@@ -8,7 +8,7 @@
 
 use crate::editor::EditorMode;
 use crate::endings::LineEndings;
-use crate::prompt::{SearchPrompt, SearchPromptRegex, TextPrompt};
+use crate::prompt::{SearchPrompt, TextPrompt};
 use crate::syntax::Highlighter;
 use ratatui::{
     layout::{Position, Rect},
@@ -1130,7 +1130,7 @@ impl BufferContext {
             .collect::<Vec<_>>();
 
         let first_start: usize = matches.first().map(|(r, _)| r.start).ok_or(term)?;
-        let current_idx = matches.iter().filter(|(r, _)| r.end < first_start).count();
+        let current_idx = matches.iter().filter(|(r, _)| r.end <= first_start).count();
         matches.rotate_right(current_idx);
         Ok((current_idx, matches))
     }
@@ -2343,9 +2343,8 @@ impl StatefulWidget for BufferWidget<'_> {
 
     fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer, state: &mut BufferContext) {
         use crate::help::{
-            BROWSE_MATCHES, CONFIRM_CLOSE, FIND, FIND_REGEX, REGEX_PASTE, REPLACE_MATCHES,
-            REPLACE_MATCHES_REGEX, SELECT_INSIDE, SELECT_LINE, SPLIT_PANE, VERIFY_RELOAD,
-            VERIFY_SAVE, render_help,
+            BROWSE_MATCHES, CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE,
+            SPLIT_PANE, VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
         use crate::syntax::{HighlightState, Highlighter, MultiComment};
         use ratatui::{
@@ -2780,102 +2779,6 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
-        fn render_regex_find_prompt(
-            text_area: Rect,
-            buf: &mut ratatui::buffer::Buffer,
-            prompt: &SearchPromptRegex,
-        ) {
-            use crate::prompt::AREA_WIDTH;
-
-            let [_, prompt_area] = Layout::vertical([Min(0), Length(3)]).areas(text_area);
-            let [prompt_area, _] =
-                Layout::horizontal([Length(AREA_WIDTH + 2), Min(0)]).areas(prompt_area);
-
-            Clear.render(prompt_area, buf);
-            Paragraph::new(prompt.to_string())
-                .block(match prompt.value() {
-                    None | Some(Ok(_)) => Block::bordered()
-                        .border_type(BorderType::Rounded)
-                        .title("Regular Expression"),
-                    Some(Err(_)) => Block::bordered()
-                        .border_style(Style::new().red())
-                        .border_type(BorderType::Rounded)
-                        .title("Regular Expression"),
-                })
-                .scroll((
-                    0,
-                    prompt.cursor_position().saturating_sub(AREA_WIDTH.into()) as u16,
-                ))
-                .render(prompt_area, buf);
-        }
-
-        #[allow(clippy::too_many_arguments)]
-        fn render_w_matches<'r, H: Highlighter>(
-            area: Rect,
-            state: &BufferContext,
-            syntax: &H,
-            mut hlstate: HighlightState,
-            rope: &'r ropey::Rope,
-            viewport_line: usize,
-            current_line: Option<usize>,
-            mut matches: VecDeque<Range<usize>>,
-        ) -> Vec<ratatui::text::Line<'r>> {
-            match state.selection {
-                // no selection, so highlight matches only
-                // (this shouldn't happen)
-                None => EditorLine::iter(rope, viewport_line)
-                    .map(
-                        |EditorLine {
-                             line,
-                             range,
-                             number,
-                         }| {
-                            highlight_matches(
-                                colorize(syntax, &mut hlstate, line, current_line == Some(number)),
-                                range,
-                                &mut matches,
-                            )
-                            .into()
-                        },
-                    )
-                    .map(|line| widen_tabs(line, &state.tab_substitution))
-                    .take(area.height.into())
-                    .collect::<Vec<_>>(),
-                // highlight both matches *and* selection
-                Some(selection) => {
-                    let (selection_start, selection_end) = reorder(state.cursor, selection);
-
-                    EditorLine::iter(rope, viewport_line)
-                        .map(
-                            |EditorLine {
-                                 line,
-                                 range,
-                                 number,
-                             }| {
-                                highlight_selection(
-                                    highlight_matches(
-                                        colorize(
-                                            syntax,
-                                            &mut hlstate,
-                                            line,
-                                            current_line == Some(number),
-                                        ),
-                                        range.clone(),
-                                        &mut matches,
-                                    ),
-                                    range.clone(),
-                                    (selection_start, selection_end),
-                                )
-                                .into()
-                            },
-                        )
-                        .map(|line| widen_tabs(line, &state.tab_substitution))
-                        .take(area.height.into())
-                        .collect::<Vec<_>>()
-                }
-            }
-        }
-
         if let Some(EditorMode::Open { chooser }) = self.mode {
             // file selection mode overrides main editing mode
             use crate::files::FileChooser;
@@ -2998,26 +2901,69 @@ impl StatefulWidget for BufferWidget<'_> {
 
         Clear.render(text_area, buf);
         Paragraph::new(match self.mode {
-            Some(EditorMode::BrowseMatches { matches, .. }) => render_w_matches(
-                area,
-                state,
-                syntax,
-                hlstate,
-                rope,
-                viewport_line,
-                current_line,
-                matches.iter().map(|(r, _)| r.clone()).collect(),
-            ),
-            Some(EditorMode::BrowseMatchesRegex { matches, .. }) => render_w_matches(
-                area,
-                state,
-                syntax,
-                hlstate,
-                rope,
-                viewport_line,
-                current_line,
-                matches.iter().map(|(r, _)| r.clone()).collect(),
-            ),
+            Some(EditorMode::BrowseMatches { matches, .. }) => {
+                let mut matches = matches.iter().map(|(r, _)| r.clone()).collect();
+
+                match state.selection {
+                    // no selection, so highlight matches only
+                    // (this shouldn't happen)
+                    None => EditorLine::iter(rope, viewport_line)
+                        .map(
+                            |EditorLine {
+                                 line,
+                                 range,
+                                 number,
+                             }| {
+                                highlight_matches(
+                                    colorize(
+                                        syntax,
+                                        &mut hlstate,
+                                        line,
+                                        current_line == Some(number),
+                                    ),
+                                    range,
+                                    &mut matches,
+                                )
+                                .into()
+                            },
+                        )
+                        .map(|line| widen_tabs(line, &state.tab_substitution))
+                        .take(area.height.into())
+                        .collect::<Vec<_>>(),
+                    // highlight both matches *and* selection
+                    Some(selection) => {
+                        let (selection_start, selection_end) = reorder(state.cursor, selection);
+
+                        EditorLine::iter(rope, viewport_line)
+                            .map(
+                                |EditorLine {
+                                     line,
+                                     range,
+                                     number,
+                                 }| {
+                                    highlight_selection(
+                                        highlight_matches(
+                                            colorize(
+                                                syntax,
+                                                &mut hlstate,
+                                                line,
+                                                current_line == Some(number),
+                                            ),
+                                            range.clone(),
+                                            &mut matches,
+                                        ),
+                                        range.clone(),
+                                        (selection_start, selection_end),
+                                    )
+                                    .into()
+                                },
+                            )
+                            .map(|line| widen_tabs(line, &state.tab_substitution))
+                            .take(area.height.into())
+                            .collect::<Vec<_>>()
+                    }
+                }
+            }
             _ => {
                 match state.selection {
                     // no selection, so nothing to highlight
@@ -3165,16 +3111,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 render_help(text_area, buf, FIND, |b| b);
                 render_find_prompt(text_area, buf, prompt);
             }
-            Some(EditorMode::IncrementalSearchRegex { prompt, .. }) => {
-                render_help(text_area, buf, FIND_REGEX, |b| b);
-                render_regex_find_prompt(text_area, buf, prompt);
-            }
             Some(EditorMode::BrowseMatches { matches, match_idx }) => {
-                render_help(text_area, buf, BROWSE_MATCHES, |block| {
-                    block.title(format!("Match {} / {}", *match_idx + 1, matches.len()))
-                });
-            }
-            Some(EditorMode::BrowseMatchesRegex { matches, match_idx }) => {
                 render_help(text_area, buf, BROWSE_MATCHES, |block| {
                     block.title(format!("Match {} / {}", *match_idx + 1, matches.len()))
                 });
@@ -3187,30 +3124,6 @@ impl StatefulWidget for BufferWidget<'_> {
                         matches.len()
                     ))
                 });
-            }
-            Some(EditorMode::ReplaceMatchesRegex {
-                matches, match_idx, ..
-            }) => {
-                render_help(text_area, buf, REPLACE_MATCHES_REGEX, |block| {
-                    block.title(format!(
-                        "Replacement {} / {}",
-                        *match_idx + 1,
-                        matches.len()
-                    ))
-                });
-            }
-            Some(EditorMode::RegexPaste { groups, .. }) => {
-                render_help(
-                    text_area,
-                    buf,
-                    REGEX_PASTE
-                        .iter()
-                        .copied()
-                        .take(1 + groups.first().map(|v| v.len()).unwrap_or(0))
-                        .collect::<Vec<_>>()
-                        .as_slice(),
-                    |b| b,
-                );
             }
             Some(EditorMode::Open { .. }) => { /* already handled, above */ }
         }

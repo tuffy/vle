@@ -11,7 +11,7 @@ use crate::files::{EitherSource, SshSource};
 use crate::{
     buffer::{AltCursor, BufferContext, BufferId, BufferList, CutBuffer, Source},
     files::{ChooserSource, FileChooserState, LocalSource},
-    prompt::{LinePrompt, SearchPrompt, SearchPromptRegex, TextPrompt},
+    prompt::{LinePrompt, SearchPrompt, TextPrompt},
 };
 use crossterm::event::Event;
 use ratatui::{
@@ -39,30 +39,13 @@ pub enum EditorMode {
     IncrementalSearch {
         prompt: SearchPrompt,
     },
-    IncrementalSearchRegex {
-        prompt: SearchPromptRegex,
-    },
     BrowseMatches {
         matches: Vec<(Range<usize>, ())>,
-        match_idx: usize,
-    },
-    BrowseMatchesRegex {
-        matches: Vec<(Range<usize>, Vec<String>)>,
         match_idx: usize,
     },
     ReplaceMatches {
         matches: Vec<Range<usize>>,
         match_idx: usize,
-    },
-    ReplaceMatchesRegex {
-        matches: Vec<Range<usize>>,
-        match_idx: usize,
-        groups: Vec<Vec<String>>,
-    },
-    RegexPaste {
-        matches: Vec<Range<usize>>,
-        match_idx: usize,
-        groups: Vec<Vec<String>>,
     },
     Open {
         #[cfg(not(feature = "ssh"))]
@@ -263,26 +246,8 @@ impl Editor {
                             process_incremental_search(buf, self.cut_buffer.as_ref(), prompt, event)
                     {
                         self.mode = match new_mode {
-                            NextModeIncremental::Alternate => EditorMode::IncrementalSearchRegex {
-                                prompt: SearchPromptRegex::default(),
-                            },
                             NextModeIncremental::Browse { match_idx, matches } => {
                                 EditorMode::BrowseMatches { match_idx, matches }
-                            }
-                        };
-                    }
-                }
-                EditorMode::IncrementalSearchRegex { prompt } => {
-                    if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                        && let Some(new_mode) =
-                            process_incremental_search(buf, self.cut_buffer.as_ref(), prompt, event)
-                    {
-                        self.mode = match new_mode {
-                            NextModeIncremental::Alternate => EditorMode::IncrementalSearch {
-                                prompt: SearchPrompt::default(),
-                            },
-                            NextModeIncremental::Browse { match_idx, matches } => {
-                                EditorMode::BrowseMatchesRegex { match_idx, matches }
                             }
                         };
                     }
@@ -310,39 +275,6 @@ impl Editor {
                                         .into_iter()
                                         .map(|(r, _)| r.start..r.start)
                                         .collect(),
-                                    match_idx: std::mem::take(match_idx),
-                                }
-                            }
-                        };
-                    }
-                }
-                EditorMode::BrowseMatchesRegex { matches, match_idx } => {
-                    let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
-                    let primary_idx = primary.current_index();
-                    if let Some(buf) = primary.current_mut()
-                        && let Some(new_mode) =
-                            process_browse_matches(buf, matches, match_idx, event)
-                    {
-                        self.mode = match new_mode {
-                            NextModeBrowse::Default => EditorMode::default(),
-                            NextModeBrowse::Replace => {
-                                if let Some(buf) = primary.current_mut() {
-                                    buf.clear_matches(
-                                        secondary
-                                            .and_then(|l| l.get_mut(primary_idx))
-                                            .map(|b| b.alt_cursor()),
-                                        matches,
-                                    );
-                                }
-
-                                let (matches, groups) = std::mem::take(matches)
-                                    .into_iter()
-                                    .map(|(r, p)| (r.start..r.start, p))
-                                    .unzip();
-
-                                EditorMode::ReplaceMatchesRegex {
-                                    matches,
-                                    groups,
                                     match_idx: std::mem::take(match_idx),
                                 }
                             }
@@ -378,96 +310,6 @@ impl Editor {
                         }
                     {
                         self.mode = new_mode;
-                    }
-                }
-                EditorMode::ReplaceMatchesRegex {
-                    matches,
-                    match_idx,
-                    groups,
-                } => {
-                    let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
-                    let cur_idx = cur_buf_list.current_index();
-                    if let Some(buf) = cur_buf_list.current_mut()
-                        && let Some(new_mode) = match event {
-                            key!(CONTROL, 'v') => Some(EditorMode::RegexPaste {
-                                matches: std::mem::take(matches),
-                                match_idx: std::mem::take(match_idx),
-                                groups: std::mem::take(groups),
-                            }),
-                            event => process_replace_matches(
-                                buf,
-                                matches,
-                                match_idx,
-                                event,
-                                alt_buf_list
-                                    .and_then(|l| l.get_mut(cur_idx))
-                                    .map(|b| b.alt_cursor()),
-                            ),
-                        }
-                    {
-                        self.mode = new_mode;
-                    }
-                }
-                EditorMode::RegexPaste {
-                    matches,
-                    match_idx,
-                    groups,
-                } => {
-                    let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
-                    let cur_idx = cur_buf_list.current_index();
-                    if let Some(buf) = cur_buf_list.current_mut() {
-                        let alt = alt_buf_list
-                            .and_then(|l| l.get_mut(cur_idx))
-                            .map(|b| b.alt_cursor());
-
-                        match event {
-                            key!(CONTROL, 'v') => {
-                                if let Some(cut) = &self.cut_buffer {
-                                    buf.multi_insert_string(alt, matches, cut.as_str());
-                                }
-                            }
-                            Event::Key(KeyEvent {
-                                code: KeyCode::Char(c @ '0'..='9'),
-                                modifiers: KeyModifiers::NONE,
-                                kind: KeyEventKind::Press,
-                                ..
-                            }) => {
-                                let group = match c {
-                                    '0' => 0,
-                                    '1' => 1,
-                                    '2' => 2,
-                                    '3' => 3,
-                                    '4' => 4,
-                                    '5' => 5,
-                                    '6' => 6,
-                                    '7' => 7,
-                                    '8' => 8,
-                                    '9' => 9,
-                                    _ => unreachable!(),
-                                };
-
-                                buf.multi_insert_strings(
-                                    alt,
-                                    matches,
-                                    groups
-                                        .iter()
-                                        .map(|captures| {
-                                            captures
-                                                .get(group)
-                                                .map(|s| s.as_str())
-                                                .unwrap_or_default()
-                                        })
-                                        .map(|s| (s.chars().count(), s)),
-                                );
-                            }
-                            _ => { /* ignore other events */ }
-                        }
-
-                        self.mode = EditorMode::ReplaceMatchesRegex {
-                            matches: std::mem::take(matches),
-                            match_idx: std::mem::take(match_idx),
-                            groups: std::mem::take(groups),
-                        };
                     }
                 }
                 EditorMode::SplitPane => self.process_split_pane(event),
@@ -1063,7 +905,6 @@ fn process_open_file<S: ChooserSource>(
 
 // which mode to switch to next
 enum NextModeIncremental<P: Sized> {
-    Alternate,
     Browse {
         match_idx: usize,
         matches: Vec<(Range<usize>, P)>,
@@ -1147,7 +988,6 @@ fn process_incremental_search<'a, P: TextPrompt>(
             *prompt = P::default();
             None
         }
-        key!(Tab) => Some(NextModeIncremental::Alternate),
         _ => None, // ignore other events
     }
 }
@@ -1518,19 +1358,6 @@ impl Layout {
                     Some(Position {
                         x: text_area.x + x,
                         y: text_area.y + y,
-                    })
-                }
-                EditorMode::IncrementalSearchRegex { prompt, .. } => {
-                    use crate::prompt::AREA_WIDTH;
-
-                    let [_, prompt_area] = Layout::vertical([Min(0), Length(3)]).areas(text_area);
-                    let [prompt_area, _] =
-                        Layout::horizontal([Length(AREA_WIDTH + 2), Min(0)]).areas(prompt_area);
-                    let text_area = Block::bordered().inner(prompt_area);
-
-                    Some(Position {
-                        x: text_area.x + (prompt.cursor_position() as u16).min(text_area.width),
-                        y: text_area.y,
                     })
                 }
                 _ => {

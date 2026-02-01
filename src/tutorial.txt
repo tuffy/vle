@@ -317,43 +317,6 @@ and hit Enter when finished.
     fixed
 
 
-## Regular Expressions
-
-Finding and replacing text also supports regular expressions,
-which are available by pressing Tab after entering find mode
-with Ctrl-F/F5.
-
-This allows for searching text via regular expression patterns,
-which are more expressive than plain text searches.
-
-Additionally, replacing regular expression matches allows
-for pasting captured groups interactively.
-
-Let's walk through an example of some mis-ordered
-comma-separated values.
-
-Type Ctrl-F/F5 and then Tab to enter regular expression find mode.
-
-Then type
-
-([0-9]+),([0-9]+)
-
-followed by Enter to find our comma-separated numbers
-and capture them in two groups.
-
-Type Ctrl-R/F6 to replace our found text,
-which will erase everything while still capturing the found text.
-
-Ctrl-V followed by 2 followed by a , will place the second column first.
-
-Finally, Ctrl-V followed by 1 will place the first column last.
-
->>> 2222,1111
->>> 44,333333
->>> 66666,555
->>> 8,7777777
-
-
 ## Multiple Buffers
 
 We've been working entirely within the tutorial buffer thus far.

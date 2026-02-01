@@ -285,14 +285,6 @@ pub static OPEN_FILE: &[Keybinding] = &[
 ];
 
 pub static FIND: &[Keybinding] = &[
-    none(&["Tab"], "Regex Find Mode"),
-    ctrl(&["V"], "Paste From Cut Buffer"),
-    ctrl_f(&["F"], "F5", "Begin New Find"),
-    none(&["Enter"], "Browse All Matches"),
-];
-
-pub static FIND_REGEX: &[Keybinding] = &[
-    none(&["Tab"], "Plain Text Find Mode"),
     ctrl(&["V"], "Paste From Cut Buffer"),
     ctrl_f(&["F"], "F5", "Begin New Find"),
     none(&["Enter"], "Browse All Matches"),
@@ -311,25 +303,4 @@ pub static REPLACE_MATCHES: &[Keybinding] = &[
     none(&[DOWN, RIGHT], "Select Next Match"),
     ctrl(&["V"], "Paste From Cut Buffer"),
     none(&["Enter"], "Finish Replacement"),
-];
-
-pub static REPLACE_MATCHES_REGEX: &[Keybinding] = &[
-    none(&[UP, LEFT], "Select Previous Match"),
-    none(&[DOWN, RIGHT], "Select Next Match"),
-    ctrl(&["V"], "Copy from Group or Cut Buffer"),
-    none(&["Enter"], "Finish Replacement"),
-];
-
-pub static REGEX_PASTE: &[Keybinding] = &[
-    ctrl(&["V"], "Paste From Cut Buffer"),
-    none(&["0"], "Paste from Capture Group 0"),
-    none(&["1"], "Paste from Capture Group 1"),
-    none(&["2"], "Paste from Capture Group 2"),
-    none(&["3"], "Paste from Capture Group 3"),
-    none(&["4"], "Paste from Capture Group 4"),
-    none(&["5"], "Paste from Capture Group 5"),
-    none(&["6"], "Paste from Capture Group 6"),
-    none(&["7"], "Paste from Capture Group 7"),
-    none(&["8"], "Paste from Capture Group 8"),
-    none(&["9"], "Paste from Capture Group 9"),
 ];
