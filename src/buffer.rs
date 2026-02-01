@@ -1111,26 +1111,23 @@ impl BufferContext {
     pub fn all_matches<'s, S: SearchTerm<'s>>(
         &self,
         term: S,
-    ) -> Result<(usize, Vec<(Range<usize>, S::Payload)>), S> {
+    ) -> Result<(usize, Vec<Range<usize>>), S> {
         let buf = self.buffer.borrow_move();
         let rope = &buf.rope;
 
         let mut matches = search_area(rope, self.cursor)
             .flat_map(|(line, offset)| {
                 term.match_ranges(&line)
-                    .map(|(s, e, p)| (offset + s, offset + e, p))
+                    .map(|(s, e)| (offset + s, offset + e))
                     .collect::<Vec<_>>()
             })
-            .filter_map(|(s, e, p)| {
-                Some((
-                    rope.try_byte_to_char(s).ok()?..rope.try_byte_to_char(e).ok()?,
-                    p,
-                ))
+            .filter_map(|(s, e)| {
+                Some(rope.try_byte_to_char(s).ok()?..rope.try_byte_to_char(e).ok()?)
             })
             .collect::<Vec<_>>();
 
-        let first_start: usize = matches.first().map(|(r, _)| r.start).ok_or(term)?;
-        let current_idx = matches.iter().filter(|(r, _)| r.end <= first_start).count();
+        let first_start: usize = matches.first().map(|r| r.start).ok_or(term)?;
+        let current_idx = matches.iter().filter(|r| r.end <= first_start).count();
         matches.rotate_right(current_idx);
         Ok((current_idx, matches))
     }
@@ -1489,11 +1486,7 @@ impl BufferContext {
         }
     }
 
-    pub fn clear_matches<P: Sized>(
-        &mut self,
-        alt: Option<AltCursor<'_>>,
-        mut matches: &mut [(Range<usize>, P)],
-    ) {
+    pub fn clear_matches(&mut self, alt: Option<AltCursor<'_>>, mut matches: &mut [Range<usize>]) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
         let mut alt = Secondary::new(alt, |_| true);
@@ -1501,7 +1494,7 @@ impl BufferContext {
         loop {
             match matches {
                 [] => break,
-                [(r, _)] => {
+                [r] => {
                     let _ = rope.try_remove(r.clone());
                     if r.start <= self.cursor {
                         self.cursor = self
@@ -1516,7 +1509,7 @@ impl BufferContext {
                     });
                     break;
                 }
-                [(r, _), rest @ ..] => {
+                [r, rest @ ..] => {
                     let len = r.end - r.start;
                     let _ = rope.try_remove(r.clone());
                     if r.start <= self.cursor {
@@ -1527,7 +1520,7 @@ impl BufferContext {
                             *cursor = cursor.saturating_sub(len.min(*cursor - r.start));
                         }
                     });
-                    for (r, _) in rest.iter_mut() {
+                    for r in rest.iter_mut() {
                         r.start -= len;
                         r.end -= len;
                     }
@@ -1754,51 +1747,25 @@ impl std::ops::SubAssign<usize> for Secondary<'_> {
 }
 
 pub trait SearchTerm<'s>: std::fmt::Display {
-    type Payload: Sized;
-
     /// Returns iterator of match ranges in bytes
-    fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize, Self::Payload)>;
+    fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize)>;
 
     /// Returns next match as range in bytes, if present
     fn next_match(&self, s: &str) -> Option<(usize, usize)> {
-        self.match_ranges(s).next().map(|(s, e, _)| (s, e))
+        self.match_ranges(s).next()
     }
 }
 
 impl<'s> SearchTerm<'s> for &'s str {
-    type Payload = ();
-
-    fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize, ())> {
-        s.match_indices(self)
-            .map(|(idx, s)| (idx, idx + s.len(), ()))
+    fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize)> {
+        s.match_indices(self).map(|(idx, s)| (idx, idx + s.len()))
     }
 }
 
 impl SearchTerm<'static> for String {
-    type Payload = ();
-
-    fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize, ())> {
+    fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize)> {
         s.match_indices(self.as_str())
-            .map(|(idx, s)| (idx, idx + s.len(), ()))
-    }
-}
-
-impl<'s> SearchTerm<'s> for &'s regex_lite::Regex {
-    type Payload = Vec<String>;
-
-    fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize, Vec<String>)> {
-        self.captures_iter(s).map(|c| {
-            let group_0 = c.get(0).unwrap(); // guaranteed to always have 1 group
-            let start = group_0.start();
-            let end = group_0.end();
-            (
-                start,
-                end,
-                c.iter()
-                    .map(|s| s.map(|m| m.as_str().to_string()).unwrap_or_default())
-                    .collect(),
-            )
-        })
+            .map(|(idx, s)| (idx, idx + s.len()))
     }
 }
 
@@ -2902,7 +2869,7 @@ impl StatefulWidget for BufferWidget<'_> {
         Clear.render(text_area, buf);
         Paragraph::new(match self.mode {
             Some(EditorMode::BrowseMatches { matches, .. }) => {
-                let mut matches = matches.iter().map(|(r, _)| r.clone()).collect();
+                let mut matches = matches.clone().into();
 
                 match state.selection {
                     // no selection, so highlight matches only

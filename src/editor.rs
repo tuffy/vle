@@ -40,7 +40,7 @@ pub enum EditorMode {
         prompt: SearchPrompt,
     },
     BrowseMatches {
-        matches: Vec<(Range<usize>, ())>,
+        matches: Vec<Range<usize>>,
         match_idx: usize,
     },
     ReplaceMatches {
@@ -273,7 +273,7 @@ impl Editor {
                                 EditorMode::ReplaceMatches {
                                     matches: std::mem::take(matches)
                                         .into_iter()
-                                        .map(|(r, _)| r.start..r.start)
+                                        .map(|r| r.start..r.start)
                                         .collect(),
                                     match_idx: std::mem::take(match_idx),
                                 }
@@ -904,21 +904,19 @@ fn process_open_file<S: ChooserSource>(
 }
 
 // which mode to switch to next
-enum NextModeIncremental<P: Sized> {
+enum NextModeIncremental {
     Browse {
         match_idx: usize,
-        matches: Vec<(Range<usize>, P)>,
+        matches: Vec<Range<usize>>,
     },
 }
 
-fn process_incremental_search<'a, P: TextPrompt>(
+fn process_incremental_search<P: TextPrompt>(
     buffer: &mut BufferContext,
     cut_buffer: Option<&CutBuffer>,
-    prompt: &'a mut P,
+    prompt: &mut P,
     event: Event,
-) -> Option<
-    NextModeIncremental<<<P as TextPrompt>::Value<'a> as crate::buffer::SearchTerm<'a>>::Payload>,
-> {
+) -> Option<NextModeIncremental> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
     fn not_found<Q: std::fmt::Display>(query: Q) -> String {
@@ -997,9 +995,9 @@ enum NextModeBrowse {
     Replace,
 }
 
-fn process_browse_matches<P: Sized>(
+fn process_browse_matches(
     buffer: &mut BufferContext,
-    matches: &mut Vec<(Range<usize>, P)>,
+    matches: &mut Vec<Range<usize>>,
     match_idx: &mut usize,
     event: Event,
 ) -> Option<NextModeBrowse> {
@@ -1019,7 +1017,7 @@ fn process_browse_matches<P: Sized>(
             ..
         }) => {
             *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
-            if let Some((r, _)) = matches.get(*match_idx) {
+            if let Some(r) = matches.get(*match_idx) {
                 buffer.set_selection(r.start, r.end);
             }
             None
@@ -1035,7 +1033,7 @@ fn process_browse_matches<P: Sized>(
             ..
         }) => {
             *match_idx = (*match_idx + 1) % matches.len();
-            if let Some((r, _)) = matches.get(*match_idx) {
+            if let Some(r) = matches.get(*match_idx) {
                 buffer.set_selection(r.start, r.end);
             }
             None
@@ -1053,7 +1051,7 @@ fn process_browse_matches<P: Sized>(
                 None => Some(NextModeBrowse::Default),
                 Some(new_max) => {
                     *match_idx = (*match_idx).min(new_max);
-                    if let Some((r, _)) = matches.get(*match_idx) {
+                    if let Some(r) = matches.get(*match_idx) {
                         buffer.set_selection(r.start, r.end);
                     }
                     None
