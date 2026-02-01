@@ -9,7 +9,7 @@
 #[cfg(feature = "ssh")]
 use crate::files::{EitherSource, SshSource};
 use crate::{
-    buffer::{AltCursor, BufferContext, BufferId, BufferList, CutBuffer, SearchArea, Source},
+    buffer::{AltCursor, BufferContext, BufferId, BufferList, CutBuffer, Source},
     files::{ChooserSource, FileChooserState, LocalSource},
     prompt::{LinePrompt, SearchPrompt, SearchPromptRegex, TextPrompt},
 };
@@ -38,11 +38,9 @@ pub enum EditorMode {
     },
     IncrementalSearch {
         prompt: SearchPrompt,
-        area: SearchArea,
     },
     IncrementalSearchRegex {
         prompt: SearchPromptRegex,
-        area: SearchArea,
     },
     BrowseMatches {
         matches: Vec<(Range<usize>, ())>,
@@ -259,20 +257,14 @@ impl Editor {
                         self.mode = new_mode;
                     }
                 }
-                EditorMode::IncrementalSearch { prompt, area } => {
+                EditorMode::IncrementalSearch { prompt } => {
                     if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                        && let Some(new_mode) = process_incremental_search(
-                            buf,
-                            self.cut_buffer.as_ref(),
-                            area,
-                            prompt,
-                            event,
-                        )
+                        && let Some(new_mode) =
+                            process_incremental_search(buf, self.cut_buffer.as_ref(), prompt, event)
                     {
                         self.mode = match new_mode {
                             NextModeIncremental::Alternate => EditorMode::IncrementalSearchRegex {
                                 prompt: SearchPromptRegex::default(),
-                                area: std::mem::take(area),
                             },
                             NextModeIncremental::Browse { match_idx, matches } => {
                                 EditorMode::BrowseMatches { match_idx, matches }
@@ -280,20 +272,14 @@ impl Editor {
                         };
                     }
                 }
-                EditorMode::IncrementalSearchRegex { prompt, area } => {
+                EditorMode::IncrementalSearchRegex { prompt } => {
                     if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                        && let Some(new_mode) = process_incremental_search(
-                            buf,
-                            self.cut_buffer.as_ref(),
-                            area,
-                            prompt,
-                            event,
-                        )
+                        && let Some(new_mode) =
+                            process_incremental_search(buf, self.cut_buffer.as_ref(), prompt, event)
                     {
                         self.mode = match new_mode {
                             NextModeIncremental::Alternate => EditorMode::IncrementalSearch {
                                 prompt: SearchPrompt::default(),
-                                area: std::mem::take(area),
                             },
                             NextModeIncremental::Browse { match_idx, matches } => {
                                 EditorMode::BrowseMatchesRegex { match_idx, matches }
@@ -660,19 +646,15 @@ impl Editor {
                 };
             }
             key!(CONTROL, 'f') | key!(F(5)) => {
-                if let Some(Ok(find)) = self.on_buffer(|b| {
-                    let area = b.search_area();
-                    match b.selection() {
-                        None => Ok(EditorMode::IncrementalSearch {
-                            area,
-                            prompt: SearchPrompt::default(),
-                        }),
-                        Some(selection) => {
-                            b.cursor_first();
-                            b.all_matches(&area, selection).map(|(match_idx, matches)| {
-                                EditorMode::BrowseMatches { match_idx, matches }
-                            })
-                        }
+                if let Some(Ok(find)) = self.on_buffer(|b| match b.selection() {
+                    None => Ok(EditorMode::IncrementalSearch {
+                        prompt: SearchPrompt::default(),
+                    }),
+                    Some(selection) => {
+                        b.cursor_first();
+                        b.all_matches(selection).map(|(match_idx, matches)| {
+                            EditorMode::BrowseMatches { match_idx, matches }
+                        })
                     }
                 }) {
                     self.mode = find;
@@ -1091,7 +1073,6 @@ enum NextModeIncremental<P: Sized> {
 fn process_incremental_search<'a, P: TextPrompt>(
     buffer: &mut BufferContext,
     cut_buffer: Option<&CutBuffer>,
-    area: &'a mut SearchArea,
     prompt: &'a mut P,
     event: Event,
 ) -> Option<
@@ -1112,7 +1093,7 @@ fn process_incremental_search<'a, P: TextPrompt>(
         }) => {
             prompt.push(c);
             let query = prompt.value()?.ok()?;
-            if let Err(err) = buffer.next_or_current_match(area, query) {
+            if let Err(err) = buffer.next_or_current_match(query) {
                 buffer.set_error(not_found(err));
             }
             None
@@ -1121,7 +1102,7 @@ fn process_incremental_search<'a, P: TextPrompt>(
             if let Some(buf) = cut_buffer {
                 prompt.extend(buf.as_str());
                 let query = prompt.value()?.ok()?;
-                if let Err(err) = buffer.next_or_current_match(area, query) {
+                if let Err(err) = buffer.next_or_current_match(query) {
                     buffer.set_error(not_found(err));
                 }
             }
@@ -1130,7 +1111,7 @@ fn process_incremental_search<'a, P: TextPrompt>(
         Event::Paste(pasted) => {
             prompt.extend(&pasted);
             let query = prompt.value()?.ok()?;
-            if let Err(err) = buffer.next_or_current_match(area, query) {
+            if let Err(err) = buffer.next_or_current_match(query) {
                 buffer.set_error(not_found(err));
             }
             None
@@ -1141,14 +1122,14 @@ fn process_incremental_search<'a, P: TextPrompt>(
                 buffer.clear_selection();
             } else {
                 let query = prompt.value()?.ok()?;
-                if let Err(err) = buffer.next_or_current_match(area, query) {
+                if let Err(err) = buffer.next_or_current_match(query) {
                     buffer.set_error(not_found(err));
                 }
             }
             None
         }
         key!(Enter) => match prompt.value()? {
-            Ok(query) => match buffer.all_matches(area, query) {
+            Ok(query) => match buffer.all_matches(query) {
                 Ok((match_idx, matches)) => {
                     Some(NextModeIncremental::Browse { match_idx, matches })
                 }

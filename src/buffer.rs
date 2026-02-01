@@ -1083,32 +1083,14 @@ impl BufferContext {
             })
     }
 
-    pub fn search_area(&mut self) -> SearchArea {
-        let rope = &self.buffer.borrow().rope;
-
-        SearchArea {
-            text: rope
-                .chunks()
-                .fold(String::with_capacity(rope.len_bytes()), |mut acc, s| {
-                    acc.push_str(s);
-                    acc
-                }),
-        }
-    }
-
-    pub fn next_or_current_match<'s, S: SearchTerm<'s>>(
-        &mut self,
-        area: &SearchArea,
-        term: S,
-    ) -> Result<(), S> {
+    pub fn next_or_current_match<'s, S: SearchTerm<'s>>(&mut self, term: S) -> Result<(), S> {
         let buf = self.buffer.borrow_move();
         let rope = &buf.rope;
-        let (behind, ahead) = area.split(rope, self.cursor);
-
-        let (start, end) = term
-            .next_match(ahead)
-            .map(|(s, e)| (s + behind.len(), e + behind.len()))
-            .or_else(|| term.next_match(behind))
+        let (start, end) = search_area(rope, self.cursor)
+            .find_map(|(line, offset)| {
+                term.next_match(&line)
+                    .map(|(s, e)| (offset + s, offset + e))
+            })
             .and_then(|(s, e)| {
                 Some((
                     rope.try_byte_to_char(s).ok()?,
@@ -1128,43 +1110,29 @@ impl BufferContext {
     /// Returns Err(term) if no matches found
     pub fn all_matches<'s, S: SearchTerm<'s>>(
         &self,
-        area: &SearchArea,
         term: S,
     ) -> Result<(usize, Vec<(Range<usize>, S::Payload)>), S> {
         let buf = self.buffer.borrow_move();
         let rope = &buf.rope;
-        let (behind, ahead) = area.split(rope, self.cursor);
 
-        let ahead_matches = term
-            .match_ranges(ahead)
-            .filter_map(|(start, end, payload)| {
+        let mut matches = search_area(rope, self.cursor)
+            .flat_map(|(line, offset)| {
+                term.match_ranges(&line)
+                    .map(|(s, e, p)| (offset + s, offset + e, p))
+                    .collect::<Vec<_>>()
+            })
+            .filter_map(|(s, e, p)| {
                 Some((
-                    rope.try_byte_to_char(behind.len() + start).ok()?
-                        ..rope.try_byte_to_char(behind.len() + end).ok()?,
-                    payload,
+                    rope.try_byte_to_char(s).ok()?..rope.try_byte_to_char(e).ok()?,
+                    p,
                 ))
             })
             .collect::<Vec<_>>();
 
-        // incremental search should put us on top of the current match
-        // and if there's nothing ahead of us, the term hasn't been found
-        if ahead_matches.is_empty() {
-            return Err(term);
-        }
-
-        let mut behind_matches = term
-            .match_ranges(behind)
-            .filter_map(|(start, end, payload)| {
-                Some((
-                    rope.try_byte_to_char(start).ok()?..rope.try_byte_to_char(end).ok()?,
-                    payload,
-                ))
-            })
-            .collect::<Vec<_>>();
-
-        let match_idx = behind_matches.len();
-        behind_matches.extend(ahead_matches);
-        Ok((match_idx, behind_matches))
+        let first_start: usize = matches.first().map(|(r, _)| r.start).ok_or(term)?;
+        let current_idx = matches.iter().filter(|(r, _)| r.end <= first_start).count();
+        matches.rotate_right(current_idx);
+        Ok((current_idx, matches))
     }
 
     pub fn perform_undo(&mut self) {
@@ -3307,20 +3275,35 @@ impl From<String> for CutBuffer {
     }
 }
 
-#[derive(Default)]
-pub struct SearchArea {
-    text: String, // local copy of entire rope
-}
+/// Given rope and starting area in chars,
+/// yields search strings and their start points in bytes
+fn search_area(rope: &ropey::Rope, start: usize) -> impl Iterator<Item = (Cow<'_, str>, usize)> {
+    let start_line_num = rope.try_char_to_line(start).unwrap_or(0);
+    let start_line_char = rope.line_to_char(start_line_num);
+    let start_line = rope.line(start_line_num);
+    let before_cursor = start_line.slice(0..start - start_line_char);
+    let after_cursor = start_line.slice(start - start_line_char..);
 
-impl SearchArea {
-    /// Splits buffer in half at cursor
-    /// If cursor is outside of area, returns (&text, "")
-    fn split(&self, rope: &ropey::Rope, cursor: usize) -> (&str, &str) {
-        rope.try_char_to_byte(cursor)
-            .ok()
-            .and_then(|byte_offset| self.text.split_at_checked(byte_offset))
-            .unwrap_or((self.text.as_str(), ""))
-    }
+    std::iter::once((after_cursor, rope.char_to_byte(start)))
+        .chain(
+            rope.lines_at(start_line_num + 1)
+                .zip(start_line_num + 1..)
+                .map(|(line, line_num)| (line, rope.line_to_byte(line_num))),
+        )
+        .chain(
+            rope.lines_at(0)
+                .zip(0..)
+                .map(|(line, line_num)| (line, rope.line_to_byte(line_num)))
+                .take(start_line_num),
+        )
+        .chain(std::iter::once((
+            before_cursor,
+            rope.char_to_byte(start_line_char),
+        )))
+        .filter_map(|(l, num)| {
+            let line = Cow::from(l);
+            (!line.is_empty()).then_some((line, num))
+        })
 }
 
 /// Buffer's undo/redo state
