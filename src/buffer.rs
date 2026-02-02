@@ -2724,6 +2724,7 @@ impl StatefulWidget for BufferWidget<'_> {
             text_area: Rect,
             buf: &mut ratatui::buffer::Buffer,
             prompt: &SearchPrompt,
+            f: impl FnOnce(Block) -> Block,
         ) {
             let [_, dialog_area, _] =
                 Layout::vertical([Min(0), Length(3), Min(0)]).areas(text_area);
@@ -2743,11 +2744,9 @@ impl StatefulWidget for BufferWidget<'_> {
                 0,
                 (prompt.cursor_column() as u16).saturating_sub(dialog_area.width.saturating_sub(2)),
             ))
-            .block(
-                Block::bordered()
-                    .border_type(BorderType::Rounded)
-                    .title_top(prompt.to_string()),
-            )
+            .block(f(Block::bordered()
+                .border_type(BorderType::Rounded)
+                .title_top(prompt.to_string())))
             .render(dialog_area, buf);
         }
 
@@ -3089,7 +3088,17 @@ impl StatefulWidget for BufferWidget<'_> {
                     },
                     |b| b,
                 );
-                render_find_prompt(syntax, text_area, buf, prompt);
+                render_find_prompt(syntax, text_area, buf, prompt, |b| {
+                    match state
+                        .message
+                        .take_if(|m| matches!(m, BufferMessage::Error(_)))
+                    {
+                        Some(BufferMessage::Error(err)) => b
+                            .title_bottom(Line::from(err.to_string()).centered())
+                            .border_style(Style::default().fg(Color::Red)),
+                        _ => b,
+                    }
+                });
             }
             Some(EditorMode::BrowseMatches { matches, match_idx }) => {
                 render_help(text_area, buf, BROWSE_MATCHES, |block| {

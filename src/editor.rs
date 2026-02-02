@@ -76,7 +76,7 @@ pub enum CaptureGroups {
 
 impl From<Vec<Vec<String>>> for CaptureGroups {
     fn from(groups: Vec<Vec<String>>) -> Self {
-        match groups.get(0).map(|g| g.len()) {
+        match groups.first().map(|g| g.len()) {
             None | Some(0) => CaptureGroups::None,
             Some(total) => CaptureGroups::Some { total, groups },
         }
