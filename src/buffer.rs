@@ -3162,37 +3162,6 @@ fn search_area(rope: &ropey::Rope) -> impl Iterator<Item = (Cow<'_, str>, usize)
     })
 }
 
-/// Given rope and starting area in chars,
-/// yields search strings and their start points in bytes
-/*fn search_area(rope: &ropey::Rope, start: usize) -> impl Iterator<Item = (Cow<'_, str>, usize)> {
-    let start_line_num = rope.try_char_to_line(start).unwrap_or(0);
-    let start_line_char = rope.line_to_char(start_line_num);
-    let start_line = rope.line(start_line_num);
-    let before_cursor = start_line.slice(0..start - start_line_char);
-    let after_cursor = start_line.slice(start - start_line_char..);
-
-    std::iter::once((after_cursor, rope.char_to_byte(start)))
-        .chain(
-            rope.lines_at(start_line_num + 1)
-                .zip(start_line_num + 1..)
-                .map(|(line, line_num)| (line, rope.line_to_byte(line_num))),
-        )
-        .chain(
-            rope.lines_at(0)
-                .zip(0..)
-                .map(|(line, line_num)| (line, rope.line_to_byte(line_num)))
-                .take(start_line_num),
-        )
-        .chain(std::iter::once((
-            before_cursor,
-            rope.char_to_byte(start_line_char),
-        )))
-        .filter_map(|(l, num)| {
-            let line = Cow::from(l);
-            (!line.is_empty()).then_some((line, num))
-        })
-}*/
-
 /// Buffer's undo/redo state
 struct BufferState {
     rope: ropey::Rope,
