@@ -286,6 +286,14 @@ pub static OPEN_FILE: &[Keybinding] = &[
 
 pub static FIND: &[Keybinding] = &[
     ctrl(&["V"], "Paste From Cut Buffer"),
+    none(&["Tab"], "Regex Find"),
+    ctrl_f(&["F"], "F5", "Begin New Find"),
+    none(&["Enter"], "Browse All Matches"),
+];
+
+pub static FIND_REGEX: &[Keybinding] = &[
+    ctrl(&["V"], "Paste From Cut Buffer"),
+    none(&["Tab"], "Plain Text Find"),
     ctrl_f(&["F"], "F5", "Begin New Find"),
     none(&["Enter"], "Browse All Matches"),
 ];

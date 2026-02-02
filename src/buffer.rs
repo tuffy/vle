@@ -2292,7 +2292,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
     fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer, state: &mut BufferContext) {
         use crate::help::{
-            BROWSE_MATCHES, CONFIRM_CLOSE, FIND, PASTE_GROUP, REPLACE_MATCHES,
+            BROWSE_MATCHES, CONFIRM_CLOSE, FIND, FIND_REGEX, PASTE_GROUP, REPLACE_MATCHES,
             REPLACE_MATCHES_REGEX, SELECT_INSIDE, SELECT_LINE, SPLIT_PANE, VERIFY_RELOAD,
             VERIFY_SAVE, render_help,
         };
@@ -3080,7 +3080,15 @@ impl StatefulWidget for BufferWidget<'_> {
                 render_help(text_area, buf, SELECT_LINE, |b| b);
             }
             Some(EditorMode::Search { prompt, .. }) => {
-                render_help(text_area, buf, FIND, |b| b);
+                render_help(
+                    text_area,
+                    buf,
+                    match prompt {
+                        SearchPrompt::Plain(_) => FIND,
+                        SearchPrompt::Regex(_) => FIND_REGEX,
+                    },
+                    |b| b,
+                );
                 render_find_prompt(syntax, text_area, buf, prompt);
             }
             Some(EditorMode::BrowseMatches { matches, match_idx }) => {
