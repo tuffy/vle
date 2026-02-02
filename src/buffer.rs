@@ -1716,9 +1716,6 @@ impl std::ops::SubAssign<usize> for Secondary<'_> {
     }
 }
 
-// TODO - support capture groups in match_ranges
-// (plain text searches can return empty Vecs)
-
 pub trait SearchTerm<'s>: std::fmt::Display {
     /// Returns iterator of match ranges in bytes and any captured groups
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize, Vec<String>)>;
@@ -2295,8 +2292,9 @@ impl StatefulWidget for BufferWidget<'_> {
 
     fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer, state: &mut BufferContext) {
         use crate::help::{
-            BROWSE_MATCHES, CONFIRM_CLOSE, FIND, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE,
-            SPLIT_PANE, VERIFY_RELOAD, VERIFY_SAVE, render_help,
+            BROWSE_MATCHES, CONFIRM_CLOSE, FIND, PASTE_GROUP, REPLACE_MATCHES,
+            REPLACE_MATCHES_REGEX, SELECT_INSIDE, SELECT_LINE, SPLIT_PANE, VERIFY_RELOAD,
+            VERIFY_SAVE, render_help,
         };
         use crate::syntax::{HighlightState, Highlighter, MultiComment};
         use ratatui::{
@@ -2731,12 +2729,16 @@ impl StatefulWidget for BufferWidget<'_> {
                 Layout::vertical([Min(0), Length(3), Min(0)]).areas(text_area);
 
             Clear.render(dialog_area, buf);
-            Paragraph::new(Line::from(colorize(
-                syntax,
-                &mut HighlightState::default(),
-                prompt.chars().collect::<String>().into(),
-                true,
-            )))
+            Paragraph::new(if matches!(prompt, SearchPrompt::Plain(_)) {
+                Line::from(colorize(
+                    syntax,
+                    &mut HighlightState::default(),
+                    prompt.chars().collect::<String>().into(),
+                    true,
+                ))
+            } else {
+                Line::from(prompt.chars().collect::<String>())
+            })
             .scroll((
                 0,
                 (prompt.cursor_column() as u16).saturating_sub(dialog_area.width.saturating_sub(2)),
@@ -3086,14 +3088,40 @@ impl StatefulWidget for BufferWidget<'_> {
                     block.title(format!("Match {} / {}", *match_idx + 1, matches.len()))
                 });
             }
-            Some(EditorMode::ReplaceMatches { matches, match_idx }) => {
-                render_help(text_area, buf, REPLACE_MATCHES, |block| {
-                    block.title(format!(
-                        "Replacement {} / {}",
-                        *match_idx + 1,
-                        matches.len()
-                    ))
-                });
+            Some(EditorMode::ReplaceMatches {
+                matches,
+                match_idx,
+                groups,
+            }) => {
+                render_help(
+                    text_area,
+                    buf,
+                    if matches!(groups, crate::editor::CaptureGroups::None) {
+                        REPLACE_MATCHES
+                    } else {
+                        REPLACE_MATCHES_REGEX
+                    },
+                    |block| {
+                        block.title(format!(
+                            "Replacement {} / {}",
+                            *match_idx + 1,
+                            matches.len()
+                        ))
+                    },
+                );
+            }
+            Some(EditorMode::PasteGroup { total, .. }) => {
+                render_help(
+                    text_area,
+                    buf,
+                    PASTE_GROUP
+                        .iter()
+                        .copied()
+                        .take(*total + 1)
+                        .collect::<Vec<_>>()
+                        .as_slice(),
+                    |b| b,
+                );
             }
             Some(EditorMode::Open { .. }) => { /* already handled, above */ }
         }

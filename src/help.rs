@@ -304,3 +304,24 @@ pub static REPLACE_MATCHES: &[Keybinding] = &[
     ctrl(&["V"], "Paste From Cut Buffer"),
     none(&["Enter"], "Finish Replacement"),
 ];
+
+pub static REPLACE_MATCHES_REGEX: &[Keybinding] = &[
+    none(&[UP, LEFT], "Select Previous Match"),
+    none(&[DOWN, RIGHT], "Select Next Match"),
+    ctrl(&["V"], "Paste From Group or Cut Buffer"),
+    none(&["Enter"], "Finish Replacement"),
+];
+
+pub static PASTE_GROUP: &[Keybinding] = &[
+    ctrl(&["V"], "Paste From Cut Buffer"),
+    none(&["0"], "Paste From Capture Group 0"),
+    none(&["1"], "Paste From Capture Group 1"),
+    none(&["2"], "Paste From Capture Group 2"),
+    none(&["3"], "Paste From Capture Group 3"),
+    none(&["4"], "Paste From Capture Group 4"),
+    none(&["5"], "Paste From Capture Group 5"),
+    none(&["6"], "Paste From Capture Group 6"),
+    none(&["7"], "Paste From Capture Group 7"),
+    none(&["8"], "Paste From Capture Group 8"),
+    none(&["9"], "Paste From Capture Group 9"),
+];

@@ -46,6 +46,13 @@ pub enum EditorMode {
     ReplaceMatches {
         matches: Vec<Range<usize>>,
         match_idx: usize,
+        groups: CaptureGroups,
+    },
+    PasteGroup {
+        matches: Vec<Range<usize>>,
+        match_idx: usize,
+        total: usize,
+        groups: Vec<Vec<String>>,
     },
     Open {
         #[cfg(not(feature = "ssh"))]
@@ -53,6 +60,27 @@ pub enum EditorMode {
         #[cfg(feature = "ssh")]
         chooser: Box<FileChooserState<EitherSource>>,
     },
+}
+
+#[derive(Default)]
+pub enum CaptureGroups {
+    #[default]
+    None,
+    Some {
+        // total number of catpure groups
+        total: usize,
+        // groups[match][group]
+        groups: Vec<Vec<String>>,
+    },
+}
+
+impl From<Vec<Vec<String>>> for CaptureGroups {
+    fn from(groups: Vec<Vec<String>>) -> Self {
+        match groups.get(0).map(|g| g.len()) {
+            None | Some(0) => CaptureGroups::None,
+            Some(total) => CaptureGroups::Some { total, groups },
+        }
+    }
 }
 
 macro_rules! key {
@@ -271,37 +299,51 @@ impl Editor {
                                     );
                                 }
 
-                                // TODO - attach match groups to ReplaceMatches
-                                let (matches, ()) = std::mem::take(matches)
+                                let (matches, groups): (_, Vec<Vec<_>>) = std::mem::take(matches)
                                     .into_iter()
-                                    .map(|(r, _)| (r.start..r.start, ()))
+                                    .map(|(r, c)| (r.start..r.start, c))
                                     .unzip();
 
                                 EditorMode::ReplaceMatches {
                                     matches,
                                     match_idx: std::mem::take(match_idx),
+                                    groups: groups.into(),
                                 }
                             }
                         };
                     }
                 }
-                EditorMode::ReplaceMatches { matches, match_idx } => {
+                EditorMode::ReplaceMatches {
+                    matches,
+                    match_idx,
+                    groups,
+                } => {
                     let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
                     let cur_idx = cur_buf_list.current_index();
                     if let Some(buf) = cur_buf_list.current_mut()
                         && let Some(new_mode) = match event {
-                            key!(CONTROL, 'v') => {
-                                if let Some(cut) = &self.cut_buffer {
-                                    buf.multi_insert_string(
-                                        alt_buf_list
-                                            .and_then(|l| l.get_mut(cur_idx))
-                                            .map(|b| b.alt_cursor()),
-                                        matches,
-                                        cut.as_str(),
-                                    );
+                            key!(CONTROL, 'v') => match groups {
+                                CaptureGroups::Some { total, groups } => {
+                                    Some(EditorMode::PasteGroup {
+                                        matches: std::mem::take(matches),
+                                        match_idx: std::mem::take(match_idx),
+                                        total: std::mem::take(total),
+                                        groups: std::mem::take(groups),
+                                    })
                                 }
-                                None
-                            }
+                                _ => {
+                                    if let Some(cut) = &self.cut_buffer {
+                                        buf.multi_insert_string(
+                                            alt_buf_list
+                                                .and_then(|l| l.get_mut(cur_idx))
+                                                .map(|b| b.alt_cursor()),
+                                            matches,
+                                            cut.as_str(),
+                                        );
+                                    }
+                                    None
+                                }
+                            },
                             event => process_replace_matches(
                                 buf,
                                 matches,
@@ -315,6 +357,71 @@ impl Editor {
                     {
                         self.mode = new_mode;
                     }
+                }
+                EditorMode::PasteGroup {
+                    matches,
+                    match_idx,
+                    total,
+                    groups,
+                } => {
+                    let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
+                    let cur_idx = cur_buf_list.current_index();
+                    if let Some(buf) = cur_buf_list.current_mut() {
+                        match event {
+                            Event::Key(KeyEvent {
+                                code: KeyCode::Char(c @ '0'..='9'),
+                                modifiers: KeyModifiers::NONE,
+                                kind: KeyEventKind::Press,
+                                ..
+                            }) => {
+                                let group = match c {
+                                    '0' => 0,
+                                    '1' => 1,
+                                    '2' => 2,
+                                    '3' => 3,
+                                    '4' => 4,
+                                    '5' => 5,
+                                    '6' => 6,
+                                    '7' => 7,
+                                    '8' => 8,
+                                    '9' => 9,
+                                    _ => unreachable!(),
+                                };
+
+                                buf.multi_insert_strings(
+                                    alt_buf_list
+                                        .and_then(|l| l.get_mut(cur_idx))
+                                        .map(|b| b.alt_cursor()),
+                                    matches,
+                                    groups.iter().map(|g| match g.get(group) {
+                                        Some(s) => (s.chars().count(), s.as_str()),
+                                        None => (0, ""),
+                                    }),
+                                );
+                            }
+                            key!(CONTROL, 'v') => {
+                                if let Some(cut) = &self.cut_buffer {
+                                    buf.multi_insert_string(
+                                        alt_buf_list
+                                            .and_then(|l| l.get_mut(cur_idx))
+                                            .map(|b| b.alt_cursor()),
+                                        matches,
+                                        cut.as_str(),
+                                    );
+                                }
+                            }
+                            _ => { /* ignore other events */ }
+                        }
+                    }
+
+                    self.mode = EditorMode::ReplaceMatches {
+                        matches: std::mem::take(matches),
+                        match_idx: std::mem::take(match_idx),
+                        groups: CaptureGroups::Some {
+                            total: std::mem::take(total),
+                            groups: std::mem::take(groups),
+                        },
+                    };
                 }
                 EditorMode::SplitPane => self.process_split_pane(event),
             },
