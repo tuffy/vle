@@ -931,8 +931,7 @@ fn process_incremental_search<P: TextPrompt>(
             ..
         }) => {
             prompt.push(c);
-            let query = prompt.value()?.ok()?;
-            if let Err(err) = buffer.next_or_current_match(query) {
+            if let Err(err) = buffer.next_or_current_match(prompt.value()?) {
                 buffer.set_error(not_found(err));
             }
             None
@@ -940,8 +939,7 @@ fn process_incremental_search<P: TextPrompt>(
         key!(CONTROL, 'v') => {
             if let Some(buf) = cut_buffer {
                 prompt.extend(buf.as_str());
-                let query = prompt.value()?.ok()?;
-                if let Err(err) = buffer.next_or_current_match(query) {
+                if let Err(err) = buffer.next_or_current_match(prompt.value()?) {
                     buffer.set_error(not_found(err));
                 }
             }
@@ -949,8 +947,7 @@ fn process_incremental_search<P: TextPrompt>(
         }
         Event::Paste(pasted) => {
             prompt.extend(&pasted);
-            let query = prompt.value()?.ok()?;
-            if let Err(err) = buffer.next_or_current_match(query) {
+            if let Err(err) = buffer.next_or_current_match(prompt.value()?) {
                 buffer.set_error(not_found(err));
             }
             None
@@ -960,25 +957,16 @@ fn process_incremental_search<P: TextPrompt>(
             if prompt.is_empty() {
                 buffer.clear_selection();
             } else {
-                let query = prompt.value()?.ok()?;
-                if let Err(err) = buffer.next_or_current_match(query) {
+                if let Err(err) = buffer.next_or_current_match(prompt.value()?) {
                     buffer.set_error(not_found(err));
                 }
             }
             None
         }
-        key!(Enter) => match prompt.value()? {
-            Ok(query) => match buffer.all_matches(query) {
-                Ok((match_idx, matches)) => {
-                    Some(NextModeIncremental::Browse { match_idx, matches })
-                }
-                Err(err) => {
-                    buffer.set_error(not_found(err));
-                    None
-                }
-            },
+        key!(Enter) => match buffer.all_matches(prompt.value()?) {
+            Ok((match_idx, matches)) => Some(NextModeIncremental::Browse { match_idx, matches }),
             Err(err) => {
-                buffer.set_error(err.to_string());
+                buffer.set_error(not_found(err));
                 None
             }
         },
