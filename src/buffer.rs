@@ -3157,8 +3157,20 @@ impl From<String> for CutBuffer {
 /// Given rope and starting area in chars,
 /// yields lines and their start points in bytes
 fn search_area(rope: &ropey::Rope) -> impl Iterator<Item = (Cow<'_, str>, usize)> {
+    fn no_nl(s: Cow<'_, str>) -> Option<Cow<'_, str>> {
+        (!s.is_empty()).then(|| match s {
+            Cow::Borrowed(s) => Cow::Borrowed(s.trim_end_matches('\n')),
+            Cow::Owned(mut s) => {
+                while s.ends_with('\n') {
+                    let _ = s.pop();
+                }
+                Cow::Owned(s)
+            }
+        })
+    }
+
     rope.lines().enumerate().filter_map(|(line_num, line)| {
-        Some((Cow::from(line), rope.try_line_to_byte(line_num).ok()?))
+        Some((no_nl(line.into())?, rope.try_line_to_byte(line_num).ok()?))
     })
 }
 
