@@ -1068,29 +1068,6 @@ impl BufferContext {
             })
     }
 
-    /*pub fn next_or_current_match<'s, S: SearchTerm<'s>>(&mut self, term: S) -> Result<(), S> {
-        let buf = self.buffer.borrow_move();
-        let rope = &buf.rope;
-        let (start, end) = search_area(rope, self.cursor)
-            .find_map(|(line, offset)| {
-                term.next_match(&line)
-                    .map(|(s, e)| (offset + s, offset + e))
-            })
-            .and_then(|(s, e)| {
-                Some((
-                    rope.try_byte_to_char(s).ok()?,
-                    rope.try_byte_to_char(e).ok()?,
-                ))
-            })
-            .ok_or(term)?;
-
-        self.cursor = start;
-        self.selection = Some(end);
-        self.cursor_column = cursor_column(rope, self.cursor);
-
-        Ok(())
-    }*/
-
     /// Returns Ok((current_idx, matches)) on success
     /// Returns Err(term) if no matches found
     pub fn all_matches<'s, S: SearchTerm<'s>>(
@@ -1732,6 +1709,9 @@ impl std::ops::SubAssign<usize> for Secondary<'_> {
     }
 }
 
+// TODO - support capture groups in match_ranges
+// (plain text searches can return empty Vecs)
+
 pub trait SearchTerm<'s>: std::fmt::Display {
     /// Returns iterator of match ranges in bytes
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize)>;
@@ -1740,6 +1720,12 @@ pub trait SearchTerm<'s>: std::fmt::Display {
 impl<'s> SearchTerm<'s> for &'s str {
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize)> {
         s.match_indices(self).map(|(idx, s)| (idx, idx + s.len()))
+    }
+}
+
+impl<'s> SearchTerm<'s> for &'s regex_lite::Regex {
+    fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize)> {
+        self.find_iter(s).map(|m| (m.start(), m.end()))
     }
 }
 
@@ -2730,7 +2716,7 @@ impl StatefulWidget for BufferWidget<'_> {
             Paragraph::new(Line::from(colorize(
                 syntax,
                 &mut HighlightState::default(),
-                prompt.value().unwrap_or_default().into(),
+                prompt.chars().collect::<String>().into(),
                 true,
             )))
             .scroll((
@@ -2740,7 +2726,7 @@ impl StatefulWidget for BufferWidget<'_> {
             .block(
                 Block::bordered()
                     .border_type(BorderType::Rounded)
-                    .title_top("Find?"),
+                    .title_top(prompt.to_string()),
             )
             .render(dialog_area, buf);
         }

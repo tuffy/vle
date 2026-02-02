@@ -908,10 +908,10 @@ enum NextModeIncremental {
     },
 }
 
-fn process_search<P: TextPrompt>(
+fn process_search(
     buffer: &mut BufferContext,
     cut_buffer: Option<&CutBuffer>,
-    prompt: &mut P,
+    prompt: &mut SearchPrompt,
     event: Event,
 ) -> Option<NextModeIncremental> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -944,15 +944,38 @@ fn process_search<P: TextPrompt>(
             prompt.pop();
             None
         }
-        key!(Enter) => match buffer.all_matches(prompt.value()?) {
-            Ok((match_idx, matches)) => Some(NextModeIncremental::Browse { match_idx, matches }),
-            Err(err) => {
-                buffer.set_error(not_found(err));
-                None
-            }
+        key!(Tab) => {
+            prompt.swap();
+            None
+        }
+        key!(Enter) => match prompt {
+            SearchPrompt::Plain(prompt) => match buffer.all_matches(prompt.value()?) {
+                Ok((match_idx, matches)) => {
+                    Some(NextModeIncremental::Browse { match_idx, matches })
+                }
+                Err(err) => {
+                    buffer.set_error(not_found(err));
+                    None
+                }
+            },
+            SearchPrompt::Regex(prompt) => match prompt.value()? {
+                Ok(regex) => match buffer.all_matches(regex) {
+                    Ok((match_idx, matches)) => {
+                        Some(NextModeIncremental::Browse { match_idx, matches })
+                    }
+                    Err(err) => {
+                        buffer.set_error(not_found(err));
+                        None
+                    }
+                },
+                Err(err) => {
+                    buffer.set_error(err.to_string());
+                    None
+                }
+            },
         },
         key!(CONTROL, 'f') => {
-            *prompt = P::default();
+            prompt.reset();
             None
         }
         _ => None, // ignore other events
