@@ -36,7 +36,7 @@ pub enum EditorMode {
     SelectLine {
         prompt: LinePrompt,
     },
-    IncrementalSearch {
+    Search {
         prompt: SearchPrompt,
     },
     BrowseMatches {
@@ -240,10 +240,10 @@ impl Editor {
                         self.mode = new_mode;
                     }
                 }
-                EditorMode::IncrementalSearch { prompt } => {
+                EditorMode::Search { prompt } => {
                     if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
                         && let Some(new_mode) =
-                            process_incremental_search(buf, self.cut_buffer.as_ref(), prompt, event)
+                            process_search(buf, self.cut_buffer.as_ref(), prompt, event)
                     {
                         self.mode = match new_mode {
                             NextModeIncremental::Browse { match_idx, matches } => {
@@ -489,15 +489,12 @@ impl Editor {
             }
             key!(CONTROL, 'f') | key!(F(5)) => {
                 if let Some(Ok(find)) = self.on_buffer(|b| match b.selection() {
-                    None => Ok(EditorMode::IncrementalSearch {
+                    None => Ok(EditorMode::Search {
                         prompt: SearchPrompt::default(),
                     }),
-                    Some(selection) => {
-                        b.cursor_first();
-                        b.all_matches(selection).map(|(match_idx, matches)| {
-                            EditorMode::BrowseMatches { match_idx, matches }
-                        })
-                    }
+                    Some(selection) => b.all_matches(selection).map(|(match_idx, matches)| {
+                        EditorMode::BrowseMatches { match_idx, matches }
+                    }),
                 }) {
                     self.mode = find;
                 }
@@ -911,7 +908,7 @@ enum NextModeIncremental {
     },
 }
 
-fn process_incremental_search<P: TextPrompt>(
+fn process_search<P: TextPrompt>(
     buffer: &mut BufferContext,
     cut_buffer: Option<&CutBuffer>,
     prompt: &mut P,
@@ -931,36 +928,20 @@ fn process_incremental_search<P: TextPrompt>(
             ..
         }) => {
             prompt.push(c);
-            if let Err(err) = buffer.next_or_current_match(prompt.value()?) {
-                buffer.set_error(not_found(err));
-            }
             None
         }
         key!(CONTROL, 'v') => {
             if let Some(buf) = cut_buffer {
                 prompt.extend(buf.as_str());
-                if let Err(err) = buffer.next_or_current_match(prompt.value()?) {
-                    buffer.set_error(not_found(err));
-                }
             }
             None
         }
         Event::Paste(pasted) => {
             prompt.extend(&pasted);
-            if let Err(err) = buffer.next_or_current_match(prompt.value()?) {
-                buffer.set_error(not_found(err));
-            }
             None
         }
         key!(Backspace) => {
             prompt.pop();
-            if prompt.is_empty() {
-                buffer.clear_selection();
-            } else {
-                if let Err(err) = buffer.next_or_current_match(prompt.value()?) {
-                    buffer.set_error(not_found(err));
-                }
-            }
             None
         }
         key!(Enter) => match buffer.all_matches(prompt.value()?) {
@@ -1339,6 +1320,15 @@ impl Layout {
                     x: text_area.x + text_area.width,
                     y: text_area.y.saturating_sub(1),
                 }),
+                EditorMode::Search { prompt } => {
+                    let [_, dialog_area, _] =
+                        Layout::vertical([Min(0), Length(3), Min(0)]).areas(text_area);
+                    let dialog_area = Block::bordered().inner(dialog_area);
+                    Some(Position {
+                        x: dialog_area.x + (prompt.cursor_column() as u16).min(dialog_area.width),
+                        y: dialog_area.y,
+                    })
+                }
                 EditorMode::Open { chooser } => {
                     let (x, y) = chooser.cursor_position();
                     Some(Position {

@@ -11,8 +11,6 @@ pub trait TextPrompt: Default + std::fmt::Display {
     where
         Self: 's;
 
-    // type Error: std::error::Error;
-
     fn push(&mut self, c: char);
 
     fn extend(&mut self, s: &str);
@@ -22,6 +20,19 @@ pub trait TextPrompt: Default + std::fmt::Display {
     fn is_empty(&self) -> bool;
 
     fn value(&self) -> Option<Self::Value<'_>>;
+
+    fn chars(&self) -> impl Iterator<Item = char>;
+
+    fn cursor_column(&self) -> usize {
+        use unicode_width::UnicodeWidthChar;
+
+        self.chars()
+            .map(|c| match c {
+                '\t' => *crate::buffer::SPACES_PER_TAB,
+                c => c.width().unwrap_or(0),
+            })
+            .sum()
+    }
 }
 
 #[derive(Default)]
@@ -70,6 +81,10 @@ impl TextPrompt for SearchPrompt {
 
     fn value(&self) -> Option<&str> {
         (!self.is_empty()).then_some(self.value.as_str())
+    }
+
+    fn chars(&self) -> impl Iterator<Item = char> {
+        self.chars.iter().copied()
     }
 }
 

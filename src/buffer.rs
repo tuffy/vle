@@ -567,27 +567,12 @@ impl BufferContext {
         self.cursor = cursor;
     }
 
-    /// If selection is active, place the cursor first if not already
-    pub fn cursor_first(&mut self) {
-        if let Some(selection) = &mut self.selection
-            && self.cursor > *selection
-        {
-            let buf = self.buffer.borrow();
-            std::mem::swap(&mut self.cursor, selection);
-            self.cursor_column = cursor_column(&buf.rope, self.cursor);
-        }
-    }
-
     pub fn set_selection(&mut self, start: usize, end: usize) {
         assert!(end >= start);
         let buf = self.buffer.borrow();
         self.cursor = start;
         self.selection = Some(end);
         self.cursor_column = cursor_column(&buf.rope, self.cursor);
-    }
-
-    pub fn clear_selection(&mut self) {
-        self.selection = None;
     }
 
     /// Returns cursor position in rope as (row, col), if possible
@@ -1083,7 +1068,7 @@ impl BufferContext {
             })
     }
 
-    pub fn next_or_current_match<'s, S: SearchTerm<'s>>(&mut self, term: S) -> Result<(), S> {
+    /*pub fn next_or_current_match<'s, S: SearchTerm<'s>>(&mut self, term: S) -> Result<(), S> {
         let buf = self.buffer.borrow_move();
         let rope = &buf.rope;
         let (start, end) = search_area(rope, self.cursor)
@@ -1104,18 +1089,18 @@ impl BufferContext {
         self.cursor_column = cursor_column(rope, self.cursor);
 
         Ok(())
-    }
+    }*/
 
     /// Returns Ok((current_idx, matches)) on success
     /// Returns Err(term) if no matches found
     pub fn all_matches<'s, S: SearchTerm<'s>>(
-        &self,
+        &mut self,
         term: S,
     ) -> Result<(usize, Vec<Range<usize>>), S> {
         let buf = self.buffer.borrow_move();
         let rope = &buf.rope;
 
-        let mut matches = search_area(rope, self.cursor)
+        let matches = search_area(rope)
             .flat_map(|(line, offset)| {
                 term.match_ranges(&line)
                     .map(|(s, e)| (offset + s, offset + e))
@@ -1126,10 +1111,11 @@ impl BufferContext {
             })
             .collect::<Vec<_>>();
 
-        let first_start: usize = matches.first().map(|r| r.start).ok_or(term)?;
-        let current_idx = matches.iter().filter(|r| r.end <= first_start).count();
-        matches.rotate_right(current_idx);
-        Ok((current_idx, matches))
+        // TODO - set selection to first match after cursor
+        let first_match = matches.first().ok_or(term)?;
+        self.cursor = first_match.start;
+        self.selection = Some(first_match.end);
+        Ok((0, matches))
     }
 
     pub fn perform_undo(&mut self) {
@@ -1749,11 +1735,6 @@ impl std::ops::SubAssign<usize> for Secondary<'_> {
 pub trait SearchTerm<'s>: std::fmt::Display {
     /// Returns iterator of match ranges in bytes
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize)>;
-
-    /// Returns next match as range in bytes, if present
-    fn next_match(&self, s: &str) -> Option<(usize, usize)> {
-        self.match_ranges(s).next()
-    }
 }
 
 impl<'s> SearchTerm<'s> for &'s str {
@@ -2736,14 +2717,32 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
-        fn render_find_prompt(
+        fn render_find_prompt<S: Highlighter>(
+            syntax: &S,
             text_area: Rect,
             buf: &mut ratatui::buffer::Buffer,
             prompt: &SearchPrompt,
         ) {
-            if prompt.is_empty() {
-                render_message(text_area, buf, BufferMessage::Notice("Find?".into()));
-            }
+            let [_, dialog_area, _] =
+                Layout::vertical([Min(0), Length(3), Min(0)]).areas(text_area);
+
+            Clear.render(dialog_area, buf);
+            Paragraph::new(Line::from(colorize(
+                syntax,
+                &mut HighlightState::default(),
+                prompt.value().unwrap_or_default().into(),
+                true,
+            )))
+            .scroll((
+                0,
+                (prompt.cursor_column() as u16).saturating_sub(dialog_area.width.saturating_sub(2)),
+            ))
+            .block(
+                Block::bordered()
+                    .border_type(BorderType::Rounded)
+                    .title_top("Find?"),
+            )
+            .render(dialog_area, buf);
         }
 
         if let Some(EditorMode::Open { chooser }) = self.mode {
@@ -3074,9 +3073,9 @@ impl StatefulWidget for BufferWidget<'_> {
             Some(EditorMode::SelectLine { .. }) => {
                 render_help(text_area, buf, SELECT_LINE, |b| b);
             }
-            Some(EditorMode::IncrementalSearch { prompt, .. }) => {
+            Some(EditorMode::Search { prompt, .. }) => {
                 render_help(text_area, buf, FIND, |b| b);
-                render_find_prompt(text_area, buf, prompt);
+                render_find_prompt(syntax, text_area, buf, prompt);
             }
             Some(EditorMode::BrowseMatches { matches, match_idx }) => {
                 render_help(text_area, buf, BROWSE_MATCHES, |block| {
@@ -3156,8 +3155,16 @@ impl From<String> for CutBuffer {
 }
 
 /// Given rope and starting area in chars,
+/// yields lines and their start points in bytes
+fn search_area(rope: &ropey::Rope) -> impl Iterator<Item = (Cow<'_, str>, usize)> {
+    rope.lines().enumerate().filter_map(|(line_num, line)| {
+        Some((Cow::from(line), rope.try_line_to_byte(line_num).ok()?))
+    })
+}
+
+/// Given rope and starting area in chars,
 /// yields search strings and their start points in bytes
-fn search_area(rope: &ropey::Rope, start: usize) -> impl Iterator<Item = (Cow<'_, str>, usize)> {
+/*fn search_area(rope: &ropey::Rope, start: usize) -> impl Iterator<Item = (Cow<'_, str>, usize)> {
     let start_line_num = rope.try_char_to_line(start).unwrap_or(0);
     let start_line_char = rope.line_to_char(start_line_num);
     let start_line = rope.line(start_line_num);
@@ -3184,7 +3191,7 @@ fn search_area(rope: &ropey::Rope, start: usize) -> impl Iterator<Item = (Cow<'_
             let line = Cow::from(l);
             (!line.is_empty()).then_some((line, num))
         })
-}
+}*/
 
 /// Buffer's undo/redo state
 struct BufferState {
