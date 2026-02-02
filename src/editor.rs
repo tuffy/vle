@@ -600,11 +600,11 @@ impl Editor {
             }
             key!(CONTROL, 'f') | key!(F(5)) => {
                 if let Some(Ok(find)) = self.on_buffer(|b| match b.selection() {
-                    None => Ok(EditorMode::Search {
-                        prompt: SearchPrompt::default(),
-                    }),
-                    Some(selection) => b.all_matches(selection).map(|(match_idx, matches)| {
+                    Some(selection) if !selection.is_empty() => b.all_matches(selection).map(|(match_idx, matches)| {
                         EditorMode::BrowseMatches { match_idx, matches }
+                    }),
+                    _ => Ok(EditorMode::Search {
+                        prompt: SearchPrompt::default(),
                     }),
                 }) {
                     self.mode = find;
