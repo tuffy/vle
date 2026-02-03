@@ -1079,15 +1079,21 @@ impl BufferContext {
         let matches = search_area(rope)
             .flat_map(|(line, offset)| {
                 term.match_ranges(&line)
-                    .map(|(s, e, c)| (offset + s, offset + e, c))
+                    .map(|m| m + offset)
                     .collect::<Vec<_>>()
             })
-            .filter_map(|(s, e, c)| {
-                Some((
-                    rope.try_byte_to_char(s).ok()?..rope.try_byte_to_char(e).ok()?,
-                    c,
-                ))
-            })
+            .filter_map(
+                |SearchMatch {
+                     start: s,
+                     end: e,
+                     groups: c,
+                 }| {
+                    Some((
+                        rope.try_byte_to_char(s).ok()?..rope.try_byte_to_char(e).ok()?,
+                        c,
+                    ))
+                },
+            )
             .collect::<Vec<_>>();
 
         // TODO - set selection to first match after cursor
@@ -1717,36 +1723,52 @@ impl std::ops::SubAssign<usize> for Secondary<'_> {
 
 pub trait SearchTerm<'s>: std::fmt::Display {
     /// Returns iterator of match ranges in bytes and any captured groups
-    fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize, Vec<String>)>;
+    fn match_ranges(&self, s: &str) -> impl Iterator<Item = SearchMatch>;
 }
 
-impl<'s> SearchTerm<'s> for &'s str {
-    fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize, Vec<String>)> {
-        s.match_indices(self)
-            .map(|(idx, s)| (idx, idx + s.len(), vec![]))
+pub struct SearchMatch {
+    start: usize,
+    end: usize,
+    // TODO - store start, end in each group also
+    groups: Vec<String>,
+}
+
+impl std::ops::Add<usize> for SearchMatch {
+    type Output = Self;
+
+    fn add(self, rhs: usize) -> Self {
+        Self {
+            start: self.start + rhs,
+            end: self.end + rhs,
+            groups: self.groups,
+        }
     }
 }
 
 impl SearchTerm<'static> for regex_lite::Regex {
-    fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize, Vec<String>)> {
+    fn match_ranges(&self, s: &str) -> impl Iterator<Item = SearchMatch> {
         self.captures_iter(s).map(|c| {
             // guaranteed to have at least one capture
             let first = c.get(0).unwrap();
-            (
-                first.start(),
-                first.end(),
-                c.iter()
+            SearchMatch {
+                start: first.start(),
+                end: first.end(),
+                groups: c
+                    .iter()
                     .map(|m| m.map(|m| m.as_str().to_string()).unwrap_or_default())
                     .collect(),
-            )
+            }
         })
     }
 }
 
 impl SearchTerm<'static> for String {
-    fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize, Vec<String>)> {
-        s.match_indices(self.as_str())
-            .map(|(idx, s)| (idx, idx + s.len(), vec![]))
+    fn match_ranges(&self, s: &str) -> impl Iterator<Item = SearchMatch> {
+        s.match_indices(self.as_str()).map(|(idx, s)| SearchMatch {
+            start: idx,
+            end: idx + s.len(),
+            groups: vec![],
+        })
     }
 }
 
