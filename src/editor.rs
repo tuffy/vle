@@ -9,7 +9,7 @@
 #[cfg(feature = "ssh")]
 use crate::files::{EitherSource, SshSource};
 use crate::{
-    buffer::{AltCursor, BufferContext, BufferId, BufferList, CutBuffer, Source},
+    buffer::{AltCursor, BufferContext, BufferId, BufferList, CutBuffer, MatchCapture, Source},
     files::{ChooserSource, FileChooserState, LocalSource},
     prompt::{LinePrompt, TextField},
 };
@@ -41,7 +41,7 @@ pub enum EditorMode {
         type_: SearchType,
     },
     BrowseMatches {
-        matches: Vec<(Range<usize>, Vec<String>)>,
+        matches: Vec<(Range<usize>, Vec<Option<MatchCapture>>)>,
         match_idx: usize,
     },
     ReplaceMatches {
@@ -53,7 +53,7 @@ pub enum EditorMode {
         matches: Vec<Range<usize>>,
         match_idx: usize,
         total: usize,
-        groups: Vec<Vec<String>>,
+        groups: Vec<Vec<Option<MatchCapture>>>,
     },
     Open {
         #[cfg(not(feature = "ssh"))]
@@ -87,12 +87,12 @@ pub enum CaptureGroups {
         // total number of capture groups
         total: usize,
         // groups[match][group]
-        groups: Vec<Vec<String>>,
+        groups: Vec<Vec<Option<MatchCapture>>>,
     },
 }
 
-impl From<Vec<Vec<String>>> for CaptureGroups {
-    fn from(groups: Vec<Vec<String>>) -> Self {
+impl From<Vec<Vec<Option<MatchCapture>>>> for CaptureGroups {
+    fn from(groups: Vec<Vec<Option<MatchCapture>>>) -> Self {
         match groups.first().map(|g| g.len()) {
             None | Some(0) => CaptureGroups::None,
             Some(total) => CaptureGroups::Some { total, groups },
@@ -411,8 +411,10 @@ impl Editor {
                                         .map(|b| b.alt_cursor()),
                                     matches,
                                     groups.iter().map(|g| match g.get(group) {
-                                        Some(s) => (s.chars().count(), s.as_str()),
-                                        None => (0, ""),
+                                        Some(Some(MatchCapture { string: s, .. })) => {
+                                            (s.chars().count(), s.as_str())
+                                        }
+                                        Some(None) | None => (0, ""),
                                     }),
                                 );
                             }
@@ -1035,7 +1037,7 @@ fn process_open_file<S: ChooserSource>(
 enum NextModeIncremental {
     Browse {
         match_idx: usize,
-        matches: Vec<(Range<usize>, Vec<String>)>,
+        matches: Vec<(Range<usize>, Vec<Option<MatchCapture>>)>,
     },
 }
 

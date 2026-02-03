@@ -1072,7 +1072,7 @@ impl BufferContext {
     pub fn all_matches<'s, S: SearchTerm<'s>>(
         &mut self,
         term: S,
-    ) -> Result<(usize, Vec<(Range<usize>, Vec<String>)>), S> {
+    ) -> Result<(usize, Vec<(Range<usize>, Vec<Option<MatchCapture>>)>), S> {
         let buf = self.buffer.borrow_move();
         let rope = &buf.rope;
 
@@ -1088,9 +1088,27 @@ impl BufferContext {
                      end: e,
                      groups: c,
                  }| {
+                    // convert ranges in bytes (from SearchTerm)
+                    // to ranges in characters (for Ropey)
                     Some((
                         rope.try_byte_to_char(s).ok()?..rope.try_byte_to_char(e).ok()?,
-                        c,
+                        c.into_iter()
+                            // if None, keep it None,
+                            // otherwise filter out any bad conversions
+                            // (which shouldn't happen, really)
+                            .filter_map(|m| match m {
+                                Some(MatchCapture { start, end, string }) => {
+                                    let start_chars = rope.try_byte_to_char(start).ok()?;
+                                    let end_chars = rope.try_byte_to_char(end).ok()?;
+                                    Some(Some(MatchCapture {
+                                        start: start_chars,
+                                        end: end_chars,
+                                        string,
+                                    }))
+                                }
+                                None => Some(None),
+                            })
+                            .collect(),
                     ))
                 },
             )
@@ -1726,11 +1744,28 @@ pub trait SearchTerm<'s>: std::fmt::Display {
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = SearchMatch>;
 }
 
+pub struct MatchCapture {
+    pub string: String,
+    start: usize,
+    end: usize,
+}
+
+impl std::ops::Add<usize> for MatchCapture {
+    type Output = Self;
+
+    fn add(self, rhs: usize) -> Self {
+        Self {
+            start: self.start + rhs,
+            end: self.end + rhs,
+            string: self.string,
+        }
+    }
+}
+
 pub struct SearchMatch {
     start: usize,
     end: usize,
-    // TODO - store start, end in each group also
-    groups: Vec<String>,
+    groups: Vec<Option<MatchCapture>>,
 }
 
 impl std::ops::Add<usize> for SearchMatch {
@@ -1740,7 +1775,11 @@ impl std::ops::Add<usize> for SearchMatch {
         Self {
             start: self.start + rhs,
             end: self.end + rhs,
-            groups: self.groups,
+            groups: self
+                .groups
+                .into_iter()
+                .map(|m| m.map(|c| c + rhs))
+                .collect(),
         }
     }
 }
@@ -1755,7 +1794,13 @@ impl SearchTerm<'static> for regex_lite::Regex {
                 end: first.end(),
                 groups: c
                     .iter()
-                    .map(|m| m.map(|m| m.as_str().to_string()).unwrap_or_default())
+                    .map(|m| {
+                        m.map(|m| MatchCapture {
+                            string: m.as_str().to_string(),
+                            start: m.start(),
+                            end: m.end(),
+                        })
+                    })
                     .collect(),
             }
         })
@@ -2781,6 +2826,58 @@ impl StatefulWidget for BufferWidget<'_> {
             .render(dialog_area, buf);
         }
 
+        fn sub_match_ranges(
+            matches: &[(Range<usize>, Vec<Option<MatchCapture>>)],
+        ) -> VecDeque<(Range<usize>, Style)> {
+            let mut ranges = VecDeque::with_capacity(matches.len());
+
+            for (whole_range, sub_captures) in matches {
+                let mut whole_range = whole_range.clone();
+                if sub_captures.is_empty() {
+                    ranges.push_back((whole_range, HIGHLIGHTED));
+                } else {
+                    for (sub_capture, style) in sub_captures
+                        .iter()
+                        .skip(1)
+                        .zip(
+                            [
+                                Style::new()
+                                    .bg(Color::Blue)
+                                    .fg(Color::Yellow)
+                                    .add_modifier(Modifier::REVERSED),
+                                Style::new()
+                                    .bg(Color::Green)
+                                    .fg(Color::Yellow)
+                                    .add_modifier(Modifier::REVERSED),
+                                Style::new()
+                                    .bg(Color::Magenta)
+                                    .fg(Color::Yellow)
+                                    .add_modifier(Modifier::REVERSED),
+                                Style::new()
+                                    .bg(Color::Cyan)
+                                    .fg(Color::Yellow)
+                                    .add_modifier(Modifier::REVERSED),
+                            ]
+                            .into_iter()
+                            .cycle(),
+                        )
+                        .filter_map(|(sub_cap, style)| Some((sub_cap.as_ref()?, style)))
+                    {
+                        if whole_range.start < sub_capture.start {
+                            ranges.push_back((whole_range.start..sub_capture.start, HIGHLIGHTED));
+                        }
+                        ranges.push_back((sub_capture.start..sub_capture.end, style));
+                        whole_range.start = sub_capture.end;
+                    }
+                    if whole_range.start < whole_range.end {
+                        ranges.push_back((whole_range, HIGHLIGHTED));
+                    }
+                }
+            }
+
+            ranges
+        }
+
         if let Some(EditorMode::Open { chooser }) = self.mode {
             // file selection mode overrides main editing mode
             use crate::files::FileChooser;
@@ -2904,12 +3001,7 @@ impl StatefulWidget for BufferWidget<'_> {
         Clear.render(text_area, buf);
         Paragraph::new(match self.mode {
             Some(EditorMode::BrowseMatches { matches, .. }) => {
-                // TODO - divide sub-groups into their own highlighted sections
-                let mut matches = matches
-                    .iter()
-                    .map(|(r, _)| r.clone())
-                    .zip(std::iter::repeat(HIGHLIGHTED))
-                    .collect();
+                let mut matches = sub_match_ranges(matches);
 
                 match state.selection {
                     // no selection, so highlight matches only
