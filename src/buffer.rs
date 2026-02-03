@@ -2539,7 +2539,7 @@ impl StatefulWidget for BufferWidget<'_> {
         fn highlight_matches<'s>(
             colorized: Vec<Span<'s>>,
             line_range: RangeInclusive<usize>,
-            matches: &mut VecDeque<Range<usize>>,
+            matches: &mut VecDeque<(Range<usize>, Style)>,
         ) -> Vec<Span<'s>> {
             // A trivial abstraction to make working
             // simultaneously with both line and match ranges
@@ -2602,12 +2602,13 @@ impl StatefulWidget for BufferWidget<'_> {
             };
 
             while !line_range.is_empty() {
-                let Some(mut match_range) = matches.pop_front().map(IntRange::from) else {
+                let Some((match_range, highlight)) = matches.pop_front() else {
                     // if there's no remaining matches,
                     // there's nothing left to highlight
                     highlighted.extend(colorized);
                     return highlighted;
                 };
+                let mut match_range = IntRange::from(match_range);
 
                 // if match ending is before start of line, just drop it
                 if match_range.end < line_range.start {
@@ -2632,12 +2633,12 @@ impl StatefulWidget for BufferWidget<'_> {
                     &mut colorized,
                     match_range.take_both(&mut line_range, match_range.remaining()),
                     &mut highlighted,
-                    |span| span.style(HIGHLIGHTED),
+                    |span| span.style(highlight),
                 );
 
                 // push any remaining partial match back into VecDeque
                 if !match_range.is_empty() {
-                    matches.push_front(match_range.into());
+                    matches.push_front((match_range.into(), highlight));
                 }
             }
 
@@ -2881,7 +2882,12 @@ impl StatefulWidget for BufferWidget<'_> {
         Clear.render(text_area, buf);
         Paragraph::new(match self.mode {
             Some(EditorMode::BrowseMatches { matches, .. }) => {
-                let mut matches = matches.iter().map(|(r, _)| r.clone()).collect();
+                // TODO - divide sub-groups into their own highlighted sections
+                let mut matches = matches
+                    .iter()
+                    .map(|(r, _)| r.clone())
+                    .zip(std::iter::repeat(HIGHLIGHTED))
+                    .collect();
 
                 match state.selection {
                     // no selection, so highlight matches only
