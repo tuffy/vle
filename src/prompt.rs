@@ -9,19 +9,50 @@
 #[derive(Default)]
 pub struct TextField {
     chars: Vec<char>,
+    cursor: usize,
 }
 
 impl TextField {
-    pub fn push(&mut self, c: char) {
-        self.chars.push(c);
+    pub fn insert_char(&mut self, c: char) {
+        self.chars.insert(self.cursor, c);
+        self.cursor += 1;
     }
 
-    pub fn extend(&mut self, s: &str) {
-        self.chars.extend(s.chars());
+    pub fn paste(&mut self, s: &str) {
+        for c in s.chars() {
+            self.insert_char(c);
+        }
     }
 
-    pub fn pop(&mut self) {
-        self.chars.pop();
+    pub fn backspace(&mut self) {
+        if let Some(cursor) = self.cursor.checked_sub(1) {
+            self.chars.remove(cursor);
+            self.cursor = cursor;
+        }
+    }
+
+    pub fn delete(&mut self) {
+        if self.cursor < self.chars.len() {
+            self.chars.remove(self.cursor);
+        }
+    }
+
+    pub fn cursor_back(&mut self) {
+        self.cursor = self.cursor.saturating_sub(1);
+    }
+
+    pub fn cursor_forward(&mut self) {
+        if self.cursor < self.chars.len() {
+            self.cursor += 1;
+        }
+    }
+
+    pub fn cursor_home(&mut self) {
+        self.cursor = 0;
+    }
+
+    pub fn cursor_end(&mut self) {
+        self.cursor = self.chars.len();
     }
 
     pub fn is_empty(&self) -> bool {
@@ -36,6 +67,7 @@ impl TextField {
         use unicode_width::UnicodeWidthChar;
 
         self.chars()
+            .take(self.cursor)
             .map(|c| match c {
                 '\t' => *crate::buffer::SPACES_PER_TAB,
                 c => c.width().unwrap_or(0),
@@ -49,6 +81,7 @@ impl TextField {
 
     pub fn reset(&mut self) {
         self.chars.clear();
+        self.cursor = 0;
     }
 }
 
