@@ -130,7 +130,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("json") => Box::new(json::Json),
         Some("md") => Box::new(markdown::Markdown),
         Some("html" | "htm") => Box::new(html::Html),
-        Some("xml") => Box::new(xml::Xml),
+        Some("xml" | "svg") => Box::new(xml::Xml),
         Some("sql") => Box::new(sql::Sql),
         Some("css") => Box::new(css::Css),
         Some("js") => Box::new(js::JavaScript),
