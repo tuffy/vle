@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::buffer::Source;
+use crate::prompt::TextField;
 use ratatui::widgets::StatefulWidget;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -221,26 +222,21 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
                         .title("Filename"),
                 )
                 .render(text_area, buf),
-            Chosen::New(filename) => {
-                use unicode_width::UnicodeWidthStr;
-
-                let filename = filename.iter().copied().collect::<String>();
-                let filename_width = filename.width();
-                Paragraph::new(filename)
-                    .scroll((
-                        0,
-                        filename_width
-                            .saturating_sub(TEXT_WIDTH.into())
-                            .try_into()
-                            .unwrap(),
-                    ))
-                    .block(
-                        Block::bordered()
-                            .border_type(BorderType::Rounded)
-                            .title("Filename"),
-                    )
-                    .render(text_area, buf)
-            }
+            Chosen::New(filename) => Paragraph::new(filename.value().unwrap_or_default())
+                .scroll((
+                    0,
+                    filename
+                        .cursor_column()
+                        .saturating_sub(TEXT_WIDTH.into())
+                        .try_into()
+                        .unwrap(),
+                ))
+                .block(
+                    Block::bordered()
+                        .border_type(BorderType::Rounded)
+                        .title("Filename"),
+                )
+                .render(text_area, buf),
             Chosen::Selected(items) => Paragraph::new(match items.len() {
                 1 => Cow::Borrowed("1 File Selected"),
                 n => Cow::Owned(format!("{n} Files Selected")),
@@ -372,51 +368,83 @@ impl<S: ChooserSource> FileChooserState<S> {
     }
 
     pub fn home(&mut self) {
-        self.index = match max_index(&self.chosen, &self.contents, self.dir_count) {
-            0 => None,
-            _ => Some(0),
+        match &mut self.chosen {
+            Chosen::New(filename) => {
+                filename.cursor_home();
+            }
+            _ => {
+                self.index = match max_index(&self.chosen, &self.contents, self.dir_count) {
+                    0 => None,
+                    _ => Some(0),
+                }
+            }
         }
     }
 
     pub fn end(&mut self) {
-        self.index = max_index(&self.chosen, &self.contents, self.dir_count).checked_sub(1);
+        match &mut self.chosen {
+            Chosen::New(filename) => {
+                filename.cursor_end();
+            }
+            _ => {
+                self.index = max_index(&self.chosen, &self.contents, self.dir_count).checked_sub(1);
+            }
+        }
     }
 
     pub fn arrow_right(&mut self) {
-        if let Some(idx) = self.index
-            && let Some(Entry {
-                path, is_dir: true, ..
-            }) = self.contents.get(idx)
-        {
-            self.update_dir(path.clone());
+        match &mut self.chosen {
+            Chosen::New(filename) => {
+                filename.cursor_forward();
+            }
+            _ => {
+                if let Some(idx) = self.index
+                    && let Some(Entry {
+                        path, is_dir: true, ..
+                    }) = self.contents.get(idx)
+                {
+                    self.update_dir(path.clone());
+                }
+            }
         }
     }
 
     pub fn arrow_left(&mut self) {
-        if let Some(parent) = self.dir.parent()
-            && parent != Path::new("")
-        {
-            self.update_dir(parent.to_path_buf());
+        match &mut self.chosen {
+            Chosen::New(filename) => {
+                filename.cursor_back();
+            }
+            _ => {
+                if let Some(parent) = self.dir.parent()
+                    && parent != Path::new("")
+                {
+                    self.update_dir(parent.to_path_buf());
+                }
+            }
         }
     }
 
-    pub fn push(&mut self, c: char) {
+    pub fn insert_char(&mut self, c: char) {
         match &mut self.chosen {
             Chosen::Default => {
-                self.chosen = Chosen::New(vec![c]);
+                self.chosen = Chosen::New({
+                    let mut filename = TextField::default();
+                    filename.insert_char(c);
+                    filename
+                });
                 self.index = None;
             }
             Chosen::New(prompt) => {
-                prompt.push(c);
+                prompt.insert_char(c);
                 self.index = None;
             }
             Chosen::Selected(_) => { /* do nothing */ }
         }
     }
 
-    pub fn pop(&mut self) {
+    pub fn backspace(&mut self) {
         if let Chosen::New(prompt) = &mut self.chosen {
-            prompt.pop();
+            prompt.backspace();
             if prompt.is_empty() {
                 self.chosen = Chosen::Default;
             }
@@ -473,7 +501,7 @@ impl<S: ChooserSource> FileChooserState<S> {
             },
             Chosen::New(filename) => Some(vec![self.source.open(strip_cwd(
                 &self.cwd,
-                &self.dir.join(filename.into_iter().collect::<String>()),
+                &self.dir.join(filename.value().expect("empty filename")),
             ))]),
             Chosen::Selected(selected) => Some(
                 selected
@@ -485,14 +513,9 @@ impl<S: ChooserSource> FileChooserState<S> {
     }
 
     pub fn cursor_position(&self) -> (u16, u16) {
-        use unicode_width::UnicodeWidthStr;
-
         match &self.chosen {
             Chosen::Default => (1, 1),
-            Chosen::New(filename) => (
-                1u16 + (filename.iter().collect::<String>().width() as u16).min(TEXT_WIDTH),
-                1,
-            ),
+            Chosen::New(filename) => (filename.cursor_column() as u16 + 1, 1),
             Chosen::Selected(_) => (0, self.index.map(|idx| 3u16 + idx as u16).unwrap_or(1)),
         }
     }
@@ -561,6 +584,6 @@ impl From<(bool, PathBuf)> for Entry {
 enum Chosen {
     #[default]
     Default, // nothing selected
-    New(Vec<char>),              // new file
+    New(TextField),              // new file
     Selected(BTreeSet<PathBuf>), // selected existing file(s)
 }

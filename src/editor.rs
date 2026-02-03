@@ -1010,11 +1010,11 @@ fn process_open_file<S: ChooserSource>(
             kind: KeyEventKind::Press,
             ..
         }) => {
-            chooser.push(c);
+            chooser.insert_char(c);
             None
         }
         key!(Backspace) => {
-            chooser.pop();
+            chooser.backspace();
             None
         }
         key!(Tab) => {
