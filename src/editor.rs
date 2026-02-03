@@ -1055,31 +1055,10 @@ fn process_search(
     }
 
     match event {
-        Event::Key(KeyEvent {
-            code: KeyCode::Char(c),
-            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            prompt.insert_char(c);
-            None
-        }
         key!(CONTROL, 'v') => {
             if let Some(buf) = cut_buffer {
                 prompt.paste(buf.as_str());
             }
-            None
-        }
-        Event::Paste(pasted) => {
-            prompt.paste(&pasted);
-            None
-        }
-        key!(Backspace) => {
-            prompt.backspace();
-            None
-        }
-        key!(Delete) => {
-            prompt.delete();
             None
         }
         key!(Tab) => {
@@ -1088,22 +1067,6 @@ fn process_search(
                 SearchType::Plain => SearchType::Regex,
                 SearchType::Regex => SearchType::Plain,
             };
-            None
-        }
-        key!(Left) => {
-            prompt.cursor_back();
-            None
-        }
-        key!(Right) => {
-            prompt.cursor_forward();
-            None
-        }
-        key!(Home) => {
-            prompt.cursor_home();
-            None
-        }
-        key!(End) => {
-            prompt.cursor_end();
             None
         }
         key!(Enter) => match type_ {
@@ -1136,7 +1099,10 @@ fn process_search(
             prompt.reset();
             None
         }
-        _ => None, // ignore other events
+        event => {
+            prompt.process_event(event);
+            None
+        }
     }
 }
 

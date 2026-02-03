@@ -83,6 +83,57 @@ impl TextField {
         self.chars.clear();
         self.cursor = 0;
     }
+
+    pub fn process_event(&mut self, event: crossterm::event::Event) {
+        use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+        match event {
+            Event::Key(KeyEvent {
+                code: KeyCode::Char(c),
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.insert_char(c),
+            Event::Paste(pasted) => self.paste(&pasted),
+            Event::Key(KeyEvent {
+                code: KeyCode::Backspace,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.backspace(),
+            Event::Key(KeyEvent {
+                code: KeyCode::Delete,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.delete(),
+            Event::Key(KeyEvent {
+                code: KeyCode::Left,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.cursor_back(),
+            Event::Key(KeyEvent {
+                code: KeyCode::Right,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.cursor_forward(),
+            Event::Key(KeyEvent {
+                code: KeyCode::Home,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.cursor_home(),
+            Event::Key(KeyEvent {
+                code: KeyCode::End,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            }) => self.cursor_end(),
+            _ => { /* ignore other events */ }
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
