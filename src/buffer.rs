@@ -8,7 +8,6 @@
 
 use crate::editor::EditorMode;
 use crate::endings::LineEndings;
-use crate::prompt::{SearchPrompt, TextPrompt};
 use crate::syntax::Highlighter;
 use ratatui::{
     layout::{Position, Rect},
@@ -1728,7 +1727,7 @@ impl<'s> SearchTerm<'s> for &'s str {
     }
 }
 
-impl<'s> SearchTerm<'s> for &'s regex_lite::Regex {
+impl SearchTerm<'static> for regex_lite::Regex {
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = (usize, usize, Vec<String>)> {
         self.captures_iter(s).map(|c| {
             // guaranteed to have at least one capture
@@ -2291,11 +2290,13 @@ impl StatefulWidget for BufferWidget<'_> {
     type State = BufferContext;
 
     fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer, state: &mut BufferContext) {
+        use crate::editor::SearchType;
         use crate::help::{
             BROWSE_MATCHES, CONFIRM_CLOSE, FIND, FIND_REGEX, PASTE_GROUP, REPLACE_MATCHES,
             REPLACE_MATCHES_REGEX, SELECT_INSIDE, SELECT_LINE, SPLIT_PANE, VERIFY_RELOAD,
             VERIFY_SAVE, render_help,
         };
+        use crate::prompt::TextField;
         use crate::syntax::{HighlightState, Highlighter, MultiComment};
         use ratatui::{
             layout::{
@@ -2723,30 +2724,27 @@ impl StatefulWidget for BufferWidget<'_> {
             syntax: &S,
             text_area: Rect,
             buf: &mut ratatui::buffer::Buffer,
-            prompt: &SearchPrompt,
+            prompt: &TextField,
             f: impl FnOnce(Block) -> Block,
         ) {
+            // TODO - give TextPrompt its own widget
             let [_, dialog_area, _] =
                 Layout::vertical([Min(0), Length(3), Min(0)]).areas(text_area);
 
             Clear.render(dialog_area, buf);
-            Paragraph::new(if matches!(prompt, SearchPrompt::Plain(_)) {
+            Paragraph::new(
                 Line::from(colorize(
                     syntax,
                     &mut HighlightState::default(),
                     prompt.chars().collect::<String>().into(),
                     true,
                 ))
-            } else {
-                Line::from(prompt.chars().collect::<String>())
-            })
+            )
             .scroll((
                 0,
                 (prompt.cursor_column() as u16).saturating_sub(dialog_area.width.saturating_sub(2)),
             ))
-            .block(f(Block::bordered()
-                .border_type(BorderType::Rounded)
-                .title_top(prompt.to_string())))
+            .block(f(Block::bordered().border_type(BorderType::Rounded)))
             .render(dialog_area, buf);
         }
 
@@ -3078,13 +3076,13 @@ impl StatefulWidget for BufferWidget<'_> {
             Some(EditorMode::SelectLine { .. }) => {
                 render_help(text_area, buf, SELECT_LINE, |b| b);
             }
-            Some(EditorMode::Search { prompt, .. }) => {
+            Some(EditorMode::Search { prompt, type_ }) => {
                 render_help(
                     text_area,
                     buf,
-                    match prompt {
-                        SearchPrompt::Plain(_) => FIND,
-                        SearchPrompt::Regex(_) => FIND_REGEX,
+                    match type_ {
+                        SearchType::Plain => FIND,
+                        SearchType::Regex => FIND_REGEX,
                     },
                     |b| b,
                 );
@@ -3094,9 +3092,10 @@ impl StatefulWidget for BufferWidget<'_> {
                         .take_if(|m| matches!(m, BufferMessage::Error(_)))
                     {
                         Some(BufferMessage::Error(err)) => b
+                            .title_top(type_.to_string())
                             .title_bottom(Line::from(err.to_string()).centered())
                             .border_style(Style::default().fg(Color::Red)),
-                        _ => b,
+                        _ => b.title_top(type_.to_string()),
                     }
                 });
             }

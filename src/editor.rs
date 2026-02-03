@@ -11,7 +11,7 @@ use crate::files::{EitherSource, SshSource};
 use crate::{
     buffer::{AltCursor, BufferContext, BufferId, BufferList, CutBuffer, Source},
     files::{ChooserSource, FileChooserState, LocalSource},
-    prompt::{LinePrompt, SearchPrompt, TextPrompt},
+    prompt::{LinePrompt, TextField},
 };
 use crossterm::event::Event;
 use ratatui::{
@@ -37,7 +37,8 @@ pub enum EditorMode {
         prompt: LinePrompt,
     },
     Search {
-        prompt: SearchPrompt,
+        prompt: TextField,
+        type_: SearchType,
     },
     BrowseMatches {
         matches: Vec<(Range<usize>, Vec<String>)>,
@@ -60,6 +61,22 @@ pub enum EditorMode {
         #[cfg(feature = "ssh")]
         chooser: Box<FileChooserState<EitherSource>>,
     },
+}
+
+#[derive(Copy, Clone, Default)]
+pub enum SearchType {
+    #[default]
+    Plain,
+    Regex,
+}
+
+impl std::fmt::Display for SearchType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Plain => "Find".fmt(f),
+            Self::Regex => "Find Regex".fmt(f),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -268,10 +285,10 @@ impl Editor {
                         self.mode = new_mode;
                     }
                 }
-                EditorMode::Search { prompt } => {
+                EditorMode::Search { prompt, type_ } => {
                     if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
                         && let Some(new_mode) =
-                            process_search(buf, self.cut_buffer.as_ref(), prompt, event)
+                            process_search(buf, self.cut_buffer.as_ref(), prompt, type_, event)
                     {
                         self.mode = match new_mode {
                             NextModeIncremental::Browse { match_idx, matches } => {
@@ -606,7 +623,8 @@ impl Editor {
                         })
                     }
                     _ => Ok(EditorMode::Search {
-                        prompt: SearchPrompt::default(),
+                        prompt: TextField::default(),
+                        type_: SearchType::default(),
                     }),
                 }) {
                     self.mode = find;
@@ -1024,7 +1042,8 @@ enum NextModeIncremental {
 fn process_search(
     buffer: &mut BufferContext,
     cut_buffer: Option<&CutBuffer>,
-    prompt: &mut SearchPrompt,
+    prompt: &mut TextField,
+    type_: &mut SearchType,
     event: Event,
 ) -> Option<NextModeIncremental> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -1058,11 +1077,15 @@ fn process_search(
             None
         }
         key!(Tab) => {
-            prompt.swap();
+            prompt.reset();
+            *type_ = match *type_ {
+                SearchType::Plain => SearchType::Regex,
+                SearchType::Regex => SearchType::Plain,
+            };
             None
         }
-        key!(Enter) => match prompt {
-            SearchPrompt::Plain(prompt) => match buffer.all_matches(prompt.value()?) {
+        key!(Enter) => match type_ {
+            SearchType::Plain => match buffer.all_matches(prompt.value()?) {
                 Ok((match_idx, matches)) => {
                     Some(NextModeIncremental::Browse { match_idx, matches })
                 }
@@ -1070,8 +1093,8 @@ fn process_search(
                     buffer.set_error(not_found(err));
                     None
                 }
-            },
-            SearchPrompt::Regex(prompt) => match prompt.value()? {
+            }
+            SearchType::Regex => match prompt.value()?.parse::<regex_lite::Regex>() {
                 Ok(regex) => match buffer.all_matches(regex) {
                     Ok((match_idx, matches)) => {
                         Some(NextModeIncremental::Browse { match_idx, matches })
@@ -1080,12 +1103,12 @@ fn process_search(
                         buffer.set_error(not_found(err));
                         None
                     }
-                },
+                }
                 Err(err) => {
                     buffer.set_error(err.to_string());
                     None
                 }
-            },
+            }
         },
         key!(CONTROL, 'f') => {
             prompt.reset();
@@ -1456,7 +1479,7 @@ impl Layout {
                     x: text_area.x + text_area.width,
                     y: text_area.y.saturating_sub(1),
                 }),
-                EditorMode::Search { prompt } => {
+                EditorMode::Search { prompt, .. } => {
                     let [_, dialog_area, _] =
                         Layout::vertical([Min(0), Length(3), Min(0)]).areas(text_area);
                     let dialog_area = Block::bordered().inner(dialog_area);
