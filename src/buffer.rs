@@ -1750,15 +1750,10 @@ pub struct MatchCapture {
     end: usize,
 }
 
-impl std::ops::Add<usize> for MatchCapture {
-    type Output = Self;
-
-    fn add(self, rhs: usize) -> Self {
-        Self {
-            start: self.start + rhs,
-            end: self.end + rhs,
-            string: self.string,
-        }
+impl std::ops::AddAssign<usize> for MatchCapture {
+    fn add_assign(&mut self, rhs: usize) {
+        self.start += rhs;
+        self.end += rhs;
     }
 }
 
@@ -1771,15 +1766,16 @@ pub struct SearchMatch {
 impl std::ops::Add<usize> for SearchMatch {
     type Output = Self;
 
-    fn add(self, rhs: usize) -> Self {
+    fn add(mut self, rhs: usize) -> Self {
+        self.groups.iter_mut().for_each(|m| {
+            if let Some(m) = m {
+                *m += rhs;
+            }
+        });
         Self {
             start: self.start + rhs,
             end: self.end + rhs,
-            groups: self
-                .groups
-                .into_iter()
-                .map(|m| m.map(|c| c + rhs))
-                .collect(),
+            groups: self.groups,
         }
     }
 }
