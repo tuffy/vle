@@ -1113,7 +1113,7 @@ fn process_search(
                     buffer.set_error(not_found(err));
                     None
                 }
-            }
+            },
             SearchType::Regex => match prompt.value()?.parse::<regex_lite::Regex>() {
                 Ok(regex) => match buffer.all_matches(regex) {
                     Ok((match_idx, matches)) => {
@@ -1123,12 +1123,12 @@ fn process_search(
                         buffer.set_error(not_found(err));
                         None
                     }
-                }
+                },
                 Err(err) => {
                     buffer.set_error(err.to_string());
                     None
                 }
-            }
+            },
         },
         key!(CONTROL, 'f') => {
             prompt.reset();

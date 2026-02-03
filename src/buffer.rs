@@ -2720,26 +2720,36 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
+        enum FindSyntax<'s, S> {
+            Plain(&'s S),
+            Regex,
+        }
+
         fn render_find_prompt<S: Highlighter>(
-            syntax: &S,
+            syntax: FindSyntax<'_, S>,
             text_area: Rect,
             buf: &mut ratatui::buffer::Buffer,
             prompt: &TextField,
             f: impl FnOnce(Block) -> Block,
         ) {
-            // TODO - give TextPrompt its own widget
             let [_, dialog_area, _] =
                 Layout::vertical([Min(0), Length(3), Min(0)]).areas(text_area);
 
             Clear.render(dialog_area, buf);
-            Paragraph::new(
-                Line::from(colorize(
+            Paragraph::new(Line::from(match syntax {
+                FindSyntax::Plain(syntax) => colorize(
                     syntax,
                     &mut HighlightState::default(),
                     prompt.chars().collect::<String>().into(),
                     true,
-                ))
-            )
+                ),
+                FindSyntax::Regex => colorize(
+                    &crate::syntax::Regex,
+                    &mut HighlightState::default(),
+                    prompt.chars().collect::<String>().into(),
+                    true,
+                ),
+            }))
             .scroll((
                 0,
                 (prompt.cursor_column() as u16).saturating_sub(dialog_area.width.saturating_sub(2)),
@@ -3086,8 +3096,15 @@ impl StatefulWidget for BufferWidget<'_> {
                     },
                     |b| b,
                 );
-                render_find_prompt(syntax, text_area, buf, prompt, |b| {
-                    match state
+                render_find_prompt(
+                    match type_ {
+                        SearchType::Plain => FindSyntax::Plain(syntax),
+                        SearchType::Regex => FindSyntax::Regex,
+                    },
+                    text_area,
+                    buf,
+                    prompt,
+                    |b| match state
                         .message
                         .take_if(|m| matches!(m, BufferMessage::Error(_)))
                     {
@@ -3096,8 +3113,8 @@ impl StatefulWidget for BufferWidget<'_> {
                             .title_bottom(Line::from(err.to_string()).centered())
                             .border_style(Style::default().fg(Color::Red)),
                         _ => b.title_top(type_.to_string()),
-                    }
-                });
+                    },
+                );
             }
             Some(EditorMode::BrowseMatches { matches, match_idx }) => {
                 render_help(text_area, buf, BROWSE_MATCHES, |block| {

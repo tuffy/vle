@@ -26,6 +26,7 @@ mod patch;
 mod perl;
 mod php;
 mod python;
+mod regex;
 mod rust;
 mod sh;
 mod sql;
@@ -110,6 +111,7 @@ impl std::fmt::Display for DefaultHighlighter {
     }
 }
 
+pub use regex::Regex;
 pub use tutorial::Tutorial;
 
 pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
