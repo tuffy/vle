@@ -812,6 +812,14 @@ impl BufferContext {
                     alt,
                     ['{', '}'],
                 ),
+                '<' => perform_surround(
+                    &mut rope,
+                    &mut self.cursor,
+                    &mut self.cursor_column,
+                    selection,
+                    alt,
+                    ['<', '>'],
+                ),
                 '\"' => perform_surround(
                     &mut rope,
                     &mut self.cursor,
