@@ -9,7 +9,10 @@
 #[cfg(feature = "ssh")]
 use crate::files::{EitherSource, SshSource};
 use crate::{
-    buffer::{AltCursor, BufferContext, BufferId, BufferList, CutBuffer, MatchCapture, Source},
+    buffer::{
+        AltCursor, BufferContext, BufferId, BufferList, CutBuffer, MatchCapture, MultiCursor,
+        Source,
+    },
     files::{ChooserSource, FileChooserState, LocalSource},
     prompt::{LinePrompt, TextField},
 };
@@ -45,12 +48,12 @@ pub enum EditorMode {
         match_idx: usize,
     },
     ReplaceMatches {
-        matches: Vec<Range<usize>>,
+        matches: Vec<MultiCursor>,
         match_idx: usize,
         groups: CaptureGroups,
     },
     PasteGroup {
-        matches: Vec<Range<usize>>,
+        matches: Vec<MultiCursor>,
         match_idx: usize,
         total: usize,
         groups: Vec<Vec<Option<MatchCapture>>>,
@@ -318,7 +321,7 @@ impl Editor {
 
                                 let (matches, groups): (_, Vec<Vec<_>>) = std::mem::take(matches)
                                     .into_iter()
-                                    .map(|(r, c)| (r.start..r.start, c))
+                                    .map(|(r, c)| (r.start.into(), c))
                                     .unzip();
 
                                 EditorMode::ReplaceMatches {
@@ -1123,7 +1126,7 @@ fn process_browse_matches<P>(
 
     match event {
         Event::Key(KeyEvent {
-            code: KeyCode::Left | KeyCode::Up,
+            code: KeyCode::Up,
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
@@ -1139,7 +1142,7 @@ fn process_browse_matches<P>(
             None
         }
         Event::Key(KeyEvent {
-            code: KeyCode::Down | KeyCode::Right,
+            code: KeyCode::Down,
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
@@ -1182,7 +1185,7 @@ fn process_browse_matches<P>(
 
 fn process_replace_matches(
     buffer: &mut BufferContext,
-    matches: &mut [Range<usize>],
+    matches: &mut [MultiCursor],
     match_idx: &mut usize,
     event: Event,
     alt: Option<AltCursor<'_>>,
@@ -1211,7 +1214,7 @@ fn process_replace_matches(
         }
         key!(Enter) => Some(EditorMode::default()),
         Event::Key(KeyEvent {
-            code: KeyCode::Left | KeyCode::Up,
+            code: KeyCode::Up,
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
@@ -1222,12 +1225,12 @@ fn process_replace_matches(
         }) => {
             *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
             if let Some(r) = matches.get(*match_idx) {
-                buffer.set_cursor(r.end);
+                buffer.set_cursor(r.cursor());
             }
             None
         }
         Event::Key(KeyEvent {
-            code: KeyCode::Down | KeyCode::Right,
+            code: KeyCode::Down,
             modifiers: KeyModifiers::NONE,
             kind: KeyEventKind::Press,
             ..
@@ -1238,7 +1241,7 @@ fn process_replace_matches(
         }) => {
             *match_idx = (*match_idx + 1) % matches.len();
             if let Some(r) = matches.get(*match_idx) {
-                buffer.set_cursor(r.end);
+                buffer.set_cursor(r.cursor());
             }
             None
         }

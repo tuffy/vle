@@ -299,23 +299,23 @@ pub static FIND_REGEX: &[Keybinding] = &[
 ];
 
 pub static BROWSE_MATCHES: &[Keybinding] = &[
-    none(&[UP, LEFT], "Previous Match"),
-    none(&[DOWN, RIGHT], "Next Match"),
+    none(&[UP], "Previous Match"),
+    none(&[DOWN], "Next Match"),
     none(&["Del"], "Remove Match"),
     ctrl_f(&["R"], "F6", "Replace Matches"),
     none(&["Enter"], "Finish"),
 ];
 
 pub static REPLACE_MATCHES: &[Keybinding] = &[
-    none(&[UP, LEFT], "Select Previous Match"),
-    none(&[DOWN, RIGHT], "Select Next Match"),
+    none(&[UP], "Select Previous Match"),
+    none(&[DOWN], "Select Next Match"),
     ctrl(&["V"], "Paste From Cut Buffer"),
     none(&["Enter"], "Finish Replacement"),
 ];
 
 pub static REPLACE_MATCHES_REGEX: &[Keybinding] = &[
-    none(&[UP, LEFT], "Select Previous Match"),
-    none(&[DOWN, RIGHT], "Select Next Match"),
+    none(&[UP], "Select Previous Match"),
+    none(&[DOWN], "Select Next Match"),
     ctrl(&["V"], "Paste From Group or Cut Buffer"),
     none(&["Enter"], "Finish Replacement"),
 ];

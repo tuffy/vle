@@ -1527,7 +1527,7 @@ impl BufferContext {
     pub fn multi_insert_char(
         &mut self,
         alt: Option<AltCursor<'_>>,
-        mut matches: &mut [Range<usize>],
+        mut matches: &mut [MultiCursor],
         c: char,
     ) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
@@ -1537,33 +1537,14 @@ impl BufferContext {
         loop {
             match matches {
                 [] => break,
-                [r] => {
-                    rope.insert_char(r.end, c);
-                    if r.end <= self.cursor {
-                        self.cursor += 1;
-                    }
-                    alt.update(|a| {
-                        if r.end <= *a {
-                            *a += 1;
-                        }
-                    });
-                    r.end += 1;
+                [m] => {
+                    m.insert_char(&mut rope, &mut self.cursor, &mut alt, c);
                     break;
                 }
-                [r, rest @ ..] => {
-                    rope.insert_char(r.end, c);
-                    if r.end <= self.cursor {
-                        self.cursor += 1;
-                    }
-                    alt.update(|a| {
-                        if r.end <= *a {
-                            *a += 1;
-                        }
-                    });
-                    r.end += 1;
+                [m, rest @ ..] => {
+                    m.insert_char(&mut rope, &mut self.cursor, &mut alt, c);
                     for r in rest.iter_mut() {
-                        r.start += 1;
-                        r.end += 1;
+                        *r += 1;
                     }
                     matches = rest;
                 }
@@ -1574,7 +1555,7 @@ impl BufferContext {
     pub fn multi_insert_string(
         &mut self,
         alt: Option<AltCursor<'_>>,
-        matches: &mut [Range<usize>],
+        matches: &mut [MultiCursor],
         s: &str,
     ) {
         self.multi_insert_strings(alt, matches, std::iter::repeat((s.chars().count(), s)))
@@ -1583,7 +1564,7 @@ impl BufferContext {
     pub fn multi_insert_strings<'s>(
         &mut self,
         alt: Option<AltCursor<'_>>,
-        mut matches: &mut [Range<usize>],
+        mut matches: &mut [MultiCursor],
         mut strings: impl Iterator<Item = (usize, &'s str)>,
     ) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
@@ -1593,39 +1574,20 @@ impl BufferContext {
         loop {
             match matches {
                 [] => break,
-                [r] => {
-                    let Some((chars_len, s)) = strings.next() else {
+                [m] => {
+                    let Some((s_len, s)) = strings.next() else {
                         return;
                     };
-                    rope.insert(r.end, s);
-                    if r.end <= self.cursor {
-                        self.cursor += chars_len;
-                    }
-                    alt.update(|a| {
-                        if r.end <= *a {
-                            *a += chars_len;
-                        }
-                    });
-                    r.end += chars_len;
+                    m.insert_str(&mut rope, &mut self.cursor, &mut alt, s, s_len);
                     break;
                 }
-                [r, rest @ ..] => {
-                    let Some((chars_len, s)) = strings.next() else {
+                [m, rest @ ..] => {
+                    let Some((s_len, s)) = strings.next() else {
                         return;
                     };
-                    rope.insert(r.end, s);
-                    if r.end <= self.cursor {
-                        self.cursor += chars_len;
-                    }
-                    alt.update(|a| {
-                        if r.end <= *a {
-                            *a += chars_len;
-                        }
-                    });
-                    r.end += chars_len;
+                    m.insert_str(&mut rope, &mut self.cursor, &mut alt, s, s_len);
                     for r in rest.iter_mut() {
-                        r.start += chars_len;
-                        r.end += chars_len;
+                        *r += s_len;
                     }
                     matches = rest;
                 }
@@ -1633,11 +1595,7 @@ impl BufferContext {
         }
     }
 
-    pub fn multi_backspace(
-        &mut self,
-        alt: Option<AltCursor<'_>>,
-        mut matches: &mut [Range<usize>],
-    ) {
+    pub fn multi_backspace(&mut self, alt: Option<AltCursor<'_>>, mut matches: &mut [MultiCursor]) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let mut rope = buf.rope.get_mut();
         let mut alt = Secondary::new(alt, |_| true);
@@ -1645,41 +1603,18 @@ impl BufferContext {
         loop {
             match matches {
                 [] => break,
-                [r] => {
-                    if r.end > r.start {
-                        let _ = rope.try_remove((r.end - 1)..r.end);
-                        if r.start <= self.cursor {
-                            self.cursor = self.cursor.saturating_sub(1);
-                        }
-                        alt.update(|a| {
-                            if r.start <= *a {
-                                *a = a.saturating_sub(1);
-                            }
-                        });
-                        r.end -= 1;
-                    }
+                [m] => {
+                    // don't worry if backspace unsuccessful
+                    let _ = m.backspace(&mut rope, &mut self.cursor, &mut alt);
                     break;
                 }
-                [r, rest @ ..] => {
-                    if r.end > r.start {
-                        let _ = rope.try_remove((r.end - 1)..r.end);
-                        if r.start <= self.cursor {
-                            self.cursor = self.cursor.saturating_sub(1);
-                        }
-                        alt.update(|a| {
-                            if r.start <= *a {
-                                *a = a.saturating_sub(1);
-                            }
-                        });
-                        r.end -= 1;
+                [m, rest @ ..] => {
+                    if let Ok(()) = m.backspace(&mut rope, &mut self.cursor, &mut alt) {
                         for r in rest.iter_mut() {
-                            r.start -= 1;
-                            r.end -= 1;
+                            *r -= 1;
                         }
-                        matches = rest;
-                    } else {
-                        break;
                     }
+                    matches = rest;
                 }
             }
         }
@@ -1736,6 +1671,114 @@ impl std::ops::SubAssign<usize> for Secondary<'_> {
         self.update(|c| {
             *c -= rhs;
         })
+    }
+}
+
+pub struct MultiCursor {
+    /// cursor's range within rope, in characters
+    range: Range<usize>,
+    /// cursor's position in rope, in characters
+    cursor: usize,
+}
+
+impl MultiCursor {
+    pub fn cursor(&self) -> usize {
+        self.cursor
+    }
+
+    fn insert_char(
+        &mut self,
+        rope: &mut ropey::Rope,
+        cursor: &mut usize,
+        secondary: &mut Secondary,
+        c: char,
+    ) {
+        if self.cursor <= *cursor {
+            *cursor += 1;
+        }
+        secondary.update(|a| {
+            if self.cursor <= *a {
+                *a += 1;
+            }
+        });
+        rope.insert_char(self.cursor, c);
+        self.cursor += 1;
+        self.range.end = self.range.end.max(self.cursor);
+    }
+
+    fn insert_str(
+        &mut self,
+        rope: &mut ropey::Rope,
+        cursor: &mut usize,
+        secondary: &mut Secondary,
+        s: &str,
+        s_len: usize,
+    ) {
+        if self.cursor <= *cursor {
+            *cursor += s_len;
+        }
+        secondary.update(|a| {
+            if self.cursor <= *a {
+                *a += s_len;
+            }
+        });
+        rope.insert(self.cursor, s);
+        self.cursor += s_len;
+        self.range.end = self.range.end.max(self.cursor);
+    }
+
+    /// Returns Ok if backspace performed successfully
+    fn backspace(
+        &mut self,
+        rope: &mut ropey::Rope,
+        cursor: &mut usize,
+        secondary: &mut Secondary,
+    ) -> Result<(), ()> {
+        if self.cursor > self.range.start {
+            if self.cursor <= *cursor {
+                *cursor = cursor.saturating_sub(1);
+            }
+            secondary.update(|a| {
+                if self.cursor <= *a {
+                    *a = a.saturating_sub(1);
+                }
+            });
+            let _ = rope.try_remove((self.cursor - 1)..self.cursor);
+            self.cursor -= 1;
+            self.range.end -= 1;
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
+    // TODO - cursor_forward()
+    // TODO - cursor_back()
+    // TODO - delete()
+}
+
+impl From<usize> for MultiCursor {
+    fn from(cursor: usize) -> Self {
+        Self {
+            range: cursor..cursor,
+            cursor,
+        }
+    }
+}
+
+impl std::ops::AddAssign<usize> for MultiCursor {
+    fn add_assign(&mut self, chars: usize) {
+        self.range.start += chars;
+        self.range.end += chars;
+        self.cursor += chars;
+    }
+}
+
+impl std::ops::SubAssign<usize> for MultiCursor {
+    fn sub_assign(&mut self, chars: usize) {
+        self.range.start -= chars;
+        self.range.end -= chars;
+        self.cursor -= chars;
     }
 }
 
