@@ -522,7 +522,7 @@ pub struct BufferContext {
     buffer: private::BufferCell,    // the buffer we're wrapping
     viewport_height: usize,         // viewport's current height in lines
     cursor: usize,                  // cursor's absolute position in rope, in characters
-    cursor_column: usize,           // cursor's desired column, in characters
+    cursor_column: usize,           // cursor's desired column, as a display column
     selection: Option<usize>,       // cursor's text selection anchor
     message: Option<BufferMessage>, // some user-facing message
 }
@@ -618,6 +618,10 @@ impl BufferContext {
         ))
     }
 
+    /// This is the inverse of cursor_position
+    ///
+    /// Given some mouse-selected position, attempt to place focus
+    /// in the document where the cursor should be.
     fn set_cursor_focus(&mut self, area: Rect, position: Position) {
         use ratatui::{
             layout::{
@@ -737,6 +741,10 @@ impl BufferContext {
             && let Some((home, _)) = line_char_range(&buf.rope, current_line)
         {
             use unicode_width::UnicodeWidthChar;
+
+            // Copies Nano's "smart home" behavior by
+            // moving cursor to start of text or start of line,
+            // depending on where we find it.
 
             let indent_char = if buf.tabs_required { '\t' } else { ' ' };
 
