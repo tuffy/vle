@@ -3185,6 +3185,39 @@ impl StatefulWidget for BufferWidget<'_> {
                     }
                 }
             }
+            Some(EditorMode::ReplaceMatches { matches, .. }) => {
+                use ratatui::style::Modifier;
+
+                let mut cursors = matches
+                    .iter()
+                    .filter(|m| m.cursor() != state.cursor)
+                    .map(|m| {
+                        (
+                            m.cursor()..m.cursor() + 1,
+                            Style::new().add_modifier(Modifier::UNDERLINED),
+                        )
+                    })
+                    .collect();
+
+                EditorLine::iter(rope, viewport_line)
+                    .map(
+                        |EditorLine {
+                             line,
+                             range,
+                             number,
+                         }| {
+                            highlight_matches(
+                                colorize(syntax, &mut hlstate, line, current_line == Some(number)),
+                                range,
+                                &mut cursors,
+                            )
+                            .into()
+                        },
+                    )
+                    .map(|line| widen_tabs(line, &state.tab_substitution))
+                    .take(area.height.into())
+                    .collect::<Vec<_>>()
+            }
             _ => {
                 match state.selection {
                     // no selection, so nothing to highlight
