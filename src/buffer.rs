@@ -3210,15 +3210,15 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
             Some(EditorMode::ReplaceMatches { matches, .. }) => {
-                use ratatui::style::Modifier;
-
                 let mut cursors = matches
                     .iter()
                     .filter(|m| m.cursor() != state.cursor)
                     .map(|m| {
                         (
                             m.cursor()..m.cursor() + 1,
-                            Style::new().add_modifier(Modifier::UNDERLINED),
+                            Style::new()
+                                .fg(Color::Blue)
+                                .add_modifier(Modifier::REVERSED),
                         )
                     })
                     .collect();
@@ -3231,8 +3231,20 @@ impl StatefulWidget for BufferWidget<'_> {
                              number,
                          }| {
                             highlight_matches(
-                                colorize(syntax, &mut hlstate, line, current_line == Some(number)),
-                                range,
+                                {
+                                    let mut colorized = colorize(
+                                        syntax,
+                                        &mut hlstate,
+                                        line,
+                                        current_line == Some(number),
+                                    );
+                                    colorized.push(Span::raw(" "));
+                                    colorized
+                                },
+                                {
+                                    let (s, e) = range.into_inner();
+                                    s..=e + 1
+                                },
                                 &mut cursors,
                             )
                             .into()
