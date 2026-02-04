@@ -333,37 +333,45 @@ impl<S: ChooserSource> FileChooserState<S> {
     }
 
     pub fn arrow_up(&mut self) {
-        self.index = match self.index {
-            None => max_index(&self.chosen, &self.contents, self.dir_count).checked_sub(1),
-            Some(i) => i
-                .checked_sub(1)
-                .or_else(|| max_index(&self.chosen, &self.contents, self.dir_count).checked_sub(1)),
+        if matches!(self.chosen, Chosen::Default | Chosen::Selected(_)) {
+            self.index = match self.index {
+                None => max_index(&self.chosen, &self.contents, self.dir_count).checked_sub(1),
+                Some(i) => i
+                    .checked_sub(1)
+                    .or_else(|| max_index(&self.chosen, &self.contents, self.dir_count).checked_sub(1)),
+            }
         }
     }
 
     pub fn arrow_down(&mut self) {
-        self.index = (match self.index {
-            None => Some(0),
-            Some(i) => Some(i + 1),
-        })
-        .and_then(|i| i.checked_rem(max_index(&self.chosen, &self.contents, self.dir_count)));
+        if matches!(self.chosen, Chosen::Default | Chosen::Selected(_)) {
+            self.index = (match self.index {
+                None => Some(0),
+                Some(i) => Some(i + 1),
+            })
+            .and_then(|i| i.checked_rem(max_index(&self.chosen, &self.contents, self.dir_count)));
+        }
     }
 
     pub fn page_up(&mut self) {
-        self.index = (match self.index {
-            None => Some(0),
-            Some(idx) => Some(idx.saturating_sub(PAGE_SIZE)),
-        })
-        .filter(|i| *i < max_index(&self.chosen, &self.contents, self.dir_count))
+        if matches!(self.chosen, Chosen::Default | Chosen::Selected(_)) {
+            self.index = (match self.index {
+                None => Some(0),
+                Some(idx) => Some(idx.saturating_sub(PAGE_SIZE)),
+            })
+            .filter(|i| *i < max_index(&self.chosen, &self.contents, self.dir_count))
+        }
     }
 
     pub fn page_down(&mut self) {
-        self.index = match max_index(&self.chosen, &self.contents, self.dir_count) {
-            0 => None,
-            max => match self.index {
-                None => Some(PAGE_SIZE.min(max - 1)),
-                Some(idx) => Some((idx + PAGE_SIZE).min(max - 1)),
-            },
+        if matches!(self.chosen, Chosen::Default | Chosen::Selected(_)) {
+            self.index = match max_index(&self.chosen, &self.contents, self.dir_count) {
+                0 => None,
+                max => match self.index {
+                    None => Some(PAGE_SIZE.min(max - 1)),
+                    Some(idx) => Some((idx + PAGE_SIZE).min(max - 1)),
+                },
+            }
         }
     }
 
