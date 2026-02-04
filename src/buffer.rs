@@ -1620,6 +1620,39 @@ impl BufferContext {
         }
     }
 
+    pub fn multi_delete(&mut self, alt: Option<AltCursor<'_>>, mut matches: &mut [MultiCursor]) {
+        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+        let mut rope = buf.rope.get_mut();
+        let mut alt = Secondary::new(alt, |_| true);
+
+        loop {
+            match matches {
+                [] => break,
+                [m] => {
+                    // don't worry if delete unsuccessful
+                    let _ = m.delete(&mut rope, &mut self.cursor, &mut alt);
+                    break;
+                }
+                [m, rest @ ..] => {
+                    if let Ok(()) = m.delete(&mut rope, &mut self.cursor, &mut alt) {
+                        for r in rest.iter_mut() {
+                            *r -= 1;
+                        }
+                    }
+                    matches = rest;
+                }
+            }
+        }
+    }
+
+    pub fn multi_cursor_back(&mut self, matches: &mut [MultiCursor]) {
+        matches.iter_mut().for_each(|m| m.cursor_back(&mut self.cursor));
+    }
+
+    pub fn multi_cursor_forward(&mut self, matches: &mut [MultiCursor]) {
+        matches.iter_mut().for_each(|m| m.cursor_forward(&mut self.cursor));
+    }
+
     pub fn set_error<S: Into<Cow<'static, str>>>(&mut self, err: S) {
         self.message = Some(BufferMessage::Error(err.into()))
     }
@@ -1703,7 +1736,7 @@ impl MultiCursor {
         });
         rope.insert_char(self.cursor, c);
         self.cursor += 1;
-        self.range.end = self.range.end.max(self.cursor);
+        self.range.end += 1;
     }
 
     fn insert_str(
@@ -1724,7 +1757,7 @@ impl MultiCursor {
         });
         rope.insert(self.cursor, s);
         self.cursor += s_len;
-        self.range.end = self.range.end.max(self.cursor);
+        self.range.end += s_len;
     }
 
     /// Returns Ok if backspace performed successfully
@@ -1752,9 +1785,47 @@ impl MultiCursor {
         }
     }
 
-    // TODO - cursor_forward()
-    // TODO - cursor_back()
-    // TODO - delete()
+    /// Returns Ok if delete performed successfully
+    fn delete(
+        &mut self,
+        rope: &mut ropey::Rope,
+        cursor: &mut usize,
+        secondary: &mut Secondary,
+    ) -> Result<(), ()> {
+        if self.cursor < self.range.end {
+            if self.cursor < *cursor {
+                *cursor = cursor.saturating_sub(1);
+            }
+            secondary.update(|a| {
+                if self.cursor < *a {
+                    *a = a.saturating_sub(1);
+                }
+            });
+            let _ = rope.try_remove(self.cursor..self.cursor + 1);
+            self.range.end -= 1;
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
+    fn cursor_back(&mut self, cursor: &mut usize) {
+        if self.cursor > self.range.start {
+            if self.cursor == *cursor {
+                *cursor = cursor.saturating_sub(1);
+            }
+            self.cursor -= 1;
+        }
+    }
+
+    fn cursor_forward(&mut self, cursor: &mut usize) {
+        if self.cursor < self.range.end {
+            if self.cursor == *cursor {
+                *cursor += 1;
+            }
+            self.cursor += 1;
+        }
+    }
 }
 
 impl From<usize> for MultiCursor {

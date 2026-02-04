@@ -1212,7 +1212,19 @@ fn process_replace_matches(
             buffer.multi_backspace(alt, matches);
             None
         }
+        key!(Delete) => {
+            buffer.multi_delete(alt, matches);
+            None
+        }
         key!(Enter) => Some(EditorMode::default()),
+        key!(Left) => {
+            buffer.multi_cursor_back(matches);
+            None
+        },
+        key!(Right) => {
+            buffer.multi_cursor_forward(matches);
+            None
+        },
         Event::Key(KeyEvent {
             code: KeyCode::Up,
             modifiers: KeyModifiers::NONE,
