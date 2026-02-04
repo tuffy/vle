@@ -31,6 +31,7 @@ pub static SPACES_PER_TAB: LazyLock<usize> = LazyLock::new(|| {
 
 static ALWAYS_TAB: LazyLock<bool> = LazyLock::new(|| std::env::var("VLE_ALWAYS_TAB").is_ok());
 
+/// A buffer's source file
 pub enum Source {
     Local(PathBuf),
     #[cfg(feature = "ssh")]
@@ -267,6 +268,7 @@ mod private {
             self.modified = false;
         }
 
+        /// Mutable handle to data rope
         pub fn get_mut(&mut self) -> RopeHandle<'_> {
             RopeHandle {
                 rope: &mut self.rope,
@@ -276,6 +278,7 @@ mod private {
         }
     }
 
+    /// If we're not modifying the rope, its modified state can't be changed
     impl std::ops::Deref for Rope {
         type Target = ropey::Rope;
 
@@ -284,6 +287,7 @@ mod private {
         }
     }
 
+    /// A handle to guarantee the "modified buffer" flag is calculated correctly
     pub struct RopeHandle<'r> {
         rope: &'r mut ropey::Rope,
         saved: &'r mut ropey::Rope,
@@ -312,6 +316,7 @@ mod private {
         }
     }
 
+    /// For managing the undo/redo stack properly
     #[derive(Clone)]
     pub struct BufferCell(Rc<RefCell<Buffer>>);
 
@@ -328,6 +333,7 @@ mod private {
             self.0.borrow()
         }
 
+        /// If we're updating the buffer, log its old state on the undo stack
         pub fn borrow_update(&self, cursor: usize, cursor_column: usize) -> RefMut<'_, Buffer> {
             use crate::buffer::{BufferState, Undo};
 
@@ -347,6 +353,7 @@ mod private {
             buf
         }
 
+        /// If we're performing a move, lock down an undo point once finished
         pub fn borrow_move(&self) -> MoveHandle<'_> {
             MoveHandle(self.0.borrow_mut())
         }
@@ -384,6 +391,8 @@ mod private {
 }
 
 /// A buffer corresponding to a file on disk (either local or remote)
+///
+/// May be shared between panes
 pub struct Buffer {
     source: Source,               // the source file
     endings: LineEndings,         // the source file's line endings
@@ -392,28 +401,35 @@ pub struct Buffer {
     undo: Vec<Undo>,              // the undo stack
     redo: Vec<BufferState>,       // the redo stack
     syntax: Box<dyn Highlighter>, // the syntax highlighting to use
+    tabs_required: bool,          // whether the format demands actual tabs
+    tab_substitution: String,     // spaces to substitute for tabs
 }
 
 impl Buffer {
-    // Used to find if Source has already been opened
+    /// Used to find if Source has already been opened
     fn source(&self) -> &Source {
         &self.source
     }
 
+    /// Opens file from source, either local or remote
     fn open(source: Source) -> std::io::Result<Self> {
         let (saved, rope, endings) = source.read_data()?;
+        let syntax = crate::syntax::syntax(&source);
 
         Ok(Self {
             rope: rope.into(),
             endings,
             saved,
-            syntax: crate::syntax::syntax(&source),
+            tabs_required: *ALWAYS_TAB || syntax.tabs_required(),
+            tab_substitution: std::iter::repeat_n(' ', *SPACES_PER_TAB).collect(),
+            syntax,
             source,
             undo: vec![],
             redo: vec![],
         })
     }
 
+    /// Builds fresh tutorial buffer
     fn tutorial() -> Self {
         Self {
             rope: ropey::Rope::from(include_str!("tutorial.txt").replacen(
@@ -425,12 +441,15 @@ impl Buffer {
             endings: LineEndings::default(),
             saved: None,
             syntax: Box::new(crate::syntax::Tutorial),
+            tab_substitution: std::iter::repeat_n(' ', *SPACES_PER_TAB).collect(),
+            tabs_required: *ALWAYS_TAB || crate::syntax::Tutorial.tabs_required(),
             source: Source::Tutorial,
             undo: vec![],
             redo: vec![],
         }
     }
 
+    /// Attempts to reload buffer from disk
     fn reload(&mut self) -> std::io::Result<()> {
         let (saved, reloaded) = self.source.read_string(self.endings)?;
         patch_rope(&mut self.rope.get_mut(), reloaded);
@@ -442,6 +461,7 @@ impl Buffer {
         Ok(())
     }
 
+    /// Attempts to save buffer to disk
     fn save(&mut self) -> std::io::Result<()> {
         self.saved = {
             // if the file is non-empty and doesn't end
@@ -464,10 +484,12 @@ impl Buffer {
         Ok(())
     }
 
+    /// Total lines in buffer
     fn total_lines(&self) -> usize {
         self.rope.len_lines()
     }
 
+    /// Whether the buffer has been modified
     pub fn modified(&self) -> bool {
         self.rope.modified()
     }
@@ -497,9 +519,7 @@ impl PartialEq for BufferId {
 /// A buffer with additional context on a per-view basis
 #[derive(Clone)]
 pub struct BufferContext {
-    buffer: private::BufferCell,
-    tabs_required: bool,            // whether the format demands actual tabs
-    tab_substitution: String,       // spaces to substitute for tabs
+    buffer: private::BufferCell,    // the buffer we're wrapping
     viewport_height: usize,         // viewport's current height in lines
     cursor: usize,                  // cursor's absolute position in rope, in characters
     cursor_column: usize,           // cursor's desired column, in characters
@@ -718,7 +738,7 @@ impl BufferContext {
         {
             use unicode_width::UnicodeWidthChar;
 
-            let indent_char = if self.tabs_required { '\t' } else { ' ' };
+            let indent_char = if buf.tabs_required { '\t' } else { ' ' };
 
             update_selection(&mut self.selection, self.cursor, selecting);
 
@@ -918,7 +938,7 @@ impl BufferContext {
 
     pub fn newline(&mut self, alt: Option<AltCursor<'_>>) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
-        let indent_char = if self.tabs_required { '\t' } else { ' ' };
+        let indent_char = if buf.tabs_required { '\t' } else { ' ' };
         let mut rope = buf.rope.get_mut();
 
         let mut alt = match self.selection.take() {
@@ -1167,11 +1187,11 @@ impl BufferContext {
     }
 
     pub fn indent(&mut self, alt: Option<AltCursor<'_>>) {
-        let indent = match self.tabs_required {
-            false => self.tab_substitution.as_str(),
-            true => "\t",
-        };
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+        let indent = match buf.tabs_required {
+            false => buf.tab_substitution.clone(),
+            true => "\t".to_string(),
+        };
 
         match self.selection {
             None => {
@@ -1181,7 +1201,7 @@ impl BufferContext {
                     .try_char_to_line(self.cursor)
                     .and_then(|line| rope.try_line_to_char(line))
                 {
-                    rope.insert(line_start, indent);
+                    rope.insert(line_start, &indent);
                     self.cursor += indent.len();
                     alt += indent.len();
                 }
@@ -1195,7 +1215,7 @@ impl BufferContext {
                     .collect::<Vec<_>>();
 
                 for SelectedLine { start, .. } in indent_lines.iter().rev() {
-                    rope.insert(*start, indent);
+                    rope.insert(*start, &indent);
                 }
 
                 self.selection = indent_lines.first().map(|l| l.start);
@@ -1216,11 +1236,11 @@ impl BufferContext {
     }
 
     pub fn un_indent(&mut self, alt: Option<AltCursor<'_>>) {
-        let indent = match self.tabs_required {
-            false => self.tab_substitution.as_str(),
-            true => "\t",
-        };
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+        let indent = match buf.tabs_required {
+            false => buf.tab_substitution.clone(),
+            true => "\t".to_string(),
+        };
 
         match self.selection {
             None => {
@@ -2301,11 +2321,7 @@ fn delete_surround<'s>(
 
 impl From<Buffer> for BufferContext {
     fn from(buffer: Buffer) -> Self {
-        use crate::syntax::Highlighter;
-
         Self {
-            tab_substitution: std::iter::repeat_n(' ', *SPACES_PER_TAB).collect(),
-            tabs_required: *ALWAYS_TAB || buffer.syntax.tabs_required(),
             buffer: buffer.into(),
             viewport_height: 0,
             cursor: 0,
@@ -3148,7 +3164,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                 .into()
                             },
                         )
-                        .map(|line| widen_tabs(line, &state.tab_substitution))
+                        .map(|line| widen_tabs(line, &buffer.tab_substitution))
                         .take(area.height.into())
                         .collect::<Vec<_>>(),
                     // highlight both matches *and* selection
@@ -3179,7 +3195,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                     .into()
                                 },
                             )
-                            .map(|line| widen_tabs(line, &state.tab_substitution))
+                            .map(|line| widen_tabs(line, &buffer.tab_substitution))
                             .take(area.height.into())
                             .collect::<Vec<_>>()
                     }
@@ -3214,7 +3230,7 @@ impl StatefulWidget for BufferWidget<'_> {
                             .into()
                         },
                     )
-                    .map(|line| widen_tabs(line, &state.tab_substitution))
+                    .map(|line| widen_tabs(line, &buffer.tab_substitution))
                     .take(area.height.into())
                     .collect::<Vec<_>>()
             }
@@ -3241,7 +3257,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                 .into()
                             },
                         )
-                        .map(|line| widen_tabs(line, &state.tab_substitution))
+                        .map(|line| widen_tabs(line, &buffer.tab_substitution))
                         .take(area.height.into())
                         .collect::<Vec<_>>(),
                     // highlight whole line, no line, or part of the line
@@ -3272,7 +3288,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                     .into()
                                 },
                             )
-                            .map(|line| widen_tabs(line, &state.tab_substitution))
+                            .map(|line| widen_tabs(line, &buffer.tab_substitution))
                             .take(area.height.into())
                             .collect::<Vec<_>>()
                     }

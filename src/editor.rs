@@ -27,37 +27,45 @@ const PAGE_SIZE: usize = 25;
 
 #[derive(Default)]
 pub enum EditorMode {
+    /// Regular editing mode
     #[default]
     Editing,
+    /// Verifying a file overwrite
     VerifySave,
+    /// Verifying a reload over a dirty buffer
     VerifyReload,
+    /// Querying which direction to split the pane
     SplitPane,
-    ConfirmClose {
-        buffer: BufferId,
-    },
+    /// Verifying whether to close dirty buffer
+    ConfirmClose { buffer: BufferId },
+    /// Querying for what to select inside of
     SelectInside,
-    SelectLine {
-        prompt: LinePrompt,
-    },
+    /// Querying for which line to select
+    SelectLine { prompt: LinePrompt },
+    /// Querying for what text to search for
     Search {
         prompt: TextField,
         type_: SearchType,
     },
+    /// Browsing search results
     BrowseMatches {
         matches: Vec<(Range<usize>, Vec<Option<MatchCapture>>)>,
         match_idx: usize,
     },
+    /// Replacing search results
     ReplaceMatches {
         matches: Vec<MultiCursor>,
         match_idx: usize,
         groups: CaptureGroups,
     },
+    /// Querying for what regex group to paste
     PasteGroup {
         matches: Vec<MultiCursor>,
         match_idx: usize,
         total: usize,
         groups: Vec<Vec<Option<MatchCapture>>>,
     },
+    /// Opening a new file
     Open {
         #[cfg(not(feature = "ssh"))]
         chooser: Box<FileChooserState<LocalSource>>,
@@ -82,6 +90,7 @@ impl std::fmt::Display for SearchType {
     }
 }
 
+/// The regex groups captured during a find/replace
 #[derive(Default)]
 pub enum CaptureGroups {
     #[default]
@@ -147,12 +156,12 @@ macro_rules! key {
 }
 
 pub struct Editor {
-    layout: Layout,
-    mode: EditorMode,
-    cut_buffer: Option<CutBuffer>,
-    show_help: bool,
+    layout: Layout,                // the editor's pane layout
+    mode: EditorMode,              // what mode the editing is in
+    cut_buffer: Option<CutBuffer>, // contents of cut buffer
+    show_help: bool,               // whether to show keybindinings
     #[cfg(feature = "ssh")]
-    remote: Option<ssh2::Session>,
+    remote: Option<ssh2::Session>, // remote SSH session
 }
 
 impl Editor {
@@ -185,7 +194,7 @@ impl Editor {
         self.layout.has_open_buffers()
     }
 
-    /// Returns size of frame
+    /// Returns size of frame, if successful
     pub fn display(&mut self, term: &mut ratatui::DefaultTerminal) -> std::io::Result<Rect> {
         term.draw(|frame| {
             let area = frame.area();
@@ -256,6 +265,8 @@ impl Editor {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
         match event {
+            // Esc is an escape hatch that always returns to normal mode
+            // regardless of what mode we were in before
             key!(Esc) => {
                 self.mode = EditorMode::default();
             }

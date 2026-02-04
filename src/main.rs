@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! An exercise in minimalist text editing
+//! An Exercise in Minimalist Text Editing
 
 #![forbid(unsafe_code)]
 
