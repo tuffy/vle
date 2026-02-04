@@ -284,6 +284,11 @@ pub static OPEN_FILE: &[Keybinding] = &[
     none(&["Esc"], "Cancel"),
 ];
 
+pub static CREATE_FILE: &[Keybinding] = &[
+    none(&["Enter"], "Create New File"),
+    none(&["Esc"], "Cancel"),
+];
+
 pub static FIND: &[Keybinding] = &[
     ctrl(&["V"], "Paste From Cut Buffer"),
     none(&["Tab"], "Regex Find"),

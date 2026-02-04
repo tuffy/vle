@@ -180,7 +180,7 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
         state: &mut FileChooserState<S>,
     ) {
         use crate::buffer::{BufferMessage, render_message};
-        use crate::help::{OPEN_FILE, render_help};
+        use crate::help::{CREATE_FILE, OPEN_FILE, render_help};
         use ratatui::{
             layout::{
                 Constraint::{Length, Min},
@@ -271,7 +271,15 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
                 .position(state.selected_entry().unwrap_or_default()),
         );
 
-        render_help(list_area, buf, OPEN_FILE, |b| b);
+        render_help(
+            list_area,
+            buf,
+            match &state.chosen {
+                Chosen::Default | Chosen::Selected(_) => OPEN_FILE,
+                Chosen::New(_) => CREATE_FILE,
+            },
+            |b| b,
+        );
 
         if let Some(error) = state.error.take() {
             render_message(list_area, buf, BufferMessage::Error(error.into()));
@@ -336,9 +344,9 @@ impl<S: ChooserSource> FileChooserState<S> {
         if matches!(self.chosen, Chosen::Default | Chosen::Selected(_)) {
             self.index = match self.index {
                 None => max_index(&self.chosen, &self.contents, self.dir_count).checked_sub(1),
-                Some(i) => i
-                    .checked_sub(1)
-                    .or_else(|| max_index(&self.chosen, &self.contents, self.dir_count).checked_sub(1)),
+                Some(i) => i.checked_sub(1).or_else(|| {
+                    max_index(&self.chosen, &self.contents, self.dir_count).checked_sub(1)
+                }),
             }
         }
     }
