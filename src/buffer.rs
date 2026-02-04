@@ -18,9 +18,10 @@ use std::cell::RefCell;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::LazyLock;
 use std::time::SystemTime;
 
-pub static SPACES_PER_TAB: std::sync::LazyLock<usize> = std::sync::LazyLock::new(|| {
+pub static SPACES_PER_TAB: LazyLock<usize> = LazyLock::new(|| {
     std::env::var("VLE_SPACES_PER_TAB")
         .ok()
         .and_then(|s| s.parse().ok())
@@ -28,8 +29,7 @@ pub static SPACES_PER_TAB: std::sync::LazyLock<usize> = std::sync::LazyLock::new
         .unwrap_or(4)
 });
 
-static ALWAYS_TAB: std::sync::LazyLock<bool> =
-    std::sync::LazyLock::new(|| std::env::var("VLE_ALWAYS_TAB").is_ok());
+static ALWAYS_TAB: LazyLock<bool> = LazyLock::new(|| std::env::var("VLE_ALWAYS_TAB").is_ok());
 
 pub enum Source {
     Local(PathBuf),
@@ -1646,11 +1646,15 @@ impl BufferContext {
     }
 
     pub fn multi_cursor_back(&mut self, matches: &mut [MultiCursor]) {
-        matches.iter_mut().for_each(|m| m.cursor_back(&mut self.cursor));
+        matches
+            .iter_mut()
+            .for_each(|m| m.cursor_back(&mut self.cursor));
     }
 
     pub fn multi_cursor_forward(&mut self, matches: &mut [MultiCursor]) {
-        matches.iter_mut().for_each(|m| m.cursor_forward(&mut self.cursor));
+        matches
+            .iter_mut()
+            .for_each(|m| m.cursor_forward(&mut self.cursor));
     }
 
     pub fn set_error<S: Into<Cow<'static, str>>>(&mut self, err: S) {

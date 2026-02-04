@@ -1220,11 +1220,11 @@ fn process_replace_matches(
         key!(Left) => {
             buffer.multi_cursor_back(matches);
             None
-        },
+        }
         key!(Right) => {
             buffer.multi_cursor_forward(matches);
             None
-        },
+        }
         Event::Key(KeyEvent {
             code: KeyCode::Up,
             modifiers: KeyModifiers::NONE,
