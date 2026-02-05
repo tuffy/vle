@@ -228,51 +228,40 @@ macro_rules! highlighter {
             }
         }
     };
-    ($syntax:ty, $token:ty, $comment_start:ident, $comment_end:ident, $comment_color:ident) => {
-        impl $crate::syntax::Highlighter for $syntax {
-            fn highlight<'s>(
-                &self,
-                s: &'s str,
-                state: &'s mut $crate::syntax::HighlightState,
-            ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
-                use $crate::syntax::HighlightState;
-
-                Box::new(<$token>::lexer(s).spanned().filter_map(move |(t, r)| {
-                    match state {
-                        HighlightState::Normal => t
-                            .ok()
-                            .inspect(|t| {
-                                if matches!(t, <$token>::$comment_start) {
-                                    *state = HighlightState::Commenting;
-                                }
-                            })
-                            .and_then(|t| Color::try_from(t).ok())
-                            .map(|c| (c, r)),
-                        HighlightState::Commenting => Some(match t {
-                            Ok(end @ <$token>::$comment_end) => {
-                                *state = HighlightState::default();
-                                (Color::try_from(end).ok()?, r)
-                            }
-                            _ => (Color::$comment_color, r),
-                        }),
-                    }
-                }))
-            }
-
-            fn multicomment(&self) -> Option<fn(&str) -> Option<$crate::syntax::MultiComment>> {
-                use $crate::syntax::MultiComment;
-
-                Some(|s: &str| {
-                    <$token>::lexer(s).find_map(|token| match token {
-                        Ok(<$token>::$comment_start) => Some(MultiComment::Start),
-                        Ok(<$token>::$comment_end) => Some(MultiComment::End),
-                        _ => None,
-                    })
-                })
+    ($syntax:ty, $token:ty, $comment_start:ident, $comment_end:ident, $start:literal, $end:literal, $comment_color:ident) => {
+        impl Plain for $token {
+            fn is_comment_start(&self) -> bool {
+                matches!(self, Self::$comment_start)
             }
         }
-    };
-    ($syntax:ty, $token:ty, $comment_end:ty, $start:literal, $end:literal, $comment_color:ident) => {
+
+        impl Commenting for $token {
+            fn is_comment_end(&self) -> bool {
+                matches!(self, Self::$comment_end)
+            }
+        }
+
+        #[derive(Logos, Debug)]
+        #[logos(skip r"[ \t\n]+")]
+        enum CommentEnd {
+            #[token($end)]
+            EndComment,
+        }
+
+        impl From<CommentEnd> for $token {
+            fn from(c: CommentEnd) -> Self {
+                match c {
+                    CommentEnd::EndComment => Self::$comment_end,
+                }
+            }
+        }
+
+        impl Commenting for CommentEnd {
+            fn is_comment_end(&self) -> bool {
+                true
+            }
+        }
+
         impl crate::syntax::Highlighter for $syntax {
             fn highlight<'s>(
                 &self,
@@ -281,7 +270,7 @@ macro_rules! highlighter {
             ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
                 use $crate::syntax::{EitherLexer, HighlightState};
 
-                let lexer: EitherLexer<$token, $comment_end> = EitherLexer::new(&state, s);
+                let lexer: EitherLexer<$token, CommentEnd> = EitherLexer::new(&state, s);
 
                 Box::new(lexer.filter_map(move |(t, r)| {
                     match state {

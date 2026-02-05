@@ -91,6 +91,7 @@ enum RustToken {
     #[token("/*")]
     StartComment,
 
+    #[token("*/")]
     EndComment,
 
     #[regex("fn [[:lower:][:digit:]_]+")]
@@ -114,39 +115,6 @@ impl TryFrom<RustToken> for Color {
     }
 }
 
-impl Plain for RustToken {
-    fn is_comment_start(&self) -> bool {
-        matches!(self, Self::StartComment)
-    }
-}
-
-impl Commenting for RustToken {
-    fn is_comment_end(&self) -> bool {
-        matches!(self, Self::EndComment)
-    }
-}
-
-#[derive(Logos, Debug)]
-#[logos(skip r"[ \t\n]+")]
-enum RustCommentEnd {
-    #[token("*/")]
-    EndComment,
-}
-
-impl From<RustCommentEnd> for RustToken {
-    fn from(c: RustCommentEnd) -> Self {
-        match c {
-            RustCommentEnd::EndComment => Self::EndComment,
-        }
-    }
-}
-
-impl Commenting for RustCommentEnd {
-    fn is_comment_end(&self) -> bool {
-        true
-    }
-}
-
 #[derive(Debug)]
 pub struct Rust;
 
@@ -156,4 +124,4 @@ impl std::fmt::Display for Rust {
     }
 }
 
-highlighter!(Rust, RustToken, RustCommentEnd, "/*", "*/", Blue);
+highlighter!(Rust, RustToken, StartComment, EndComment, "/*", "*/", Blue);

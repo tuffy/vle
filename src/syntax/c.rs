@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
+use crate::syntax::{Commenting, Plain};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -119,4 +120,4 @@ impl std::fmt::Display for C {
     }
 }
 
-highlighter!(C, CToken, StartComment, EndComment, Blue);
+highlighter!(C, CToken, StartComment, EndComment, "/*", "*/", Blue);
