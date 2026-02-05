@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::highlighter;
+use crate::syntax::{Commenting, HighlightState, Highlighter, MultiCommentType, Plain};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -58,6 +58,9 @@ enum PythonToken {
     String,
     #[regex(r"'([^\\']|\\.)*'")]
     SingleQuotedString,
+    #[token("\"\"\"")]
+    #[token("'''")]
+    MultiLineString,
     #[regex("#.*", allow_greedy = true)]
     Comment,
     #[regex("[[:alpha:]_][[:alnum:]_.]*")]
@@ -73,7 +76,9 @@ impl TryFrom<PythonToken> for Color {
             PythonToken::Keyword => Ok(Color::LightCyan),
             PythonToken::Literal => Ok(Color::LightMagenta),
             PythonToken::Decorator => Ok(Color::Cyan),
-            PythonToken::String | PythonToken::SingleQuotedString => Ok(Color::LightGreen),
+            PythonToken::String
+            | PythonToken::SingleQuotedString
+            | PythonToken::MultiLineString => Ok(Color::LightGreen),
             PythonToken::Comment => Ok(Color::LightRed),
             PythonToken::Variable => Err(()),
         }
@@ -89,4 +94,81 @@ impl std::fmt::Display for Python {
     }
 }
 
-highlighter!(Python, PythonToken);
+impl Plain for PythonToken {
+    fn is_comment_start(&self) -> bool {
+        matches!(self, Self::MultiLineString)
+    }
+}
+
+impl Commenting for PythonToken {
+    fn is_comment_end(&self) -> bool {
+        matches!(self, Self::MultiLineString)
+    }
+}
+
+#[derive(Logos, Debug)]
+#[logos(skip r"[ \t\n]+")]
+enum MultiLineString {
+    #[token("\"\"\"")]
+    #[token("'''")]
+    StartEnd,
+}
+
+impl From<MultiLineString> for PythonToken {
+    fn from(s: MultiLineString) -> Self {
+        match s {
+            MultiLineString::StartEnd => Self::MultiLineString,
+        }
+    }
+}
+
+impl Commenting for MultiLineString {
+    fn is_comment_end(&self) -> bool {
+        true
+    }
+}
+
+impl Highlighter for Python {
+    fn highlight<'s>(
+        &self,
+        s: &'s str,
+        state: &'s mut crate::syntax::HighlightState,
+    ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
+        use crate::syntax::EitherLexer;
+
+        let lexer: EitherLexer<PythonToken, MultiLineString> = EitherLexer::new(&state, s);
+
+        Box::new(lexer.filter_map(move |(t, r)| {
+            match state {
+                HighlightState::Normal => t
+                    .ok()
+                    .inspect(|t| {
+                        if t.is_comment_start() {
+                            *state = HighlightState::Commenting;
+                        }
+                    })
+                    .and_then(|t| Color::try_from(t).ok())
+                    .map(|c| (c, r)),
+                HighlightState::Commenting => Some(match t {
+                    Ok(end) if end.is_comment_end() => {
+                        *state = HighlightState::default();
+                        (Color::try_from(end).ok()?, r)
+                    }
+                    _ => (Color::LightGreen, r),
+                }),
+            }
+        }))
+    }
+
+    fn multicomment(&self) -> Option<MultiCommentType> {
+        Some(MultiCommentType::Unidirectional(|acc, s| {
+            MultiLineString::lexer(s).fold(acc, |acc, s| match s {
+                Ok(MultiLineString::StartEnd) => match acc {
+                    HighlightState::Normal => HighlightState::Commenting,
+                    HighlightState::Commenting => HighlightState::Normal,
+                },
+                Err(()) => acc,
+            })
+        }))
+    }
+}
