@@ -52,6 +52,11 @@ pub enum MultiComment {
     End,
 }
 
+pub enum MultiCommentType {
+    Bidirectional(fn(&str) -> Option<MultiComment>),
+    Unidirectional(fn(HighlightState, &str) -> HighlightState),
+}
+
 /// Implemented for different syntax highlighters
 pub trait Highlighter: std::fmt::Debug + std::fmt::Display {
     /// Yields portions of the string to highlight in a particular color
@@ -70,7 +75,7 @@ pub trait Highlighter: std::fmt::Debug + std::fmt::Display {
     /// If format supports multi-line comments,
     /// returns function which returns the first one that
     /// exists in a line, if any
-    fn multicomment(&self) -> Option<fn(&str) -> Option<MultiComment>> {
+    fn multicomment(&self) -> Option<MultiCommentType> {
         None
     }
 }
@@ -88,7 +93,7 @@ impl Highlighter for Box<dyn Highlighter> {
         Box::as_ref(self).tabs_required()
     }
 
-    fn multicomment(&self) -> Option<fn(&str) -> Option<MultiComment>> {
+    fn multicomment(&self) -> Option<MultiCommentType> {
         Box::as_ref(self).multicomment()
     }
 }
@@ -294,8 +299,8 @@ macro_rules! highlighter {
                 }))
             }
 
-            fn multicomment(&self) -> Option<fn(&str) -> Option<$crate::syntax::MultiComment>> {
-                use $crate::syntax::MultiComment;
+            fn multicomment(&self) -> Option<$crate::syntax::MultiCommentType> {
+                use $crate::syntax::{MultiComment, MultiCommentType};
 
                 #[derive(Logos, Debug)]
                 #[logos(skip r"[ \t\n]+")]
@@ -315,7 +320,9 @@ macro_rules! highlighter {
                     }
                 }
 
-                Some(|s: &str| Comment::lexer(s).find_map(|token| token.ok().map(|t| t.into())))
+                Some(MultiCommentType::Bidirectional(|s: &str| {
+                    Comment::lexer(s).find_map(|token| token.ok().map(|t| t.into()))
+                }))
             }
         }
     };

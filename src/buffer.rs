@@ -2510,7 +2510,7 @@ impl StatefulWidget for BufferWidget<'_> {
             VERIFY_SAVE, render_help,
         };
         use crate::prompt::TextField;
-        use crate::syntax::{HighlightState, Highlighter, MultiComment};
+        use crate::syntax::{HighlightState, Highlighter, MultiComment, MultiCommentType};
         use ratatui::{
             layout::{
                 Constraint::{Length, Min},
@@ -3091,19 +3091,25 @@ impl StatefulWidget for BufferWidget<'_> {
 
         state.viewport_height = text_area.height.into();
 
-        let mut hlstate: HighlightState = syntax
-            .multicomment()
-            .and_then(|has_multicomment| {
-                rope.lines_at(viewport_line)
-                    .take(area.height.into())
-                    .find_map(|line| {
-                        has_multicomment(&Cow::from(line)).map(|multicomment| match multicomment {
-                            MultiComment::Start => HighlightState::Normal,
-                            MultiComment::End => HighlightState::Commenting,
-                        })
+        let mut hlstate: HighlightState = match syntax.multicomment() {
+            Some(MultiCommentType::Bidirectional(f)) => rope
+                .lines_at(viewport_line)
+                .take(area.height.into())
+                .find_map(|line| {
+                    f(&Cow::from(line)).map(|multicomment| match multicomment {
+                        MultiComment::Start => HighlightState::Normal,
+                        MultiComment::End => HighlightState::Commenting,
                     })
-            })
-            .unwrap_or_default();
+                })
+                .unwrap_or_default(),
+            Some(MultiCommentType::Unidirectional(f)) => rope
+                .lines()
+                .take(viewport_line)
+                .fold(HighlightState::default(), |acc, line| {
+                    f(acc, &Cow::from(line))
+                }),
+            None => HighlightState::default(),
+        };
 
         // we're technically only viewing half of the viewport most of the time
         // but it's okay for the viewport_size to be a bit larger than necessary
