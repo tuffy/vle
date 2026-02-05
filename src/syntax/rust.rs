@@ -7,7 +7,7 @@
 // except according to those terms.
 
 // use crate::highlighter;
-use crate::syntax::{Commenting, Plain};
+use crate::syntax::{Commenting, MultiComment, Plain};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -120,6 +120,12 @@ impl Plain for RustToken {
     }
 }
 
+impl Commenting for RustToken {
+    fn is_comment_end(&self) -> bool {
+        matches!(self, Self::EndComment)
+    }
+}
+
 #[derive(Logos, Debug)]
 #[logos(skip r"[ \t\n]+")]
 enum RustComment {
@@ -127,6 +133,15 @@ enum RustComment {
     Start,
     #[token("*/")]
     End,
+}
+
+impl From<RustComment> for MultiComment {
+    fn from(c: RustComment) -> MultiComment {
+        match c {
+            RustComment::Start => MultiComment::Start,
+            RustComment::End => MultiComment::End,
+        }
+    }
 }
 
 #[derive(Logos, Debug)]
@@ -174,14 +189,14 @@ impl crate::syntax::Highlighter for Rust {
                 HighlightState::Normal => t
                     .ok()
                     .inspect(|t| {
-                        if matches!(t, RustToken::StartComment) {
+                        if t.is_comment_start() {
                             *state = HighlightState::Commenting;
                         }
                     })
                     .and_then(|t| Color::try_from(t).ok())
                     .map(|c| (c, r)),
                 HighlightState::Commenting => Some(match t {
-                    Ok(end @ RustToken::EndComment) => {
+                    Ok(end) if end.is_comment_end() => {
                         *state = HighlightState::default();
                         (Color::try_from(end).ok()?, r)
                     }
@@ -192,15 +207,7 @@ impl crate::syntax::Highlighter for Rust {
     }
 
     fn multicomment(&self) -> Option<fn(&str) -> Option<crate::syntax::MultiComment>> {
-        use crate::syntax::MultiComment;
-
-        Some(|s: &str| {
-            RustComment::lexer(s).find_map(|token| match token {
-                Ok(RustComment::Start) => Some(MultiComment::Start),
-                Ok(RustComment::End) => Some(MultiComment::End),
-                _ => None,
-            })
-        })
+        Some(|s: &str| RustComment::lexer(s).find_map(|token| token.ok().map(|t| t.into())))
     }
 }
 // highlighter!(Rust, RustToken, StartComment, EndComment, Blue);
