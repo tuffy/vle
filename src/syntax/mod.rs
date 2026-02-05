@@ -267,7 +267,7 @@ macro_rules! highlighter {
             }
         }
 
-        impl crate::syntax::Highlighter for $syntax {
+        impl $crate::syntax::Highlighter for $syntax {
             fn highlight<'s>(
                 &self,
                 s: &'s str,
