@@ -272,4 +272,62 @@ macro_rules! highlighter {
             }
         }
     };
+    ($syntax:ty, $token:ty, $comment_end:ty, $start:literal, $end:literal, $comment_color:ident) => {
+        impl crate::syntax::Highlighter for $syntax {
+            fn highlight<'s>(
+                &self,
+                s: &'s str,
+                state: &'s mut $crate::syntax::HighlightState,
+            ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
+                use $crate::syntax::{EitherLexer, HighlightState};
+
+                let lexer: EitherLexer<$token, $comment_end> = EitherLexer::new(&state, s);
+
+                Box::new(lexer.filter_map(move |(t, r)| {
+                    match state {
+                        HighlightState::Normal => t
+                            .ok()
+                            .inspect(|t| {
+                                if t.is_comment_start() {
+                                    *state = HighlightState::Commenting;
+                                }
+                            })
+                            .and_then(|t| Color::try_from(t).ok())
+                            .map(|c| (c, r)),
+                        HighlightState::Commenting => Some(match t {
+                            Ok(end) if end.is_comment_end() => {
+                                *state = HighlightState::default();
+                                (Color::try_from(end).ok()?, r)
+                            }
+                            _ => (Color::$comment_color, r),
+                        }),
+                    }
+                }))
+            }
+
+            fn multicomment(&self) -> Option<fn(&str) -> Option<$crate::syntax::MultiComment>> {
+                use $crate::syntax::MultiComment;
+
+                #[derive(Logos, Debug)]
+                #[logos(skip r"[ \t\n]+")]
+                enum Comment {
+                    #[token($start)]
+                    Start,
+                    #[token($end)]
+                    End,
+                }
+
+                impl From<Comment> for MultiComment {
+                    fn from(c: Comment) -> MultiComment {
+                        match c {
+                            Comment::Start => MultiComment::Start,
+                            Comment::End => MultiComment::End,
+                        }
+                    }
+                }
+
+                Some(|s: &str| Comment::lexer(s).find_map(|token| token.ok().map(|t| t.into())))
+            }
+        }
+    };
 }
