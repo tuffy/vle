@@ -6,7 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::highlighter;
+// use crate::highlighter;
+use crate::syntax::{Commenting, Plain};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -90,7 +91,6 @@ enum RustToken {
     #[token("/*")]
     StartComment,
 
-    #[token("*/")]
     EndComment,
 
     #[regex("fn [[:lower:][:digit:]_]+")]
@@ -114,6 +114,42 @@ impl TryFrom<RustToken> for Color {
     }
 }
 
+impl Plain for RustToken {
+    fn is_comment_start(&self) -> bool {
+        matches!(self, Self::StartComment)
+    }
+}
+
+#[derive(Logos, Debug)]
+#[logos(skip r"[ \t\n]+")]
+enum RustComment {
+    #[token("/*")]
+    Start,
+    #[token("*/")]
+    End,
+}
+
+#[derive(Logos, Debug)]
+#[logos(skip r"[ \t\n]+")]
+enum RustCommentEnd {
+    #[token("*/")]
+    EndComment,
+}
+
+impl From<RustCommentEnd> for RustToken {
+    fn from(c: RustCommentEnd) -> Self {
+        match c {
+            RustCommentEnd::EndComment => Self::EndComment,
+        }
+    }
+}
+
+impl Commenting for RustCommentEnd {
+    fn is_comment_end(&self) -> bool {
+        true
+    }
+}
+
 #[derive(Debug)]
 pub struct Rust;
 
@@ -123,4 +159,48 @@ impl std::fmt::Display for Rust {
     }
 }
 
-highlighter!(Rust, RustToken, StartComment, EndComment, Blue);
+impl crate::syntax::Highlighter for Rust {
+    fn highlight<'s>(
+        &self,
+        s: &'s str,
+        state: &'s mut crate::syntax::HighlightState,
+    ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
+        use crate::syntax::{EitherLexer, HighlightState};
+
+        let lexer: EitherLexer<RustToken, RustCommentEnd> = EitherLexer::new(&state, s);
+
+        Box::new(lexer.filter_map(move |(t, r)| {
+            match state {
+                HighlightState::Normal => t
+                    .ok()
+                    .inspect(|t| {
+                        if matches!(t, RustToken::StartComment) {
+                            *state = HighlightState::Commenting;
+                        }
+                    })
+                    .and_then(|t| Color::try_from(t).ok())
+                    .map(|c| (c, r)),
+                HighlightState::Commenting => Some(match t {
+                    Ok(end @ RustToken::EndComment) => {
+                        *state = HighlightState::default();
+                        (Color::try_from(end).ok()?, r)
+                    }
+                    _ => (Color::Blue, r),
+                }),
+            }
+        }))
+    }
+
+    fn multicomment(&self) -> Option<fn(&str) -> Option<crate::syntax::MultiComment>> {
+        use crate::syntax::MultiComment;
+
+        Some(|s: &str| {
+            RustComment::lexer(s).find_map(|token| match token {
+                Ok(RustComment::Start) => Some(MultiComment::Start),
+                Ok(RustComment::End) => Some(MultiComment::End),
+                _ => None,
+            })
+        })
+    }
+}
+// highlighter!(Rust, RustToken, StartComment, EndComment, Blue);
