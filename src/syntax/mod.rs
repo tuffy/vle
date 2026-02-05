@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::buffer::Source;
+use logos::{Lexer, Logos};
 use ratatui::style::Color;
 
 mod c;
@@ -113,6 +114,66 @@ impl std::fmt::Display for DefaultHighlighter {
 
 pub use regex::Regex;
 pub use tutorial::Tutorial;
+
+pub trait Plain {
+    fn is_comment_start(&self) -> bool;
+}
+
+pub trait Commenting {
+    fn is_comment_end(&self) -> bool;
+}
+
+pub enum EitherLexer<'s, P: Logos<'s>, C: Logos<'s>> {
+    Plain(Lexer<'s, P>),
+    Commenting(Lexer<'s, C>),
+}
+
+impl<'s, P, C> EitherLexer<'s, P, C>
+where
+    P: Logos<'s, Extras: Default>,
+    C: Logos<'s, Source = P::Source, Extras = P::Extras>,
+{
+    pub fn new(state: &HighlightState, source: &'s <P as Logos<'s>>::Source) -> Self {
+        match state {
+            HighlightState::Normal => Self::Plain(Lexer::new(source)),
+            HighlightState::Commenting => Self::Commenting(Lexer::new(source)),
+        }
+    }
+}
+
+impl<'s, P, C> Iterator for EitherLexer<'s, P, C>
+where
+    P: Logos<'s, Source = str, Error = (), Extras: Default> + Plain,
+    C: Logos<'s, Source = P::Source, Extras = P::Extras, Error = ()> + Commenting + Into<P>,
+{
+    type Item = (Result<P, P::Error>, std::ops::Range<usize>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Self::Plain(lexer) => {
+                let token = lexer.next()?;
+                let pair = (token, lexer.span());
+                if let (Ok(token), _) = &pair
+                    && token.is_comment_start()
+                {
+                    *self =
+                        EitherLexer::Commenting(std::mem::replace(lexer, Lexer::new("")).morph());
+                }
+                Some(pair)
+            }
+            Self::Commenting(lexer) => {
+                let token = lexer.next()?;
+                let span = lexer.span();
+                if let Ok(token) = &token
+                    && token.is_comment_end()
+                {
+                    *self = EitherLexer::Plain(std::mem::replace(lexer, Lexer::new("")).morph());
+                }
+                Some((token.map(|t| t.into()), span))
+            }
+        }
+    }
+}
 
 pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
     match source.extension() {
