@@ -169,12 +169,17 @@ where
             Self::Commenting(lexer) => {
                 let token = lexer.next()?;
                 let span = lexer.span();
-                if let Ok(token) = &token
-                    && token.is_comment_end()
-                {
-                    *self = EitherLexer::Plain(std::mem::replace(lexer, Lexer::new("")).morph());
+                match token {
+                    Ok(token) => {
+                        if token.is_comment_end() {
+                            *self = EitherLexer::Plain(
+                                std::mem::replace(lexer, Lexer::new("")).morph(),
+                            );
+                        }
+                        Some((Ok(token.into()), span))
+                    }
+                    Err(err) => Some((Err(err), span)),
                 }
-                Some((token.map(|t| t.into()), span))
             }
         }
     }
