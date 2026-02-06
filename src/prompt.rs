@@ -138,16 +138,17 @@ impl TextField {
 
 #[derive(Copy, Clone)]
 pub enum Digit {
-    Digit0 = 0,
-    Digit1 = 1,
-    Digit2 = 2,
-    Digit3 = 3,
-    Digit4 = 4,
-    Digit5 = 5,
-    Digit6 = 6,
-    Digit7 = 7,
-    Digit8 = 8,
-    Digit9 = 9,
+    Digit0,
+    Digit1,
+    Digit2,
+    Digit3,
+    Digit4,
+    Digit5,
+    Digit6,
+    Digit7,
+    Digit8,
+    Digit9,
+    Separator,
 }
 
 impl TryFrom<char> for Digit {
@@ -165,7 +166,46 @@ impl TryFrom<char> for Digit {
             '7' => Ok(Digit::Digit7),
             '8' => Ok(Digit::Digit8),
             '9' => Ok(Digit::Digit9),
+            ',' | '_' | '.' => Ok(Digit::Separator),
             c => Err(c),
+        }
+    }
+}
+
+impl TryFrom<Digit> for usize {
+    type Error = ();
+
+    fn try_from(d: Digit) -> Result<Self, Self::Error> {
+        match d {
+            Digit::Digit0 => Ok(0),
+            Digit::Digit1 => Ok(1),
+            Digit::Digit2 => Ok(2),
+            Digit::Digit3 => Ok(3),
+            Digit::Digit4 => Ok(4),
+            Digit::Digit5 => Ok(5),
+            Digit::Digit6 => Ok(6),
+            Digit::Digit7 => Ok(7),
+            Digit::Digit8 => Ok(8),
+            Digit::Digit9 => Ok(9),
+            Digit::Separator => Err(()),
+        }
+    }
+}
+
+impl std::fmt::Display for Digit {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Digit::Digit0 => 0.fmt(f),
+            Digit::Digit1 => 1.fmt(f),
+            Digit::Digit2 => 2.fmt(f),
+            Digit::Digit3 => 3.fmt(f),
+            Digit::Digit4 => 4.fmt(f),
+            Digit::Digit5 => 5.fmt(f),
+            Digit::Digit6 => 6.fmt(f),
+            Digit::Digit7 => 7.fmt(f),
+            Digit::Digit8 => 8.fmt(f),
+            Digit::Digit9 => 9.fmt(f),
+            Digit::Separator => '_'.fmt(f),
         }
     }
 }
@@ -190,9 +230,9 @@ impl LinePrompt {
 
     pub fn line(&self) -> usize {
         let mut line = 0;
-        for digit in self.line.iter().copied() {
+        for digit in self.line.iter().filter_map(|d| usize::try_from(*d).ok()) {
             line *= 10;
-            line += digit as usize;
+            line += digit;
         }
         line
     }
@@ -200,9 +240,6 @@ impl LinePrompt {
 
 impl std::fmt::Display for LinePrompt {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.line
-            .iter()
-            .copied()
-            .try_for_each(|d| (d as usize).fmt(f))
+        self.line.iter().copied().try_for_each(|d| d.fmt(f))
     }
 }
