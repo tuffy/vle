@@ -272,6 +272,7 @@ pub static SELECT_LINE: &[Keybinding] = &[
     none(&["Enter"], "Select Line"),
     none(&["Home"], "Goto First Line"),
     none(&["End"], "Goto Last Line"),
+    ctrl_f(&["F"], "F5", "Find Text"),
     none(&["Esc"], "Cancel"),
 ];
 
@@ -292,35 +293,36 @@ pub static CREATE_FILE: &[Keybinding] = &[
 pub static FIND: &[Keybinding] = &[
     ctrl(&["V"], "Paste From Cut Buffer"),
     none(&["Tab"], "Regex Find"),
+    ctrl_f(&["T"], "F4", "Goto Line"),
     ctrl_f(&["F"], "F5", "Begin New Find"),
     none(&["Enter"], "Browse All Matches"),
+    none(&["Esc"], "Cancel"),
 ];
 
 pub static FIND_REGEX: &[Keybinding] = &[
     ctrl(&["V"], "Paste From Cut Buffer"),
     none(&["Tab"], "Plain Text Find"),
+    ctrl_f(&["T"], "F4", "Goto Line"),
     ctrl_f(&["F"], "F5", "Begin New Find"),
     none(&["Enter"], "Browse All Matches"),
+    none(&["Esc"], "Cancel"),
 ];
 
 pub static BROWSE_MATCHES: &[Keybinding] = &[
-    none(&[UP], "Previous Match"),
-    none(&[DOWN], "Next Match"),
+    none(&[UP, DOWN], "Select Match"),
     none(&["Del"], "Remove Match"),
     ctrl_f(&["R"], "F6", "Replace Matches"),
     none(&["Enter"], "Finish"),
 ];
 
 pub static REPLACE_MATCHES: &[Keybinding] = &[
-    none(&[UP], "Select Previous Match"),
-    none(&[DOWN], "Select Next Match"),
+    none(&[UP, DOWN], "Select Match"),
     ctrl(&["V"], "Paste From Cut Buffer"),
     none(&["Enter"], "Finish Replacement"),
 ];
 
 pub static REPLACE_MATCHES_REGEX: &[Keybinding] = &[
-    none(&[UP], "Select Previous Match"),
-    none(&[DOWN], "Select Next Match"),
+    none(&[UP, DOWN], "Select Match"),
     ctrl(&["V"], "Paste From Group or Cut Buffer"),
     none(&["Enter"], "Finish Replacement"),
 ];

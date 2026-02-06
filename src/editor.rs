@@ -321,6 +321,9 @@ impl Editor {
                             NextModeIncremental::Browse { match_idx, matches } => {
                                 EditorMode::BrowseMatches { match_idx, matches }
                             }
+                            NextModeIncremental::SelectLine => EditorMode::SelectLine {
+                                prompt: LinePrompt::default(),
+                            },
                         };
                     }
                 }
@@ -949,6 +952,10 @@ fn process_select_line(
             buffer.select_line(buffer.last_line());
             Some(EditorMode::default())
         }
+        key!(CONTROL, 'f') | key!(F(5)) => Some(EditorMode::Search {
+            prompt: TextField::default(),
+            type_: SearchType::default(),
+        }),
         _ => {
             None // ignore other events
         }
@@ -1030,6 +1037,7 @@ enum NextModeIncremental {
         match_idx: usize,
         matches: Vec<(Range<usize>, Vec<Option<MatchCapture>>)>,
     },
+    SelectLine,
 }
 
 fn process_search(
@@ -1086,6 +1094,7 @@ fn process_search(
                 }
             },
         },
+        key!(CONTROL, 't') | key!(F(4)) => Some(NextModeIncremental::SelectLine),
         key!(CONTROL, 'f') => {
             prompt.reset();
             None
