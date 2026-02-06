@@ -13,7 +13,7 @@ use ratatui::style::Color;
 #[derive(Logos, Debug)]
 #[logos(skip r"[ \t\n]+")]
 enum PythonToken {
-    #[regex("def [[:alnum:]_]+")]
+    #[regex("def [[:alpha:]_][[:alnum:]_.]*")]
     Function,
     #[token("and")]
     #[token("as")]
