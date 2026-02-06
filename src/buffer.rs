@@ -635,66 +635,67 @@ impl BufferContext {
         let [text_area, _] = Layout::horizontal([Min(0), Length(1)])
             .areas(Block::bordered().borders(Borders::TOP).inner(area));
 
-        if text_area.contains(position) {
-            let buffer = self.buffer.borrow();
-            let rope = &buffer.rope;
-            let row = position.y.saturating_sub(text_area.y);
-            let col = position.x.saturating_sub(text_area.x);
-
-            let current_line = rope.try_char_to_line(self.cursor).ok();
-
-            let viewport_line: usize = current_line
-                .map(|line| line.saturating_sub(self.viewport_height / 2))
-                .unwrap_or(0);
-
-            let line = viewport_line + usize::from(row);
-
-            let starting_col = self
-                .cursor_position()
-                .map(|(_, col)| {
-                    col.saturating_sub(
-                        text_area
-                            .width
-                            .saturating_sub(BufferWidget::RIGHT_MARGIN)
-                            .into(),
-                    ) as u16
-                })
-                .unwrap_or(0);
-
-            // the column we're aiming for, in onscreen characters
-            let mut desired_col: usize = (starting_col + col).into();
-            self.cursor_column = desired_col;
-
-            let col_chars = rope
-                .try_line_to_char(line)
-                .map(|line_start| {
-                    rope.chars_at(line_start)
-                        .take_while(|c| {
-                            use unicode_width::UnicodeWidthChar;
-
-                            desired_col = match desired_col.checked_sub(match c {
-                                '\t' => *SPACES_PER_TAB,
-                                c => c.width().unwrap_or(0),
-                            }) {
-                                Some(col) => col,
-                                None => return false,
-                            };
-                            true
-                        })
-                        .count()
-                })
-                .unwrap_or(0);
-
-            // ensure cursor doesn't walk past desired line
-            self.cursor = (rope.try_line_to_char(line).unwrap_or(rope.len_chars()) + col_chars)
-                .min(
-                    rope.try_line_to_char(line + 1)
-                        .unwrap_or(rope.len_chars())
-                        .saturating_sub(1),
-                );
-
-            self.selection = None;
+        if !text_area.contains(position) {
+            return;
         }
+
+        let buffer = self.buffer.borrow();
+        let rope = &buffer.rope;
+        let row = position.y.saturating_sub(text_area.y);
+        let col = position.x.saturating_sub(text_area.x);
+
+        let current_line = rope.try_char_to_line(self.cursor).ok();
+
+        let viewport_line: usize = current_line
+            .map(|line| line.saturating_sub(self.viewport_height / 2))
+            .unwrap_or(0);
+
+        let line = viewport_line + usize::from(row);
+
+        let starting_col = self
+            .cursor_position()
+            .map(|(_, col)| {
+                col.saturating_sub(
+                    text_area
+                        .width
+                        .saturating_sub(BufferWidget::RIGHT_MARGIN)
+                        .into(),
+                ) as u16
+            })
+            .unwrap_or(0);
+
+        // the column we're aiming for, in onscreen characters
+        let mut desired_col: usize = (starting_col + col).into();
+        self.cursor_column = desired_col;
+
+        let col_chars = rope
+            .try_line_to_char(line)
+            .map(|line_start| {
+                rope.chars_at(line_start)
+                    .take_while(|c| {
+                        use unicode_width::UnicodeWidthChar;
+
+                        desired_col = match desired_col.checked_sub(match c {
+                            '\t' => *SPACES_PER_TAB,
+                            c => c.width().unwrap_or(0),
+                        }) {
+                            Some(col) => col,
+                            None => return false,
+                        };
+                        true
+                    })
+                    .count()
+            })
+            .unwrap_or(0);
+
+        // ensure cursor doesn't walk past desired line
+        self.cursor = (rope.try_line_to_char(line).unwrap_or(rope.len_chars()) + col_chars).min(
+            rope.try_line_to_char(line + 1)
+                .unwrap_or(rope.len_chars())
+                .saturating_sub(1),
+        );
+
+        self.selection = None;
     }
 
     pub fn cursor_up(&mut self, lines: usize, selecting: bool) {
