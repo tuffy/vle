@@ -411,53 +411,16 @@ impl Editor {
                     let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
                     let cur_idx = cur_buf_list.current_index();
                     if let Some(buf) = cur_buf_list.current_mut() {
-                        match event {
-                            Event::Key(KeyEvent {
-                                code: KeyCode::Char(c @ '0'..='9'),
-                                modifiers: KeyModifiers::NONE,
-                                kind: KeyEventKind::Press,
-                                ..
-                            }) => {
-                                let group = match c {
-                                    '0' => 0,
-                                    '1' => 1,
-                                    '2' => 2,
-                                    '3' => 3,
-                                    '4' => 4,
-                                    '5' => 5,
-                                    '6' => 6,
-                                    '7' => 7,
-                                    '8' => 8,
-                                    '9' => 9,
-                                    _ => unreachable!(),
-                                };
-
-                                buf.multi_insert_strings(
-                                    alt_buf_list
-                                        .and_then(|l| l.get_mut(cur_idx))
-                                        .map(|b| b.alt_cursor()),
-                                    matches,
-                                    groups.iter().map(|g| match g.get(group) {
-                                        Some(Some(MatchCapture { string: s, .. })) => {
-                                            (s.chars().count(), s.as_str())
-                                        }
-                                        Some(None) | None => (0, ""),
-                                    }),
-                                );
-                            }
-                            key!(CONTROL, 'v') => {
-                                if let Some(cut) = &self.cut_buffer {
-                                    buf.multi_insert_string(
-                                        alt_buf_list
-                                            .and_then(|l| l.get_mut(cur_idx))
-                                            .map(|b| b.alt_cursor()),
-                                        matches,
-                                        cut.as_str(),
-                                    );
-                                }
-                            }
-                            _ => { /* ignore other events */ }
-                        }
+                        process_paste_group(
+                            buf,
+                            matches,
+                            self.cut_buffer.as_ref(),
+                            groups,
+                            event,
+                            alt_buf_list
+                                .and_then(|l| l.get_mut(cur_idx))
+                                .map(|b| b.alt_cursor()),
+                        );
                     }
 
                     self.mode = EditorMode::ReplaceMatches {
@@ -1283,6 +1246,55 @@ fn process_replace_matches(
             None
         }
         _ => None,
+    }
+}
+
+fn process_paste_group(
+    buf: &mut BufferContext,
+    matches: &mut [MultiCursor],
+    cut_buffer: Option<&CutBuffer>,
+    groups: &mut [Vec<Option<MatchCapture>>],
+    event: Event,
+    alt: Option<AltCursor<'_>>,
+) {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+    match event {
+        Event::Key(KeyEvent {
+            code: KeyCode::Char(c @ '0'..='9'),
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            let group = match c {
+                '0' => 0,
+                '1' => 1,
+                '2' => 2,
+                '3' => 3,
+                '4' => 4,
+                '5' => 5,
+                '6' => 6,
+                '7' => 7,
+                '8' => 8,
+                '9' => 9,
+                _ => unreachable!(),
+            };
+
+            buf.multi_insert_strings(
+                alt,
+                matches,
+                groups.iter().map(|g| match g.get(group) {
+                    Some(Some(MatchCapture { string: s, .. })) => (s.chars().count(), s.as_str()),
+                    Some(None) | None => (0, ""),
+                }),
+            );
+        }
+        key!(CONTROL, 'v') => {
+            if let Some(cut) = cut_buffer {
+                buf.multi_insert_string(alt, matches, cut.as_str());
+            }
+        }
+        _ => { /* ignore other events */ }
     }
 }
 
