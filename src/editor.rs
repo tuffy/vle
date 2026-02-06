@@ -190,7 +190,13 @@ impl Editor {
     ) -> std::io::Result<Self> {
         Ok(Self {
             layout: Layout::Single(BufferList::new(buffers)?),
-            mode: EditorMode::default(),
+            mode: SshSource::open(&remote)
+                .ok()
+                .and_then(|source| FileChooserState::new(EitherSource::Ssh(source)).ok())
+                .map(|chooser| EditorMode::Open {
+                    chooser: Box::new(chooser),
+                })
+                .unwrap_or_default(),
             cut_buffer: None,
             show_help: false,
             remote: Some(remote),
@@ -553,8 +559,9 @@ impl Editor {
                 modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
                 ..
-            }) => self
-                .update_buffer(|b| b.cursor_up(*PAGE_SIZE, modifiers.contains(KeyModifiers::SHIFT))),
+            }) => self.update_buffer(|b| {
+                b.cursor_up(*PAGE_SIZE, modifiers.contains(KeyModifiers::SHIFT))
+            }),
             Event::Key(KeyEvent {
                 code: KeyCode::PageDown,
                 modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
