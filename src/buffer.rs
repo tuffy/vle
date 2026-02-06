@@ -3066,9 +3066,13 @@ impl StatefulWidget for BufferWidget<'_> {
                     _ => match buffer.rope.try_char_to_line(state.cursor) {
                         Ok(line) => match buffer.rope.try_line_to_char(line) {
                             Ok(line_start) => {
-                                format!("{}:{}", line + 1, (state.cursor - line_start) + 1)
+                                format!(
+                                    "{}:{}",
+                                    Thousands(line + 1),
+                                    (state.cursor - line_start) + 1
+                                )
                             }
-                            Err(_) => format!("{}", line + 1),
+                            Err(_) => format!("{}", Thousands(line + 1)),
                         },
                         Err(_) => "???".to_string(),
                     },
@@ -3624,6 +3628,30 @@ fn patch_rope(source: &mut ropey::Rope, target: String) {
         let to_insert = get_lines(&target, after);
         if !to_insert.is_empty() {
             source.insert(source.line_to_char(before.start as usize), &to_insert);
+        }
+    }
+}
+
+struct Thousands(usize);
+
+impl std::fmt::Display for Thousands {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // this is recursive but also very limited
+        // on a 64-bit platform, usize::MAX only recurses 7 levels deep
+        // which is impossibly huge for a text file
+        fn write_separated(u: usize, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            match u {
+                u @ 0..1000 => u.fmt(f),
+                u => {
+                    write_separated(u / 1000, f)?;
+                    write!(f, "_{:03}", u % 1000)
+                }
+            }
+        }
+
+        match self.0 {
+            u @ 0..10000 => u.fmt(f),
+            u => write_separated(u, f),
         }
     }
 }

@@ -75,8 +75,7 @@ impl TryFrom<PythonToken> for Color {
             PythonToken::Keyword => Ok(Color::LightCyan),
             PythonToken::Literal => Ok(Color::LightMagenta),
             PythonToken::Decorator => Ok(Color::Cyan),
-            PythonToken::String
-            | PythonToken::MultiLineString => Ok(Color::LightGreen),
+            PythonToken::String | PythonToken::MultiLineString => Ok(Color::LightGreen),
             PythonToken::Comment => Ok(Color::LightRed),
             PythonToken::Variable => Err(()),
         }
@@ -134,7 +133,7 @@ impl Highlighter for Python {
     ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
         use crate::syntax::EitherLexer;
 
-        let lexer: EitherLexer<PythonToken, MultiLineString> = EitherLexer::new(&state, s);
+        let lexer: EitherLexer<PythonToken, MultiLineString> = EitherLexer::new(state, s);
 
         Box::new(lexer.filter_map(move |(t, r)| {
             match state {
