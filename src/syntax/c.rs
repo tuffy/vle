@@ -20,8 +20,12 @@ enum CToken {
     #[regex("[[:lower:][:upper:]][[:lower:][:upper:][:digit:]_]*")]
     Variable,
 
+    #[token("alignas")]
+    #[token("alignof")]
     #[token("auto")]
+    #[token("bool")]
     #[token("const")]
+    #[token("constexpr")]
     #[token("char")]
     #[token("double")]
     #[token("enum")]
@@ -30,14 +34,19 @@ enum CToken {
     #[token("inline")]
     #[token("int")]
     #[token("long")]
+    #[token("nullptr")]
     #[token("restrict")]
     #[token("register")]
     #[token("short")]
     #[token("signed")]
     #[token("sizeof")]
     #[token("static")]
+    #[token("static_assert")]
+    #[token("thread_local")]
     #[token("struct")]
     #[token("typedef")]
+    #[token("typeof")]
+    #[token("typeof_unqual")]
     #[token("union")]
     #[token("unsigned")]
     #[token("void")]
@@ -73,11 +82,17 @@ enum CToken {
     #[regex(r"'([^\\\']|\\.){0,1}'")]
     String,
 
-    #[regex(r"0x[0-9a-fA-F]+[uU]?(|ll|LL)?")]
-    #[regex(r"[0-9]+[uU]?(ll|LL)?")]
+    #[regex(r"0[xX][0-9a-fA-F]+[uU]?(|ll|LL)?")]
+    #[regex(r"[0-9][0-9']*[uU]?(ll|LL)?")]
+    #[regex(r"0b[01]+")]
     Integer,
 
+    #[token("true")]
+    #[token("false")]
+    Boolean,
+
     #[token("#define")]
+    #[token("#embed")]
     #[token("#include")]
     #[token("#if")]
     #[token("#ifdef")]
@@ -98,7 +113,7 @@ impl TryFrom<CToken> for Color {
     fn try_from(t: CToken) -> Result<Color, ()> {
         match t {
             CToken::Constant => Ok(Color::Red),
-            CToken::Integer => Ok(Color::Blue),
+            CToken::Integer | CToken::Boolean => Ok(Color::Cyan),
             CToken::Keyword => Ok(Color::Green),
             CToken::Flowcontrol1 => Ok(Color::LightYellow),
             CToken::Flowcontrol2 => Ok(Color::Magenta),
