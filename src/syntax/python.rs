@@ -55,9 +55,8 @@ enum PythonToken {
     #[regex("@[[:alpha:]_][[:alnum:]_.]*")]
     Decorator,
     #[regex(r#"\"([^\\\"]|\\.)*\""#)]
-    String,
     #[regex(r"'([^\\']|\\.)*'")]
-    SingleQuotedString,
+    String,
     #[token("\"\"\"")]
     #[token("'''")]
     MultiLineString,
@@ -77,7 +76,6 @@ impl TryFrom<PythonToken> for Color {
             PythonToken::Literal => Ok(Color::LightMagenta),
             PythonToken::Decorator => Ok(Color::Cyan),
             PythonToken::String
-            | PythonToken::SingleQuotedString
             | PythonToken::MultiLineString => Ok(Color::LightGreen),
             PythonToken::Comment => Ok(Color::LightRed),
             PythonToken::Variable => Err(()),

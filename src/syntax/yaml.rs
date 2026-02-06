@@ -19,13 +19,28 @@ enum YamlToken {
     #[token("]")]
     #[token("{")]
     #[token("}")]
+    #[token("-")]
     Symbol,
-    #[regex(r#""([^"\\\x00-\x1F]|\\(["\\bnfrt/]|u[a-fA-F0-9]{4}))*""#)]
+    #[regex(r#"\"([^\\\"]|\\.)*\""#)]
+    #[regex(r"'([^\\']|\\.)*'")]
     String,
     #[regex(r"[[:alpha:]][[:alpha:][:digit:]]*:")]
     Name,
-    #[regex(r"-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?")]
+    #[regex(r"[+-]?[0-9][0-9_]*")]
+    #[regex(r"[+-]?[0-9][0-9_]*\.[0-9_]+(e[+-][0-9]+)?")]
+    #[regex(r"[+-]?0[bB][0-1][0-1_]*")]
+    #[regex(r"[+-]?0[xX][0-9a-fA-F][0-9a-fA-F_]*")]
+    #[regex(r"[+-]?0[oO]?[0-7][0-7_]*")]
+    #[regex(r"[+-]?\.[iI][nN][fF]")]
+    #[regex(r"\.[nN][aA][nN]")]
     Number,
+    #[token("true")]
+    #[token("false")]
+    #[token("TRUE")]
+    #[token("FALSE")]
+    #[token("True")]
+    #[token("False")]
+    Boolean,
 }
 
 impl TryFrom<YamlToken> for Color {
@@ -38,6 +53,7 @@ impl TryFrom<YamlToken> for Color {
             YamlToken::String => Ok(Color::LightMagenta),
             YamlToken::Name => Ok(Color::LightGreen),
             YamlToken::Number => Ok(Color::Red),
+            YamlToken::Boolean => Ok(Color::Magenta),
         }
     }
 }

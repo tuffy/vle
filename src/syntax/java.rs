@@ -71,6 +71,8 @@ enum JavaToken {
     StartComment,
     #[token("*/")]
     EndComment,
+    #[regex("@[[:alpha:]][[:alpha:].]*?")]
+    Annotation,
 }
 
 impl TryFrom<JavaToken> for Color {
@@ -79,9 +81,10 @@ impl TryFrom<JavaToken> for Color {
     fn try_from(t: JavaToken) -> Result<Color, ()> {
         match t {
             JavaToken::Type => Ok(Color::Green),
-            JavaToken::Flow => Ok(Color::Red),
+            JavaToken::Flow => Ok(Color::Blue),
             JavaToken::Keyword => Ok(Color::Cyan),
             JavaToken::String => Ok(Color::Red),
+            JavaToken::Annotation => Ok(Color::Magenta),
             JavaToken::Comment | JavaToken::StartComment | JavaToken::EndComment => Ok(Color::Blue),
         }
     }

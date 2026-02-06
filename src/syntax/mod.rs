@@ -199,7 +199,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("cpp" | "cc" | "cxx" | "c++" | "hh" | "hpp" | "hxx" | "h++") => Box::new(cpp::Cpp),
         Some("py") => Box::new(python::Python),
         Some("json") => Box::new(json::Json),
-        Some("md") => Box::new(markdown::Markdown),
+        Some("md" | "markdown") => Box::new(markdown::Markdown),
         Some("html" | "htm") => Box::new(html::Html),
         Some("xml" | "svg") => Box::new(xml::Xml),
         Some("sql") => Box::new(sql::Sql),
