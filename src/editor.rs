@@ -22,8 +22,15 @@ use ratatui::{
     widgets::StatefulWidget,
 };
 use std::ops::Range;
+use std::sync::LazyLock;
 
-const PAGE_SIZE: usize = 25;
+static PAGE_SIZE: LazyLock<usize> = LazyLock::new(|| {
+    std::env::var("VLE_PAGE_SIZE")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .map(|s| s.clamp(1, 100))
+        .unwrap_or(25)
+});
 
 #[derive(Default)]
 pub enum EditorMode {
@@ -547,14 +554,14 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => self
-                .update_buffer(|b| b.cursor_up(PAGE_SIZE, modifiers.contains(KeyModifiers::SHIFT))),
+                .update_buffer(|b| b.cursor_up(*PAGE_SIZE, modifiers.contains(KeyModifiers::SHIFT))),
             Event::Key(KeyEvent {
                 code: KeyCode::PageDown,
                 modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
                 ..
             }) => self.update_buffer(|b| {
-                b.cursor_down(PAGE_SIZE, modifiers.contains(KeyModifiers::SHIFT))
+                b.cursor_down(*PAGE_SIZE, modifiers.contains(KeyModifiers::SHIFT))
             }),
             key!(CONTROL, Home) => self.update_buffer(|b| b.cursor_to_selection_start()),
             key!(CONTROL, End) => self.update_buffer(|b| {

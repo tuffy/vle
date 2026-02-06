@@ -24,8 +24,8 @@ use std::time::SystemTime;
 pub static SPACES_PER_TAB: LazyLock<usize> = LazyLock::new(|| {
     std::env::var("VLE_SPACES_PER_TAB")
         .ok()
-        .and_then(|s| s.parse().ok())
-        .filter(|s| (1..=16).contains(s))
+        .and_then(|s| s.parse::<usize>().ok())
+        .map(|s| s.clamp(1, 16))
         .unwrap_or(4)
 });
 
