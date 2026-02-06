@@ -96,8 +96,7 @@ file without having to type in their respective line numbers.
 
 ## Find Text
 
-Searches incrementally forward to the next possible match
-as more text is entered.
+Prompts for text to search for and highlights all possible matches.
 Use arrow keys to cycle forward or backward through
 all possible matches in the file.
 The <kbd>Del</kbd> key can be used to cull matches from the match list.
@@ -161,10 +160,13 @@ The editor quits once all buffers have been closed.
 # Configuration
 
 With very little to configure, VLE doesn't use a config file at all.
-Any configuration is performed with two environmental variables:
+Any configuration is performed with three environmental variables:
 
-- `VLE_SPACES_PER_TAB` - the number of spaces to output per tab
-- `VLE_ALWAYS_TAB` - whether to always insert literal tabs
+| Variable             | Default | Meaning                               |
+|----------------------|---------|---------------------------------------|
+| `VLE_SPACES_PER_TAB` | 4       | number of spaces to output per tab    |
+| `VLE_ALWAYS_TAB`     | 0       | whether to always insert literal tabs |
+| `VLE_PAGE_SIZE`      | 25      | number of lines PgUp and PgDn move    |
 
 No config file means there's one less thing to install,
 learn the format of, modify or break.
@@ -203,8 +205,6 @@ languages / file formats:
 
 Syntax highlighting is done naively with an emphasis
 on colorizing known keywords, strings, etc.
-but may handle all cases since it doesn't do
-rigorous syntax analysis.
 
 # Why Another Editor?
 

@@ -271,13 +271,16 @@ Sometimes we want to locate text in a file
 but don't know exactly which line it's on.
 Ctrl-F/F5 prompts for text to search for.
 
-Searching proceeds incrementally forward
-as more characters are added to the prompt,
-looping around to the start of the file as needed
-to find the next match.
+Once you've entered the text you need,
+Enter will highlight all matches (if any)
+and move your cursor to the first one so you
+may browse them all.
 
-When a match has been found, Enter allows
-one to browse all matching instances in the file.
+If text has already been highlighted,
+Ctrl-F/F5 will locate all instances of that text
+and jump directly to browse mode.
+
+This may be more convenient than typing it in by hand.
 
 
 ## Browsing Matches
