@@ -3386,31 +3386,39 @@ impl StatefulWidget for BufferWidget<'_> {
 
         match self.mode {
             None | Some(EditorMode::Editing) => {
-                use crate::editor::EditorLayout;
-                use crate::help::{EDITING_HORIZONTAL, EDITING_UNSPLIT, EDITING_VERTICAL};
-
                 if self.show_help {
-                    crate::help::render_help(
-                        text_area,
-                        buf,
-                        match self.layout {
-                            EditorLayout::Single => EDITING_UNSPLIT,
-                            EditorLayout::Horizontal => EDITING_HORIZONTAL,
-                            EditorLayout::Vertical => EDITING_VERTICAL,
-                        },
-                        |b| {
-                            b.title_top("Keybindings").title_bottom(
-                                Line::from(vec![
-                                    Span::styled(
-                                        "F1",
-                                        Style::default().add_modifier(Modifier::REVERSED),
-                                    ),
-                                    Span::raw(" to toggle"),
-                                ])
-                                .centered(),
-                            )
-                        },
-                    );
+                    use crate::editor::EditorLayout;
+                    use crate::help::{
+                        EDITING_0, EDITING_1, EDITING_2, F10_SPLIT, F10_UNSPLIT,
+                        SWITCH_PANE_HORIZONTAL, SWITCH_PANE_VERTICAL,
+                    };
+
+                    let mut help = Vec::with_capacity(16);
+                    help.extend(EDITING_0);
+                    help.extend(EDITING_1);
+                    help.push(match self.layout {
+                        EditorLayout::Single => F10_UNSPLIT,
+                        EditorLayout::Horizontal | EditorLayout::Vertical => F10_SPLIT,
+                    });
+                    help.extend(EDITING_2);
+                    match self.layout {
+                        EditorLayout::Horizontal => help.push(SWITCH_PANE_HORIZONTAL),
+                        EditorLayout::Vertical => help.push(SWITCH_PANE_VERTICAL),
+                        EditorLayout::Single => { /* do nothing */ }
+                    }
+
+                    crate::help::render_help(text_area, buf, &help, |b| {
+                        b.title_top("Keybindings").title_bottom(
+                            Line::from(vec![
+                                Span::styled(
+                                    "F1",
+                                    Style::default().add_modifier(Modifier::REVERSED),
+                                ),
+                                Span::raw(" to toggle"),
+                            ])
+                            .centered(),
+                        )
+                    });
                 }
             }
             Some(EditorMode::ConfirmClose { .. }) => {

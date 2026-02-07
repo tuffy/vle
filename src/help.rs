@@ -163,16 +163,24 @@ static DOWN: &str = "\u{2193}";
 static LEFT: &str = "\u{2190}";
 static RIGHT: &str = "\u{2192}";
 
-pub static EDITING_UNSPLIT: &[Keybinding] = &[
+pub static EDITING_0: &[Keybinding] = &[
     ctrl_f(&["O"], "F2", "Open File"),
     ctrl_f(&["S"], "F3", "Save File"),
     ctrl_f(&["T"], "F4", "Goto Line"),
-    ctrl_f(&["F"], "F5", "Find Text"),
+    ctrl_f(&["T"], "F5", "Find Text"),
+];
+
+pub static EDITING_1: &[Keybinding] = &[
     // F6 is for replace text
     ctrl_f(&["P"], "F7", "Goto Matching Pair"),
     ctrl_f(&["E"], "F8", "Select Inside Pair"),
     ctrl_f(&["W"], "F9", "Widen Selection to Lines"),
-    ctrl_f(&["N"], "F10", "Split Pane"),
+];
+
+pub static F10_UNSPLIT: Keybinding = ctrl_f(&["N"], "F10", "Split Pane");
+pub static F10_SPLIT: Keybinding = ctrl_f(&["N"], "F10", "Un-Split Pane");
+
+pub static EDITING_2: &[Keybinding] = &[
     ctrl_f(&["L"], "F11", "Reload File"),
     ctrl_f(&["Q"], "F12", "Quit File"),
     Keybinding {
@@ -187,55 +195,8 @@ pub static EDITING_UNSPLIT: &[Keybinding] = &[
     ctrl(&["PgUp", "PgDn"], "Switch File"),
 ];
 
-pub static EDITING_HORIZONTAL: &[Keybinding] = &[
-    ctrl_f(&["O"], "F2", "Open File"),
-    ctrl_f(&["S"], "F3", "Save File"),
-    ctrl_f(&["T"], "F4", "Goto Line"),
-    ctrl_f(&["F"], "F5", "Find Text"),
-    // F6 is for replace text
-    ctrl_f(&["P"], "F7", "Goto Matching Pair"),
-    ctrl_f(&["E"], "F8", "Select Inside Pair"),
-    ctrl_f(&["W"], "F9", "Widen Selection to Lines"),
-    ctrl_f(&["N"], "F10", "Un-Split Pane"),
-    ctrl_f(&["L"], "F11", "Reload File"),
-    ctrl_f(&["Q"], "F12", "Quit File"),
-    Keybinding {
-        modifier: Some("Shift"),
-        keys: &[LEFT, DOWN, UP, RIGHT],
-        action: "Highlight Text",
-        f: "",
-    },
-    ctrl(&["Home", "End"], "Start / End of Selection"),
-    ctrl(&["X", "C", "V"], "Cut / Copy / Paste"),
-    ctrl(&["Z", "Y"], "Undo / Redo"),
-    ctrl(&["PgUp", "PgDn"], "Switch File"),
-    ctrl(&[DOWN, UP], "Switch Pane"),
-];
-
-pub static EDITING_VERTICAL: &[Keybinding] = &[
-    ctrl_f(&["O"], "F2", "Open File"),
-    ctrl_f(&["S"], "F3", "Save File"),
-    ctrl_f(&["T"], "F4", "Goto Line"),
-    ctrl_f(&["F"], "F5", "Find Text"),
-    // F6 is for replace text
-    ctrl_f(&["P"], "F7", "Goto Matching Pair"),
-    ctrl_f(&["E"], "F8", "Select Inside Pair"),
-    ctrl_f(&["W"], "F9", "Widen Selection to Lines"),
-    ctrl_f(&["N"], "F10", "Un-Split Pane"),
-    ctrl_f(&["L"], "F11", "Reload File"),
-    ctrl_f(&["Q"], "F12", "Quit File"),
-    Keybinding {
-        modifier: Some("Shift"),
-        keys: &[LEFT, DOWN, UP, RIGHT],
-        action: "Highlight Text",
-        f: "",
-    },
-    ctrl(&["Home", "End"], "Start / End of Selection"),
-    ctrl(&["X", "C", "V"], "Cut / Copy / Paste"),
-    ctrl(&["Z", "Y"], "Undo / Redo"),
-    ctrl(&["PgUp", "PgDn"], "Switch File"),
-    ctrl(&[LEFT, RIGHT], "Switch Pane"),
-];
+pub static SWITCH_PANE_HORIZONTAL: Keybinding = ctrl(&[DOWN, UP], "Switch Pane");
+pub static SWITCH_PANE_VERTICAL: Keybinding = ctrl(&[LEFT, RIGHT], "Switch Pane");
 
 pub static VERIFY_SAVE: &[Keybinding] = &[
     none(&["Y"], "Yes, Overwrite Contents"),
