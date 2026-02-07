@@ -809,6 +809,19 @@ impl BufferContext {
         }
     }
 
+    pub fn select_line_and_column(&mut self, line: usize, column: usize) {
+        let buf = self.buffer.borrow_move();
+        if let Ok(line_start) = buf.rope.try_line_to_char(line)
+            && let Ok(next_line_start) = buf.rope.try_line_to_char(line + 1)
+        {
+            self.cursor = (line_start + column).min(next_line_start.saturating_sub(1));
+            self.cursor_column = cursor_column(&buf.rope, self.cursor);
+            self.selection = None;
+        } else {
+            self.message = Some(BufferMessage::Error("invalid line".into()));
+        }
+    }
+
     pub fn insert_char(&mut self, alt: Option<AltCursor<'_>>, c: char) {
         use unicode_width::UnicodeWidthChar;
 

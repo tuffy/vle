@@ -941,7 +941,12 @@ fn process_select_line(
             None
         }
         key!(Enter) => {
-            buffer.select_line(prompt.line().saturating_sub(1));
+            match prompt.line_and_column() {
+                (line, None) => buffer.select_line(line.saturating_sub(1)),
+                (line, Some(col)) => {
+                    buffer.select_line_and_column(line.saturating_sub(1), col.saturating_sub(1))
+                }
+            }
             Some(EditorMode::default())
         }
         key!(Home) => {

@@ -136,7 +136,7 @@ impl TextField {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub enum Digit {
     Digit0,
     Digit1,
@@ -149,6 +149,7 @@ pub enum Digit {
     Digit8,
     Digit9,
     Separator,
+    Column,
 }
 
 impl TryFrom<char> for Digit {
@@ -167,13 +168,16 @@ impl TryFrom<char> for Digit {
             '8' => Ok(Digit::Digit8),
             '9' => Ok(Digit::Digit9),
             ',' | '_' | '.' => Ok(Digit::Separator),
+            ':' => Ok(Digit::Column),
             c => Err(c),
         }
     }
 }
 
+pub struct Column;
+
 impl TryFrom<Digit> for usize {
-    type Error = ();
+    type Error = Option<Column>;
 
     fn try_from(d: Digit) -> Result<Self, Self::Error> {
         match d {
@@ -187,7 +191,8 @@ impl TryFrom<Digit> for usize {
             Digit::Digit7 => Ok(7),
             Digit::Digit8 => Ok(8),
             Digit::Digit9 => Ok(9),
-            Digit::Separator => Err(()),
+            Digit::Separator => Err(None),
+            Digit::Column => Err(Some(Column)),
         }
     }
 }
@@ -206,40 +211,65 @@ impl std::fmt::Display for Digit {
             Digit::Digit8 => 8.fmt(f),
             Digit::Digit9 => 9.fmt(f),
             Digit::Separator => '_'.fmt(f),
+            Digit::Column => ':'.fmt(f),
         }
     }
 }
 
 #[derive(Default)]
 pub struct LinePrompt {
-    line: Vec<Digit>,
+    value: Vec<Digit>,
 }
 
 impl LinePrompt {
     pub const MAX: usize = 9;
 
-    pub fn push(&mut self, d: Digit) {
-        if !(self.line.is_empty() && matches!(d, Digit::Digit0)) && self.line.len() < Self::MAX {
-            self.line.push(d);
+    pub fn push(&mut self, digit: Digit) {
+        if self.value.len() < Self::MAX {
+            match digit {
+                d @ Digit::Digit0 | d @ Digit::Separator => {
+                    if !self.value.is_empty() {
+                        self.value.push(d);
+                    }
+                }
+                d @ Digit::Column => {
+                    if !self.value.is_empty() && !self.value.contains(&d) {
+                        self.value.push(d);
+                    }
+                }
+                d => self.value.push(d),
+            }
         }
     }
 
     pub fn pop(&mut self) -> Option<Digit> {
-        self.line.pop()
+        self.value.pop()
     }
 
-    pub fn line(&self) -> usize {
-        let mut line = 0;
-        for digit in self.line.iter().filter_map(|d| usize::try_from(*d).ok()) {
-            line *= 10;
-            line += digit;
+    pub fn line_and_column(&self) -> (usize, Option<usize>) {
+        let mut digits = self.value.iter();
+        match digits
+            .by_ref()
+            .try_fold(0, |acc, d| match usize::try_from(*d) {
+                Ok(digit) => Ok(acc * 10 + digit),
+                Err(None) => Ok(acc),          // skip digits separators
+                Err(Some(Column)) => Err(acc), // hit columns separator
+            }) {
+            Ok(lines) => (lines, None),
+            Err(lines) => (
+                lines,
+                Some(
+                    digits
+                        .filter_map(|d| usize::try_from(*d).ok())
+                        .fold(0, |acc, digit| acc * 10 + digit),
+                ),
+            ),
         }
-        line
     }
 }
 
 impl std::fmt::Display for LinePrompt {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.line.iter().copied().try_for_each(|d| d.fmt(f))
+        self.value.iter().copied().try_for_each(|d| d.fmt(f))
     }
 }
