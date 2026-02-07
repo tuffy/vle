@@ -11,7 +11,7 @@ use crate::files::{EitherSource, SshSource};
 use crate::{
     buffer::{
         AltCursor, BufferContext, BufferId, BufferList, CutBuffer, MatchCapture, MultiCursor,
-        Source,
+        SelectionRange, Source,
     },
     files::{ChooserSource, FileChooserState, LocalSource},
     prompt::{LinePrompt, TextField},
@@ -53,6 +53,7 @@ pub enum EditorMode {
     Search {
         prompt: TextField,
         type_: SearchType,
+        range: Option<SelectionRange>,
     },
     /// Browsing search results
     BrowseMatches {
@@ -312,10 +313,20 @@ impl Editor {
                         self.mode = new_mode;
                     }
                 }
-                EditorMode::Search { prompt, type_ } => {
+                EditorMode::Search {
+                    prompt,
+                    type_,
+                    range,
+                } => {
                     if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                        && let Some(new_mode) =
-                            process_search(buf, self.cut_buffer.as_ref(), prompt, type_, event)
+                        && let Some(new_mode) = process_search(
+                            buf,
+                            self.cut_buffer.as_ref(),
+                            prompt,
+                            type_,
+                            range.as_ref(),
+                            event,
+                        )
                     {
                         self.mode = match new_mode {
                             NextModeIncremental::Browse { match_idx, matches } => {
@@ -441,6 +452,7 @@ impl Editor {
     }
 
     fn process_normal_event(&mut self, area: Rect, event: Event) {
+        use crate::buffer::SelectionType;
         use crossterm::event::{
             Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent,
             MouseEventKind,
@@ -612,15 +624,21 @@ impl Editor {
                 };
             }
             key!(CONTROL, 'f') | key!(F(5)) => {
-                if let Some(Ok(find)) = self.on_buffer(|b| match b.selection() {
-                    Some(selection) if !selection.is_empty() => {
-                        b.all_matches(selection).map(|(match_idx, matches)| {
+                if let Some(Ok(find)) = self.on_buffer(|b| match b.selection_range() {
+                    Some(SelectionType::Term(selection)) => {
+                        b.all_matches(None, selection).map(|(match_idx, matches)| {
                             EditorMode::BrowseMatches { match_idx, matches }
                         })
                     }
-                    _ => Ok(EditorMode::Search {
+                    Some(SelectionType::Range(range)) => Ok(EditorMode::Search {
                         prompt: TextField::default(),
                         type_: SearchType::default(),
+                        range: Some(range),
+                    }),
+                    None => Ok(EditorMode::Search {
+                        prompt: TextField::default(),
+                        type_: SearchType::default(),
+                        range: None,
                     }),
                 }) {
                     self.mode = find;
@@ -960,6 +978,7 @@ fn process_select_line(
         key!(CONTROL, 'f') | key!(F(5)) => Some(EditorMode::Search {
             prompt: TextField::default(),
             type_: SearchType::default(),
+            range: None,
         }),
         _ => {
             None // ignore other events
@@ -1050,6 +1069,7 @@ fn process_search(
     cut_buffer: Option<&CutBuffer>,
     prompt: &mut TextField,
     type_: &mut SearchType,
+    range: Option<&SelectionRange>,
     event: Event,
 ) -> Option<NextModeIncremental> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -1074,7 +1094,7 @@ fn process_search(
             None
         }
         key!(Enter) => match type_ {
-            SearchType::Plain => match buffer.all_matches(prompt.value()?) {
+            SearchType::Plain => match buffer.all_matches(range, prompt.value()?) {
                 Ok((match_idx, matches)) => {
                     Some(NextModeIncremental::Browse { match_idx, matches })
                 }
@@ -1084,7 +1104,7 @@ fn process_search(
                 }
             },
             SearchType::Regex => match prompt.value()?.parse::<regex_lite::Regex>() {
-                Ok(regex) => match buffer.all_matches(regex) {
+                Ok(regex) => match buffer.all_matches(range, regex) {
                     Ok((match_idx, matches)) => {
                         Some(NextModeIncremental::Browse { match_idx, matches })
                     }

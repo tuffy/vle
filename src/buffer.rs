@@ -15,6 +15,7 @@ use ratatui::{
 };
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::num::NonZero;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -1074,14 +1075,27 @@ impl BufferContext {
     }
 
     /// Returns selection without clearing it, if any
-    pub fn selection(&self) -> Option<String> {
+    pub fn selection_range(&self) -> Option<SelectionType> {
         let (selection_start, selection_end) = reorder(self.cursor, self.selection?);
 
-        self.buffer
-            .borrow()
-            .rope
-            .get_slice(selection_start..selection_end)
-            .map(|r| r.into())
+        if selection_start == selection_end {
+            return None;
+        }
+
+        let buf = self.buffer.borrow();
+        let rope = &buf.rope;
+
+        let start_line = rope.try_char_to_line(selection_start).ok()?;
+        let end_line = rope.try_char_to_line(selection_end).ok()?;
+        if start_line == end_line {
+            rope.get_slice(selection_start..selection_end)
+                .map(|r| SelectionType::Term(r.into()))
+        } else {
+            Some(SelectionType::Range(SelectionRange {
+                start: start_line,
+                lines: NonZero::new((end_line - start_line) + 1)?,
+            }))
+        }
     }
 
     pub fn get_selection(&mut self) -> Option<CutBuffer> {
@@ -1121,12 +1135,13 @@ impl BufferContext {
     /// Returns Err(term) if no matches found
     pub fn all_matches<'s, S: SearchTerm<'s>>(
         &mut self,
+        range: Option<&SelectionRange>,
         term: S,
     ) -> Result<(usize, Vec<(Range<usize>, Vec<Option<MatchCapture>>)>), S> {
         let buf = self.buffer.borrow_move();
         let rope = &buf.rope;
 
-        let matches = search_area(rope)
+        let matches = search_area(rope, range)
             .flat_map(|(line, offset)| {
                 term.match_ranges(&line)
                     .map(|m| m + offset)
@@ -1905,6 +1920,16 @@ impl std::ops::SubAssign<usize> for MultiCursor {
         self.range.end -= chars;
         self.cursor -= chars;
     }
+}
+
+pub enum SelectionType {
+    Term(String),
+    Range(SelectionRange),
+}
+
+pub struct SelectionRange {
+    start: usize,
+    lines: NonZero<usize>,
 }
 
 pub trait SearchTerm<'s>: std::fmt::Display {
@@ -3421,7 +3446,7 @@ impl StatefulWidget for BufferWidget<'_> {
             Some(EditorMode::SelectLine { .. }) => {
                 render_help(text_area, buf, SELECT_LINE, |b| b);
             }
-            Some(EditorMode::Search { prompt, type_ }) => {
+            Some(EditorMode::Search { prompt, type_, .. }) => {
                 render_help(
                     text_area,
                     buf,
@@ -3556,7 +3581,10 @@ impl From<String> for CutBuffer {
 
 /// Given rope and starting area in chars,
 /// yields lines and their start points in bytes
-fn search_area(rope: &ropey::Rope) -> impl Iterator<Item = (Cow<'_, str>, usize)> {
+fn search_area<'r>(
+    rope: &'r ropey::Rope,
+    range: Option<&SelectionRange>,
+) -> impl Iterator<Item = (Cow<'r, str>, usize)> {
     fn no_nl(s: Cow<'_, str>) -> Option<Cow<'_, str>> {
         (!s.is_empty()).then(|| match s {
             Cow::Borrowed(s) => Cow::Borrowed(s.trim_end_matches('\n')),
@@ -3569,9 +3597,19 @@ fn search_area(rope: &ropey::Rope) -> impl Iterator<Item = (Cow<'_, str>, usize)
         })
     }
 
-    rope.lines().enumerate().filter_map(|(line_num, line)| {
-        Some((no_nl(line.into())?, rope.try_line_to_byte(line_num).ok()?))
-    })
+    match range {
+        None => Box::new(rope.lines().enumerate().filter_map(|(line_num, line)| {
+            Some((no_nl(line.into())?, rope.try_line_to_byte(line_num).ok()?))
+        })) as Box<dyn Iterator<Item = (Cow<'_, str>, usize)>>,
+        Some(SelectionRange { start, lines }) => Box::new(
+            (*start..)
+                .zip(rope.lines_at(*start))
+                .take(lines.get())
+                .filter_map(|(line_num, line)| {
+                    Some((no_nl(line.into())?, rope.try_line_to_byte(line_num).ok()?))
+                }),
+        ),
+    }
 }
 
 /// Buffer's undo/redo state
