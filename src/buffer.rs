@@ -451,9 +451,14 @@ impl Buffer {
     }
 
     /// Attempts to reload buffer from disk
-    fn reload(&mut self) -> std::io::Result<()> {
+    fn reload(
+        &mut self,
+        cursor: &mut usize,
+        selection: &mut Option<usize>,
+        alt: Option<AltCursor<'_>>,
+    ) -> std::io::Result<()> {
         let (saved, reloaded) = self.source.read_string(self.endings)?;
-        patch_rope(&mut self.rope.get_mut(), reloaded);
+        patch_rope(&mut self.rope.get_mut(), reloaded, cursor, selection, alt);
         self.rope.save();
         self.saved = saved;
         if let Some(last) = self.undo.last_mut() {
@@ -548,12 +553,10 @@ impl BufferContext {
         Buffer::open(source).map(|b| b.into())
     }
 
-    pub fn reload(&mut self) {
+    pub fn reload(&mut self, alt: Option<AltCursor<'_>>) {
         let mut buf = self.buffer.borrow_mut();
-        match buf.reload() {
+        match buf.reload(&mut self.cursor, &mut self.selection, alt) {
             Ok(()) => {
-                self.cursor = self.cursor.min(buf.rope.len_chars());
-                self.selection = None;
                 self.message = Some(BufferMessage::Notice("Reloaded".into()));
             }
             Err(err) => {
@@ -3646,26 +3649,53 @@ impl BufferMessage {
     }
 }
 
-// Patches source to match target using diffs
-fn patch_rope(source: &mut ropey::Rope, target: String) {
+/// Patches source to match target using diffs
+///
+/// Adjusts cursor and alt cursor in the process
+fn patch_rope(
+    source: &mut ropey::Rope,
+    target: String,
+    cursor: &mut usize,
+    selection: &mut Option<usize>,
+    alt: Option<AltCursor<'_>>,
+) {
     use imara_diff::{Algorithm::Histogram, Diff, Hunk, InternedInput};
     use ropey::Rope;
     use std::ops::Range;
 
-    fn remove_lines(rope: &mut Rope, lines: Range<u32>) {
-        rope.remove(rope.line_to_char(lines.start as usize)..rope.line_to_char(lines.end as usize));
+    #[must_use]
+    fn remove_lines(rope: &mut Rope, lines: Range<u32>) -> Range<usize> {
+        let removed =
+            rope.line_to_char(lines.start as usize)..rope.line_to_char(lines.end as usize);
+        rope.remove(removed.clone());
+        removed
     }
 
-    fn get_lines(rope: &Rope, lines: Range<u32>) -> String {
+    // returns string and length in characters
+    fn get_lines(rope: &Rope, lines: Range<u32>) -> (String, usize) {
         if lines.end > lines.start {
             rope.lines_at(lines.start as usize)
                 .take((lines.end - lines.start) as usize)
-                .fold(String::default(), |mut acc, line| {
-                    acc.extend(line.chunks());
-                    acc
+                .fold((String::default(), 0), |(mut s, chars), line| {
+                    s.extend(line.chunks());
+                    (s, chars + line.len_chars())
                 })
         } else {
-            String::default()
+            (String::default(), 0)
+        }
+    }
+
+    fn decrement_pos(pos: &mut usize, removed: &Range<usize>) {
+        if *pos > removed.end {
+            *pos -= removed.end - removed.start;
+        } else if *pos > removed.start {
+            *pos = removed.start;
+        }
+    }
+
+    fn increment_pos(pos: &mut usize, inserted_pos: usize, inserted_chars: usize) {
+        if *pos >= inserted_pos {
+            *pos += inserted_chars;
         }
     }
 
@@ -3683,11 +3713,29 @@ fn patch_rope(source: &mut ropey::Rope, target: String) {
 
     let target = Rope::from(target);
 
+    let mut alt = Secondary::new(alt, |_| true);
+
     for Hunk { before, after } in hunks.into_iter().rev() {
-        remove_lines(source, before.clone());
-        let to_insert = get_lines(&target, after);
+        let removed = remove_lines(source, before.clone());
+
+        decrement_pos(cursor, &removed);
+        if let Some(selection) = selection.as_mut() {
+            decrement_pos(selection, &removed);
+        }
+        alt.update(|a| decrement_pos(a, &removed));
+
+        let (to_insert, inserted_chars) = get_lines(&target, after);
+
         if !to_insert.is_empty() {
-            source.insert(source.line_to_char(before.start as usize), &to_insert);
+            let inserted_pos = source.line_to_char(before.start as usize);
+
+            increment_pos(cursor, inserted_pos, inserted_chars);
+            if let Some(selection) = selection.as_mut() {
+                increment_pos(selection, inserted_pos, inserted_chars);
+            }
+            alt.update(|a| increment_pos(a, inserted_pos, inserted_chars));
+
+            source.insert(inserted_pos, &to_insert);
         }
     }
 }

@@ -253,6 +253,19 @@ impl Editor {
         self.layout.selected_buffer_list_mut().on_buf(f)
     }
 
+    fn on_buffer_at<T>(
+        &mut self,
+        f: impl FnOnce(&mut crate::buffer::BufferContext, Option<AltCursor<'_>>) -> T,
+    ) -> Option<T> {
+        let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
+        // Both primary and secondary buffer should be at the same index
+        // within the BufferList.
+        let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
+        primary
+            .current_mut()
+            .map(|primary| f(primary, secondary.map(|s| s.alt_cursor())))
+    }
+
     fn perform_cut(&mut self) {
         let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
         let cur_idx = cur_buf_list.current_index();
@@ -684,11 +697,11 @@ impl Editor {
                 },
             },
             key!(CONTROL, 'l') | key!(F(11)) => {
-                if let Some(new_mode) = self.on_buffer(|b| {
+                if let Some(new_mode) = self.on_buffer_at(|b, a| {
                     if b.modified() {
                         EditorMode::VerifyReload
                     } else {
-                        b.reload();
+                        b.reload(a);
                         EditorMode::default()
                     }
                 }) {
@@ -776,7 +789,7 @@ impl Editor {
         match event {
             key!('y') => {
                 // reload buffer anyway
-                self.update_buffer(|b| b.reload());
+                self.update_buffer_at(|b, a| b.reload(a));
                 self.mode = EditorMode::default();
             }
             key!('n') => {
