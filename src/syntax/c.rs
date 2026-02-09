@@ -17,7 +17,7 @@ enum CToken {
     #[regex("[[:upper:]_][[:upper:][:digit:]_]+")]
     Constant,
 
-    #[regex("[[:lower:][:upper:]][[:lower:][:upper:][:digit:]_]*")]
+    #[regex("[[:lower:][:upper:]_][[:lower:][:upper:][:digit:]_]*")]
     Variable,
 
     #[token("alignas")]
