@@ -23,7 +23,7 @@ pub trait ChooserSource {
 
     fn current_dir(&self) -> Result<PathBuf, Self::Error>;
 
-    fn read_dir(&self, dir: &Path) -> Result<Vec<Entry>, Self::Error>;
+    fn read_dir(&self, dir: &Path, show_hidden: bool) -> Result<Vec<Entry>, Self::Error>;
 
     fn open(&self, path: PathBuf) -> Source;
 }
@@ -38,9 +38,24 @@ impl ChooserSource for LocalSource {
         std::env::current_dir()
     }
 
-    fn read_dir(&self, dir: &Path) -> std::io::Result<Vec<Entry>> {
+    fn read_dir(&self, dir: &Path, show_hidden: bool) -> std::io::Result<Vec<Entry>> {
         dir.read_dir()
-            .and_then(|entries| entries.map(|e| e.and_then(Entry::try_from)).collect())
+            .and_then(|entries| {
+                entries
+                    .map(|e| e.and_then(Entry::try_from))
+                    .filter_map(|e| {
+                        if show_hidden {
+                            Some(e)
+                        } else {
+                            match e {
+                                Ok(e) if e.is_hidden() => None,
+                                Ok(e) => Some(Ok(e)),
+                                Err(e) => Some(Err(e)),
+                            }
+                        }
+                    })
+                    .collect()
+            })
             .map(|mut entries: Vec<Entry>| {
                 entries.sort_unstable_by(|x, y| {
                     x.is_dir.cmp(&y.is_dir).reverse().then(x.path.cmp(&y.path))
@@ -76,7 +91,7 @@ impl ChooserSource for SshSource {
         self.remote.realpath(Path::new("."))
     }
 
-    fn read_dir(&self, dir: &Path) -> Result<Vec<Entry>, Self::Error> {
+    fn read_dir(&self, dir: &Path, show_hidden: bool) -> Result<Vec<Entry>, Self::Error> {
         self.remote
             .readdir(dir)
             .map(|entries| {
@@ -88,6 +103,7 @@ impl ChooserSource for SshSource {
                             pb,
                         ))
                     })
+                    .filter_map(|e| (show_hidden || !e.is_hidden()).then_some(e))
                     .collect()
             })
             .map(|mut entries: Vec<Entry>| {
@@ -123,10 +139,10 @@ impl ChooserSource for EitherSource {
         }
     }
 
-    fn read_dir(&self, dir: &Path) -> Result<Vec<Entry>, Self::Error> {
+    fn read_dir(&self, dir: &Path, show_hidden: bool) -> Result<Vec<Entry>, Self::Error> {
         match self {
-            Self::Local(l) => l.read_dir(dir).map_err(EitherError::Io),
-            Self::Ssh(s) => s.read_dir(dir).map_err(EitherError::Ssh),
+            Self::Local(l) => l.read_dir(dir, show_hidden).map_err(EitherError::Io),
+            Self::Ssh(s) => s.read_dir(dir, show_hidden).map_err(EitherError::Ssh),
         }
     }
 
@@ -278,7 +294,13 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
                 Chosen::Default | Chosen::Selected(_) => OPEN_FILE,
                 Chosen::New(_) => CREATE_FILE,
             },
-            |b| b,
+            |b| {
+                if state.show_hidden {
+                    b.title_top("Showing Hidden")
+                } else {
+                    b
+                }
+            },
         );
 
         if let Some(error) = state.error.take() {
@@ -296,6 +318,7 @@ pub struct FileChooserState<S: ChooserSource> {
     chosen: Chosen,        // either new file or chosen entries
     error: Option<String>, // error message
     source: S,             // file source
+    show_hidden: bool,     // whether to display hidden files
 }
 
 impl<S: ChooserSource> FileChooserState<S> {
@@ -304,7 +327,7 @@ impl<S: ChooserSource> FileChooserState<S> {
     pub fn new(source: S) -> Result<Self, S::Error> {
         let cwd = source.current_dir()?;
 
-        let contents = source.read_dir(&cwd)?;
+        let contents = source.read_dir(&cwd, false)?;
 
         Ok(Self {
             dir: cwd.clone(),
@@ -315,11 +338,12 @@ impl<S: ChooserSource> FileChooserState<S> {
             chosen: Chosen::default(),
             error: None,
             source,
+            show_hidden: false,
         })
     }
 
     pub fn update_dir(&mut self, new_dir: PathBuf) {
-        match self.source.read_dir(&new_dir) {
+        match self.source.read_dir(&new_dir, self.show_hidden) {
             Ok(contents) => {
                 self.dir_count = contents.iter().take_while(|e| e.is_dir).count();
                 self.contents = contents;
@@ -330,6 +354,12 @@ impl<S: ChooserSource> FileChooserState<S> {
                 self.error = Some(err.to_string());
             }
         }
+    }
+
+    pub fn toggle_show_hidden(&mut self) {
+        self.show_hidden = !self.show_hidden;
+        let dir = std::mem::take(&mut self.dir);
+        self.update_dir(dir);
     }
 
     pub fn dir_entries(&self) -> impl Iterator<Item = &str> {
@@ -548,6 +578,12 @@ pub struct Entry {
     name: String,  // user-visible name
     path: PathBuf, // actual path on disk
     is_dir: bool,  // whether item is directory
+}
+
+impl Entry {
+    fn is_hidden(&self) -> bool {
+        self.name.starts_with('.')
+    }
 }
 
 impl TryFrom<std::fs::DirEntry> for Entry {

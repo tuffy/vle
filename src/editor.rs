@@ -1056,6 +1056,10 @@ fn process_open_file<S: ChooserSource>(
             chooser.toggle_selected();
             None
         }
+        key!(CONTROL, 'h') => {
+            chooser.toggle_show_hidden();
+            None
+        }
         key!(Enter) => {
             for selected in chooser.select()? {
                 if let Err(()) = layout.add(selected) {

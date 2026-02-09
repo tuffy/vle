@@ -242,6 +242,7 @@ pub static OPEN_FILE: &[Keybinding] = &[
     none(&[LEFT], "Up Directory"),
     none(&[RIGHT], "Down Directory"),
     none(&["Tab"], "Toggle File to Open"),
+    ctrl(&["H"], "Toggle Show Hidden Files"),
     none(&["Enter"], "Select File(s)"),
     none(&["Esc"], "Cancel"),
 ];
