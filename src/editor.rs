@@ -957,15 +957,34 @@ fn process_select_line(
             }
             None
         }
-        Event::Paste(pasted) => match pasted.parse::<usize>() {
-            Ok(line) => {
-                buffer.select_line(line.saturating_sub(1));
-                Some(EditorMode::default())
-            }
-            Err(_) => {
-                buffer.set_error("Invalid Line Number");
-                None
-            }
+        Event::Paste(pasted) => match pasted.split_once(':') {
+            None => match pasted.parse::<usize>() {
+                Ok(line) => {
+                    buffer.select_line(line.saturating_sub(1));
+                    Some(EditorMode::default())
+                }
+                Err(_) => {
+                    buffer.set_error("Invalid Line Number");
+                    None
+                }
+            },
+            Some((line, column)) => match line.parse::<usize>() {
+                Ok(line) => match column.parse::<usize>() {
+                    Ok(col) => {
+                        buffer
+                            .select_line_and_column(line.saturating_sub(1), col.saturating_sub(1));
+                        Some(EditorMode::default())
+                    }
+                    Err(_) => {
+                        buffer.set_error("Invalid Column Number");
+                        None
+                    }
+                },
+                Err(_) => {
+                    buffer.set_error("Invalid Line Number");
+                    None
+                }
+            },
         },
         key!(Backspace) => {
             prompt.pop();
