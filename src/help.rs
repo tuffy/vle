@@ -25,7 +25,7 @@ const fn ctrl(keys: &'static [&'static str], action: &'static str) -> Keybinding
     }
 }
 
-const fn ctrl_f(
+pub const fn ctrl_f(
     keys: &'static [&'static str],
     f: &'static str,
     action: &'static str,
@@ -167,7 +167,6 @@ pub static EDITING_0: &[Keybinding] = &[
     ctrl_f(&["O"], "F2", "Open File"),
     ctrl_f(&["S"], "F3", "Save File"),
     ctrl_f(&["T"], "F4", "Goto Line"),
-    ctrl_f(&["T"], "F5", "Find Text"),
 ];
 
 pub static EDITING_1: &[Keybinding] = &[

@@ -1763,7 +1763,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                     BufferWidget {
                         mode: Some(mode),
                         layout: EditorLayout::Single,
-                        show_help,
+                        show_help: show_help.then(|| buffer.find_mode()),
                     }
                     .render(area, buf, buffer);
                 }
@@ -1781,7 +1781,9 @@ impl StatefulWidget for LayoutWidget<'_> {
                             HorizontalPos::Bottom => None,
                         },
                         layout: EditorLayout::Horizontal,
-                        show_help: show_help && !matches!(which, HorizontalPos::Top),
+                        show_help: (show_help && !matches!(which, HorizontalPos::Top))
+                            .then(|| bottom.find_mode())
+                            .flatten(),
                     }
                     .render(top_area, buf, buffer);
                 }
@@ -1792,7 +1794,9 @@ impl StatefulWidget for LayoutWidget<'_> {
                             HorizontalPos::Bottom => Some(mode),
                         },
                         layout: EditorLayout::Horizontal,
-                        show_help: show_help && !matches!(which, HorizontalPos::Bottom),
+                        show_help: (show_help && !matches!(which, HorizontalPos::Bottom))
+                            .then(|| top.find_mode())
+                            .flatten(),
                     }
                     .render(bottom_area, buf, buffer);
                 }
@@ -1810,7 +1814,9 @@ impl StatefulWidget for LayoutWidget<'_> {
                             VerticalPos::Right => None,
                         },
                         layout: EditorLayout::Vertical,
-                        show_help: show_help && !matches!(which, VerticalPos::Left),
+                        show_help: (show_help && !matches!(which, VerticalPos::Left))
+                            .then(|| right.find_mode())
+                            .flatten(),
                     }
                     .render(left_area, buf, buffer);
                 }
@@ -1821,7 +1827,9 @@ impl StatefulWidget for LayoutWidget<'_> {
                             VerticalPos::Right => Some(mode),
                         },
                         layout: EditorLayout::Vertical,
-                        show_help: show_help && !matches!(which, VerticalPos::Right),
+                        show_help: (show_help && !matches!(which, VerticalPos::Right))
+                            .then(|| left.find_mode())
+                            .flatten(),
                     }
                     .render(right_area, buf, buffer);
                 }

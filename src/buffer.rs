@@ -522,6 +522,26 @@ impl PartialEq for BufferId {
     }
 }
 
+pub enum FindMode {
+    WholeFile,
+    Selected,
+    InSelection,
+}
+
+impl From<FindMode> for crate::help::Keybinding {
+    fn from(mode: FindMode) -> Self {
+        crate::help::ctrl_f(
+            &["T"],
+            "F5",
+            match mode {
+                FindMode::WholeFile => "Find in File",
+                FindMode::Selected => "Find Selected Text",
+                FindMode::InSelection => "Find in Selected Lines",
+            },
+        )
+    }
+}
+
 /// A buffer with additional context on a per-view basis
 #[derive(Clone)]
 pub struct BufferContext {
@@ -1735,6 +1755,21 @@ impl BufferContext {
             selection: &mut self.selection,
         }
     }
+
+    pub fn find_mode(&self) -> FindMode {
+        match self.selection {
+            Some(selection) => {
+                let rope = &self.buffer.borrow().rope;
+                if rope.try_char_to_line(self.cursor).ok() == rope.try_char_to_line(selection).ok()
+                {
+                    FindMode::Selected
+                } else {
+                    FindMode::InSelection
+                }
+            }
+            None => FindMode::WholeFile,
+        }
+    }
 }
 
 pub struct AltCursor<'b> {
@@ -2544,12 +2579,16 @@ impl BufferList {
     pub fn has_tabs(&self) -> bool {
         self.buffers.len() > 1
     }
+
+    pub fn find_mode(&self) -> Option<FindMode> {
+        self.current().map(|b| b.find_mode())
+    }
 }
 
 pub struct BufferWidget<'e> {
     pub mode: Option<&'e mut EditorMode>,
     pub layout: crate::editor::EditorLayout,
-    pub show_help: bool,
+    pub show_help: Option<FindMode>,
 }
 
 impl BufferWidget<'_> {
@@ -3404,7 +3443,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
         match self.mode {
             None | Some(EditorMode::Editing) => {
-                if self.show_help {
+                if let Some(find_mode) = self.show_help {
                     use crate::editor::EditorLayout;
                     use crate::help::{
                         EDITING_0, EDITING_1, EDITING_2, F10_SPLIT, F10_UNSPLIT,
@@ -3413,6 +3452,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
                     let mut help = Vec::with_capacity(16);
                     help.extend(EDITING_0);
+                    help.push(find_mode.into());
                     help.extend(EDITING_1);
                     help.push(match self.layout {
                         EditorLayout::Single => F10_UNSPLIT,
