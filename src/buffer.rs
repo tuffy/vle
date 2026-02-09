@@ -1743,22 +1743,37 @@ pub struct AltCursor<'b> {
 }
 
 /// A secondary cursor which implements various math operations
-struct Secondary<'b>(Option<AltCursor<'b>>);
+// struct Secondary<'b>(Option<AltCursor<'b>>);
+struct Secondary<'b> {
+    cursor: Option<&'b mut usize>,
+    selection: Option<&'b mut usize>,
+}
 
 impl<'b> Secondary<'b> {
     /// Takes some optional alternative cursor
     /// and a conditional which takes that cursor's position and
     /// returns true if the secondary cursor should be manipulated
     /// and returns ourself, which implements necessary math operations.
-    fn new(alt: Option<AltCursor<'b>>, f: impl FnOnce(usize) -> bool) -> Self {
-        Self(alt.filter(|alt| f(*alt.cursor)))
+    fn new(alt: Option<AltCursor<'b>>, mut f: impl FnMut(usize) -> bool) -> Self {
+        match alt {
+            Some(alt) => Self {
+                cursor: f(*alt.cursor).then_some(alt.cursor),
+                selection: alt.selection.as_mut().filter(|s| f(**s)),
+            },
+            None => Self {
+                cursor: None,
+                selection: None,
+            },
+        }
     }
 
     /// Updates secondary cursor in-place, if available
-    fn update(&mut self, f: impl FnOnce(&mut usize)) {
-        if let Some(AltCursor { cursor, selection }) = &mut self.0 {
-            f(cursor);
-            **selection = None;
+    fn update(&mut self, mut f: impl FnMut(&mut usize)) {
+        if let Some(cursor) = &mut self.cursor {
+            f(cursor)
+        }
+        if let Some(selection) = &mut self.selection {
+            f(selection)
         }
     }
 }
