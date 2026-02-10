@@ -1,14 +1,14 @@
 [package]
 name = "vle"
 description = "Very Little Editor - an exercise in minimalist text editing"
-version = "0.29.2"
+version = "1.0.0"
 edition = "2024"
 license = "MIT/Apache-2.0"
 keywords = ["editor", "terminal", "text-editor"]
 categories = ["development-tools", "text-editors"]
 authors = ["Brian Langenberger <bjl@usa.net>"]
 repository = "https://github.com/tuffy/vle"
-# homepage = "TODO"
+homepage = "https://github.com/tuffy/vle"
 
 [[bin]]
 name = "vle"
