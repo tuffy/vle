@@ -15,6 +15,8 @@ By restricting our feature set to less than twenty powerful features,
 we can devote more mental effort to our projects and less mental
 effort to our tools.
 
+[![asciicast](https://asciinema.org/a/MBH2FO9IU6LNWUvC.svg)](https://asciinema.org/a/MBH2FO9IU6LNWUvC)
+
 # Installation
 
 Installing VLE from source can be done using Cargo:
@@ -53,7 +55,7 @@ are done via simple environment variables.
 | Redo                           |                | <kbd>Ctrl</kbd>-<kbd>Y</kbd>       |
 | Previous Buffer                |                | <kbd>Ctrl</kbd>-<kbd>PgUp</kbd>    |
 | Next Buffer                    |                | <kbd>Ctrl</kbd>-<kbd>PgDn</kbd>    |
-| Switch Pane                    |                | <kbd>Ctrl</kbd>-<kbd>Arrows</kbd/> |
+| Switch Pane                    |                | <kbd>Ctrl</kbd>-<kbd>Arrows</kbd>  |
 
 Because we have so few features, non-navigational features
 have alternative <kbd>Ctrl</kbd>-based and <kbd>F</kbd>-based keybindings.
