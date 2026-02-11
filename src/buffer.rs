@@ -2290,6 +2290,10 @@ pub fn next_pairing_char(rope: &ropey::Rope, offset: usize) -> Option<(char, usi
         }
     }
 
+    if offset > rope.len_chars() {
+        return None;
+    }
+
     rope.chars_at(offset)
         .zip(0..)
         .find(|(c, _)| match c {
@@ -2335,6 +2339,10 @@ pub fn prev_pairing_char(rope: &ropey::Rope, offset: usize) -> Option<(char, usi
         } else {
             true
         }
+    }
+
+    if offset > rope.len_chars() {
+        return None;
     }
 
     let mut chars = rope.chars_at(offset);
