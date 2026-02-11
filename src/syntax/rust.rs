@@ -72,8 +72,12 @@ enum RustToken {
     #[regex("[[:lower:]][[:lower:][:digit:]_]*")]
     Variable,
 
-    #[regex("[[:digit:]]+")]
-    Integer,
+    #[regex(r"[+-]?[0-9][0-9_]*")]
+    #[regex(r"[+-]?[0-9][0-9_]*\.[0-9_]+(e[+-][0-9]+)?")]
+    #[regex(r"[+-]?0[bB][0-1][0-1_]*")]
+    #[regex(r"[+-]?0[xX][0-9a-fA-F][0-9a-fA-F_]*")]
+    #[regex(r"[+-]?0[oO]?[0-7][0-7_]*")]
+    Number,
 
     #[regex(r#"\"([^\\\"]|\\.)*\""#)]
     #[regex(r"'([^\\\']|\\.){0,1}'")]
@@ -110,7 +114,8 @@ impl TryFrom<RustToken> for Color {
             RustToken::Comment | RustToken::StartComment | RustToken::EndComment => Ok(Color::Blue),
             RustToken::Function => Ok(Color::Magenta),
             RustToken::String => Ok(Color::Green),
-            RustToken::Variable | RustToken::Integer => Err(()),
+            RustToken::Number => Ok(Color::Cyan),
+            RustToken::Variable => Err(()),
         }
     }
 }
