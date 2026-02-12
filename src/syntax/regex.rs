@@ -35,6 +35,10 @@ enum RegexToken {
     #[token("\\(")]
     #[token("\\)")]
     Bracket,
+    #[regex("\\\\[a-zA-Z]")]
+    Escape,
+    #[regex("\\\\[0-9]")]
+    Backreference,
 }
 
 impl TryFrom<RegexToken> for Color {
@@ -45,7 +49,8 @@ impl TryFrom<RegexToken> for Color {
             RegexToken::Position => Ok(Color::Green),
             RegexToken::SubExpression => Ok(Color::Blue),
             RegexToken::Repeat => Ok(Color::Red),
-            RegexToken::Bracketed => Ok(Color::Magenta),
+            RegexToken::Bracketed | RegexToken::Escape => Ok(Color::Magenta),
+            RegexToken::Backreference => Ok(Color::Cyan),
             RegexToken::Bracket => Err(()),
         }
     }
