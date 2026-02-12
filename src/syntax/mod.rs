@@ -148,8 +148,8 @@ where
 
 impl<'s, P, C> Iterator for EitherLexer<'s, P, C>
 where
-    P: Logos<'s, Source = str, Error = (), Extras: Default> + Plain,
-    C: Logos<'s, Source = P::Source, Extras = P::Extras, Error = ()> + Commenting + Into<P>,
+    P: Logos<'s, Source = str, Extras: Default> + Plain,
+    C: Logos<'s, Source = P::Source, Extras = P::Extras, Error = P::Error> + Commenting + Into<P>,
 {
     type Item = (Result<P, P::Error>, std::ops::Range<usize>);
 
