@@ -2026,9 +2026,9 @@ impl std::ops::Add<usize> for SearchMatch {
     }
 }
 
-impl SearchTerm<'static> for regex_lite::Regex {
+impl SearchTerm<'static> for fancy_regex::Regex {
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = SearchMatch> {
-        self.captures_iter(s).map(|c| {
+        self.captures_iter(s).filter_map(|c| c.ok()).map(|c| {
             // guaranteed to have at least one capture
             let first = c.get(0).unwrap();
             SearchMatch {

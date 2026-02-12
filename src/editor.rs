@@ -1139,7 +1139,7 @@ fn process_search(
                     None
                 }
             },
-            SearchType::Regex => match prompt.value()?.parse::<regex_lite::Regex>() {
+            SearchType::Regex => match prompt.value()?.parse::<fancy_regex::Regex>() {
                 Ok(regex) => match buffer.all_matches(range, regex) {
                     Ok((match_idx, matches)) => {
                         Some(NextModeIncremental::Browse { match_idx, matches })
