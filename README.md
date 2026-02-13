@@ -41,7 +41,7 @@ are done via simple environment variables.
 | Replace Text                   | <kbd>F6</kbd>  | <kbd>Ctrl</kbd>-<kbd>R</kbd>       |
 | Goto Matching Pair             | <kbd>F7</kbd>  | <kbd>Ctrl</kbd>-<kbd>P</kbd>       |
 | Select Inside Pair             | <kbd>F8</kbd>  | <kbd>Ctrl</kbd>-<kbd>E</kbd>       |
-| Widen Selection to Whole Lines | <kbd>F9</kbd>  | <kbd>Ctrl</kbd>-<kbd>W</kbd>       |
+| Select Word or Whole Lines     | <kbd>F9</kbd>  | <kbd>Ctrl</kbd>-<kbd>W</kbd>       |
 | Split/Un-Split Pane            | <kbd>F10</kbd> | <kbd>Ctrl</kbd>-<kbd>N</kbd>       |
 | Reload File                    | <kbd>F11</kbd> | <kbd>Ctrl</kbd>-<kbd>L</kbd>       |
 | Quit File                      | <kbd>F12</kbd> | <kbd>Ctrl</kbd>-<kbd>Q</kbd>       |

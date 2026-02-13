@@ -173,7 +173,6 @@ pub static EDITING_1: &[Keybinding] = &[
     // F6 is for replace text
     ctrl_f(&["P"], "F7", "Goto Matching Pair"),
     ctrl_f(&["E"], "F8", "Select Inside Pair"),
-    ctrl_f(&["W"], "F9", "Widen Selection to Lines"),
 ];
 
 pub static F10_UNSPLIT: Keybinding = ctrl_f(&["N"], "F10", "Split Pane");

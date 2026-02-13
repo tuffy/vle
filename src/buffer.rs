@@ -522,6 +522,24 @@ impl PartialEq for BufferId {
     }
 }
 
+pub enum WholeSelect {
+    Word,
+    Lines,
+}
+
+impl From<WholeSelect> for crate::help::Keybinding {
+    fn from(mode: WholeSelect) -> Self {
+        crate::help::ctrl_f(
+            &["W"],
+            "F9",
+            match mode {
+                WholeSelect::Word => "Select Word",
+                WholeSelect::Lines => "Widen Selection to Lines",
+            },
+        )
+    }
+}
+
 pub enum FindMode {
     WholeFile,
     Selected,
@@ -540,6 +558,11 @@ impl From<FindMode> for crate::help::Keybinding {
             },
         )
     }
+}
+
+pub struct Help {
+    select: WholeSelect,
+    find: FindMode,
 }
 
 /// A buffer with additional context on a per-view basis
@@ -1508,22 +1531,43 @@ impl BufferContext {
         }
     }
 
-    pub fn select_whole_lines(&mut self) {
+    pub fn select_word_or_lines(&mut self) {
         let buf = &mut self.buffer.borrow_move();
         let rope = &buf.rope;
 
         match self.selection {
             None => {
-                // no selection, so select current line instead
-
-                if let Some((start, end)) = rope
-                    .try_char_to_line(self.cursor)
-                    .ok()
-                    .and_then(|line| line_char_range(rope, line))
-                {
-                    self.selection = Some(start);
-                    self.cursor = end;
-                    self.cursor_column = cursor_column(rope, self.cursor);
+                // no selection
+                match rope.get_char(self.cursor) {
+                    Some(c) if is_word(c) => {
+                        // widen selection to current word
+                        if let Some(word_start) = rope
+                            .chars_at(self.cursor)
+                            .reversed()
+                            .position(|c| !is_word(c))
+                            .and_then(|pos| self.cursor.checked_sub(pos))
+                            && let Some(word_end) = rope
+                                .chars_at(self.cursor)
+                                .position(|c| !is_word(c))
+                                .map(|pos| self.cursor + pos)
+                        {
+                            self.selection = Some(word_start);
+                            self.cursor = word_end;
+                            self.cursor_column = cursor_column(rope, self.cursor);
+                        }
+                    }
+                    _ => {
+                        // select current line
+                        if let Some((start, end)) = rope
+                            .try_char_to_line(self.cursor)
+                            .ok()
+                            .and_then(|line| line_char_range(rope, line))
+                        {
+                            self.selection = Some(start);
+                            self.cursor = end;
+                            self.cursor_column = cursor_column(rope, self.cursor);
+                        }
+                    }
                 }
             }
             Some(selection) => {
@@ -1754,18 +1798,27 @@ impl BufferContext {
         }
     }
 
-    pub fn find_mode(&self) -> FindMode {
+    pub fn find_mode(&self) -> Help {
+        let rope = &self.buffer.borrow().rope;
+
         match self.selection {
-            Some(selection) => {
-                let rope = &self.buffer.borrow().rope;
-                if rope.try_char_to_line(self.cursor).ok() == rope.try_char_to_line(selection).ok()
+            Some(selection) => Help {
+                select: WholeSelect::Lines,
+                find: if rope.try_char_to_line(self.cursor).ok()
+                    == rope.try_char_to_line(selection).ok()
                 {
                     FindMode::Selected
                 } else {
                     FindMode::InSelection
-                }
-            }
-            None => FindMode::WholeFile,
+                },
+            },
+            None => Help {
+                select: match rope.get_char(self.cursor) {
+                    Some(c) if is_word(c) => WholeSelect::Word,
+                    _ => WholeSelect::Lines,
+                },
+                find: FindMode::WholeFile,
+            },
         }
     }
 }
@@ -2586,7 +2639,7 @@ impl BufferList {
         self.buffers.len() > 1
     }
 
-    pub fn find_mode(&self) -> Option<FindMode> {
+    pub fn find_mode(&self) -> Option<Help> {
         self.current().map(|b| b.find_mode())
     }
 }
@@ -2594,7 +2647,7 @@ impl BufferList {
 pub struct BufferWidget<'e> {
     pub mode: Option<&'e mut EditorMode>,
     pub layout: crate::editor::EditorLayout,
-    pub show_help: Option<FindMode>,
+    pub show_help: Option<Help>,
 }
 
 impl BufferWidget<'_> {
@@ -3449,7 +3502,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
         match self.mode {
             None | Some(EditorMode::Editing) => {
-                if let Some(find_mode) = self.show_help {
+                if let Some(Help { select, find }) = self.show_help {
                     use crate::editor::EditorLayout;
                     use crate::help::{
                         EDITING_0, EDITING_1, EDITING_2, F10_SPLIT, F10_UNSPLIT,
@@ -3458,8 +3511,9 @@ impl StatefulWidget for BufferWidget<'_> {
 
                     let mut help = Vec::with_capacity(16);
                     help.extend(EDITING_0);
-                    help.push(find_mode.into());
+                    help.push(find.into());
                     help.extend(EDITING_1);
+                    help.push(select.into());
                     help.push(match self.layout {
                         EditorLayout::Single => F10_UNSPLIT,
                         EditorLayout::Horizontal | EditorLayout::Vertical => F10_SPLIT,
@@ -3823,6 +3877,11 @@ impl std::fmt::Display for Thousands {
             u => write_separated(u, f),
         }
     }
+}
+
+#[inline]
+fn is_word(c: char) -> bool {
+    c == '_' || c.is_alphanumeric()
 }
 
 fn reorder<T: Ord>(x: T, y: T) -> (T, T) {
