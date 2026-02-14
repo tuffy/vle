@@ -16,7 +16,7 @@ pub struct Keybinding {
     f: &'static str,
 }
 
-const fn ctrl(keys: &'static [&'static str], action: &'static str) -> Keybinding {
+pub const fn ctrl(keys: &'static [&'static str], action: &'static str) -> Keybinding {
     Keybinding {
         modifier: Some("Ctrl"),
         keys,
@@ -38,7 +38,7 @@ pub const fn ctrl_f(
     }
 }
 
-const fn none(keys: &'static [&'static str], action: &'static str) -> Keybinding {
+pub const fn none(keys: &'static [&'static str], action: &'static str) -> Keybinding {
     Keybinding {
         modifier: None,
         keys,
@@ -247,24 +247,6 @@ pub static OPEN_FILE: &[Keybinding] = &[
 
 pub static CREATE_FILE: &[Keybinding] = &[
     none(&["Enter"], "Create New File"),
-    none(&["Esc"], "Cancel"),
-];
-
-pub static FIND: &[Keybinding] = &[
-    ctrl(&["V"], "Paste From Cut Buffer"),
-    none(&["Tab"], "Regex Find"),
-    ctrl_f(&["T"], "F4", "Goto Line"),
-    ctrl_f(&["F"], "F5", "Begin New Find"),
-    none(&["Enter"], "Browse All Matches"),
-    none(&["Esc"], "Cancel"),
-];
-
-pub static FIND_REGEX: &[Keybinding] = &[
-    ctrl(&["V"], "Paste From Cut Buffer"),
-    none(&["Tab"], "Plain Text Find"),
-    ctrl_f(&["T"], "F4", "Goto Line"),
-    ctrl_f(&["F"], "F5", "Begin New Find"),
-    none(&["Enter"], "Browse All Matches"),
     none(&["Esc"], "Cancel"),
 ];
 

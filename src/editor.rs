@@ -164,10 +164,12 @@ macro_rules! key {
 }
 
 pub struct Editor {
-    layout: Layout,                // the editor's pane layout
-    mode: EditorMode,              // what mode the editing is in
-    cut_buffer: Option<CutBuffer>, // contents of cut buffer
-    show_help: bool,               // whether to show keybindinings
+    layout: Layout,                       // the editor's pane layout
+    mode: EditorMode,                     // what mode the editing is in
+    cut_buffer: Option<CutBuffer>,        // contents of cut buffer
+    last_plain_search: Option<TextField>, // previous plaintext search
+    last_regex_search: Option<TextField>, // previous regex search
+    show_help: bool,                      // whether to show keybindinings
     #[cfg(feature = "ssh")]
     remote: Option<ssh2::Session>, // remote SSH session
 }
@@ -178,6 +180,8 @@ impl Editor {
             layout: Layout::Single(BufferList::new(buffers)?),
             mode: EditorMode::default(),
             cut_buffer: None,
+            last_plain_search: None,
+            last_regex_search: None,
             show_help: false,
             #[cfg(feature = "ssh")]
             remote: None,
@@ -335,6 +339,10 @@ impl Editor {
                         && let Some(new_mode) = process_search(
                             buf,
                             self.cut_buffer.as_ref(),
+                            match type_ {
+                                SearchType::Plain => &mut self.last_plain_search,
+                                SearchType::Regex => &mut self.last_regex_search,
+                            },
                             prompt,
                             type_,
                             range.as_ref(),
@@ -1103,6 +1111,7 @@ enum NextModeIncremental {
 fn process_search(
     buffer: &mut BufferContext,
     cut_buffer: Option<&CutBuffer>,
+    last_search: &mut Option<TextField>,
     prompt: &mut TextField,
     type_: &mut SearchType,
     range: Option<&SelectionRange>,
@@ -1132,6 +1141,7 @@ fn process_search(
         key!(Enter) => match type_ {
             SearchType::Plain => match buffer.all_matches(range, prompt.value()?) {
                 Ok((match_idx, matches)) => {
+                    *last_search = Some(std::mem::take(prompt));
                     Some(NextModeIncremental::Browse { match_idx, matches })
                 }
                 Err(err) => {
@@ -1142,6 +1152,7 @@ fn process_search(
             SearchType::Regex => match prompt.value()?.parse::<fancy_regex::Regex>() {
                 Ok(regex) => match buffer.all_matches(range, regex) {
                     Ok((match_idx, matches)) => {
+                        *last_search = Some(std::mem::take(prompt));
                         Some(NextModeIncremental::Browse { match_idx, matches })
                     }
                     Err(err) => {
@@ -1157,7 +1168,13 @@ fn process_search(
         },
         key!(CONTROL, 't') | key!(F(4)) => Some(NextModeIncremental::SelectLine),
         key!(CONTROL, 'f') => {
-            prompt.reset();
+            if prompt.is_empty()
+                && let Some(last) = last_search
+            {
+                *prompt = last.clone();
+            } else {
+                prompt.reset();
+            }
             None
         }
         event => {

@@ -2705,9 +2705,8 @@ impl StatefulWidget for BufferWidget<'_> {
     fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer, state: &mut BufferContext) {
         use crate::editor::SearchType;
         use crate::help::{
-            BROWSE_MATCHES, CONFIRM_CLOSE, FIND, FIND_REGEX, PASTE_GROUP, REPLACE_MATCHES,
-            REPLACE_MATCHES_REGEX, SELECT_INSIDE, SELECT_LINE, SPLIT_PANE, VERIFY_RELOAD,
-            VERIFY_SAVE, render_help,
+            BROWSE_MATCHES, CONFIRM_CLOSE, PASTE_GROUP, REPLACE_MATCHES, REPLACE_MATCHES_REGEX,
+            SELECT_INSIDE, SELECT_LINE, SPLIT_PANE, VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
         use crate::prompt::TextField;
         use crate::syntax::{HighlightState, Highlighter, MultiComment, MultiCommentType};
@@ -3625,13 +3624,32 @@ impl StatefulWidget for BufferWidget<'_> {
                 render_help(text_area, buf, SELECT_LINE, |b| b);
             }
             Some(EditorMode::Search { prompt, type_, .. }) => {
+                use crate::help::{ctrl, ctrl_f, none};
+
                 render_help(
                     text_area,
                     buf,
-                    match type_ {
-                        SearchType::Plain => FIND,
-                        SearchType::Regex => FIND_REGEX,
-                    },
+                    &[
+                        ctrl(&["V"], "Paste From Cut Buffer"),
+                        none(
+                            &["Tab"],
+                            match type_ {
+                                SearchType::Plain => "Regex Find",
+                                SearchType::Regex => "Plain Text Find",
+                            },
+                        ),
+                        ctrl_f(&["T"], "F4", "Goto Line"),
+                        ctrl_f(
+                            &["F"],
+                            "F5",
+                            match prompt.is_empty() {
+                                true => "Redo Last Find",
+                                false => "Begin New Find",
+                            },
+                        ),
+                        none(&["Enter"], "Browse All Matches"),
+                        none(&["Esc"], "Cancel"),
+                    ],
                     |b| b,
                 );
                 render_find_prompt(
