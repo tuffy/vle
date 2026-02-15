@@ -1225,15 +1225,21 @@ impl BufferContext {
             )
             .collect::<Vec<_>>();
 
-        let (next_match, _) = matches
+        let start = match self.selection {
+            Some(selection) => selection.min(self.cursor),
+            None => self.cursor,
+        };
+
+        let (idx, (next_match, _)) = matches
             .iter()
-            .filter(|(m, _)| m.start >= self.cursor)
+            .enumerate()
+            .filter(|(_, (m, _))| m.start >= start)
             .next()
-            .or_else(|| matches.first())
+            .or_else(|| matches.first().map(|m| (0, m)))
             .ok_or(term)?;
         self.cursor = next_match.start;
         self.selection = Some(next_match.end);
-        Ok((0, matches))
+        Ok((idx, matches))
     }
 
     pub fn perform_undo(&mut self) {
