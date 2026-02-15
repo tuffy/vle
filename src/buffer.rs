@@ -1225,10 +1225,14 @@ impl BufferContext {
             )
             .collect::<Vec<_>>();
 
-        // TODO - set selection to first match after cursor
-        let (first_match, _) = matches.first().ok_or(term)?;
-        self.cursor = first_match.start;
-        self.selection = Some(first_match.end);
+        let (next_match, _) = matches
+            .iter()
+            .filter(|(m, _)| m.start >= self.cursor)
+            .next()
+            .or_else(|| matches.first())
+            .ok_or(term)?;
+        self.cursor = next_match.start;
+        self.selection = Some(next_match.end);
         Ok((0, matches))
     }
 
