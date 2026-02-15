@@ -1233,8 +1233,7 @@ impl BufferContext {
         let (idx, (next_match, _)) = matches
             .iter()
             .enumerate()
-            .filter(|(_, (m, _))| m.start >= start)
-            .next()
+            .find(|(_, (m, _))| m.start >= start)
             .or_else(|| matches.first().map(|m| (0, m)))
             .ok_or(term)?;
         self.cursor = next_match.start;
@@ -3105,15 +3104,45 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
+        #[derive(Copy, Clone)]
+        struct Paren {
+            position: usize,
+            color: Color,
+        }
+
+        impl Paren {
+            fn pair(position: usize) -> Self {
+                Self {
+                    position,
+                    color: Color::Yellow,
+                }
+            }
+
+            fn opener(position: usize) -> Self {
+                Self {
+                    position,
+                    color: Color::Cyan,
+                }
+            }
+        }
+
         fn highlight_paren<'s>(
             colorized: Vec<Span<'s>>,
             line_range: RangeInclusive<usize>,
-            paren: Option<(usize, Color)>,
+            paren: Option<Paren>,
         ) -> Vec<Span<'s>> {
             let (line_start, line_end) = line_range.into_inner();
-            let Some((paren_offset, color)) = paren
-                .and_then(|(p, color)| Some((p.checked_sub(line_start)?, color)))
-                .filter(|(p, _)| *p <= line_end - line_start)
+            let Some(Paren {
+                position: paren_offset,
+                color,
+            }) = paren
+                .and_then(|Paren { position, color }| {
+                    Some(Paren {
+                        position: position.checked_sub(line_start)?,
+                        color,
+                    })
+                })
+                .filter(|p| p.position <= line_end - line_start)
             else {
                 return colorized;
             };
@@ -3121,7 +3150,6 @@ impl StatefulWidget for BufferWidget<'_> {
             let mut highlighted = Vec::with_capacity(colorized.len());
             extract(&mut colorized, paren_offset, &mut highlighted, |s| s);
             extract(&mut colorized, 1, &mut highlighted, |s| {
-                // s.style(Style::new().bg(Color::Yellow))
                 s.style(Style::new().bg(color))
             });
             highlighted.extend(colorized);
@@ -3332,42 +3360,42 @@ impl StatefulWidget for BufferWidget<'_> {
             .unwrap_or(rope.len_chars())
             .saturating_sub(rope.try_line_to_char(viewport_line).unwrap_or(0));
 
-        let matching_paren: Option<(usize, Color)> = match rope.get_char(state.cursor) {
+        let matching_paren: Option<Paren> = match rope.get_char(state.cursor) {
             Some('(') => {
                 select_limited_next_char::<true>(rope, state.cursor + 1, ')', '(', viewport_size)
-                    .map(|offset| (offset, Color::Yellow))
+                    .map(Paren::pair)
             }
             Some('[') => {
                 select_limited_next_char::<true>(rope, state.cursor + 1, ']', '[', viewport_size)
-                    .map(|offset| (offset, Color::Yellow))
+                    .map(Paren::pair)
             }
             Some('{') => {
                 select_limited_next_char::<true>(rope, state.cursor + 1, '}', '{', viewport_size)
-                    .map(|offset| (offset, Color::Yellow))
+                    .map(Paren::pair)
             }
             Some('<') => {
                 select_limited_next_char::<true>(rope, state.cursor + 1, '>', '<', viewport_size)
-                    .map(|offset| (offset, Color::Yellow))
+                    .map(Paren::pair)
             }
             Some(')') => {
                 select_limited_next_char::<false>(rope, state.cursor, '(', ')', viewport_size)
-                    .map(|c| (c.saturating_sub(1), Color::Yellow))
+                    .map(|c| Paren::pair(c.saturating_sub(1)))
             }
             Some(']') => {
                 select_limited_next_char::<false>(rope, state.cursor, '[', ']', viewport_size)
-                    .map(|c| (c.saturating_sub(1), Color::Yellow))
+                    .map(|c| Paren::pair(c.saturating_sub(1)))
             }
             Some('}') => {
                 select_limited_next_char::<false>(rope, state.cursor, '{', '}', viewport_size)
-                    .map(|c| (c.saturating_sub(1), Color::Yellow))
+                    .map(|c| Paren::pair(c.saturating_sub(1)))
             }
             Some('>') => {
                 select_limited_next_char::<false>(rope, state.cursor, '<', '>', viewport_size)
-                    .map(|c| (c.saturating_sub(1), Color::Yellow))
+                    .map(|c| Paren::pair(c.saturating_sub(1)))
             }
             _ => prev_opening_char(rope, state.cursor, viewport_size)
                 .and_then(|offset| offset.checked_sub(1))
-                .map(|offset| (offset, Color::Cyan)),
+                .map(Paren::opener),
         };
 
         Clear.render(text_area, buf);
