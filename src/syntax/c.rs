@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain};
+use crate::syntax::{Commenting, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -112,16 +112,15 @@ impl TryFrom<CToken> for Color {
 
     fn try_from(t: CToken) -> Result<Color, ()> {
         match t {
-            CToken::Constant => Ok(Color::Red),
-            CToken::Integer | CToken::Boolean => Ok(Color::Cyan),
-            CToken::Keyword => Ok(Color::Green),
-            CToken::Flowcontrol1 => Ok(Color::LightYellow),
-            CToken::Flowcontrol2 => Ok(Color::Magenta),
-            CToken::Comment => Ok(Color::LightBlue),
-            CToken::String => Ok(Color::LightYellow),
+            CToken::Constant => Ok(color::CONSTANT),
+            CToken::Integer | CToken::Boolean => Ok(color::NUMBER),
+            CToken::Keyword => Ok(color::KEYWORD),
+            CToken::Flowcontrol1 | CToken::Flowcontrol2 => Ok(color::FLOW),
+            CToken::Comment => Ok(color::COMMENT),
+            CToken::String => Ok(color::STRING),
             CToken::Variable => Err(()),
             CToken::Preprocessor => Ok(Color::LightCyan),
-            CToken::StartComment | CToken::EndComment => Ok(Color::Blue),
+            CToken::StartComment | CToken::EndComment => Ok(color::COMMENT),
         }
     }
 }
@@ -135,4 +134,12 @@ impl std::fmt::Display for C {
     }
 }
 
-highlighter!(C, CToken, StartComment, EndComment, "/*", "*/", Blue);
+highlighter!(
+    C,
+    CToken,
+    StartComment,
+    EndComment,
+    "/*",
+    "*/",
+    color::COMMENT
+);

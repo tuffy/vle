@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain};
+use crate::syntax::{Commenting, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -74,12 +74,11 @@ impl TryFrom<JavaScriptToken> for Color {
         match t {
             JavaScriptToken::Comment
             | JavaScriptToken::StartComment
-            | JavaScriptToken::EndComment => Ok(Color::LightBlue),
-            JavaScriptToken::Keyword => Ok(Color::Green),
-            JavaScriptToken::Flow => Ok(Color::LightYellow),
-            JavaScriptToken::Break => Ok(Color::Magenta),
-            JavaScriptToken::String => Ok(Color::LightMagenta),
-            JavaScriptToken::Number => Ok(Color::Cyan),
+            | JavaScriptToken::EndComment => Ok(color::COMMENT),
+            JavaScriptToken::Keyword => Ok(color::KEYWORD),
+            JavaScriptToken::Flow | JavaScriptToken::Break => Ok(color::FLOW),
+            JavaScriptToken::String => Ok(color::STRING),
+            JavaScriptToken::Number => Ok(color::NUMBER),
             JavaScriptToken::Identifier => Err(()),
         }
     }
@@ -101,5 +100,5 @@ highlighter!(
     EndComment,
     "/*",
     "*/",
-    LightBlue
+    color::COMMENT
 );

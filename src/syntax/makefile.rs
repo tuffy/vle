@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use crate::syntax::color;
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -25,9 +26,9 @@ impl TryFrom<MakefileToken> for Color {
 
     fn try_from(t: MakefileToken) -> Result<Color, ()> {
         match t {
-            MakefileToken::Variable => Ok(Color::Blue),
+            MakefileToken::Variable => Ok(Color::Cyan),
             MakefileToken::Assignment => Ok(Color::Red),
-            MakefileToken::Comment => Ok(Color::Green),
+            MakefileToken::Comment => Ok(color::COMMENT),
         }
     }
 }

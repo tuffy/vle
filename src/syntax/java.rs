@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain};
+use crate::syntax::{Commenting, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -80,12 +80,14 @@ impl TryFrom<JavaToken> for Color {
 
     fn try_from(t: JavaToken) -> Result<Color, ()> {
         match t {
-            JavaToken::Type => Ok(Color::Green),
-            JavaToken::Flow => Ok(Color::Blue),
-            JavaToken::Keyword => Ok(Color::Cyan),
-            JavaToken::String => Ok(Color::Red),
+            JavaToken::Type => Ok(color::TYPE),
+            JavaToken::Flow => Ok(color::FLOW),
+            JavaToken::Keyword => Ok(color::KEYWORD),
+            JavaToken::String => Ok(color::STRING),
             JavaToken::Annotation => Ok(Color::Magenta),
-            JavaToken::Comment | JavaToken::StartComment | JavaToken::EndComment => Ok(Color::Blue),
+            JavaToken::Comment | JavaToken::StartComment | JavaToken::EndComment => {
+                Ok(color::COMMENT)
+            }
         }
     }
 }
@@ -99,4 +101,12 @@ impl std::fmt::Display for Java {
     }
 }
 
-highlighter!(Java, JavaToken, StartComment, EndComment, "/*", "*/", Blue);
+highlighter!(
+    Java,
+    JavaToken,
+    StartComment,
+    EndComment,
+    "/*",
+    "*/",
+    color::COMMENT
+);

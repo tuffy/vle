@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
+use crate::syntax::color;
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -32,7 +33,7 @@ impl TryFrom<TexToken> for Color {
             TexToken::Command => Ok(Color::Green),
             TexToken::Punctuation => Ok(Color::Magenta),
             TexToken::Math => Ok(Color::Red),
-            TexToken::Comment => Ok(Color::Blue),
+            TexToken::Comment => Ok(color::COMMENT),
         }
     }
 }

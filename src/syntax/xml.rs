@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain};
+use crate::syntax::{Commenting, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -38,8 +38,8 @@ impl TryFrom<XmlToken> for Color {
         match t {
             XmlToken::TagStart | XmlToken::TagEnd => Ok(Color::Cyan),
             XmlToken::FieldName => Ok(Color::Green),
-            XmlToken::String => Ok(Color::Magenta),
-            XmlToken::StartComment | XmlToken::EndComment => Ok(Color::Yellow),
+            XmlToken::String => Ok(color::STRING),
+            XmlToken::StartComment | XmlToken::EndComment => Ok(color::COMMENT),
         }
     }
 }
@@ -60,5 +60,5 @@ highlighter!(
     EndComment,
     "<!--",
     "-->",
-    Yellow
+    color::COMMENT
 );

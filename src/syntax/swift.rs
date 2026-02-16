@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain};
+use crate::syntax::{Commenting, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -147,12 +147,12 @@ impl TryFrom<SwiftToken> for Color {
 
     fn try_from(t: SwiftToken) -> Result<Color, ()> {
         match t {
-            SwiftToken::String => Ok(Color::Green),
-            SwiftToken::Keyword => Ok(Color::Yellow),
-            SwiftToken::Type => Ok(Color::Magenta),
+            SwiftToken::String => Ok(color::STRING),
+            SwiftToken::Keyword => Ok(color::KEYWORD),
+            SwiftToken::Type => Ok(color::TYPE),
             SwiftToken::Identifier => Err(()),
             SwiftToken::Comment | SwiftToken::StartComment | SwiftToken::EndComment => {
-                Ok(Color::Blue)
+                Ok(color::COMMENT)
             }
         }
     }
@@ -174,5 +174,5 @@ highlighter!(
     EndComment,
     "/*",
     "*/",
-    Blue
+    color::COMMENT
 );

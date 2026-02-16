@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
+use crate::syntax::color;
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -63,9 +64,9 @@ impl TryFrom<FishToken> for Color {
 
     fn try_from(t: FishToken) -> Result<Color, ()> {
         match t {
-            FishToken::Comment => Ok(Color::Red),
-            FishToken::Keyword => Ok(Color::Magenta),
-            FishToken::Loop => Ok(Color::Blue),
+            FishToken::Comment => Ok(color::COMMENT),
+            FishToken::Keyword => Ok(color::KEYWORD),
+            FishToken::Loop => Ok(color::FLOW),
             FishToken::Variable => Ok(Color::Cyan),
             FishToken::Misc => Err(()),
         }

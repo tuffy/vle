@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
+use crate::syntax::color;
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -34,9 +35,9 @@ impl TryFrom<TomlToken> for Color {
     fn try_from(t: TomlToken) -> Result<Color, ()> {
         match t {
             TomlToken::Encloser => Ok(Color::Red),
-            TomlToken::Key => Ok(Color::Blue),
-            TomlToken::Value => Ok(Color::Green),
-            TomlToken::Comment => Ok(Color::LightRed),
+            TomlToken::Key => Ok(color::KEYWORD),
+            TomlToken::Value => Ok(color::STRING),
+            TomlToken::Comment => Ok(color::COMMENT),
         }
     }
 }

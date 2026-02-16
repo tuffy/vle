@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
+use crate::syntax::color;
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -122,10 +123,10 @@ impl TryFrom<SqlToken> for Color {
 
     fn try_from(t: SqlToken) -> Result<Color, ()> {
         match t {
-            SqlToken::Keyword => Ok(Color::Blue),
-            SqlToken::Type => Ok(Color::Green),
-            SqlToken::Flow => Ok(Color::Yellow),
-            SqlToken::String => Ok(Color::LightGreen),
+            SqlToken::Keyword => Ok(color::KEYWORD),
+            SqlToken::Type => Ok(color::TYPE),
+            SqlToken::Flow => Ok(color::FLOW),
+            SqlToken::String => Ok(color::STRING),
         }
     }
 }

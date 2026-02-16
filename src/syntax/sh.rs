@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
+use crate::syntax::color;
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -97,11 +98,11 @@ impl TryFrom<ShellToken> for Color {
 
     fn try_from(t: ShellToken) -> Result<Color, ()> {
         match t {
-            ShellToken::Keyword => Ok(Color::Green),
+            ShellToken::Keyword => Ok(color::KEYWORD),
             ShellToken::Command => Ok(Color::LightBlue),
-            ShellToken::Comment => Ok(Color::Cyan),
+            ShellToken::Comment => Ok(color::COMMENT),
             ShellToken::Option => Ok(Color::LightMagenta),
-            ShellToken::String => Ok(Color::Yellow),
+            ShellToken::String => Ok(color::STRING),
             ShellToken::Variable => Err(()),
         }
     }

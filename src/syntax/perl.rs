@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
+use crate::syntax::color;
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -66,12 +67,12 @@ impl TryFrom<PerlToken> for Color {
 
     fn try_from(t: PerlToken) -> Result<Color, ()> {
         match t {
-            PerlToken::Function => Ok(Color::Red),
-            PerlToken::Flow => Ok(Color::Magenta),
+            PerlToken::Function => Ok(color::FUNCTION),
+            PerlToken::Flow => Ok(color::FLOW),
             PerlToken::Variable => Ok(Color::Cyan),
-            PerlToken::String => Ok(Color::Yellow),
-            PerlToken::Regex => Ok(Color::Blue),
-            PerlToken::Comment => Ok(Color::Green),
+            PerlToken::String => Ok(color::STRING),
+            PerlToken::Regex => Ok(Color::Magenta),
+            PerlToken::Comment => Ok(color::COMMENT),
         }
     }
 }

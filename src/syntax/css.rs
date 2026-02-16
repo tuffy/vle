@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain};
+use crate::syntax::{Commenting, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -44,7 +44,7 @@ impl TryFrom<CssToken> for Color {
     fn try_from(t: CssToken) -> Result<Color, ()> {
         match t {
             CssToken::Property => Ok(Color::Yellow),
-            CssToken::StartComment | CssToken::EndComment => Ok(Color::Blue),
+            CssToken::StartComment | CssToken::EndComment => Ok(color::COMMENT),
             CssToken::Syntax => Ok(Color::Green),
             CssToken::Class => Ok(Color::Red),
             CssToken::Id => Ok(Color::Magenta),
@@ -62,4 +62,12 @@ impl std::fmt::Display for Css {
     }
 }
 
-highlighter!(Css, CssToken, StartComment, EndComment, "/*", "*/", Blue);
+highlighter!(
+    Css,
+    CssToken,
+    StartComment,
+    EndComment,
+    "/*",
+    "*/",
+    color::COMMENT
+);

@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
+use crate::syntax::color;
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -28,7 +29,7 @@ impl TryFrom<IniToken> for Color {
     fn try_from(t: IniToken) -> Result<Color, ()> {
         match t {
             IniToken::Key => Ok(Color::Blue),
-            IniToken::Comment => Ok(Color::LightRed),
+            IniToken::Comment => Ok(color::COMMENT),
             IniToken::Section => Ok(Color::Green),
         }
     }

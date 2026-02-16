@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain};
+use crate::syntax::{Commenting, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -99,6 +99,9 @@ enum PhpToken {
 
     #[token("*/")]
     EndComment,
+
+    #[regex("[[:upper:][:lower:]_]+")]
+    Identifier,
 }
 
 impl TryFrom<PhpToken> for Color {
@@ -107,14 +110,13 @@ impl TryFrom<PhpToken> for Color {
     fn try_from(t: PhpToken) -> Result<Color, ()> {
         match t {
             PhpToken::Variable => Ok(Color::Cyan),
-            PhpToken::Type => Ok(Color::Green),
-            PhpToken::Keyword => Ok(Color::LightCyan),
-            PhpToken::Flow => Ok(Color::Magenta),
-            PhpToken::String => Ok(Color::LightYellow),
-            PhpToken::Comment | PhpToken::StartComment | PhpToken::EndComment => {
-                Ok(Color::LightBlue)
-            }
-            PhpToken::Constant => Ok(Color::Red),
+            PhpToken::Type => Ok(color::TYPE),
+            PhpToken::Keyword => Ok(color::KEYWORD),
+            PhpToken::Flow => Ok(color::FLOW),
+            PhpToken::String => Ok(color::STRING),
+            PhpToken::Comment | PhpToken::StartComment | PhpToken::EndComment => Ok(color::COMMENT),
+            PhpToken::Constant => Ok(color::CONSTANT),
+            PhpToken::Identifier => Err(()),
         }
     }
 }
@@ -135,5 +137,5 @@ highlighter!(
     EndComment,
     "/*",
     "*/",
-    LightBlue
+    color::COMMENT
 );

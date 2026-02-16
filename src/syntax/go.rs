@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain};
+use crate::syntax::{Commenting, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -97,14 +97,14 @@ impl TryFrom<GoToken> for Color {
 
     fn try_from(t: GoToken) -> Result<Color, ()> {
         match t {
-            GoToken::Type => Ok(Color::Green),
-            GoToken::Function => Ok(Color::Blue),
+            GoToken::Type => Ok(color::TYPE),
+            GoToken::Function => Ok(color::FUNCTION),
             GoToken::Control => Ok(Color::LightYellow),
-            GoToken::Flow => Ok(Color::Magenta),
+            GoToken::Flow => Ok(color::FLOW),
             GoToken::Declaration => Ok(Color::LightCyan),
             GoToken::Literal => Ok(Color::Red),
-            GoToken::String => Ok(Color::Red),
-            GoToken::Comment | GoToken::StartComment | GoToken::EndComment => Ok(Color::LightBlue),
+            GoToken::String => Ok(color::STRING),
+            GoToken::Comment | GoToken::StartComment | GoToken::EndComment => Ok(color::COMMENT),
         }
     }
 }
@@ -118,4 +118,12 @@ impl std::fmt::Display for Go {
     }
 }
 
-highlighter!(Go, GoToken, StartComment, EndComment, "/*", "*/", LightBlue);
+highlighter!(
+    Go,
+    GoToken,
+    StartComment,
+    EndComment,
+    "/*",
+    "*/",
+    color::COMMENT
+);

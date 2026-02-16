@@ -238,7 +238,7 @@ macro_rules! highlighter {
             }
         }
     };
-    ($syntax:ty, $token:ty, $comment_start:ident, $comment_end:ident, $start:literal, $end:literal, $comment_color:ident) => {
+    ($syntax:ty, $token:ty, $comment_start:ident, $comment_end:ident, $start:literal, $end:literal, $comment_color:expr) => {
         impl Plain for $token {
             fn is_comment_start(&self) -> bool {
                 matches!(self, Self::$comment_start)
@@ -298,7 +298,7 @@ macro_rules! highlighter {
                                 *state = HighlightState::default();
                                 (Color::try_from(end).ok()?, r)
                             }
-                            _ => (Color::$comment_color, r),
+                            _ => ($comment_color, r),
                         }),
                     }
                 }))
@@ -331,4 +331,19 @@ macro_rules! highlighter {
             }
         }
     };
+}
+
+pub mod color {
+    use ratatui::style::Color;
+
+    // A unified color scheme across common syntax items
+
+    pub const KEYWORD: Color = Color::Yellow;
+    pub const FLOW: Color = Color::Red;
+    pub const CONSTANT: Color = Color::Magenta;
+    pub const TYPE: Color = Color::Magenta;
+    pub const COMMENT: Color = Color::Green;
+    pub const FUNCTION: Color = Color::Magenta;
+    pub const STRING: Color = Color::Blue;
+    pub const NUMBER: Color = Color::Cyan;
 }

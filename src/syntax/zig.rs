@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
+use crate::syntax::color;
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -112,11 +113,11 @@ impl TryFrom<ZigToken> for Color {
 
     fn try_from(t: ZigToken) -> Result<Color, ()> {
         match t {
-            ZigToken::Keyword => Ok(Color::Yellow),
-            ZigToken::String => Ok(Color::Green),
+            ZigToken::Keyword => Ok(color::KEYWORD),
+            ZigToken::String => Ok(color::STRING),
             ZigToken::BuiltinFunction => Ok(Color::Cyan),
-            ZigToken::Comment => Ok(Color::Blue),
-            ZigToken::Type => Ok(Color::Magenta),
+            ZigToken::Comment => Ok(color::COMMENT),
+            ZigToken::Type => Ok(color::TYPE),
             ZigToken::Identifier => Err(()),
         }
     }

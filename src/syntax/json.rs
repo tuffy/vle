@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
+use crate::syntax::color;
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -38,10 +39,10 @@ impl TryFrom<JsonToken> for Color {
 
     fn try_from(t: JsonToken) -> Result<Color, ()> {
         match t {
-            JsonToken::Name => Ok(Color::Blue),
-            JsonToken::String => Ok(Color::LightMagenta),
-            JsonToken::Number => Ok(Color::Green),
-            JsonToken::Literal => Ok(Color::Green),
+            JsonToken::Name => Ok(color::TYPE),
+            JsonToken::String => Ok(color::STRING),
+            JsonToken::Number => Ok(color::NUMBER),
+            JsonToken::Literal => Ok(Color::Red),
             JsonToken::Punctuation1 => Ok(Color::LightBlue),
             JsonToken::Punctuation2 => Ok(Color::LightRed),
         }

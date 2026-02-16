@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain};
+use crate::syntax::{Commenting, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -166,17 +166,17 @@ impl TryFrom<CppToken> for Color {
 
     fn try_from(t: CppToken) -> Result<Color, ()> {
         match t {
-            CppToken::Constant | CppToken::Operator => Ok(Color::Red),
-            CppToken::Integer | CppToken::Literal => Ok(Color::Blue),
-            CppToken::Keyword => Ok(Color::Green),
-            CppToken::Flowcontrol1 => Ok(Color::LightYellow),
-            CppToken::Flowcontrol2 => Ok(Color::Magenta),
-            CppToken::Flowcontrol3 => Ok(Color::LightMagenta),
-            CppToken::Comment => Ok(Color::LightBlue),
-            CppToken::String => Ok(Color::LightYellow),
+            CppToken::Constant | CppToken::Operator => Ok(color::CONSTANT),
+            CppToken::Integer | CppToken::Literal => Ok(color::NUMBER),
+            CppToken::Keyword => Ok(color::KEYWORD),
+            CppToken::Flowcontrol1 => Ok(color::FLOW),
+            CppToken::Flowcontrol2 => Ok(color::FLOW),
+            CppToken::Flowcontrol3 => Ok(color::FLOW),
+            CppToken::Comment => Ok(color::COMMENT),
+            CppToken::String => Ok(color::STRING),
             CppToken::Variable => Err(()),
             CppToken::Preprocessor => Ok(Color::LightCyan),
-            CppToken::StartComment | CppToken::EndComment => Ok(Color::Blue),
+            CppToken::StartComment | CppToken::EndComment => Ok(color::COMMENT),
         }
     }
 }
@@ -190,4 +190,12 @@ impl std::fmt::Display for Cpp {
     }
 }
 
-highlighter!(Cpp, CppToken, StartComment, EndComment, "/*", "*/", Blue);
+highlighter!(
+    Cpp,
+    CppToken,
+    StartComment,
+    EndComment,
+    "/*",
+    "*/",
+    color::COMMENT
+);

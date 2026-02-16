@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
+use crate::syntax::color;
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -48,12 +49,12 @@ impl TryFrom<YamlToken> for Color {
 
     fn try_from(t: YamlToken) -> Result<Color, ()> {
         match t {
-            YamlToken::Comment => Ok(Color::Cyan),
+            YamlToken::Comment => Ok(color::COMMENT),
             YamlToken::Symbol => Ok(Color::Yellow),
-            YamlToken::String => Ok(Color::LightMagenta),
+            YamlToken::String => Ok(color::STRING),
             YamlToken::Name => Ok(Color::LightGreen),
-            YamlToken::Number => Ok(Color::Red),
-            YamlToken::Boolean => Ok(Color::Magenta),
+            YamlToken::Number => Ok(color::NUMBER),
+            YamlToken::Boolean => Ok(color::KEYWORD),
         }
     }
 }

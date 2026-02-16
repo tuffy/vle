@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::syntax::{Commenting, HighlightState, Highlighter, MultiCommentType, Plain};
+use crate::syntax::{Commenting, HighlightState, Highlighter, MultiCommentType, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -71,12 +71,12 @@ impl TryFrom<PythonToken> for Color {
 
     fn try_from(t: PythonToken) -> Result<Color, ()> {
         match t {
-            PythonToken::Function => Ok(Color::LightBlue),
-            PythonToken::Keyword => Ok(Color::LightCyan),
+            PythonToken::Function => Ok(color::FUNCTION),
+            PythonToken::Keyword => Ok(color::KEYWORD),
             PythonToken::Literal => Ok(Color::LightMagenta),
             PythonToken::Decorator => Ok(Color::Cyan),
-            PythonToken::String | PythonToken::MultiLineString => Ok(Color::LightGreen),
-            PythonToken::Comment => Ok(Color::LightRed),
+            PythonToken::String | PythonToken::MultiLineString => Ok(color::STRING),
+            PythonToken::Comment => Ok(color::COMMENT),
             PythonToken::Variable => Err(()),
         }
     }
@@ -151,7 +151,7 @@ impl Highlighter for Python {
                         *state = HighlightState::default();
                         (Color::try_from(end).ok()?, r)
                     }
-                    _ => (Color::LightGreen, r),
+                    _ => (color::STRING, r),
                 }),
             }
         }))

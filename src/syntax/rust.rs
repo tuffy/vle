@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain};
+use crate::syntax::{Commenting, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -20,26 +20,20 @@ enum RustToken {
     #[token("await")]
     #[token("become")]
     #[token("box")]
-    #[token("break")]
     #[token("const")]
     #[token("continue")]
     #[token("crate")]
     #[token("do")]
     #[token("dyn")]
-    #[token("else")]
     #[token("enum")]
     #[token("extern")]
     #[token("false")]
     #[token("final")]
     #[token("fn")]
-    #[token("for")]
-    #[token("if")]
     #[token("impl")]
     #[token("in")]
     #[token("let")]
-    #[token("loop")]
     #[token("macro")]
-    #[token("match")]
     #[token("mod")]
     #[token("move")]
     #[token("mut")]
@@ -47,7 +41,6 @@ enum RustToken {
     #[token("priv")]
     #[token("pub")]
     #[token("ref")]
-    #[token("return")]
     #[token("self")]
     #[token("static")]
     #[token("struct")]
@@ -61,10 +54,19 @@ enum RustToken {
     #[token("unsized")]
     #[token("use")]
     #[token("virtual")]
+    Keyword,
+
+    #[token("break")]
+    #[token("else")]
+    #[token("for")]
+    #[token("if")]
+    #[token("loop")]
+    #[token("match")]
+    #[token("return")]
     #[token("where")]
     #[token("while")]
     #[token("yield")]
-    Keyword,
+    Flow,
 
     #[regex("[[:upper:]][[:upper:][:digit:]_]+", priority = 5)]
     Constant,
@@ -107,14 +109,17 @@ impl TryFrom<RustToken> for Color {
 
     fn try_from(t: RustToken) -> Result<Color, ()> {
         match t {
-            RustToken::Keyword => Ok(Color::Yellow),
-            RustToken::Constant => Ok(Color::Magenta),
+            RustToken::Keyword => Ok(color::KEYWORD),
+            RustToken::Constant => Ok(color::CONSTANT),
             RustToken::Macro => Ok(Color::Red),
-            RustToken::Type => Ok(Color::Magenta),
-            RustToken::Comment | RustToken::StartComment | RustToken::EndComment => Ok(Color::Blue),
-            RustToken::Function => Ok(Color::Magenta),
-            RustToken::String => Ok(Color::Green),
-            RustToken::Number => Ok(Color::Cyan),
+            RustToken::Flow => Ok(color::FLOW),
+            RustToken::Type => Ok(color::TYPE),
+            RustToken::Comment | RustToken::StartComment | RustToken::EndComment => {
+                Ok(color::COMMENT)
+            }
+            RustToken::Function => Ok(color::FUNCTION),
+            RustToken::String => Ok(color::STRING),
+            RustToken::Number => Ok(color::NUMBER),
             RustToken::Variable => Err(()),
         }
     }
@@ -129,4 +134,12 @@ impl std::fmt::Display for Rust {
     }
 }
 
-highlighter!(Rust, RustToken, StartComment, EndComment, "/*", "*/", Blue);
+highlighter!(
+    Rust,
+    RustToken,
+    StartComment,
+    EndComment,
+    "/*",
+    "*/",
+    color::COMMENT
+);
