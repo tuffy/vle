@@ -68,14 +68,14 @@ pub enum Modifier {
 
 #[derive(Copy, Clone)]
 pub struct Highlight {
-    pub color: Color,
+    pub color: Option<Color>,
     pub modifier: Modifier,
 }
 
 impl From<Color> for Highlight {
     fn from(color: Color) -> Self {
         Self {
-            color,
+            color: Some(color),
             modifier: Modifier::default(),
         }
     }
@@ -83,12 +83,15 @@ impl From<Color> for Highlight {
 
 impl From<Highlight> for ratatui::style::Style {
     fn from(highlight: Highlight) -> Self {
-        (match highlight.modifier {
+        let style = match highlight.modifier {
             Modifier::Plain => Self::default(),
             Modifier::Italic => Self::default().italic(),
             Modifier::Bold => Self::default().bold(),
-        })
-        .fg(highlight.color)
+        };
+        match highlight.color {
+            Some(color) => style.fg(color),
+            None => style,
+        }
     }
 }
 
@@ -377,35 +380,35 @@ pub mod color {
     // A unified color scheme across common syntax items
 
     pub const KEYWORD: Highlight = Highlight {
-        color: Color::Yellow,
-        modifier: Modifier::Plain,
+        color: None,
+        modifier: Modifier::Bold,
     };
     pub const FLOW: Highlight = Highlight {
-        color: Color::Red,
+        color: Some(Color::Blue),
         modifier: Modifier::Bold,
     };
     pub const CONSTANT: Highlight = Highlight {
-        color: Color::Magenta,
-        modifier: Modifier::Plain,
+        color: Some(Color::Green),
+        modifier: Modifier::Bold,
     };
     pub const TYPE: Highlight = Highlight {
-        color: Color::Magenta,
+        color: Some(Color::Magenta),
         modifier: Modifier::Plain,
     };
     pub const COMMENT: Highlight = Highlight {
-        color: Color::DarkGray,
+        color: Some(Color::DarkGray),
         modifier: Modifier::Italic,
     };
     pub const FUNCTION: Highlight = Highlight {
-        color: Color::Magenta,
+        color: Some(Color::Magenta),
         modifier: Modifier::Bold,
     };
     pub const STRING: Highlight = Highlight {
-        color: Color::Blue,
+        color: Some(Color::Red),
         modifier: Modifier::Plain,
     };
     pub const NUMBER: Highlight = Highlight {
-        color: Color::Cyan,
+        color: Some(Color::Cyan),
         modifier: Modifier::Plain,
     };
 }
