@@ -3126,32 +3126,24 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
-        fn highlight_paren<'s>(
+        fn highlight_parens<'s>(
             colorized: Vec<Span<'s>>,
             line_range: RangeInclusive<usize>,
-            paren: Option<Paren>,
+            parens: &mut VecDeque<Paren>,
         ) -> Vec<Span<'s>> {
             let (line_start, line_end) = line_range.into_inner();
-            let Some(Paren {
-                position: paren_offset,
-                color,
-            }) = paren
-                .and_then(|Paren { position, color }| {
-                    Some(Paren {
-                        position: position.checked_sub(line_start)?,
-                        color,
-                    })
-                })
-                .filter(|p| p.position <= line_end - line_start)
-            else {
-                return colorized;
-            };
             let mut colorized: VecDeque<_> = colorized.into();
             let mut highlighted = Vec::with_capacity(colorized.len());
-            extract(&mut colorized, paren_offset, &mut highlighted, |s| s);
-            extract(&mut colorized, 1, &mut highlighted, |s| {
-                s.style(Style::new().bg(color))
-            });
+            let mut offset = line_start;
+            while let Some(Paren { position, color }) =
+                parens.pop_front_if(|p| p.position >= offset && p.position <= line_end)
+            {
+                extract(&mut colorized, position - offset, &mut highlighted, |s| s);
+                extract(&mut colorized, 1, &mut highlighted, |s| {
+                    s.style(Style::new().bg(color))
+                });
+                offset = position + 1;
+            }
             highlighted.extend(colorized);
             highlighted
         }
@@ -3360,42 +3352,87 @@ impl StatefulWidget for BufferWidget<'_> {
             .unwrap_or(rope.len_chars())
             .saturating_sub(rope.try_line_to_char(viewport_line).unwrap_or(0));
 
-        let matching_paren: Option<Paren> = match rope.get_char(state.cursor) {
+        let mut parentheses: VecDeque<Paren> = match rope.get_char(state.cursor) {
             Some('(') => {
-                select_limited_next_char::<true>(rope, state.cursor + 1, ')', '(', viewport_size)
-                    .map(Paren::pair)
+                match select_limited_next_char::<true>(
+                    rope,
+                    state.cursor + 1,
+                    ')',
+                    '(',
+                    viewport_size,
+                ) {
+                    Some(paren) => vec![Paren::pair(paren)].into(),
+                    None => VecDeque::default(),
+                }
             }
             Some('[') => {
-                select_limited_next_char::<true>(rope, state.cursor + 1, ']', '[', viewport_size)
-                    .map(Paren::pair)
+                match select_limited_next_char::<true>(
+                    rope,
+                    state.cursor + 1,
+                    ']',
+                    '[',
+                    viewport_size,
+                ) {
+                    Some(paren) => vec![Paren::pair(paren)].into(),
+                    None => VecDeque::default(),
+                }
             }
             Some('{') => {
-                select_limited_next_char::<true>(rope, state.cursor + 1, '}', '{', viewport_size)
-                    .map(Paren::pair)
+                match select_limited_next_char::<true>(
+                    rope,
+                    state.cursor + 1,
+                    '}',
+                    '{',
+                    viewport_size,
+                ) {
+                    Some(paren) => vec![Paren::pair(paren)].into(),
+                    None => VecDeque::default(),
+                }
             }
             Some('<') => {
-                select_limited_next_char::<true>(rope, state.cursor + 1, '>', '<', viewport_size)
-                    .map(Paren::pair)
+                match select_limited_next_char::<true>(
+                    rope,
+                    state.cursor + 1,
+                    '>',
+                    '<',
+                    viewport_size,
+                ) {
+                    Some(paren) => vec![Paren::pair(paren)].into(),
+                    None => VecDeque::default(),
+                }
             }
             Some(')') => {
-                select_limited_next_char::<false>(rope, state.cursor, '(', ')', viewport_size)
-                    .map(|c| Paren::pair(c.saturating_sub(1)))
+                match select_limited_next_char::<false>(rope, state.cursor, '(', ')', viewport_size)
+                {
+                    Some(paren) => vec![Paren::pair(paren.saturating_sub(1))].into(),
+                    None => VecDeque::default(),
+                }
             }
             Some(']') => {
-                select_limited_next_char::<false>(rope, state.cursor, '[', ']', viewport_size)
-                    .map(|c| Paren::pair(c.saturating_sub(1)))
+                match select_limited_next_char::<false>(rope, state.cursor, '[', ']', viewport_size)
+                {
+                    Some(paren) => vec![Paren::pair(paren.saturating_sub(1))].into(),
+                    None => VecDeque::default(),
+                }
             }
             Some('}') => {
-                select_limited_next_char::<false>(rope, state.cursor, '{', '}', viewport_size)
-                    .map(|c| Paren::pair(c.saturating_sub(1)))
+                match select_limited_next_char::<false>(rope, state.cursor, '{', '}', viewport_size)
+                {
+                    Some(paren) => vec![Paren::pair(paren.saturating_sub(1))].into(),
+                    None => VecDeque::default(),
+                }
             }
             Some('>') => {
-                select_limited_next_char::<false>(rope, state.cursor, '<', '>', viewport_size)
-                    .map(|c| Paren::pair(c.saturating_sub(1)))
+                match select_limited_next_char::<false>(rope, state.cursor, '<', '>', viewport_size)
+                {
+                    Some(paren) => vec![Paren::pair(paren.saturating_sub(1))].into(),
+                    None => VecDeque::default(),
+                }
             }
-            _ => prev_opening_char(rope, state.cursor, viewport_size)
-                .and_then(|offset| offset.checked_sub(1))
-                .map(Paren::opener),
+            _ => match prev_opening_char(rope, state.cursor, viewport_size) {
+                Some(paren) => vec![Paren::opener(paren.saturating_sub(1))].into(),
+                None => VecDeque::default(),
+            },
         };
 
         Clear.render(text_area, buf);
@@ -3518,7 +3555,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                  range,
                                  number,
                              }| {
-                                highlight_paren(
+                                highlight_parens(
                                     colorize(
                                         syntax,
                                         &mut hlstate,
@@ -3526,7 +3563,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                         current_line == Some(number),
                                     ),
                                     range,
-                                    matching_paren,
+                                    &mut parentheses,
                                 )
                                 .into()
                             },
@@ -3545,7 +3582,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                      range,
                                      number,
                                  }| {
-                                    highlight_paren(
+                                    highlight_parens(
                                         highlight_selection(
                                             colorize(
                                                 syntax,
@@ -3557,7 +3594,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                             (selection_start, selection_end),
                                         ),
                                         range,
-                                        matching_paren,
+                                        &mut parentheses,
                                     )
                                     .into()
                                 },
