@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain, color};
+use crate::syntax::{Commenting, Highlight, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -75,16 +75,16 @@ enum JavaToken {
     Annotation,
 }
 
-impl TryFrom<JavaToken> for Color {
+impl TryFrom<JavaToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: JavaToken) -> Result<Color, ()> {
+    fn try_from(t: JavaToken) -> Result<Highlight, ()> {
         match t {
             JavaToken::Type => Ok(color::TYPE),
             JavaToken::Flow => Ok(color::FLOW),
             JavaToken::Keyword => Ok(color::KEYWORD),
             JavaToken::String => Ok(color::STRING),
-            JavaToken::Annotation => Ok(Color::Magenta),
+            JavaToken::Annotation => Ok(Color::Magenta.into()),
             JavaToken::Comment | JavaToken::StartComment | JavaToken::EndComment => {
                 Ok(color::COMMENT)
             }

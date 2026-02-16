@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
+use crate::syntax::Highlight;
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -25,16 +26,16 @@ enum PatchToken {
     Linenumber,
 }
 
-impl TryFrom<PatchToken> for Color {
+impl TryFrom<PatchToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: PatchToken) -> Result<Color, ()> {
+    fn try_from(t: PatchToken) -> Result<Highlight, ()> {
         match t {
-            PatchToken::Header => Ok(Color::Magenta),
-            PatchToken::Added => Ok(Color::LightGreen),
+            PatchToken::Header => Ok(Color::Magenta.into()),
+            PatchToken::Added => Ok(Color::LightGreen.into()),
             PatchToken::Context => Err(()),
-            PatchToken::Deleted => Ok(Color::LightRed),
-            PatchToken::Linenumber => Ok(Color::LightYellow),
+            PatchToken::Deleted => Ok(Color::LightRed.into()),
+            PatchToken::Linenumber => Ok(Color::LightYellow.into()),
         }
     }
 }

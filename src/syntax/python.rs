@@ -6,7 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::syntax::{Commenting, HighlightState, Highlighter, MultiCommentType, Plain, color};
+use crate::syntax::{
+    Commenting, Highlight, HighlightState, Highlighter, MultiCommentType, Plain, color,
+};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -67,16 +69,16 @@ enum PythonToken {
     Variable,
 }
 
-impl TryFrom<PythonToken> for Color {
+impl TryFrom<PythonToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: PythonToken) -> Result<Color, ()> {
+    fn try_from(t: PythonToken) -> Result<Highlight, ()> {
         match t {
             PythonToken::Function => Ok(color::FUNCTION),
             PythonToken::Keyword => Ok(color::KEYWORD),
             PythonToken::Flow => Ok(color::FLOW),
-            PythonToken::Literal => Ok(Color::LightMagenta),
-            PythonToken::Decorator => Ok(Color::Cyan),
+            PythonToken::Literal => Ok(Color::LightMagenta.into()),
+            PythonToken::Decorator => Ok(Color::Cyan.into()),
             PythonToken::String | PythonToken::MultiLineString => Ok(color::STRING),
             PythonToken::Comment => Ok(color::COMMENT),
             PythonToken::Variable => Err(()),
@@ -132,7 +134,7 @@ impl Highlighter for Python {
         &self,
         s: &'s str,
         state: &'s mut crate::syntax::HighlightState,
-    ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
+    ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
         use crate::syntax::EitherLexer;
 
         let lexer: EitherLexer<PythonToken, MultiLineString> = EitherLexer::new(state, s);
@@ -146,12 +148,12 @@ impl Highlighter for Python {
                             *state = HighlightState::Commenting;
                         }
                     })
-                    .and_then(|t| Color::try_from(t).ok())
+                    .and_then(|t| Highlight::try_from(t).ok())
                     .map(|c| (c, r)),
                 HighlightState::Commenting => Some(match t {
                     Ok(end) if end.is_comment_end() => {
                         *state = HighlightState::default();
-                        (Color::try_from(end).ok()?, r)
+                        (Highlight::try_from(end).ok()?, r)
                     }
                     _ => (color::STRING, r),
                 }),

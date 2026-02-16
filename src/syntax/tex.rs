@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::color;
+use crate::syntax::{Highlight, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -25,14 +25,14 @@ enum TexToken {
     Comment,
 }
 
-impl TryFrom<TexToken> for Color {
+impl TryFrom<TexToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: TexToken) -> Result<Color, ()> {
+    fn try_from(t: TexToken) -> Result<Highlight, ()> {
         match t {
-            TexToken::Command => Ok(Color::Green),
-            TexToken::Punctuation => Ok(Color::Magenta),
-            TexToken::Math => Ok(Color::Red),
+            TexToken::Command => Ok(Color::Green.into()),
+            TexToken::Punctuation => Ok(Color::Magenta.into()),
+            TexToken::Math => Ok(Color::Red.into()),
             TexToken::Comment => Ok(color::COMMENT),
         }
     }

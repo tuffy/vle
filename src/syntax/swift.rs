@@ -7,9 +7,8 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain, color};
+use crate::syntax::{Commenting, Highlight, Plain, color};
 use logos::Logos;
-use ratatui::style::Color;
 
 #[derive(Logos, Debug)]
 #[logos(skip r"[ \t\n]+")]
@@ -143,10 +142,10 @@ enum SwiftToken {
     EndComment,
 }
 
-impl TryFrom<SwiftToken> for Color {
+impl TryFrom<SwiftToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: SwiftToken) -> Result<Color, ()> {
+    fn try_from(t: SwiftToken) -> Result<Highlight, ()> {
         match t {
             SwiftToken::String => Ok(color::STRING),
             SwiftToken::Keyword => Ok(color::KEYWORD),

@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain, color};
+use crate::syntax::{Commenting, Highlight, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -52,6 +52,7 @@ enum RustToken {
     #[token("unsafe")]
     #[token("unsized")]
     #[token("use")]
+    #[token("where")]
     #[token("virtual")]
     Keyword,
 
@@ -63,7 +64,6 @@ enum RustToken {
     #[token("loop")]
     #[token("match")]
     #[token("return")]
-    #[token("where")]
     #[token("while")]
     #[token("yield")]
     Flow,
@@ -104,14 +104,14 @@ enum RustToken {
     Function,
 }
 
-impl TryFrom<RustToken> for Color {
+impl TryFrom<RustToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: RustToken) -> Result<Color, ()> {
+    fn try_from(t: RustToken) -> Result<Highlight, ()> {
         match t {
             RustToken::Keyword => Ok(color::KEYWORD),
             RustToken::Constant => Ok(color::CONSTANT),
-            RustToken::Macro => Ok(Color::Red),
+            RustToken::Macro => Ok(Color::Red.into()),
             RustToken::Flow => Ok(color::FLOW),
             RustToken::Type => Ok(color::TYPE),
             RustToken::Comment | RustToken::StartComment | RustToken::EndComment => {

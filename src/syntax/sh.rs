@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::color;
+use crate::syntax::{Highlight, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -94,16 +94,16 @@ enum ShellToken {
     Variable,
 }
 
-impl TryFrom<ShellToken> for Color {
+impl TryFrom<ShellToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: ShellToken) -> Result<Color, ()> {
+    fn try_from(t: ShellToken) -> Result<Highlight, ()> {
         match t {
             ShellToken::Keyword => Ok(color::KEYWORD),
             ShellToken::Flow => Ok(color::FLOW),
-            ShellToken::Command => Ok(Color::LightBlue),
+            ShellToken::Command => Ok(Color::LightBlue.into()),
             ShellToken::Comment => Ok(color::COMMENT),
-            ShellToken::Option => Ok(Color::LightMagenta),
+            ShellToken::Option => Ok(Color::LightMagenta.into()),
             ShellToken::String => Ok(color::STRING),
             ShellToken::Variable => Err(()),
         }

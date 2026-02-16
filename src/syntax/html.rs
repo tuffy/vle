@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain, color};
+use crate::syntax::{Commenting, Highlight, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -32,15 +32,15 @@ enum HtmlToken {
     EndComment,
 }
 
-impl TryFrom<HtmlToken> for Color {
+impl TryFrom<HtmlToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: HtmlToken) -> Result<Color, ()> {
+    fn try_from(t: HtmlToken) -> Result<Highlight, ()> {
         match t {
-            HtmlToken::TagStart | HtmlToken::TagEnd => Ok(Color::Cyan),
-            HtmlToken::CharRef => Ok(Color::Red),
+            HtmlToken::TagStart | HtmlToken::TagEnd => Ok(Color::Cyan.into()),
+            HtmlToken::CharRef => Ok(Color::Red.into()),
             HtmlToken::StartComment | HtmlToken::EndComment => Ok(color::COMMENT),
-            HtmlToken::FieldName => Ok(Color::Green),
+            HtmlToken::FieldName => Ok(Color::Green.into()),
             HtmlToken::String => Ok(color::STRING),
         }
     }

@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use crate::syntax::Highlight;
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -34,7 +35,7 @@ impl crate::syntax::Highlighter for Csv {
         &self,
         s: &'s str,
         _state: &'s mut crate::syntax::HighlightState,
-    ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
+    ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
         let colors = &[
             Color::Blue,
             Color::Green,
@@ -59,7 +60,7 @@ impl crate::syntax::Highlighter for Csv {
                         color = next_color.next().unwrap();
                         None
                     }
-                    Ok(CsvToken::Quoted) | Err(_) => Some((*color, r)),
+                    Ok(CsvToken::Quoted) | Err(_) => Some(((*color).into(), r)),
                 }),
         )
     }

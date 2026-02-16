@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain, color};
+use crate::syntax::{Commenting, Highlight, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -92,17 +92,17 @@ enum GoToken {
     EndComment,
 }
 
-impl TryFrom<GoToken> for Color {
+impl TryFrom<GoToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: GoToken) -> Result<Color, ()> {
+    fn try_from(t: GoToken) -> Result<Highlight, ()> {
         match t {
             GoToken::Type => Ok(color::TYPE),
             GoToken::Function => Ok(color::FUNCTION),
-            GoToken::Control => Ok(Color::LightYellow),
+            GoToken::Control => Ok(Color::LightYellow.into()),
             GoToken::Flow => Ok(color::FLOW),
-            GoToken::Declaration => Ok(Color::LightCyan),
-            GoToken::Literal => Ok(Color::Red),
+            GoToken::Declaration => Ok(Color::LightCyan.into()),
+            GoToken::Literal => Ok(Color::Red.into()),
             GoToken::String => Ok(color::STRING),
             GoToken::Comment | GoToken::StartComment | GoToken::EndComment => Ok(color::COMMENT),
         }

@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
+use crate::syntax::Highlight;
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -41,16 +42,16 @@ enum RegexToken {
     Backreference,
 }
 
-impl TryFrom<RegexToken> for Color {
+impl TryFrom<RegexToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: RegexToken) -> Result<Color, ()> {
+    fn try_from(t: RegexToken) -> Result<Highlight, ()> {
         match t {
-            RegexToken::Position => Ok(Color::Green),
-            RegexToken::SubExpression => Ok(Color::Blue),
-            RegexToken::Repeat => Ok(Color::Red),
-            RegexToken::Bracketed | RegexToken::Escape => Ok(Color::Magenta),
-            RegexToken::Backreference => Ok(Color::Cyan),
+            RegexToken::Position => Ok(Color::Green.into()),
+            RegexToken::SubExpression => Ok(Color::Blue.into()),
+            RegexToken::Repeat => Ok(Color::Red.into()),
+            RegexToken::Bracketed | RegexToken::Escape => Ok(Color::Magenta.into()),
+            RegexToken::Backreference => Ok(Color::Cyan.into()),
             RegexToken::Bracket => Err(()),
         }
     }

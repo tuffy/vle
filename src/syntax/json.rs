@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::color;
+use crate::syntax::{Highlight, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -34,17 +34,17 @@ enum JsonToken {
     Punctuation2,
 }
 
-impl TryFrom<JsonToken> for Color {
+impl TryFrom<JsonToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: JsonToken) -> Result<Color, ()> {
+    fn try_from(t: JsonToken) -> Result<Highlight, ()> {
         match t {
             JsonToken::Name => Ok(color::TYPE),
             JsonToken::String => Ok(color::STRING),
             JsonToken::Number => Ok(color::NUMBER),
-            JsonToken::Literal => Ok(Color::Red),
-            JsonToken::Punctuation1 => Ok(Color::LightBlue),
-            JsonToken::Punctuation2 => Ok(Color::LightRed),
+            JsonToken::Literal => Ok(Color::Red.into()),
+            JsonToken::Punctuation1 => Ok(Color::LightBlue.into()),
+            JsonToken::Punctuation2 => Ok(Color::LightRed.into()),
         }
     }
 }

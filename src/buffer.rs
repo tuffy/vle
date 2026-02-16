@@ -2894,13 +2894,14 @@ impl StatefulWidget for BufferWidget<'_> {
             ) -> Vec<Span<'r>> {
                 let mut elements = vec![];
                 let mut idx = 0;
-                for (color, range) in syntax.highlight(text.as_ref(), state) {
+                for (highlight, range) in syntax.highlight(text.as_ref(), state) {
                     if idx < range.start {
                         elements.push(Span::raw(text.extract_range(idx..range.start)));
                     }
                     elements.push(Span::styled(
                         text.extract_range(range.clone()),
-                        Style::default().fg(color),
+                        // Style::default().fg(highlight),
+                        Style::from(highlight),
                     ));
                     idx = range.end;
                 }

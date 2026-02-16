@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::color;
+use crate::syntax::{Highlight, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -29,12 +29,12 @@ enum TomlToken {
     Comment,
 }
 
-impl TryFrom<TomlToken> for Color {
+impl TryFrom<TomlToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: TomlToken) -> Result<Color, ()> {
+    fn try_from(t: TomlToken) -> Result<Highlight, ()> {
         match t {
-            TomlToken::Encloser => Ok(Color::Red),
+            TomlToken::Encloser => Ok(Color::Red.into()),
             TomlToken::Key => Ok(color::KEYWORD),
             TomlToken::Value => Ok(color::STRING),
             TomlToken::Comment => Ok(color::COMMENT),

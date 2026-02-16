@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::color;
+use crate::syntax::{Highlight, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -23,14 +23,14 @@ enum IniToken {
     Section,
 }
 
-impl TryFrom<IniToken> for Color {
+impl TryFrom<IniToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: IniToken) -> Result<Color, ()> {
+    fn try_from(t: IniToken) -> Result<Highlight, ()> {
         match t {
-            IniToken::Key => Ok(Color::Blue),
+            IniToken::Key => Ok(Color::Blue.into()),
             IniToken::Comment => Ok(color::COMMENT),
-            IniToken::Section => Ok(Color::Green),
+            IniToken::Section => Ok(Color::Green.into()),
         }
     }
 }

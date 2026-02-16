@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
+use crate::syntax::Highlight;
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -93,18 +94,18 @@ enum TutorialToken {
     Incorrect,
 }
 
-impl TryFrom<TutorialToken> for Color {
+impl TryFrom<TutorialToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: TutorialToken) -> Result<Color, ()> {
+    fn try_from(t: TutorialToken) -> Result<Highlight, ()> {
         match t {
-            TutorialToken::Title => Ok(Color::Cyan),
-            TutorialToken::Keybinding => Ok(Color::Magenta),
-            TutorialToken::Header => Ok(Color::Blue),
-            TutorialToken::Subheader => Ok(Color::Blue),
-            TutorialToken::Correct => Ok(Color::Green),
-            TutorialToken::Incorrect => Ok(Color::Red),
-            TutorialToken::Variable => Ok(Color::Cyan),
+            TutorialToken::Title => Ok(Color::Cyan.into()),
+            TutorialToken::Keybinding => Ok(Color::Magenta.into()),
+            TutorialToken::Header => Ok(Color::Blue.into()),
+            TutorialToken::Subheader => Ok(Color::Blue.into()),
+            TutorialToken::Correct => Ok(Color::Green.into()),
+            TutorialToken::Incorrect => Ok(Color::Red.into()),
+            TutorialToken::Variable => Ok(Color::Cyan.into()),
         }
     }
 }

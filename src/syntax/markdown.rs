@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
+use crate::syntax::Highlight;
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -25,16 +26,16 @@ enum MarkdownToken {
     Link,
 }
 
-impl TryFrom<MarkdownToken> for Color {
+impl TryFrom<MarkdownToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: MarkdownToken) -> Result<Color, ()> {
+    fn try_from(t: MarkdownToken) -> Result<Highlight, ()> {
         match t {
-            MarkdownToken::Code => Ok(Color::LightCyan),
-            MarkdownToken::Emphasis => Ok(Color::Green),
-            MarkdownToken::Heading => Ok(Color::LightYellow),
-            MarkdownToken::Url => Ok(Color::LightBlue),
-            MarkdownToken::Link => Ok(Color::LightMagenta),
+            MarkdownToken::Code => Ok(Color::LightCyan.into()),
+            MarkdownToken::Emphasis => Ok(Color::Green.into()),
+            MarkdownToken::Heading => Ok(Color::LightYellow.into()),
+            MarkdownToken::Url => Ok(Color::LightBlue.into()),
+            MarkdownToken::Link => Ok(Color::LightMagenta.into()),
         }
     }
 }

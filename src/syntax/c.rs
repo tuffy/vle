@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain, color};
+use crate::syntax::{Commenting, Highlight, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -107,10 +107,10 @@ enum CToken {
     Preprocessor,
 }
 
-impl TryFrom<CToken> for Color {
+impl TryFrom<CToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: CToken) -> Result<Color, ()> {
+    fn try_from(t: CToken) -> Result<Highlight, ()> {
         match t {
             CToken::Constant => Ok(color::CONSTANT),
             CToken::Integer | CToken::Boolean => Ok(color::NUMBER),
@@ -119,7 +119,7 @@ impl TryFrom<CToken> for Color {
             CToken::Comment => Ok(color::COMMENT),
             CToken::String => Ok(color::STRING),
             CToken::Variable => Err(()),
-            CToken::Preprocessor => Ok(Color::LightCyan),
+            CToken::Preprocessor => Ok(Color::LightCyan.into()),
             CToken::StartComment | CToken::EndComment => Ok(color::COMMENT),
         }
     }

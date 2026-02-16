@@ -57,6 +57,41 @@ pub enum MultiCommentType {
     Unidirectional(fn(HighlightState, &str) -> HighlightState),
 }
 
+/// A subset of all of Ratatui's possible modifiers
+#[derive(Copy, Clone, Default)]
+pub enum Modifier {
+    #[default]
+    Plain,
+    Bold,
+    Italic,
+}
+
+#[derive(Copy, Clone)]
+pub struct Highlight {
+    pub color: Color,
+    pub modifier: Modifier,
+}
+
+impl From<Color> for Highlight {
+    fn from(color: Color) -> Self {
+        Self {
+            color,
+            modifier: Modifier::default(),
+        }
+    }
+}
+
+impl From<Highlight> for ratatui::style::Style {
+    fn from(highlight: Highlight) -> Self {
+        (match highlight.modifier {
+            Modifier::Plain => Self::default(),
+            Modifier::Italic => Self::default().italic(),
+            Modifier::Bold => Self::default().bold(),
+        })
+        .fg(highlight.color)
+    }
+}
+
 /// Implemented for different syntax highlighters
 pub trait Highlighter: std::fmt::Debug + std::fmt::Display {
     /// Yields portions of the string to highlight in a particular color
@@ -64,7 +99,7 @@ pub trait Highlighter: std::fmt::Debug + std::fmt::Display {
         &self,
         s: &'s str,
         state: &'s mut HighlightState,
-    ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's>;
+    ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's>;
 
     /// Returns true if the format requires actual tabs instead of spaces
     /// (pretty sure this only applies to Makefiles)
@@ -85,7 +120,7 @@ impl Highlighter for Box<dyn Highlighter> {
         &self,
         s: &'s str,
         state: &'s mut HighlightState,
-    ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
+    ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
         Box::as_ref(self).highlight(s, state)
     }
 
@@ -106,7 +141,7 @@ impl Highlighter for DefaultHighlighter {
         &self,
         _s: &'s str,
         _state: &'s mut HighlightState,
-    ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
+    ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
         Box::new(std::iter::empty())
     }
 }
@@ -231,9 +266,11 @@ macro_rules! highlighter {
                 &self,
                 s: &'s str,
                 _state: &'s mut $crate::syntax::HighlightState,
-            ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
+            ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
                 Box::new(<$token>::lexer(s).spanned().filter_map(|(t, r)| {
-                    t.ok().and_then(|t| Color::try_from(t).ok()).map(|c| (c, r))
+                    t.ok()
+                        .and_then(|t| Highlight::try_from(t).ok())
+                        .map(|c| (c, r))
                 }))
             }
         }
@@ -277,7 +314,7 @@ macro_rules! highlighter {
                 &self,
                 s: &'s str,
                 state: &'s mut $crate::syntax::HighlightState,
-            ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
+            ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
                 use $crate::syntax::{EitherLexer, HighlightState};
 
                 let lexer: EitherLexer<$token, CommentEnd> = EitherLexer::new(&state, s);
@@ -291,12 +328,12 @@ macro_rules! highlighter {
                                     *state = HighlightState::Commenting;
                                 }
                             })
-                            .and_then(|t| Color::try_from(t).ok())
+                            .and_then(|t| Highlight::try_from(t).ok())
                             .map(|c| (c, r)),
                         HighlightState::Commenting => Some(match t {
                             Ok(end) if end.is_comment_end() => {
                                 *state = HighlightState::default();
-                                (Color::try_from(end).ok()?, r)
+                                (Highlight::try_from(end).ok()?, r)
                             }
                             _ => ($comment_color, r),
                         }),
@@ -334,16 +371,41 @@ macro_rules! highlighter {
 }
 
 pub mod color {
+    use crate::syntax::{Highlight, Modifier};
     use ratatui::style::Color;
 
     // A unified color scheme across common syntax items
 
-    pub const KEYWORD: Color = Color::Yellow;
-    pub const FLOW: Color = Color::Red;
-    pub const CONSTANT: Color = Color::Magenta;
-    pub const TYPE: Color = Color::Magenta;
-    pub const COMMENT: Color = Color::DarkGray;
-    pub const FUNCTION: Color = Color::Magenta;
-    pub const STRING: Color = Color::Blue;
-    pub const NUMBER: Color = Color::Cyan;
+    pub const KEYWORD: Highlight = Highlight {
+        color: Color::Yellow,
+        modifier: Modifier::Plain,
+    };
+    pub const FLOW: Highlight = Highlight {
+        color: Color::Red,
+        modifier: Modifier::Bold,
+    };
+    pub const CONSTANT: Highlight = Highlight {
+        color: Color::Magenta,
+        modifier: Modifier::Plain,
+    };
+    pub const TYPE: Highlight = Highlight {
+        color: Color::Magenta,
+        modifier: Modifier::Plain,
+    };
+    pub const COMMENT: Highlight = Highlight {
+        color: Color::DarkGray,
+        modifier: Modifier::Italic,
+    };
+    pub const FUNCTION: Highlight = Highlight {
+        color: Color::Magenta,
+        modifier: Modifier::Bold,
+    };
+    pub const STRING: Highlight = Highlight {
+        color: Color::Blue,
+        modifier: Modifier::Plain,
+    };
+    pub const NUMBER: Highlight = Highlight {
+        color: Color::Cyan,
+        modifier: Modifier::Plain,
+    };
 }

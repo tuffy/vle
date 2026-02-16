@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::color;
+use crate::syntax::{Highlight, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -109,15 +109,15 @@ enum ZigToken {
     Comment,
 }
 
-impl TryFrom<ZigToken> for Color {
+impl TryFrom<ZigToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: ZigToken) -> Result<Color, ()> {
+    fn try_from(t: ZigToken) -> Result<Highlight, ()> {
         match t {
             ZigToken::Keyword => Ok(color::KEYWORD),
             ZigToken::Flow => Ok(color::FLOW),
             ZigToken::String => Ok(color::STRING),
-            ZigToken::BuiltinFunction => Ok(Color::Cyan),
+            ZigToken::BuiltinFunction => Ok(Color::Cyan.into()),
             ZigToken::Comment => Ok(color::COMMENT),
             ZigToken::Type => Ok(color::TYPE),
             ZigToken::Identifier => Err(()),

@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain, color};
+use crate::syntax::{Commenting, Highlight, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -161,10 +161,10 @@ enum CppToken {
     Preprocessor,
 }
 
-impl TryFrom<CppToken> for Color {
+impl TryFrom<CppToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: CppToken) -> Result<Color, ()> {
+    fn try_from(t: CppToken) -> Result<Highlight, ()> {
         match t {
             CppToken::Constant | CppToken::Operator => Ok(color::CONSTANT),
             CppToken::Integer | CppToken::Literal => Ok(color::NUMBER),
@@ -175,7 +175,7 @@ impl TryFrom<CppToken> for Color {
             CppToken::Comment => Ok(color::COMMENT),
             CppToken::String => Ok(color::STRING),
             CppToken::Variable => Err(()),
-            CppToken::Preprocessor => Ok(Color::LightCyan),
+            CppToken::Preprocessor => Ok(Color::LightCyan.into()),
             CppToken::StartComment | CppToken::EndComment => Ok(color::COMMENT),
         }
     }

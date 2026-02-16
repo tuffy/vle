@@ -7,9 +7,8 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain, color};
+use crate::syntax::{Commenting, Highlight, Plain, color};
 use logos::Logos;
-use ratatui::style::Color;
 
 #[derive(Logos, Debug)]
 #[logos(skip r"[ \t\n]+")]
@@ -67,10 +66,10 @@ enum JavaScriptToken {
     EndComment,
 }
 
-impl TryFrom<JavaScriptToken> for Color {
+impl TryFrom<JavaScriptToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: JavaScriptToken) -> Result<Color, ()> {
+    fn try_from(t: JavaScriptToken) -> Result<Highlight, ()> {
         match t {
             JavaScriptToken::Comment
             | JavaScriptToken::StartComment

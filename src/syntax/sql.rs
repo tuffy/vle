@@ -7,9 +7,8 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::color;
+use crate::syntax::{Highlight, color};
 use logos::Logos;
-use ratatui::style::Color;
 
 #[derive(Logos, Debug)]
 #[logos(skip r"[ \t\n]+")]
@@ -118,10 +117,10 @@ enum SqlToken {
     String,
 }
 
-impl TryFrom<SqlToken> for Color {
+impl TryFrom<SqlToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: SqlToken) -> Result<Color, ()> {
+    fn try_from(t: SqlToken) -> Result<Highlight, ()> {
         match t {
             SqlToken::Keyword => Ok(color::KEYWORD),
             SqlToken::Type => Ok(color::TYPE),

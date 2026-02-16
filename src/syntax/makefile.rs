@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::syntax::color;
+use crate::syntax::{Highlight, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -21,13 +21,13 @@ enum MakefileToken {
     Comment,
 }
 
-impl TryFrom<MakefileToken> for Color {
+impl TryFrom<MakefileToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: MakefileToken) -> Result<Color, ()> {
+    fn try_from(t: MakefileToken) -> Result<Highlight, ()> {
         match t {
-            MakefileToken::Variable => Ok(Color::Cyan),
-            MakefileToken::Assignment => Ok(Color::Red),
+            MakefileToken::Variable => Ok(Color::Cyan.into()),
+            MakefileToken::Assignment => Ok(Color::Red.into()),
             MakefileToken::Comment => Ok(color::COMMENT),
         }
     }
@@ -47,12 +47,12 @@ impl crate::syntax::Highlighter for Makefile {
         &self,
         s: &'s str,
         _state: &'s mut crate::syntax::HighlightState,
-    ) -> Box<dyn Iterator<Item = (Color, std::ops::Range<usize>)> + 's> {
-        Box::new(
-            MakefileToken::lexer(s)
-                .spanned()
-                .filter_map(|(t, r)| t.ok().and_then(|t| Color::try_from(t).ok()).map(|c| (c, r))),
-        )
+    ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
+        Box::new(MakefileToken::lexer(s).spanned().filter_map(|(t, r)| {
+            t.ok()
+                .and_then(|t| Highlight::try_from(t).ok())
+                .map(|c| (c, r))
+        }))
     }
 
     fn tabs_required(&self) -> bool {

@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Commenting, Plain, color};
+use crate::syntax::{Commenting, Highlight, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -104,12 +104,12 @@ enum PhpToken {
     Identifier,
 }
 
-impl TryFrom<PhpToken> for Color {
+impl TryFrom<PhpToken> for Highlight {
     type Error = ();
 
-    fn try_from(t: PhpToken) -> Result<Color, ()> {
+    fn try_from(t: PhpToken) -> Result<Highlight, ()> {
         match t {
-            PhpToken::Variable => Ok(Color::Cyan),
+            PhpToken::Variable => Ok(Color::Cyan.into()),
             PhpToken::Type => Ok(color::TYPE),
             PhpToken::Keyword => Ok(color::KEYWORD),
             PhpToken::Flow => Ok(color::FLOW),
