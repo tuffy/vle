@@ -3167,7 +3167,7 @@ impl StatefulWidget for BufferWidget<'_> {
             fn pair(position: usize) -> Self {
                 Self {
                     position,
-                    color: Color::Yellow,
+                    color: Color::Green,
                 }
             }
 
