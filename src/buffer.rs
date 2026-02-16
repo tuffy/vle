@@ -2437,8 +2437,8 @@ pub fn prev_pairing_char(rope: &ropey::Rope, offset: usize) -> Option<(char, usi
 }
 
 /// Attempts to find previous opening character
-/// returning its character position
-pub fn prev_opening_char(rope: &ropey::Rope, offset: usize, limit: usize) -> Option<usize> {
+/// returning character and its position
+pub fn prev_opening_char(rope: &ropey::Rope, offset: usize, limit: usize) -> Option<(char, usize)> {
     let mut stacked_paren = 0;
     let mut stacked_square_bracket = 0;
     let mut stacked_curly_bracket = 0;
@@ -2478,7 +2478,60 @@ pub fn prev_opening_char(rope: &ropey::Rope, offset: usize, limit: usize) -> Opt
             '{' => checked_dec(&mut stacked_curly_bracket),
             _ => false,
         })
-        .map(|(_, pos)| offset - pos)
+        .map(|(c, pos)| (c, offset - pos))
+}
+
+/// Attempts to find next closing character
+/// returning opening character and its position
+pub fn next_closing_char(rope: &ropey::Rope, offset: usize, limit: usize) -> Option<(char, usize)> {
+    let mut stacked_paren = 0;
+    let mut stacked_square_bracket = 0;
+    let mut stacked_curly_bracket = 0;
+
+    fn checked_dec(i: &mut usize) -> bool {
+        if *i > 0 {
+            *i -= 1;
+            false
+        } else {
+            true
+        }
+    }
+
+    if offset > rope.len_chars() {
+        return None;
+    }
+
+    rope.chars_at(offset)
+        .zip(0..limit)
+        .find(|(c, _)| match c {
+            '(' => {
+                stacked_paren += 1;
+                false
+            }
+            '[' => {
+                stacked_square_bracket += 1;
+                false
+            }
+            '{' => {
+                stacked_curly_bracket += 1;
+                false
+            }
+            ')' => checked_dec(&mut stacked_paren),
+            ']' => checked_dec(&mut stacked_square_bracket),
+            '}' => checked_dec(&mut stacked_curly_bracket),
+            _ => false,
+        })
+        .map(|(c, pos)| {
+            (
+                match c {
+                    ')' => '(',
+                    ']' => '[',
+                    '}' => '{',
+                    _ => unreachable!(),
+                },
+                offset + pos,
+            )
+        })
 }
 
 fn perform_surround(
@@ -3124,6 +3177,20 @@ impl StatefulWidget for BufferWidget<'_> {
                     color: Color::Cyan,
                 }
             }
+
+            fn matching(position: usize) -> Self {
+                Self {
+                    position,
+                    color: Color::Green,
+                }
+            }
+
+            fn mismatch(position: usize) -> Self {
+                Self {
+                    position,
+                    color: Color::Red,
+                }
+            }
         }
 
         fn highlight_parens<'s>(
@@ -3430,7 +3497,25 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
             _ => match prev_opening_char(rope, state.cursor, viewport_size) {
-                Some(paren) => vec![Paren::opener(paren.saturating_sub(1))].into(),
+                Some((opener, start)) => match next_closing_char(rope, state.cursor, viewport_size)
+                {
+                    Some((closer, end)) => {
+                        if opener == closer {
+                            vec![
+                                Paren::matching(start.saturating_sub(1)),
+                                Paren::matching(end),
+                            ]
+                            .into()
+                        } else {
+                            vec![
+                                Paren::mismatch(start.saturating_sub(1)),
+                                Paren::mismatch(end),
+                            ]
+                            .into()
+                        }
+                    }
+                    None => vec![Paren::opener(start.saturating_sub(1))].into(),
+                },
                 None => VecDeque::default(),
             },
         };
