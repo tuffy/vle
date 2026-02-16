@@ -194,7 +194,6 @@ impl Editor {
         remote: ssh2::Session,
     ) -> std::io::Result<Self> {
         Ok(Self {
-            layout: Layout::Single(BufferList::new(buffers)?),
             mode: SshSource::open(&remote)
                 .ok()
                 .and_then(|source| FileChooserState::new(EitherSource::Ssh(source)).ok())
@@ -202,9 +201,8 @@ impl Editor {
                     chooser: Box::new(chooser),
                 })
                 .unwrap_or_default(),
-            cut_buffer: None,
-            show_help: false,
             remote: Some(remote),
+            ..Self::new(buffers)?
         })
     }
 
