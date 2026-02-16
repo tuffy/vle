@@ -30,12 +30,23 @@ impl TryFrom<MarkdownToken> for Highlight {
     type Error = ();
 
     fn try_from(t: MarkdownToken) -> Result<Highlight, ()> {
+        use crate::syntax::Modifier;
+
         match t {
-            MarkdownToken::Code => Ok(Color::LightCyan.into()),
-            MarkdownToken::Emphasis => Ok(Color::Green.into()),
-            MarkdownToken::Heading => Ok(Color::LightYellow.into()),
-            MarkdownToken::Url => Ok(Color::LightBlue.into()),
-            MarkdownToken::Link => Ok(Color::LightMagenta.into()),
+            MarkdownToken::Code => Ok(Highlight {
+                color: None,
+                modifier: Modifier::Italic,
+            }),
+            MarkdownToken::Emphasis => Ok(Highlight {
+                color: None,
+                modifier: Modifier::Bold,
+            }),
+            MarkdownToken::Heading => Ok(Highlight {
+                color: Some(Color::Blue),
+                modifier: Modifier::Bold,
+            }),
+            MarkdownToken::Url => Ok(Color::Blue.into()),
+            MarkdownToken::Link => Ok(Color::Magenta.into()),
         }
     }
 }
