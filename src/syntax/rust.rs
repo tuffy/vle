@@ -21,7 +21,6 @@ enum RustToken {
     #[token("become")]
     #[token("box")]
     #[token("const")]
-    #[token("continue")]
     #[token("crate")]
     #[token("do")]
     #[token("dyn")]
@@ -57,6 +56,7 @@ enum RustToken {
     Keyword,
 
     #[token("break")]
+    #[token("continue")]
     #[token("else")]
     #[token("for")]
     #[token("if")]

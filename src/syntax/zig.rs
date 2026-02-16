@@ -21,22 +21,16 @@ enum ZigToken {
     #[token("anyframe")]
     #[token("anytime")]
     #[token("asm")]
-    #[token("break")]
     #[token("callconv")]
-    #[token("catch")]
     #[token("comptime")]
     #[token("const")]
-    #[token("continue")]
     #[token("defer")]
-    #[token("else")]
     #[token("enum")]
     #[token("errdefer")]
     #[token("error")]
     #[token("export")]
     #[token("extern")]
     #[token("fn")]
-    #[token("for")]
-    #[token("if")]
     #[token("inline")]
     #[token("linksection")]
     #[token("noalias")]
@@ -44,23 +38,30 @@ enum ZigToken {
     #[token("nosuspend")]
     #[token("opaque")]
     #[token("or")]
-    #[token("orelse")]
     #[token("packed")]
     #[token("pub")]
     #[token("resume")]
-    #[token("return")]
     #[token("struct")]
     #[token("suspend")]
-    #[token("switch")]
     #[token("test")]
     #[token("threadlocal")]
-    #[token("try")]
     #[token("union")]
     #[token("unreachable")]
     #[token("var")]
     #[token("volatile")]
-    #[token("while")]
     Keyword,
+    #[token("break")]
+    #[token("catch")]
+    #[token("continue")]
+    #[token("else")]
+    #[token("for")]
+    #[token("if")]
+    #[token("orelse")]
+    #[token("return")]
+    #[token("switch")]
+    #[token("try")]
+    #[token("while")]
+    Flow,
     #[regex("@[[:upper:][:lower:]]+")]
     BuiltinFunction,
     #[regex(r#"\"([^\\\"]|\\.)*\""#)]
@@ -114,6 +115,7 @@ impl TryFrom<ZigToken> for Color {
     fn try_from(t: ZigToken) -> Result<Color, ()> {
         match t {
             ZigToken::Keyword => Ok(color::KEYWORD),
+            ZigToken::Flow => Ok(color::FLOW),
             ZigToken::String => Ok(color::STRING),
             ZigToken::BuiltinFunction => Ok(Color::Cyan),
             ZigToken::Comment => Ok(color::COMMENT),

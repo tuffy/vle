@@ -46,25 +46,11 @@ enum SwiftToken {
     #[token("subscript")]
     #[token("typealias")]
     #[token("var")]
-    #[token("break")]
-    #[token("case")]
-    #[token("catch")]
-    #[token("continue")]
     #[token("default")]
     #[token("defer")]
-    #[token("do")]
-    #[token("else")]
-    #[token("fallthrough")]
-    #[token("for")]
-    #[token("guard")]
     #[token("if")]
     #[token("in")]
-    #[token("repeat")]
-    #[token("return")]
-    #[token("switch")]
-    #[token("throw")]
     #[token("where")]
-    #[token("while")]
     #[token("Any")]
     #[token("as")]
     #[token("await")]
@@ -76,7 +62,6 @@ enum SwiftToken {
     #[token("super")]
     #[token("throws")]
     #[token("true")]
-    #[token("try")]
     #[token("#available")]
     #[token("#colorLiteral")]
     #[token("#else")]
@@ -119,6 +104,22 @@ enum SwiftToken {
     #[token("weak")]
     #[token("willSet")]
     Keyword,
+    #[token("break")]
+    #[token("case")]
+    #[token("catch")]
+    #[token("continue")]
+    #[token("do")]
+    #[token("else")]
+    #[token("fallthrough")]
+    #[token("for")]
+    #[token("guard")]
+    #[token("repeat")]
+    #[token("return")]
+    #[token("switch")]
+    #[token("throw")]
+    #[token("while")]
+    #[token("try")]
+    Flow,
     #[token("Int")]
     #[token("Int32")]
     #[token("Int64")]
@@ -149,6 +150,7 @@ impl TryFrom<SwiftToken> for Color {
         match t {
             SwiftToken::String => Ok(color::STRING),
             SwiftToken::Keyword => Ok(color::KEYWORD),
+            SwiftToken::Flow => Ok(color::FLOW),
             SwiftToken::Type => Ok(color::TYPE),
             SwiftToken::Identifier => Err(()),
             SwiftToken::Comment | SwiftToken::StartComment | SwiftToken::EndComment => {

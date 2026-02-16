@@ -20,19 +20,11 @@ enum PythonToken {
     #[token("assert")]
     #[token("async")]
     #[token("await")]
-    #[token("break")]
     #[token("class")]
-    #[token("continue")]
     #[token("def")]
     #[token("del")]
-    #[token("elif")]
-    #[token("else")]
-    #[token("except")]
-    #[token("finally")]
-    #[token("for")]
     #[token("from")]
     #[token("global")]
-    #[token("if")]
     #[token("import")]
     #[token("in")]
     #[token("is")]
@@ -40,14 +32,23 @@ enum PythonToken {
     #[token("nonlocal")]
     #[token("not")]
     #[token("or")]
-    #[token("pass")]
-    #[token("raise")]
-    #[token("return")]
-    #[token("try")]
-    #[token("while")]
     #[token("with")]
-    #[token("yield")]
     Keyword,
+    #[token("break")]
+    #[token("continue")]
+    #[token("elif")]
+    #[token("else")]
+    #[token("except")]
+    #[token("finally")]
+    #[token("for")]
+    #[token("if")]
+    #[token("pass")]
+    #[token("try")]
+    #[token("raise")]
+    #[token("while")]
+    #[token("yield")]
+    #[token("return")]
+    Flow,
     #[token("True")]
     #[token("False")]
     #[token("None")]
@@ -73,6 +74,7 @@ impl TryFrom<PythonToken> for Color {
         match t {
             PythonToken::Function => Ok(color::FUNCTION),
             PythonToken::Keyword => Ok(color::KEYWORD),
+            PythonToken::Flow => Ok(color::FLOW),
             PythonToken::Literal => Ok(Color::LightMagenta),
             PythonToken::Decorator => Ok(Color::Cyan),
             PythonToken::String | PythonToken::MultiLineString => Ok(color::STRING),

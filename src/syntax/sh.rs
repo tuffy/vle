@@ -14,28 +14,15 @@ use ratatui::style::Color;
 #[derive(Logos, Debug)]
 #[logos(skip r"[ \t\n]+")]
 enum ShellToken {
-    #[token("break")]
-    #[token("case")]
-    #[token("continue")]
-    #[token("do")]
-    #[token("done")]
-    #[token("elif")]
-    #[token("else")]
-    #[token("esac")]
     #[token("exit")]
     #[token("fi")]
     #[token("for")]
     #[token("function")]
-    #[token("if")]
     #[token("in")]
     #[token("read")]
-    #[token("return")]
     #[token("select")]
     #[token("shift")]
-    #[token("then")]
     #[token("time")]
-    #[token("until")]
-    #[token("while")]
     #[token("declare")]
     #[token("eval")]
     #[token("exec")]
@@ -83,6 +70,20 @@ enum ShellToken {
     #[token("umask")]
     #[token("unset")]
     Command,
+    #[token("break")]
+    #[token("case")]
+    #[token("continue")]
+    #[token("do")]
+    #[token("done")]
+    #[token("elif")]
+    #[token("else")]
+    #[token("esac")]
+    #[token("if")]
+    #[token("return")]
+    #[token("then")]
+    #[token("until")]
+    #[token("while")]
+    Flow,
     #[regex("#.*", allow_greedy = true)]
     Comment,
     #[regex("(-[[:alpha:]]|--[[:alpha:]-]+)")]
@@ -99,6 +100,7 @@ impl TryFrom<ShellToken> for Color {
     fn try_from(t: ShellToken) -> Result<Color, ()> {
         match t {
             ShellToken::Keyword => Ok(color::KEYWORD),
+            ShellToken::Flow => Ok(color::FLOW),
             ShellToken::Command => Ok(Color::LightBlue),
             ShellToken::Comment => Ok(color::COMMENT),
             ShellToken::Option => Ok(Color::LightMagenta),

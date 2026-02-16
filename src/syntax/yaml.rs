@@ -52,7 +52,7 @@ impl TryFrom<YamlToken> for Color {
             YamlToken::Comment => Ok(color::COMMENT),
             YamlToken::Symbol => Ok(Color::Yellow),
             YamlToken::String => Ok(color::STRING),
-            YamlToken::Name => Ok(Color::LightGreen),
+            YamlToken::Name => Ok(Color::Magenta),
             YamlToken::Number => Ok(color::NUMBER),
             YamlToken::Boolean => Ok(color::KEYWORD),
         }

@@ -342,7 +342,7 @@ pub mod color {
     pub const FLOW: Color = Color::Red;
     pub const CONSTANT: Color = Color::Magenta;
     pub const TYPE: Color = Color::Magenta;
-    pub const COMMENT: Color = Color::Green;
+    pub const COMMENT: Color = Color::DarkGray;
     pub const FUNCTION: Color = Color::Magenta;
     pub const STRING: Color = Color::Blue;
     pub const NUMBER: Color = Color::Cyan;
