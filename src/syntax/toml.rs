@@ -34,7 +34,7 @@ impl TryFrom<TomlToken> for Highlight {
 
     fn try_from(t: TomlToken) -> Result<Highlight, ()> {
         match t {
-            TomlToken::Encloser => Ok(Color::Red.into()),
+            TomlToken::Encloser => Ok(Color::Blue.into()),
             TomlToken::Key => Ok(color::KEYWORD),
             TomlToken::Value => Ok(color::STRING),
             TomlToken::Comment => Ok(color::COMMENT),

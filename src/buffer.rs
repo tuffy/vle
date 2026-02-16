@@ -549,7 +549,7 @@ pub enum FindMode {
 impl From<FindMode> for crate::help::Keybinding {
     fn from(mode: FindMode) -> Self {
         crate::help::ctrl_f(
-            &["T"],
+            &["F"],
             "F5",
             match mode {
                 FindMode::WholeFile => "Find in File",
