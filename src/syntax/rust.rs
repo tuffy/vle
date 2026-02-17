@@ -6,8 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::highlighter;
 use crate::syntax::{Commenting, Highlight, Plain, color};
+use crate::{highlighter, underliner};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -121,6 +121,15 @@ impl TryFrom<RustToken> for Highlight {
     }
 }
 
+#[derive(Logos, Debug)]
+#[logos(skip r"[ \t\n]+")]
+enum RustDef {
+    #[regex("fn [[:lower:]][[:lower:][:digit:]_]*")]
+    #[regex("struct [[:upper:]][[:alnum:]]+")]
+    #[regex("enum [[:upper:]][[:alnum:]]+")]
+    Definition,
+}
+
 #[derive(Debug)]
 pub struct Rust;
 
@@ -137,5 +146,6 @@ highlighter!(
     EndComment,
     "/*",
     "*/",
-    color::COMMENT
+    color::COMMENT,
+    underliner!(s, RustDef)
 );

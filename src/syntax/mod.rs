@@ -296,6 +296,9 @@ macro_rules! highlighter {
         }
     };
     ($syntax:ty, $token:ty, $comment_start:ident, $comment_end:ident, $start:literal, $end:literal, $comment_color:expr) => {
+        highlighter!($syntax, $token, $comment_start, $comment_end, $start, $end, $comment_color, None);
+    };
+    ($syntax:ty, $token:ty, $comment_start:ident, $comment_end:ident, $start:literal, $end:literal, $comment_color:expr, $underliner:expr) => {
         impl Plain for $token {
             fn is_comment_start(&self) -> bool {
                 matches!(self, Self::$comment_start)
@@ -361,6 +364,12 @@ macro_rules! highlighter {
                 }))
             }
 
+            fn underline(
+                &self,
+            ) -> Option<for<'s> fn(&'s str) -> Box<dyn Iterator<Item = std::ops::Range<usize>> + 's>> {
+                $underliner
+            }
+
             fn multicomment(&self) -> Option<$crate::syntax::MultiCommentType> {
                 use $crate::syntax::{MultiComment, MultiCommentType};
 
@@ -387,6 +396,19 @@ macro_rules! highlighter {
                 }))
             }
         }
+    };
+}
+
+#[macro_export]
+macro_rules! underliner {
+    ($s:ident, $class:ty) => {
+        Some(|$s| {
+            Box::new(
+                <$class>::lexer($s)
+                    .spanned()
+                    .filter_map(|(t, r)| t.ok().map(|_| r)),
+            )
+        })
     };
 }
 
