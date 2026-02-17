@@ -2924,8 +2924,8 @@ impl StatefulWidget for BufferWidget<'_> {
                     return elements;
                 }
 
+                let mut output = Vec::with_capacity(elements.len());
                 let mut input = elements.into();
-                let mut output = vec![];
                 let mut idx = 0;
                 for underline in underlines {
                     extract_bytes(&mut input, underline.start - idx, &mut output, |span| span);

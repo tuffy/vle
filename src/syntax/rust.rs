@@ -127,6 +127,7 @@ enum RustDef {
     #[regex("fn [[:lower:]][[:lower:][:digit:]_]*")]
     #[regex("struct [[:upper:]][[:alnum:]]+")]
     #[regex("enum [[:upper:]][[:alnum:]]+")]
+    #[regex("trait [[:upper:]][[:alnum:]]+")]
     Definition,
 }
 
