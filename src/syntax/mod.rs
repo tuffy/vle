@@ -387,7 +387,7 @@ pub mod color {
     };
     pub const FLOW: Highlight = Highlight {
         color: Some(Color::Blue),
-        modifier: Modifier::Bold,
+        modifier: Modifier::Plain,
     };
     pub const CONSTANT: Highlight = Highlight {
         color: Some(Color::Red),

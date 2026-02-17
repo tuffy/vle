@@ -2900,7 +2900,6 @@ impl StatefulWidget for BufferWidget<'_> {
                     }
                     elements.push(Span::styled(
                         text.extract_range(range.clone()),
-                        // Style::default().fg(highlight),
                         Style::from(highlight),
                     ));
                     idx = range.end;
