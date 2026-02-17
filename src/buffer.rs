@@ -2887,7 +2887,7 @@ impl StatefulWidget for BufferWidget<'_> {
             }
 
             /// Colorizes &str or String to spans based on syntax
-            fn colorize_s<'r, R: FromRange<'r>, S: Highlighter>(
+            fn colorize<'r, R: FromRange<'r>, S: Highlighter>(
                 syntax: &S,
                 state: &mut HighlightState,
                 text: R,
@@ -2908,7 +2908,40 @@ impl StatefulWidget for BufferWidget<'_> {
                 if !last.as_ref().is_empty() {
                     elements.push(Span::raw(last));
                 }
-                elements
+                match syntax.underline() {
+                    None => elements,
+                    Some(underline) => add_underlines(underline(text.as_ref()), elements),
+                }
+            }
+
+            fn add_underlines<'r>(
+                underlines: impl Iterator<Item = std::ops::Range<usize>>,
+                elements: Vec<Span<'r>>,
+            ) -> Vec<Span<'r>> {
+                let mut underlines = underlines.peekable();
+                if underlines.peek().is_none() {
+                    // nothing to underline (the common case)
+                    return elements;
+                }
+
+                let mut input = elements.into();
+                let mut output = vec![];
+                let mut idx = 0;
+                for underline in underlines {
+                    extract_bytes(&mut input, underline.start - idx, &mut output, |span| span);
+                    extract_bytes(
+                        &mut input,
+                        underline.end - underline.start,
+                        &mut output,
+                        |span| Span {
+                            content: span.content,
+                            style: span.style.underlined(),
+                        },
+                    );
+                    idx = underline.end;
+                }
+                output.extend(input);
+                output
             }
 
             fn highlight_trailing_whitespace(mut colorized: Vec<Span<'_>>) -> Vec<Span<'_>> {
@@ -2950,13 +2983,13 @@ impl StatefulWidget for BufferWidget<'_> {
 
             if current_line {
                 match text {
-                    Cow::Borrowed(s) => colorize_s(syntax, state, s.trim_end_matches('\n')),
-                    Cow::Owned(s) => colorize_s(syntax, state, trim_string_matches(s, '\n')),
+                    Cow::Borrowed(s) => colorize(syntax, state, s.trim_end_matches('\n')),
+                    Cow::Owned(s) => colorize(syntax, state, trim_string_matches(s, '\n')),
                 }
             } else {
                 highlight_trailing_whitespace(match text {
-                    Cow::Borrowed(s) => colorize_s(syntax, state, s.trim_end_matches('\n')),
-                    Cow::Owned(s) => colorize_s(syntax, state, trim_string_matches(s, '\n')),
+                    Cow::Borrowed(s) => colorize(syntax, state, s.trim_end_matches('\n')),
+                    Cow::Owned(s) => colorize(syntax, state, trim_string_matches(s, '\n')),
                 })
             }
         }
@@ -2994,6 +3027,54 @@ impl StatefulWidget for BufferWidget<'_> {
                     output.push(map(span));
                 } else {
                     let (prefix, suffix) = split_cow(span.content, characters);
+                    input.push_front(Span {
+                        style: span.style,
+                        content: suffix,
+                    });
+                    output.push(map(Span {
+                        style: span.style,
+                        content: prefix,
+                    }));
+                    return;
+                }
+            }
+        }
+
+        fn extract_bytes<'s>(
+            input: &mut VecDeque<Span<'s>>,
+            mut bytes: usize,
+            output: &mut Vec<Span<'s>>,
+            map: impl Fn(Span<'s>) -> Span<'s>,
+        ) {
+            fn split_cow(s: Cow<'_, str>, bytes: usize) -> (Cow<'_, str>, Cow<'_, str>) {
+                let split_point = if bytes < s.len() {
+                    bytes
+                } else {
+                    return (s, "".into());
+                };
+
+                match s {
+                    Cow::Borrowed(slice) => {
+                        let (start, end) = slice.split_at(split_point);
+                        (Cow::Borrowed(start), Cow::Borrowed(end))
+                    }
+                    Cow::Owned(mut string) => {
+                        let suffix = string.split_off(split_point);
+                        (Cow::Owned(string), Cow::Owned(suffix))
+                    }
+                }
+            }
+
+            while bytes > 0 {
+                let Some(span) = input.pop_front() else {
+                    return;
+                };
+                let span_width = span.content.len();
+                if span_width <= bytes {
+                    bytes -= span_width;
+                    output.push(map(span));
+                } else {
+                    let (prefix, suffix) = split_cow(span.content, bytes);
                     input.push_front(Span {
                         style: span.style,
                         content: suffix,

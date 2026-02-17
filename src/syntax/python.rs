@@ -126,6 +126,14 @@ impl Commenting for MultiLineString {
     }
 }
 
+#[derive(Logos, Debug)]
+#[logos(skip r"[ \t\n]+")]
+enum PythonDef {
+    #[regex("def [[:alpha:]_][[:alnum:]_.]*")]
+    #[regex("class [[:alpha:]_][[:alnum:]_.]*")]
+    Definition,
+}
+
 impl Highlighter for Python {
     fn highlight<'s>(
         &self,
@@ -156,6 +164,18 @@ impl Highlighter for Python {
                 }),
             }
         }))
+    }
+
+    fn underline(
+        &self,
+    ) -> Option<for<'s> fn(&'s str) -> Box<dyn Iterator<Item = std::ops::Range<usize>> + 's>> {
+        Some(|s| {
+            Box::new(
+                PythonDef::lexer(s)
+                    .spanned()
+                    .filter_map(|(t, r)| t.ok().map(|_| r)),
+            )
+        })
     }
 
     fn multicomment(&self) -> Option<MultiCommentType> {

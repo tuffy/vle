@@ -100,11 +100,20 @@ impl From<Highlight> for ratatui::style::Style {
 /// Implemented for different syntax highlighters
 pub trait Highlighter: std::fmt::Debug + std::fmt::Display {
     /// Yields portions of the string to highlight in a particular color
+    /// range is in bytes
     fn highlight<'s>(
         &self,
         s: &'s str,
         state: &'s mut HighlightState,
     ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's>;
+
+    /// Yields portions of the string to underline
+    /// range is in bytes
+    fn underline(
+        &self,
+    ) -> Option<for<'s> fn(&'s str) -> Box<dyn Iterator<Item = std::ops::Range<usize>> + 's>> {
+        None
+    }
 
     /// Returns true if the format requires actual tabs instead of spaces
     /// (pretty sure this only applies to Makefiles)
@@ -127,6 +136,12 @@ impl Highlighter for Box<dyn Highlighter> {
         state: &'s mut HighlightState,
     ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
         Box::as_ref(self).highlight(s, state)
+    }
+
+    fn underline(
+        &self,
+    ) -> Option<for<'s> fn(&'s str) -> Box<dyn Iterator<Item = std::ops::Range<usize>> + 's>> {
+        Box::as_ref(self).underline()
     }
 
     fn tabs_required(&self) -> bool {
