@@ -6,8 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::highlighter;
 use crate::syntax::{Commenting, Highlight, Plain, color};
+use crate::{highlighter, underliner};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -100,7 +100,7 @@ enum PhpToken {
     #[token("*/")]
     EndComment,
 
-    #[regex("[[:upper:][:lower:]_]+")]
+    #[regex("[[:upper:][:lower:]_][[:upper:][:lower:][:digit:]_]*")]
     Identifier,
 }
 
@@ -121,6 +121,14 @@ impl TryFrom<PhpToken> for Highlight {
     }
 }
 
+#[derive(Logos, Debug)]
+#[logos(skip r"[ \t\n]+")]
+enum PhpDef {
+    #[regex("function [[:upper:][:lower:]_][[:upper:][:lower:][:digit:]_]*")]
+    #[regex("class [[:upper:][:lower:]_][[:upper:][:lower:][:digit:]_]*")]
+    Definition,
+}
+
 #[derive(Debug)]
 pub struct Php;
 
@@ -137,5 +145,6 @@ highlighter!(
     EndComment,
     "/*",
     "*/",
-    color::COMMENT
+    color::COMMENT,
+    underliner!(s, PhpDef)
 );

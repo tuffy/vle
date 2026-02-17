@@ -6,8 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::highlighter;
 use crate::syntax::{Highlight, color};
+use crate::{highlighter, underliner};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -41,15 +41,16 @@ enum ZigToken {
     #[token("packed")]
     #[token("pub")]
     #[token("resume")]
-    #[token("struct")]
     #[token("suspend")]
     #[token("test")]
     #[token("threadlocal")]
-    #[token("union")]
     #[token("unreachable")]
     #[token("var")]
     #[token("volatile")]
     Keyword,
+    #[token("struct")]
+    #[token("union")]
+    StructUnion,
     #[token("break")]
     #[token("catch")]
     #[token("continue")]
@@ -113,8 +114,14 @@ impl TryFrom<ZigToken> for Highlight {
     type Error = ();
 
     fn try_from(t: ZigToken) -> Result<Highlight, ()> {
+        use crate::syntax::Modifier;
+
         match t {
             ZigToken::Keyword => Ok(color::KEYWORD),
+            ZigToken::StructUnion => Ok(Highlight {
+                modifier: Modifier::Underlined,
+                ..color::KEYWORD
+            }),
             ZigToken::Flow => Ok(color::FLOW),
             ZigToken::String => Ok(color::STRING),
             ZigToken::BuiltinFunction => Ok(Color::Cyan.into()),
@@ -128,10 +135,17 @@ impl TryFrom<ZigToken> for Highlight {
 #[derive(Debug)]
 pub struct Zig;
 
+#[derive(Logos, Debug)]
+#[logos(skip r"[ \t\n]+")]
+enum ZigDef {
+    #[regex("fn [[:upper:][:lower:]_][[:upper:][:lower:][:digit:]_]*")]
+    Definition,
+}
+
 impl std::fmt::Display for Zig {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         "Zig".fmt(f)
     }
 }
 
-highlighter!(Zig, ZigToken);
+highlighter!(Zig, ZigToken, underliner!(s, ZigDef));

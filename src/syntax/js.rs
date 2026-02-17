@@ -6,8 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::highlighter;
 use crate::syntax::{Commenting, Highlight, Plain, color};
+use crate::{highlighter, underliner};
 use logos::Logos;
 
 #[derive(Logos, Debug)]
@@ -56,7 +56,7 @@ enum JavaScriptToken {
     #[regex("'([^']|\\')*'")]
     #[regex(r#"\"([^\\\"]|\\.)*\""#)]
     String,
-    #[regex("[[:lower:]][[:lower:][:digit:]_]*")]
+    #[regex("[[:lower:][:upper:]][[:lower:][:upper:][:digit:]_]*")]
     Identifier,
     #[regex("//.*", allow_greedy = true)]
     Comment,
@@ -83,6 +83,15 @@ impl TryFrom<JavaScriptToken> for Highlight {
     }
 }
 
+#[derive(Logos, Debug)]
+#[logos(skip r"[ \t\n]+")]
+enum JavaScriptDef {
+    #[regex("function [[:lower:][:upper:]][[:lower:][:upper:][:digit:]_]*")]
+    #[token("function")]
+    #[regex("class [[:lower:][:upper:]][[:lower:][:upper:][:digit:]_]*")]
+    Definition,
+}
+
 #[derive(Debug)]
 pub struct JavaScript;
 
@@ -99,5 +108,6 @@ highlighter!(
     EndComment,
     "/*",
     "*/",
-    color::COMMENT
+    color::COMMENT,
+    underliner!(s, JavaScriptDef)
 );

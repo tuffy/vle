@@ -281,6 +281,9 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
 #[macro_export]
 macro_rules! highlighter {
     ($syntax:ty, $token:ty) => {
+        highlighter!($syntax, $token, None);
+    };
+    ($syntax:ty, $token:ty, $underliner:expr) => {
         impl $crate::syntax::Highlighter for $syntax {
             fn highlight<'s>(
                 &self,
@@ -292,6 +295,12 @@ macro_rules! highlighter {
                         .and_then(|t| Highlight::try_from(t).ok())
                         .map(|c| (c, r))
                 }))
+            }
+
+            fn underline(
+                &self,
+            ) -> Option<for<'s> fn(&'s str) -> Box<dyn Iterator<Item = std::ops::Range<usize>> + 's>> {
+                $underliner
             }
         }
     };

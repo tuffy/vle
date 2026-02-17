@@ -6,8 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::highlighter;
 use crate::syntax::{Commenting, Highlight, Plain, color};
+use crate::{highlighter, underliner};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -110,6 +110,16 @@ impl TryFrom<GoToken> for Highlight {
     }
 }
 
+#[derive(Logos, Debug)]
+#[logos(skip r"[ \t\n]+")]
+enum GoDef {
+    #[regex("func [[:lower:][:upper:]_][[:lower:][:upper:][:digit:]_]*")]
+    #[regex(r"func \([^\)]+?\) [[:lower:][:upper:]_][[:lower:][:upper:][:digit:]_]*")]
+    #[token("func")]
+    #[regex("type [[:lower:][:upper:]_][[:lower:][:upper:][:digit:]_]*")]
+    Definition,
+}
+
 #[derive(Debug)]
 pub struct Go;
 
@@ -126,5 +136,6 @@ highlighter!(
     EndComment,
     "/*",
     "*/",
-    color::COMMENT
+    color::COMMENT,
+    underliner!(s, GoDef)
 );

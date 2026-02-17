@@ -6,8 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::highlighter;
 use crate::syntax::{Commenting, Highlight, Plain, color};
+use crate::{highlighter, underliner};
 use logos::Logos;
 
 #[derive(Logos, Debug)]
@@ -18,6 +18,7 @@ enum SwiftToken {
     #[regex(r#"\"([^\\\"]|\\.)*\""#)]
     #[regex(r"'([^\\\']|\\.){0,1}'")]
     String,
+    #[token("actor")]
     #[token("associatedtype")]
     #[token("borrowing")]
     #[token("class")]
@@ -159,6 +160,16 @@ impl TryFrom<SwiftToken> for Highlight {
     }
 }
 
+#[derive(Logos, Debug)]
+#[logos(skip r"[ \t\n]+")]
+enum SwiftDef {
+    #[regex("func [[:upper:][:lower:]_][[:upper:][:lower:][:digit:]_]*")]
+    #[regex("class [[:upper:][:lower:]_][[:upper:][:lower:][:digit:]_]*")]
+    #[regex("enum [[:upper:][:lower:]_][[:upper:][:lower:][:digit:]_]*")]
+    #[regex("actor [[:upper:][:lower:]_][[:upper:][:lower:][:digit:]_]*")]
+    Definition,
+}
+
 #[derive(Debug)]
 pub struct Swift;
 
@@ -175,5 +186,6 @@ highlighter!(
     EndComment,
     "/*",
     "*/",
-    color::COMMENT
+    color::COMMENT,
+    underliner!(s, SwiftDef)
 );
