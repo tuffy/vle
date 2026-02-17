@@ -99,9 +99,6 @@ enum RustToken {
 
     #[token("*/")]
     EndComment,
-
-    #[regex("fn [[:lower:]_][[:lower:][:digit:]_]*")]
-    Function,
 }
 
 impl TryFrom<RustToken> for Highlight {
@@ -117,7 +114,6 @@ impl TryFrom<RustToken> for Highlight {
             RustToken::Comment | RustToken::StartComment | RustToken::EndComment => {
                 Ok(color::COMMENT)
             }
-            RustToken::Function => Ok(color::FUNCTION),
             RustToken::String => Ok(color::STRING),
             RustToken::Number => Ok(color::NUMBER),
             RustToken::Variable => Err(()),

@@ -67,7 +67,7 @@ impl TryFrom<PerlToken> for Highlight {
 
     fn try_from(t: PerlToken) -> Result<Highlight, ()> {
         match t {
-            PerlToken::Function => Ok(color::FUNCTION),
+            PerlToken::Function => Ok(color::KEYWORD),
             PerlToken::Flow => Ok(color::FLOW),
             PerlToken::Variable => Ok(Color::Cyan.into()),
             PerlToken::String => Ok(color::STRING),

@@ -401,10 +401,6 @@ pub mod color {
         color: Some(Color::DarkGray),
         modifier: Modifier::Italic,
     };
-    pub const FUNCTION: Highlight = Highlight {
-        color: Some(Color::Magenta),
-        modifier: Modifier::Underlined,
-    };
     pub const STRING: Highlight = Highlight {
         color: Some(Color::Green),
         modifier: Modifier::Plain,

@@ -36,6 +36,7 @@ enum PhpToken {
     #[token("enddeclare")]
     #[token("declare")]
     #[token("extends")]
+    #[token("function")]
     #[token("implements")]
     #[token("include")]
     #[token("include_once")]
@@ -59,9 +60,6 @@ enum PhpToken {
     #[token("or")]
     #[token("xor")]
     Keyword,
-
-    #[token("function")]
-    Function,
 
     #[token("break")]
     #[token("continue")]
@@ -118,7 +116,6 @@ impl TryFrom<PhpToken> for Highlight {
             PhpToken::String => Ok(color::STRING),
             PhpToken::Comment | PhpToken::StartComment | PhpToken::EndComment => Ok(color::COMMENT),
             PhpToken::Constant => Ok(color::CONSTANT),
-            PhpToken::Function => Ok(color::FUNCTION),
             PhpToken::Identifier => Err(()),
         }
     }

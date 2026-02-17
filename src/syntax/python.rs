@@ -15,8 +15,6 @@ use ratatui::style::Color;
 #[derive(Logos, Debug)]
 #[logos(skip r"[ \t\n]+")]
 enum PythonToken {
-    #[regex("def [[:alpha:]_][[:alnum:]_.]*")]
-    Function,
     #[token("and")]
     #[token("as")]
     #[token("assert")]
@@ -74,7 +72,6 @@ impl TryFrom<PythonToken> for Highlight {
 
     fn try_from(t: PythonToken) -> Result<Highlight, ()> {
         match t {
-            PythonToken::Function => Ok(color::FUNCTION),
             PythonToken::Keyword => Ok(color::KEYWORD),
             PythonToken::Flow => Ok(color::FLOW),
             PythonToken::Literal => Ok(Color::LightMagenta.into()),

@@ -46,6 +46,7 @@ enum GoToken {
     #[token("complex")]
     #[token("copy")]
     #[token("delete")]
+    #[token("func")]
     #[token("imag")]
     #[token("len")]
     #[token("make")]
@@ -90,9 +91,6 @@ enum GoToken {
     EndComment,
     #[regex("[[:lower:][:upper:]_][[:lower:][:upper:][:digit:]_]*")]
     Identifier,
-    // #[regex("func [[:lower:][:upper:]_][[:lower:][:upper:][:digit:]_]*")]
-    #[token("func")]
-    Function,
 }
 
 impl TryFrom<GoToken> for Highlight {
@@ -107,7 +105,6 @@ impl TryFrom<GoToken> for Highlight {
             GoToken::Literal => Ok(Color::Red.into()),
             GoToken::String => Ok(color::STRING),
             GoToken::Comment | GoToken::StartComment | GoToken::EndComment => Ok(color::COMMENT),
-            GoToken::Function => Ok(color::FUNCTION),
             GoToken::Identifier => Err(()),
         }
     }

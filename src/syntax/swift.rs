@@ -78,6 +78,7 @@ enum SwiftToken {
     #[token("didSet")]
     #[token("dynamic")]
     #[token("final")]
+    #[token("func")]
     #[token("get")]
     #[token("indirect")]
     #[token("infix")]
@@ -102,10 +103,6 @@ enum SwiftToken {
     #[token("weak")]
     #[token("willSet")]
     Keyword,
-
-    #[regex("func [[:upper:][:lower:]_][[:upper:][:lower:][:digit:]_]*")]
-    Function,
-
     #[token("break")]
     #[token("case")]
     #[token("catch")]
@@ -155,7 +152,6 @@ impl TryFrom<SwiftToken> for Highlight {
             SwiftToken::Flow => Ok(color::FLOW),
             SwiftToken::Type => Ok(color::TYPE),
             SwiftToken::Identifier => Err(()),
-            SwiftToken::Function => Ok(color::FUNCTION),
             SwiftToken::Comment | SwiftToken::StartComment | SwiftToken::EndComment => {
                 Ok(color::COMMENT)
             }
