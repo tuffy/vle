@@ -43,7 +43,7 @@ impl TryFrom<MarkdownToken> for Highlight {
             }),
             MarkdownToken::Heading => Ok(Highlight {
                 color: Some(Color::Blue),
-                modifier: Modifier::Bold,
+                modifier: Modifier::Underlined,
             }),
             MarkdownToken::Url => Ok(Color::Blue.into()),
             MarkdownToken::Link => Ok(Color::Magenta.into()),

@@ -34,7 +34,6 @@ enum GoToken {
     #[token("error")]
     #[token("chan")]
     #[token("const")]
-    #[token("func")]
     #[token("interface")]
     #[token("map")]
     #[token("struct")]
@@ -56,7 +55,7 @@ enum GoToken {
     #[token("println")]
     #[token("real")]
     #[token("recover")]
-    Function,
+    Keyword,
     #[token("case")]
     #[token("default")]
     #[token("defer")]
@@ -67,7 +66,6 @@ enum GoToken {
     #[token("range")]
     #[token("select")]
     #[token("switch")]
-    Control,
     #[token("break")]
     #[token("continue")]
     #[token("fallthrough")]
@@ -90,6 +88,11 @@ enum GoToken {
     StartComment,
     #[token("*/")]
     EndComment,
+    #[regex("[[:lower:][:upper:]_][[:lower:][:upper:][:digit:]_]*")]
+    Identifier,
+    // #[regex("func [[:lower:][:upper:]_][[:lower:][:upper:][:digit:]_]*")]
+    #[token("func")]
+    Function,
 }
 
 impl TryFrom<GoToken> for Highlight {
@@ -98,13 +101,14 @@ impl TryFrom<GoToken> for Highlight {
     fn try_from(t: GoToken) -> Result<Highlight, ()> {
         match t {
             GoToken::Type => Ok(color::TYPE),
-            GoToken::Function => Ok(color::FUNCTION),
-            GoToken::Control => Ok(Color::LightYellow.into()),
+            GoToken::Keyword => Ok(color::KEYWORD),
             GoToken::Flow => Ok(color::FLOW),
             GoToken::Declaration => Ok(Color::LightCyan.into()),
             GoToken::Literal => Ok(Color::Red.into()),
             GoToken::String => Ok(color::STRING),
             GoToken::Comment | GoToken::StartComment | GoToken::EndComment => Ok(color::COMMENT),
+            GoToken::Function => Ok(color::FUNCTION),
+            GoToken::Identifier => Err(()),
         }
     }
 }

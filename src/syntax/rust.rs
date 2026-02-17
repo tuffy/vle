@@ -100,7 +100,7 @@ enum RustToken {
     #[token("*/")]
     EndComment,
 
-    #[regex("fn [[:lower:][:digit:]_]+")]
+    #[regex("fn [[:lower:]_][[:lower:][:digit:]_]*")]
     Function,
 }
 

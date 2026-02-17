@@ -107,6 +107,8 @@ enum ZigToken {
     Identifier,
     #[regex("//.*", allow_greedy = true)]
     Comment,
+    #[regex("fn [[:lower:]_][[:lower:][:digit:]_]*")]
+    Function,
 }
 
 impl TryFrom<ZigToken> for Highlight {
@@ -120,6 +122,7 @@ impl TryFrom<ZigToken> for Highlight {
             ZigToken::BuiltinFunction => Ok(Color::Cyan.into()),
             ZigToken::Comment => Ok(color::COMMENT),
             ZigToken::Type => Ok(color::TYPE),
+            ZigToken::Function => Ok(color::FUNCTION),
             ZigToken::Identifier => Err(()),
         }
     }

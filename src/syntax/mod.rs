@@ -64,6 +64,7 @@ pub enum Modifier {
     Plain,
     Bold,
     Italic,
+    Underlined,
 }
 
 #[derive(Copy, Clone)]
@@ -86,6 +87,7 @@ impl From<Highlight> for ratatui::style::Style {
         let style = match highlight.modifier {
             Modifier::Plain => Self::default(),
             Modifier::Italic => Self::default().italic(),
+            Modifier::Underlined => Self::default().underlined(),
             Modifier::Bold => Self::default().bold(),
         };
         match highlight.color {
@@ -380,16 +382,16 @@ pub mod color {
     // A unified color scheme across common syntax items
 
     pub const KEYWORD: Highlight = Highlight {
-        color: None,
-        modifier: Modifier::Bold,
+        color: Some(Color::Blue),
+        modifier: Modifier::Plain,
     };
     pub const FLOW: Highlight = Highlight {
         color: Some(Color::Blue),
         modifier: Modifier::Bold,
     };
     pub const CONSTANT: Highlight = Highlight {
-        color: Some(Color::Green),
-        modifier: Modifier::Bold,
+        color: Some(Color::Red),
+        modifier: Modifier::Plain,
     };
     pub const TYPE: Highlight = Highlight {
         color: Some(Color::Magenta),
@@ -401,10 +403,10 @@ pub mod color {
     };
     pub const FUNCTION: Highlight = Highlight {
         color: Some(Color::Magenta),
-        modifier: Modifier::Bold,
+        modifier: Modifier::Underlined,
     };
     pub const STRING: Highlight = Highlight {
-        color: Some(Color::Red),
+        color: Some(Color::Green),
         modifier: Modifier::Plain,
     };
     pub const NUMBER: Highlight = Highlight {
