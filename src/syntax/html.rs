@@ -40,7 +40,7 @@ impl TryFrom<HtmlToken> for Highlight {
             HtmlToken::TagStart | HtmlToken::TagEnd => Ok(Color::Cyan.into()),
             HtmlToken::CharRef => Ok(Color::Red.into()),
             HtmlToken::StartComment | HtmlToken::EndComment => Ok(color::COMMENT),
-            HtmlToken::FieldName => Ok(Color::Green.into()),
+            HtmlToken::FieldName => Ok(Color::Blue.into()),
             HtmlToken::String => Ok(color::STRING),
         }
     }

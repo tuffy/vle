@@ -37,7 +37,7 @@ impl TryFrom<XmlToken> for Highlight {
     fn try_from(t: XmlToken) -> Result<Highlight, ()> {
         match t {
             XmlToken::TagStart | XmlToken::TagEnd => Ok(Color::Cyan.into()),
-            XmlToken::FieldName => Ok(Color::Green.into()),
+            XmlToken::FieldName => Ok(Color::Blue.into()),
             XmlToken::String => Ok(color::STRING),
             XmlToken::StartComment | XmlToken::EndComment => Ok(color::COMMENT),
         }
