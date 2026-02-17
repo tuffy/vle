@@ -951,9 +951,9 @@ impl BufferContext {
     }
 
     pub fn paste(&mut self, alt: Option<AltCursor<'_>>, cut_buffer: &mut Option<CutBuffer>) {
-        match self.selection.as_mut() {
-            None => {
-                if let Some(pasted) = cut_buffer {
+        if let Some(pasted) = cut_buffer {
+            match self.selection.as_mut() {
+                None => {
                     // No active selection, so paste as-is
                     let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
                     let mut rope = buf.rope.get_mut();
@@ -964,9 +964,7 @@ impl BufferContext {
                         self.cursor_column = cursor_column(&rope, self.cursor);
                     }
                 }
-            }
-            Some(selection) => {
-                if let Some(pasted) = cut_buffer {
+                Some(selection) => {
                     let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
                     let (selection_start, selection_end) = reorder(self.cursor, *selection);
                     let cut_range = selection_start..selection_end;
