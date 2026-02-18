@@ -2046,17 +2046,21 @@ fn try_auto_pair(rope: &mut ropey::Rope, cursor: usize, alt: &mut Secondary, c: 
     } {
         Ok(c) => {
             rope.insert_char(cursor, c);
-            *alt += 1;
+            alt.update(|a| {
+                if *a >= cursor {
+                    *a += 1;
+                }
+            });
             1
         }
         Err(s) => {
             rope.insert(cursor, s);
             alt.update(|a| {
-                if *a > cursor {
-                    *a += 2;
-                } else {
-                    *a += 1;
-                }
+                *a += match (*a).cmp(&cursor) {
+                    std::cmp::Ordering::Greater => 2,
+                    std::cmp::Ordering::Equal => 1,
+                    std::cmp::Ordering::Less => 0,
+                };
             });
             2
         }
@@ -2078,16 +2082,20 @@ fn try_un_auto_pair(
     } {
         rope.try_remove(prev..cursor + 1).map_err(|_| ())?;
         alt.update(|a| {
-            if *a > cursor {
-                *a -= 2;
-            } else {
-                *a -= 1;
-            }
+            *a -= match (*a).cmp(&cursor) {
+                std::cmp::Ordering::Greater => 2,
+                std::cmp::Ordering::Equal => 1,
+                std::cmp::Ordering::Less => 0,
+            };
         });
         Ok(2)
     } else {
         rope.try_remove(prev..cursor).map_err(|_| ())?;
-        *alt -= 1;
+        alt.update(|a| {
+            if *a >= cursor {
+                *a -= 1;
+            }
+        });
         Ok(1)
     }
 }
