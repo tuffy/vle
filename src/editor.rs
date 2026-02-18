@@ -751,6 +751,30 @@ impl Editor {
                 self.layout
                     .set_cursor_focus(area, Position { y: row, x: column });
             }
+            Event::Mouse(MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Right),
+                column,
+                row,
+                ..
+            }) => {
+                self.layout
+                    .set_cursor_focus(area, Position { y: row, x: column });
+                self.update_buffer(|b| b.select_word_or_lines());
+            }
+            Event::Mouse(MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Middle),
+                column,
+                row,
+                ..
+            }) => {
+                self.layout
+                    .set_cursor_focus(area, Position { y: row, x: column });
+                let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
+                let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
+                if let Some(primary) = primary.current_mut() {
+                    primary.paste(secondary.map(|s| s.alt_cursor()), &mut self.cut_buffer);
+                }
+            }
             _ => { /* ignore other events */ }
         }
     }
