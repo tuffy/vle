@@ -1387,9 +1387,16 @@ impl BufferContext {
                         .eq(indent.chars())
                 {
                     let mut rope = buf.rope.get_mut();
-                    rope.remove(line_start..line_start + indent.len());
-                    self.cursor = line_start;
-                    self.cursor_column = 0;
+                    let to_remove = line_start..line_start + indent.len();
+                    rope.remove(to_remove.clone());
+                    if to_remove.contains(&self.cursor) {
+                        self.cursor = line_start;
+                        self.cursor_column = 0;
+                    } else {
+                        self.cursor -= to_remove.end - to_remove.start;
+                        self.cursor_column = cursor_column(&rope, self.cursor);
+                    }
+
                     alt.update(|pos| {
                         if (line_start..line_start + indent.len()).contains(pos) {
                             *pos = line_start;
