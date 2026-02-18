@@ -942,8 +942,12 @@ impl BufferContext {
                 }
             },
             None => {
-                let mut alt = Secondary::new(alt, |a| a >= self.cursor);
-                try_auto_pair(&mut rope, self.cursor, &mut alt, c);
+                try_auto_pair(
+                    &mut rope,
+                    self.cursor,
+                    &mut Secondary::new(alt, |_| true),
+                    c,
+                );
                 self.cursor += 1;
                 self.cursor_column += c.width().unwrap_or(1);
             }
@@ -1063,8 +1067,9 @@ impl BufferContext {
 
         match self.selection.take() {
             None => {
-                let mut alt = Secondary::new(alt, |a| a >= self.cursor);
-                if try_un_auto_pair(&mut rope, self.cursor, &mut alt).is_ok() {
+                if try_un_auto_pair(&mut rope, self.cursor, &mut Secondary::new(alt, |_| true))
+                    .is_ok()
+                {
                     self.cursor -= 1;
                     self.cursor_column = cursor_column(&rope, self.cursor);
                 }
