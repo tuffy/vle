@@ -3541,6 +3541,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 },
                 None => VecDeque::default(),
             };
+        parentheses.retain(|p| p.position != state.cursor);
 
         Clear.render(text_area, buf);
         Paragraph::new(match self.mode {
