@@ -1064,7 +1064,7 @@ impl BufferContext {
         match self.selection.take() {
             None => {
                 let mut alt = Secondary::new(alt, |a| a >= self.cursor);
-                if let Ok(_) = try_un_auto_pair(&mut rope, self.cursor, &mut alt) {
+                if try_un_auto_pair(&mut rope, self.cursor, &mut alt).is_ok() {
                     self.cursor -= 1;
                     self.cursor_column = cursor_column(&rope, self.cursor);
                 }
@@ -2069,25 +2069,26 @@ fn try_un_auto_pair(
     cursor: usize,
     alt: &mut Secondary,
 ) -> Result<usize, ()> {
-    // TODO - optimize this to avoid unnecessary get_char()
     let prev = cursor.checked_sub(1).ok_or(())?;
-    match (rope.get_char(prev), rope.get_char(cursor)) {
-        (Some('('), Some(')')) | (Some('['), Some(']')) | (Some('{'), Some('}')) => {
-            rope.try_remove(prev..cursor + 1).map_err(|_| ())?;
-            alt.update(|a| {
-                if *a > cursor {
-                    *a -= 2;
-                } else {
-                    *a -= 1;
-                }
-            });
-            Ok(2)
-        }
-        _ => {
-            rope.try_remove(prev..cursor).map_err(|_| ())?;
-            *alt -= 1;
-            Ok(1)
-        }
+    if match rope.get_char(prev) {
+        Some('(') => matches!(rope.get_char(cursor), Some(')')),
+        Some('[') => matches!(rope.get_char(cursor), Some(']')),
+        Some('{') => matches!(rope.get_char(cursor), Some('}')),
+        _ => false,
+    } {
+        rope.try_remove(prev..cursor + 1).map_err(|_| ())?;
+        alt.update(|a| {
+            if *a > cursor {
+                *a -= 2;
+            } else {
+                *a -= 1;
+            }
+        });
+        Ok(2)
+    } else {
+        rope.try_remove(prev..cursor).map_err(|_| ())?;
+        *alt -= 1;
+        Ok(1)
     }
 }
 
