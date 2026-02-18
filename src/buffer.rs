@@ -946,6 +946,7 @@ impl BufferContext {
                 match match c {
                     '(' => Err("()"),
                     '[' => Err("[]"),
+                    '{' => Err("{}"),
                     c => Ok(c),
                 } {
                     Ok(c) => {
@@ -1085,7 +1086,9 @@ impl BufferContext {
                 let mut alt = Secondary::new(alt, |a| a >= self.cursor);
                 if let Some(prev) = self.cursor.checked_sub(1) {
                     match (rope.get_char(prev), rope.get_char(self.cursor)) {
-                        (Some('('), Some(')')) | (Some('['), Some(']')) => {
+                        (Some('('), Some(')'))
+                        | (Some('['), Some(']'))
+                        | (Some('{'), Some('}')) => {
                             if rope.try_remove(prev..self.cursor + 1).is_ok() {
                                 alt.update(|a| {
                                     if *a > self.cursor {
@@ -2333,38 +2336,6 @@ fn select_next_char<const FORWARD: bool>(
     }
 }
 
-fn select_limited_next_char<const FORWARD: bool>(
-    rope: &ropey::Rope,
-    cursor: usize,
-    target: char,
-    stack: char,
-    limit: usize,
-) -> Option<usize> {
-    let mut chars = rope.chars_at(cursor);
-    if !FORWARD {
-        chars.reverse();
-    }
-    let mut stacked = 0;
-    chars
-        .zip(0..limit)
-        .find(|(c, _)| {
-            if *c == target {
-                if stacked > 0 {
-                    stacked -= 1;
-                    false
-                } else {
-                    true
-                }
-            } else if *c == stack {
-                stacked += 1;
-                false
-            } else {
-                false
-            }
-        })
-        .map(|(_, pos)| if FORWARD { cursor + pos } else { cursor - pos })
-}
-
 /// Attempts to find next pairing character
 /// (closing parens, quotes, etc.)
 /// returning the character and its character position
@@ -3278,13 +3249,6 @@ impl StatefulWidget for BufferWidget<'_> {
         }
 
         impl Paren {
-            fn pair(position: usize) -> Self {
-                Self {
-                    position,
-                    color: Color::Green,
-                }
-            }
-
             fn opener(position: usize) -> Self {
                 Self {
                     position,
@@ -3533,84 +3497,8 @@ impl StatefulWidget for BufferWidget<'_> {
             .unwrap_or(rope.len_chars())
             .saturating_sub(rope.try_line_to_char(viewport_line).unwrap_or(0));
 
-        let mut parentheses: VecDeque<Paren> = match rope.get_char(state.cursor) {
-            Some('(') => {
-                match select_limited_next_char::<true>(
-                    rope,
-                    state.cursor + 1,
-                    ')',
-                    '(',
-                    viewport_size,
-                ) {
-                    Some(paren) => vec![Paren::pair(paren)].into(),
-                    None => VecDeque::default(),
-                }
-            }
-            Some('[') => {
-                match select_limited_next_char::<true>(
-                    rope,
-                    state.cursor + 1,
-                    ']',
-                    '[',
-                    viewport_size,
-                ) {
-                    Some(paren) => vec![Paren::pair(paren)].into(),
-                    None => VecDeque::default(),
-                }
-            }
-            Some('{') => {
-                match select_limited_next_char::<true>(
-                    rope,
-                    state.cursor + 1,
-                    '}',
-                    '{',
-                    viewport_size,
-                ) {
-                    Some(paren) => vec![Paren::pair(paren)].into(),
-                    None => VecDeque::default(),
-                }
-            }
-            Some('<') => {
-                match select_limited_next_char::<true>(
-                    rope,
-                    state.cursor + 1,
-                    '>',
-                    '<',
-                    viewport_size,
-                ) {
-                    Some(paren) => vec![Paren::pair(paren)].into(),
-                    None => VecDeque::default(),
-                }
-            }
-            Some(')') => {
-                match select_limited_next_char::<false>(rope, state.cursor, '(', ')', viewport_size)
-                {
-                    Some(paren) => vec![Paren::pair(paren.saturating_sub(1))].into(),
-                    None => VecDeque::default(),
-                }
-            }
-            Some(']') => {
-                match select_limited_next_char::<false>(rope, state.cursor, '[', ']', viewport_size)
-                {
-                    Some(paren) => vec![Paren::pair(paren.saturating_sub(1))].into(),
-                    None => VecDeque::default(),
-                }
-            }
-            Some('}') => {
-                match select_limited_next_char::<false>(rope, state.cursor, '{', '}', viewport_size)
-                {
-                    Some(paren) => vec![Paren::pair(paren.saturating_sub(1))].into(),
-                    None => VecDeque::default(),
-                }
-            }
-            Some('>') => {
-                match select_limited_next_char::<false>(rope, state.cursor, '<', '>', viewport_size)
-                {
-                    Some(paren) => vec![Paren::pair(paren.saturating_sub(1))].into(),
-                    None => VecDeque::default(),
-                }
-            }
-            _ => match prev_opening_char(rope, state.cursor, viewport_size) {
+        let mut parentheses: VecDeque<Paren> =
+            match prev_opening_char(rope, state.cursor, viewport_size) {
                 Some((opener, start)) => match next_closing_char(rope, state.cursor, viewport_size)
                 {
                     Some((closer, end)) => {
@@ -3631,8 +3519,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     None => vec![Paren::opener(start.saturating_sub(1))].into(),
                 },
                 None => VecDeque::default(),
-            },
-        };
+            };
 
         Clear.render(text_area, buf);
         Paragraph::new(match self.mode {
