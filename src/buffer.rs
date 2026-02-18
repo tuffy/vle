@@ -942,10 +942,29 @@ impl BufferContext {
                 }
             },
             None => {
-                rope.insert_char(self.cursor, c);
+                let mut alt = Secondary::new(alt, |a| a >= self.cursor);
+                match match c {
+                    '(' => Err("()"),
+                    '[' => Err("[]"),
+                    c => Ok(c),
+                } {
+                    Ok(c) => {
+                        rope.insert_char(self.cursor, c);
+                        alt += 1;
+                    }
+                    Err(s) => {
+                        rope.insert(self.cursor, s);
+                        alt.update(|a| {
+                            if *a > self.cursor {
+                                *a += 2;
+                            } else {
+                                *a += 1;
+                            }
+                        });
+                    }
+                }
                 self.cursor += 1;
                 self.cursor_column += c.width().unwrap_or(1);
-                Secondary::new(alt, |a| a >= self.cursor).update(|pos| *pos += 1);
             }
         }
     }
@@ -1064,12 +1083,29 @@ impl BufferContext {
         match self.selection.take() {
             None => {
                 let mut alt = Secondary::new(alt, |a| a >= self.cursor);
-                if let Some(prev) = self.cursor.checked_sub(1)
-                    && rope.try_remove(prev..self.cursor).is_ok()
-                {
-                    alt -= 1;
-                    self.cursor -= 1;
-                    self.cursor_column = cursor_column(&rope, self.cursor);
+                if let Some(prev) = self.cursor.checked_sub(1) {
+                    match (rope.get_char(prev), rope.get_char(self.cursor)) {
+                        (Some('('), Some(')')) | (Some('['), Some(']')) => {
+                            if rope.try_remove(prev..self.cursor + 1).is_ok() {
+                                alt.update(|a| {
+                                    if *a > self.cursor {
+                                        *a -= 2;
+                                    } else {
+                                        *a -= 1;
+                                    }
+                                });
+                                self.cursor -= 1;
+                                self.cursor_column = cursor_column(&rope, self.cursor);
+                            }
+                        }
+                        _ => {
+                            if rope.try_remove(prev..self.cursor).is_ok() {
+                                alt -= 1;
+                                self.cursor -= 1;
+                                self.cursor_column = cursor_column(&rope, self.cursor);
+                            }
+                        }
+                    }
                 }
             }
             Some(current_selection) => {
@@ -1836,7 +1872,6 @@ pub struct AltCursor<'b> {
 }
 
 /// A secondary cursor which implements various math operations
-// struct Secondary<'b>(Option<AltCursor<'b>>);
 struct Secondary<'b> {
     cursor: Option<&'b mut usize>,
     selection: Option<&'b mut usize>,
