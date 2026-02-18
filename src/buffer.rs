@@ -943,27 +943,7 @@ impl BufferContext {
             },
             None => {
                 let mut alt = Secondary::new(alt, |a| a >= self.cursor);
-                match match c {
-                    '(' => Err("()"),
-                    '[' => Err("[]"),
-                    '{' => Err("{}"),
-                    c => Ok(c),
-                } {
-                    Ok(c) => {
-                        rope.insert_char(self.cursor, c);
-                        alt += 1;
-                    }
-                    Err(s) => {
-                        rope.insert(self.cursor, s);
-                        alt.update(|a| {
-                            if *a > self.cursor {
-                                *a += 2;
-                            } else {
-                                *a += 1;
-                            }
-                        });
-                    }
-                }
+                try_auto_pair(&mut rope, self.cursor, &mut alt, c);
                 self.cursor += 1;
                 self.cursor_column += c.width().unwrap_or(1);
             }
@@ -1084,31 +1064,9 @@ impl BufferContext {
         match self.selection.take() {
             None => {
                 let mut alt = Secondary::new(alt, |a| a >= self.cursor);
-                if let Some(prev) = self.cursor.checked_sub(1) {
-                    match (rope.get_char(prev), rope.get_char(self.cursor)) {
-                        (Some('('), Some(')'))
-                        | (Some('['), Some(']'))
-                        | (Some('{'), Some('}')) => {
-                            if rope.try_remove(prev..self.cursor + 1).is_ok() {
-                                alt.update(|a| {
-                                    if *a > self.cursor {
-                                        *a -= 2;
-                                    } else {
-                                        *a -= 1;
-                                    }
-                                });
-                                self.cursor -= 1;
-                                self.cursor_column = cursor_column(&rope, self.cursor);
-                            }
-                        }
-                        _ => {
-                            if rope.try_remove(prev..self.cursor).is_ok() {
-                                alt -= 1;
-                                self.cursor -= 1;
-                                self.cursor_column = cursor_column(&rope, self.cursor);
-                            }
-                        }
-                    }
+                if let Ok(_) = try_un_auto_pair(&mut rope, self.cursor, &mut alt) {
+                    self.cursor -= 1;
+                    self.cursor_column = cursor_column(&rope, self.cursor);
                 }
             }
             Some(current_selection) => {
@@ -1725,9 +1683,9 @@ impl BufferContext {
                     break;
                 }
                 [m, rest @ ..] => {
-                    m.insert_char(&mut rope, &mut self.cursor, &mut alt, c);
+                    let inserted = m.insert_char(&mut rope, &mut self.cursor, &mut alt, c);
                     for r in rest.iter_mut() {
-                        *r += 1;
+                        *r += inserted;
                     }
                     matches = rest;
                 }
@@ -1792,9 +1750,9 @@ impl BufferContext {
                     break;
                 }
                 [m, rest @ ..] => {
-                    if let Ok(()) = m.backspace(&mut rope, &mut self.cursor, &mut alt) {
+                    if let Ok(removed) = m.backspace(&mut rope, &mut self.cursor, &mut alt) {
                         for r in rest.iter_mut() {
-                            *r -= 1;
+                            *r -= removed;
                         }
                     }
                     matches = rest;
@@ -1944,24 +1902,25 @@ impl MultiCursor {
         self.cursor
     }
 
+    /// Returns number of characters inserted (1 or 2)
     fn insert_char(
         &mut self,
         rope: &mut ropey::Rope,
         cursor: &mut usize,
         secondary: &mut Secondary,
         c: char,
-    ) {
-        if self.cursor <= *cursor {
-            *cursor += 1;
-        }
-        secondary.update(|a| {
-            if self.cursor <= *a {
-                *a += 1;
-            }
-        });
-        rope.insert_char(self.cursor, c);
+    ) -> usize {
+        use std::cmp::Ordering;
+
+        let inserted = try_auto_pair(rope, self.cursor, secondary, c);
+        *cursor += match self.cursor.cmp(cursor) {
+            Ordering::Less => inserted,
+            Ordering::Equal => 1,
+            Ordering::Greater => 0,
+        };
         self.cursor += 1;
-        self.range.end += 1;
+        self.range.end += inserted;
+        inserted
     }
 
     fn insert_str(
@@ -1991,23 +1950,22 @@ impl MultiCursor {
         rope: &mut ropey::Rope,
         cursor: &mut usize,
         secondary: &mut Secondary,
-    ) -> Result<(), ()> {
-        if self.cursor > self.range.start {
-            if self.cursor <= *cursor {
-                *cursor = cursor.saturating_sub(1);
-            }
-            secondary.update(|a| {
-                if self.cursor <= *a {
-                    *a = a.saturating_sub(1);
-                }
-            });
-            let _ = rope.try_remove((self.cursor - 1)..self.cursor);
-            self.cursor -= 1;
-            self.range.end -= 1;
-            Ok(())
-        } else {
-            Err(())
+    ) -> Result<usize, ()> {
+        use std::cmp::Ordering;
+
+        if self.cursor <= self.range.start {
+            // can't backup before start of range
+            return Err(());
         }
+        let removed = try_un_auto_pair(rope, self.cursor, secondary)?;
+        *cursor -= match self.cursor.cmp(cursor) {
+            Ordering::Less => removed,
+            Ordering::Equal => 1,
+            Ordering::Greater => 0,
+        };
+        self.cursor -= 1;
+        self.range.end -= removed;
+        Ok(removed)
     }
 
     /// Returns Ok if delete performed successfully
@@ -2075,6 +2033,61 @@ impl std::ops::SubAssign<usize> for MultiCursor {
         self.range.start -= chars;
         self.range.end -= chars;
         self.cursor -= chars;
+    }
+}
+
+/// Returns number of characters inserted (1 or 2)
+fn try_auto_pair(rope: &mut ropey::Rope, cursor: usize, alt: &mut Secondary, c: char) -> usize {
+    match match c {
+        '(' => Err("()"),
+        '[' => Err("[]"),
+        '{' => Err("{}"),
+        c => Ok(c),
+    } {
+        Ok(c) => {
+            rope.insert_char(cursor, c);
+            *alt += 1;
+            1
+        }
+        Err(s) => {
+            rope.insert(cursor, s);
+            alt.update(|a| {
+                if *a > cursor {
+                    *a += 2;
+                } else {
+                    *a += 1;
+                }
+            });
+            2
+        }
+    }
+}
+
+/// On success, returns number of characters removed (1 or 2)
+fn try_un_auto_pair(
+    rope: &mut ropey::Rope,
+    cursor: usize,
+    alt: &mut Secondary,
+) -> Result<usize, ()> {
+    // TODO - optimize this to avoid unnecessary get_char()
+    let prev = cursor.checked_sub(1).ok_or(())?;
+    match (rope.get_char(prev), rope.get_char(cursor)) {
+        (Some('('), Some(')')) | (Some('['), Some(']')) | (Some('{'), Some('}')) => {
+            rope.try_remove(prev..cursor + 1).map_err(|_| ())?;
+            alt.update(|a| {
+                if *a > cursor {
+                    *a -= 2;
+                } else {
+                    *a -= 1;
+                }
+            });
+            Ok(2)
+        }
+        _ => {
+            rope.try_remove(prev..cursor).map_err(|_| ())?;
+            *alt -= 1;
+            Ok(1)
+        }
     }
 }
 
