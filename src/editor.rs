@@ -1055,6 +1055,10 @@ fn process_select_line(
             buffer.next_bookmark();
             None
         }
+        key!(Delete) => {
+            buffer.delete_bookmark();
+            None
+        }
         _ => {
             None // ignore other events
         }

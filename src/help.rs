@@ -240,6 +240,7 @@ pub static SELECT_LINE_BOOKMARKED: &[Keybinding] = &[
     none(&["Home"], "Goto First Line"),
     none(&["End"], "Goto Last Line"),
     none(&[UP, DOWN], "Select Bookmark"),
+    none(&["Del"], "Delete Bookmark"),
     ctrl_f(&["F"], "F5", "Find Text"),
     none(&["Esc"], "Cancel"),
 ];

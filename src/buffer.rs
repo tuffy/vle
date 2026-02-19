@@ -567,12 +567,14 @@ impl Buffer {
         self.saved
     }
 
+    /// A simple rope / bookmarks split borrow
     pub fn rope_bookmarks_mut(
         &mut self,
     ) -> (private::RopeHandle<'_>, private::BookmarksHandle<'_>) {
         (self.rope.get_mut(), self.bookmarks.get_mut())
     }
 
+    /// Whether this buffer has any bookmarks
     pub fn has_bookmarks(&self) -> bool {
         !self.bookmarks.is_empty()
     }
@@ -1930,6 +1932,14 @@ impl BufferContext {
             Err(bookmark) => {
                 buf.bookmarks.insert(bookmark, self.cursor);
             }
+        }
+    }
+
+    /// If cursor at a bookmark, delete it
+    pub fn delete_bookmark(&mut self) {
+        let mut buf = self.buffer.borrow_mut();
+        if let Ok(bookmark) = buf.bookmarks.binary_search(&self.cursor) {
+            buf.bookmarks.remove(bookmark);
         }
     }
 
