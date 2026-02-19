@@ -159,20 +159,6 @@ Closes the current file buffer, prompting for a confirmation
 if its contents have not yet been saved.
 The editor quits once all buffers have been closed.
 
-# Configuration
-
-With very little to configure, VLE doesn't use a config file at all.
-Any configuration is performed with three environmental variables:
-
-| Variable             | Default | Meaning                               |
-|----------------------|---------|---------------------------------------|
-| `VLE_SPACES_PER_TAB` | 4       | number of spaces to output per tab    |
-| `VLE_ALWAYS_TAB`     | 0       | whether to always insert literal tabs |
-| `VLE_PAGE_SIZE`      | 25      | number of lines PgUp and PgDn move    |
-
-No config file means there's one less thing to install,
-learn the format of, modify or break.
-
 # Syntax Highlighting
 
 VLE has syntax has built-in syntax highlighting for the following
@@ -207,6 +193,35 @@ languages / file formats:
 
 Syntax highlighting is done naively with an emphasis
 on colorizing known keywords, strings, etc.
+
+The syntax highlighting to use for a file is usually determined
+by its file extension (`.rs` for Rust files, `.py` for Python, etc.).
+If you find yourself with files using some non-standard extension,
+the `VLE_EXT_MAP` environmental variable can be used to
+map the extension to something else.  Its syntax is simply
+a set of comma-delimited `src=target` pairs.
+
+For example, given a file with a `.tpl` extension that we'd like
+treated as an `.html` file:
+
+```bash
+VLE_EXT_MAP=tpl=html vle file.tpl
+```
+
+# Configuration
+
+With very little to configure, VLE doesn't use a config file at all.
+Any configuration is performed with three environmental variables:
+
+| Variable             | Default | Meaning                               |
+|----------------------|---------|---------------------------------------|
+| `VLE_SPACES_PER_TAB` | 4       | number of spaces to output per tab    |
+| `VLE_ALWAYS_TAB`     | 0       | whether to always insert literal tabs |
+| `VLE_PAGE_SIZE`      | 25      | number of lines PgUp and PgDn move    |
+| `VLE_EXT_MAP`        | empty   | syntax highlighting extension mapping |
+
+No config file means there's one less thing to install,
+learn the format of, modify or break.
 
 # Why Another Editor?
 

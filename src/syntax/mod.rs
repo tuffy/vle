@@ -241,7 +241,29 @@ where
 }
 
 pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
-    match source.extension() {
+    use std::collections::HashMap;
+    use std::sync::LazyLock;
+
+    static EXT_MAP: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
+        std::env::var("VLE_EXT_MAP")
+            .ok()
+            .map(|whole| {
+                whole
+                    .split(',')
+                    .filter_map(|s| {
+                        s.split_once('=')
+                            .map(|(from, to)| (from.trim().to_string(), to.trim().to_string()))
+                            .filter(|(from, to)| !from.is_empty() && !to.is_empty())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    });
+
+    match source
+        .extension()
+        .map(|ext| EXT_MAP.get(ext).map(|s| s.as_str()).unwrap_or(ext))
+    {
         None => match source.file_name() {
             Some(file_name) => match file_name.as_ref() {
                 "Makefile" | "makefile" => Box::new(makefile::Makefile),
