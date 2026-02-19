@@ -1022,6 +1022,7 @@ impl BufferContext {
                 try_auto_pair(
                     &mut rope,
                     self.cursor,
+                    // TODO - a >= self.cursor
                     &mut Secondary::new(alt, &mut bookmarks, |_| true),
                     c,
                 );
@@ -1145,6 +1146,7 @@ impl BufferContext {
 
         match self.selection.take() {
             None => {
+                // TODO - a >= self.cursor
                 if try_un_auto_pair(
                     &mut rope,
                     self.cursor,
@@ -1707,6 +1709,7 @@ impl BufferContext {
     ) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
+        // TODO - a >= earliest match
         let mut alt = Secondary::new(alt, &mut bookmarks, |_| true);
 
         loop {
@@ -1757,6 +1760,7 @@ impl BufferContext {
     ) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
+        // TODO - a >= earliest match
         let mut alt = Secondary::new(alt, &mut bookmarks, |_| true);
 
         loop {
@@ -1794,6 +1798,7 @@ impl BufferContext {
     ) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
+        // TODO - a >= earliest match
         let mut alt = Secondary::new(alt, &mut bookmarks, |_| true);
 
         loop {
@@ -1823,6 +1828,7 @@ impl BufferContext {
     pub fn multi_backspace(&mut self, alt: Option<AltCursor<'_>>, mut matches: &mut [MultiCursor]) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
+        // TODO - a >= earliest match
         let mut alt = Secondary::new(alt, &mut bookmarks, |_| true);
 
         loop {
@@ -1848,6 +1854,7 @@ impl BufferContext {
     pub fn multi_delete(&mut self, alt: Option<AltCursor<'_>>, mut matches: &mut [MultiCursor]) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
+        // TODO - a >= earliest match
         let mut alt = Secondary::new(alt, &mut bookmarks, |_| true);
 
         loop {
@@ -1997,7 +2004,7 @@ pub struct AltCursor<'b> {
 /// A secondary cursor which implements various math operations
 struct Secondary<'b, 'm> {
     cursor_selection: Option<(&'b mut usize, Option<&'b mut usize>)>,
-    bookmarks: Vec<&'m mut usize>,
+    bookmarks: &'m mut [usize],
 }
 
 impl<'b, 'm> Secondary<'b, 'm> {
@@ -2007,10 +2014,15 @@ impl<'b, 'm> Secondary<'b, 'm> {
     /// and returns ourself, which implements necessary math operations.
     fn new(
         alt: Option<AltCursor<'b>>,
-        bookmarks: &'m mut [usize],
+        mut bookmarks: &'m mut [usize],
         mut f: impl FnMut(usize) -> bool,
     ) -> Self {
-        let bookmarks = bookmarks.iter_mut().filter(|b| f(**b)).collect();
+        // we can get away with the because f() always does
+        // ordering comparisons (>= or >) and bookmarks
+        // is always in order
+        while let Some(first) = bookmarks.first() && !f(*first) {
+            let _ = bookmarks.split_off_first_mut();
+        }
 
         match alt {
             None => Self {
@@ -2034,7 +2046,7 @@ impl<'b, 'm> Secondary<'b, 'm> {
                 f(selection);
             }
         }
-        self.bookmarks.iter_mut().for_each(|b| f(b));
+        self.bookmarks.iter_mut().for_each(f);
     }
 }
 
