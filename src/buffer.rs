@@ -3092,6 +3092,18 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
+        /// Widens line of spans by 1, for appending something at the end
+        fn widen<'s>(mut line: Vec<Span<'s>>) -> Vec<Span<'s>> {
+            line.push(Span::raw(" "));
+            line
+        }
+
+        /// Widens range by 1, for appending something at the end
+        fn widen_range(range: std::ops::RangeInclusive<usize>) -> std::ops::RangeInclusive<usize> {
+            let (s, e) = range.into_inner();
+            s..=e + 1
+        }
+
         fn extract<'s>(
             input: &mut VecDeque<Span<'s>>,
             mut characters: usize,
@@ -3729,20 +3741,13 @@ impl StatefulWidget for BufferWidget<'_> {
                              number,
                          }| {
                             highlight_matches(
-                                {
-                                    let mut colorized = colorize(
-                                        syntax,
-                                        &mut hlstate,
-                                        line,
-                                        current_line == Some(number),
-                                    );
-                                    colorized.push(Span::raw(" "));
-                                    colorized
-                                },
-                                {
-                                    let (s, e) = range.into_inner();
-                                    s..=e + 1
-                                },
+                                widen(colorize(
+                                    syntax,
+                                    &mut hlstate,
+                                    line,
+                                    current_line == Some(number),
+                                )),
+                                widen_range(range),
                                 &mut cursors,
                             )
                             .into()
@@ -3763,12 +3768,12 @@ impl StatefulWidget for BufferWidget<'_> {
                                  number,
                              }| {
                                 highlight_parens(
-                                    colorize(
+                                    widen(colorize(
                                         syntax,
                                         &mut hlstate,
                                         line,
                                         current_line == Some(number),
-                                    ),
+                                    )),
                                     range,
                                     &mut marks,
                                 )
@@ -3790,7 +3795,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                      number,
                                  }| {
                                     highlight_parens(
-                                        highlight_selection(
+                                        widen(highlight_selection(
                                             colorize(
                                                 syntax,
                                                 &mut hlstate,
@@ -3799,7 +3804,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                             ),
                                             range.clone(),
                                             (selection_start, selection_end),
-                                        ),
+                                        )),
                                         range,
                                         &mut marks,
                                     )
