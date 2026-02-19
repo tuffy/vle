@@ -56,6 +56,7 @@ are done via simple environment variables.
 | Previous Buffer                |                | <kbd>Ctrl</kbd>-<kbd>PgUp</kbd>    |
 | Next Buffer                    |                | <kbd>Ctrl</kbd>-<kbd>PgDn</kbd>    |
 | Switch Pane                    |                | <kbd>Ctrl</kbd>-<kbd>Arrows</kbd>  |
+| Toggle Bookmark                |                | <kbd>Ctrl</kbd>-<kbd>B</kbd>       |
 
 Because we have so few features, non-navigational features
 have alternative <kbd>Ctrl</kbd>-based and <kbd>F</kbd>-based keybindings.

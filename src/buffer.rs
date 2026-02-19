@@ -422,13 +422,13 @@ mod private {
         type Target = [usize];
 
         fn deref(&self) -> &[usize] {
-            &self.0
+            self.0
         }
     }
 
     impl DerefMut for BookmarksHandle<'_> {
         fn deref_mut(&mut self) -> &mut [usize] {
-            &mut self.0
+            self.0
         }
     }
 
@@ -572,6 +572,10 @@ impl Buffer {
     ) -> (private::RopeHandle<'_>, private::BookmarksHandle<'_>) {
         (self.rope.get_mut(), self.bookmarks.get_mut())
     }
+
+    pub fn has_bookmarks(&self) -> bool {
+        !self.bookmarks.is_empty()
+    }
 }
 
 #[derive(Clone)]
@@ -626,6 +630,7 @@ impl From<FindMode> for crate::help::Keybinding {
 pub struct Help {
     select: WholeSelect,
     find: FindMode,
+    has_bookmarks: bool,
 }
 
 /// A buffer with additional context on a per-view basis
@@ -1887,7 +1892,9 @@ impl BufferContext {
     }
 
     pub fn find_mode(&self) -> Help {
-        let rope = &self.buffer.borrow().rope;
+        let buffer = &self.buffer.borrow();
+        let has_bookmarks = buffer.has_bookmarks();
+        let rope = &buffer.rope;
 
         match self.selection {
             Some(selection) => Help {
@@ -1899,6 +1906,7 @@ impl BufferContext {
                 } else {
                     FindMode::InSelection
                 },
+                has_bookmarks,
             },
             None => Help {
                 select: match rope.get_char(self.cursor) {
@@ -1906,6 +1914,7 @@ impl BufferContext {
                     _ => WholeSelect::Lines,
                 },
                 find: FindMode::WholeFile,
+                has_bookmarks,
             },
         }
     }
@@ -2946,7 +2955,8 @@ impl StatefulWidget for BufferWidget<'_> {
         use crate::editor::SearchType;
         use crate::help::{
             BROWSE_MATCHES, CONFIRM_CLOSE, PASTE_GROUP, REPLACE_MATCHES, REPLACE_MATCHES_REGEX,
-            SELECT_INSIDE, SELECT_LINE, SPLIT_PANE, VERIFY_RELOAD, VERIFY_SAVE, render_help,
+            SELECT_INSIDE, SELECT_LINE, SELECT_LINE_BOOKMARKED, SPLIT_PANE, VERIFY_RELOAD,
+            VERIFY_SAVE, render_help,
         };
         use crate::prompt::TextField;
         use crate::syntax::{HighlightState, Highlighter, MultiComment, MultiCommentType};
@@ -3920,15 +3930,29 @@ impl StatefulWidget for BufferWidget<'_> {
 
         match self.mode {
             None | Some(EditorMode::Editing) => {
-                if let Some(Help { select, find }) = self.show_help {
+                if let Some(Help {
+                    select,
+                    find,
+                    has_bookmarks,
+                }) = self.show_help
+                {
                     use crate::editor::EditorLayout;
                     use crate::help::{
                         EDITING_0, EDITING_1, EDITING_2, F10_SPLIT, F10_UNSPLIT,
-                        SWITCH_PANE_HORIZONTAL, SWITCH_PANE_VERTICAL,
+                        SWITCH_PANE_HORIZONTAL, SWITCH_PANE_VERTICAL, ctrl_f,
                     };
 
                     let mut help = Vec::with_capacity(16);
                     help.extend(EDITING_0);
+                    help.push(ctrl_f(
+                        &["T"],
+                        "F4",
+                        if has_bookmarks {
+                            "Goto Line / Bookmark"
+                        } else {
+                            "Goto Line"
+                        },
+                    ));
                     help.push(find.into());
                     help.extend(EDITING_1);
                     help.push(select.into());
@@ -3988,7 +4012,16 @@ impl StatefulWidget for BufferWidget<'_> {
                 render_help(text_area, buf, SELECT_INSIDE, |b| b);
             }
             Some(EditorMode::SelectLine { .. }) => {
-                render_help(text_area, buf, SELECT_LINE, |b| b);
+                render_help(
+                    text_area,
+                    buf,
+                    if buffer.has_bookmarks() {
+                        SELECT_LINE_BOOKMARKED
+                    } else {
+                        SELECT_LINE
+                    },
+                    |b| b,
+                );
             }
             Some(EditorMode::Search { prompt, type_, .. }) => {
                 use crate::help::{ctrl, ctrl_f, none};

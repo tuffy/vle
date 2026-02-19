@@ -166,7 +166,6 @@ static RIGHT: &str = "\u{2192}";
 pub static EDITING_0: &[Keybinding] = &[
     ctrl_f(&["O"], "F2", "Open File"),
     ctrl_f(&["S"], "F3", "Save File"),
-    ctrl_f(&["T"], "F4", "Goto Line"),
 ];
 
 pub static EDITING_1: &[Keybinding] = &[
@@ -178,7 +177,6 @@ pub static EDITING_1: &[Keybinding] = &[
 pub static F10_UNSPLIT: Keybinding = ctrl_f(&["N"], "F10", "Split Pane");
 pub static F10_SPLIT: Keybinding = ctrl_f(&["N"], "F10", "Un-Split Pane");
 
-// TODO - add mention of bookmark
 pub static EDITING_2: &[Keybinding] = &[
     ctrl_f(&["L"], "F11", "Reload File"),
     ctrl_f(&["Q"], "F12", "Quit File"),
@@ -191,6 +189,7 @@ pub static EDITING_2: &[Keybinding] = &[
     ctrl(&["Home", "End"], "Start / End of Selection"),
     ctrl(&["X", "C", "V"], "Cut / Copy / Paste"),
     ctrl(&["Z", "Y"], "Undo / Redo"),
+    ctrl(&["B"], "Toggle Bookmark"),
     ctrl(&["PgUp", "PgDn"], "Switch File"),
 ];
 
@@ -228,11 +227,19 @@ pub static SELECT_INSIDE: &[Keybinding] = &[
     none(&["Esc"], "Cancel"),
 ];
 
-// TODO - include mention of bookmark
 pub static SELECT_LINE: &[Keybinding] = &[
     none(&["Enter"], "Select Line"),
     none(&["Home"], "Goto First Line"),
     none(&["End"], "Goto Last Line"),
+    ctrl_f(&["F"], "F5", "Find Text"),
+    none(&["Esc"], "Cancel"),
+];
+
+pub static SELECT_LINE_BOOKMARKED: &[Keybinding] = &[
+    none(&["Enter"], "Select Line"),
+    none(&["Home"], "Goto First Line"),
+    none(&["End"], "Goto Last Line"),
+    none(&[UP, DOWN], "Select Bookmark"),
     ctrl_f(&["F"], "F5", "Find Text"),
     none(&["Esc"], "Cancel"),
 ];
