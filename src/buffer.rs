@@ -1996,8 +1996,7 @@ pub struct AltCursor<'b> {
 
 /// A secondary cursor which implements various math operations
 struct Secondary<'b, 'm> {
-    cursor: Option<&'b mut usize>,
-    selection: Option<&'b mut usize>,
+    cursor_selection: Option<(&'b mut usize, Option<&'b mut usize>)>,
     bookmarks: Vec<&'m mut usize>,
 }
 
@@ -2014,14 +2013,13 @@ impl<'b, 'm> Secondary<'b, 'm> {
         let bookmarks = bookmarks.iter_mut().filter(|b| f(**b)).collect();
 
         match alt {
-            Some(alt) => Self {
-                cursor: f(*alt.cursor).then_some(alt.cursor),
-                selection: alt.selection.as_mut().filter(|s| f(**s)),
+            None => Self {
+                cursor_selection: None,
                 bookmarks,
             },
-            None => Self {
-                cursor: None,
-                selection: None,
+            Some(alt) => Self {
+                cursor_selection: f(*alt.cursor)
+                    .then_some((alt.cursor, alt.selection.as_mut().filter(|s| f(**s)))),
                 bookmarks,
             },
         }
@@ -2029,11 +2027,12 @@ impl<'b, 'm> Secondary<'b, 'm> {
 
     /// Updates secondary cursor in-place, if available
     fn update(&mut self, mut f: impl FnMut(&mut usize)) {
-        if let Some(cursor) = &mut self.cursor {
-            f(cursor)
-        }
-        if let Some(selection) = &mut self.selection {
-            f(selection)
+        if let Some((cursor, selection)) = &mut self.cursor_selection {
+            f(cursor);
+
+            if let Some(selection) = selection {
+                f(selection);
+            }
         }
         self.bookmarks.iter_mut().for_each(|b| f(b));
     }
