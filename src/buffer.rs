@@ -1928,9 +1928,11 @@ impl BufferContext {
         match buf.bookmarks.binary_search(&self.cursor) {
             Ok(bookmark) => {
                 buf.bookmarks.remove(bookmark);
+                self.message = Some(BufferMessage::Notice("Bookmark Removed".into()));
             }
             Err(bookmark) => {
                 buf.bookmarks.insert(bookmark, self.cursor);
+                self.message = Some(BufferMessage::Notice("Bookmark Added".into()));
             }
         }
     }
@@ -1940,6 +1942,7 @@ impl BufferContext {
         let mut buf = self.buffer.borrow_mut();
         if let Ok(bookmark) = buf.bookmarks.binary_search(&self.cursor) {
             buf.bookmarks.remove(bookmark);
+            self.message = Some(BufferMessage::Notice("Bookmark Removed".into()));
         }
     }
 
