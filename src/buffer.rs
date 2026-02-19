@@ -1022,7 +1022,6 @@ impl BufferContext {
                 try_auto_pair(
                     &mut rope,
                     self.cursor,
-                    // TODO - a >= self.cursor
                     &mut Secondary::new(alt, &mut bookmarks, |_| true),
                     c,
                 );
@@ -1146,7 +1145,6 @@ impl BufferContext {
 
         match self.selection.take() {
             None => {
-                // TODO - a >= self.cursor
                 if try_un_auto_pair(
                     &mut rope,
                     self.cursor,
@@ -1709,7 +1707,6 @@ impl BufferContext {
     ) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
-        // TODO - a >= earliest match
         let mut alt = Secondary::new(alt, &mut bookmarks, |_| true);
 
         loop {
@@ -1760,7 +1757,6 @@ impl BufferContext {
     ) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
-        // TODO - a >= earliest match
         let mut alt = Secondary::new(alt, &mut bookmarks, |_| true);
 
         loop {
@@ -1798,7 +1794,6 @@ impl BufferContext {
     ) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
-        // TODO - a >= earliest match
         let mut alt = Secondary::new(alt, &mut bookmarks, |_| true);
 
         loop {
@@ -1828,7 +1823,6 @@ impl BufferContext {
     pub fn multi_backspace(&mut self, alt: Option<AltCursor<'_>>, mut matches: &mut [MultiCursor]) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
-        // TODO - a >= earliest match
         let mut alt = Secondary::new(alt, &mut bookmarks, |_| true);
 
         loop {
@@ -1854,7 +1848,6 @@ impl BufferContext {
     pub fn multi_delete(&mut self, alt: Option<AltCursor<'_>>, mut matches: &mut [MultiCursor]) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
-        // TODO - a >= earliest match
         let mut alt = Secondary::new(alt, &mut bookmarks, |_| true);
 
         loop {
@@ -1944,6 +1937,47 @@ impl BufferContext {
         }
     }
 
+    pub fn toggle_bookmarks(&mut self, positions: impl Iterator<Item = usize>) {
+        let mut added = 0;
+        let mut removed = 0;
+        let mut buf = self.buffer.borrow_mut();
+
+        for pos in positions {
+            match buf.bookmarks.binary_search(&pos) {
+                Ok(bookmark) => {
+                    buf.bookmarks.remove(bookmark);
+                    removed += 1;
+                }
+                Err(bookmark) => {
+                    buf.bookmarks.insert(bookmark, pos);
+                    added += 1;
+                }
+            }
+        }
+
+        match (added, removed) {
+            (0, 0) => { /* nothing to do*/ }
+            (1, 0) => {
+                self.message = Some(BufferMessage::Notice("Bookmark Added".into()));
+            }
+            (n, 0) => {
+                self.message = Some(BufferMessage::Notice(format!("{n} Bookmarks Added").into()));
+            }
+            (0, 1) => {
+                self.message = Some(BufferMessage::Notice("Bookmark Removed".into()));
+            }
+            (0, n) => {
+                self.message = Some(BufferMessage::Notice(
+                    format!("{n} Bookmarks Removed").into(),
+                ));
+            }
+            _ => {
+                // an unusual case
+                self.message = Some(BufferMessage::Notice("Bookmarks Toggled".into()));
+            }
+        }
+    }
+
     /// If cursor at a bookmark, delete it
     pub fn delete_bookmark(&mut self) {
         let mut buf = self.buffer.borrow_mut();
@@ -2020,7 +2054,9 @@ impl<'b, 'm> Secondary<'b, 'm> {
         // we can get away with the because f() always does
         // ordering comparisons (>= or >) and bookmarks
         // is always in order
-        while let Some(first) = bookmarks.first() && !f(*first) {
+        while let Some(first) = bookmarks.first()
+            && !f(*first)
+        {
             let _ = bookmarks.split_off_first_mut();
         }
 

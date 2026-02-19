@@ -1293,7 +1293,10 @@ fn process_browse_matches<P>(
         }
         key!(Enter) => Some(NextModeBrowse::Default),
         key!(CONTROL, 'r') | key!(F(6)) => Some(NextModeBrowse::Replace),
-        // TODO - add Ctrl-B mass-bookmark option
+        key!(CONTROL, 'b') => {
+            buffer.toggle_bookmarks(matches.iter().map(|(m, _)| m.start));
+            None
+        }
         _ => None, // ignore other events
     }
 }

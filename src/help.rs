@@ -260,11 +260,11 @@ pub static CREATE_FILE: &[Keybinding] = &[
     none(&["Esc"], "Cancel"),
 ];
 
-// TODO - add Ctrl-B mass-bookmark option
 pub static BROWSE_MATCHES: &[Keybinding] = &[
     none(&[UP, DOWN], "Select Match"),
     none(&["Del"], "Remove Match"),
     ctrl_f(&["R"], "F6", "Replace Matches"),
+    ctrl(&["B"], "Bookmark Matches"),
     none(&["Enter"], "Finish"),
 ];
 
