@@ -632,6 +632,7 @@ impl Editor {
             key!(Tab) => self.update_buffer_at(|b, a| b.indent(a)),
             key!(SHIFT, BackTab) => self.update_buffer_at(|b, a| b.un_indent(a)),
             key!(CONTROL, 'p') | key!(F(7)) => self.update_buffer(|b| b.select_matching_paren()),
+            key!(CONTROL, 'b') => self.update_buffer(|b| b.toggle_bookmark()),
             key!(CONTROL, 'e') | key!(F(8)) => {
                 if let Some(Err(())) = self.on_buffer(|b| b.try_auto_pair()) {
                     self.mode = EditorMode::SelectInside;
@@ -1021,13 +1022,17 @@ fn process_select_line(
             None
         }
         key!(Enter) => {
-            match prompt.line_and_column() {
-                (line, None) => buffer.select_line(line.saturating_sub(1)),
-                (line, Some(col)) => {
-                    buffer.select_line_and_column(line.saturating_sub(1), col.saturating_sub(1))
+            if prompt.is_empty() {
+                Some(EditorMode::default())
+            } else {
+                match prompt.line_and_column() {
+                    (line, None) => buffer.select_line(line.saturating_sub(1)),
+                    (line, Some(col)) => {
+                        buffer.select_line_and_column(line.saturating_sub(1), col.saturating_sub(1))
+                    }
                 }
+                Some(EditorMode::default())
             }
-            Some(EditorMode::default())
         }
         key!(Home) => {
             buffer.select_line(0);
@@ -1042,6 +1047,14 @@ fn process_select_line(
             type_: SearchType::default(),
             range: None,
         }),
+        key!(Up) => {
+            buffer.previous_bookmark();
+            None
+        }
+        key!(Down) => {
+            buffer.next_bookmark();
+            None
+        }
         _ => {
             None // ignore other events
         }

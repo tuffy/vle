@@ -266,6 +266,10 @@ impl LinePrompt {
             ),
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.value.is_empty()
+    }
 }
 
 impl std::fmt::Display for LinePrompt {

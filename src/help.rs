@@ -178,6 +178,7 @@ pub static EDITING_1: &[Keybinding] = &[
 pub static F10_UNSPLIT: Keybinding = ctrl_f(&["N"], "F10", "Split Pane");
 pub static F10_SPLIT: Keybinding = ctrl_f(&["N"], "F10", "Un-Split Pane");
 
+// TODO - add mention of bookmark
 pub static EDITING_2: &[Keybinding] = &[
     ctrl_f(&["L"], "F11", "Reload File"),
     ctrl_f(&["Q"], "F12", "Quit File"),
@@ -227,6 +228,7 @@ pub static SELECT_INSIDE: &[Keybinding] = &[
     none(&["Esc"], "Cancel"),
 ];
 
+// TODO - include mention of bookmark
 pub static SELECT_LINE: &[Keybinding] = &[
     none(&["Enter"], "Select Line"),
     none(&["Home"], "Goto First Line"),

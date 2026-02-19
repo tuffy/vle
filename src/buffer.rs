@@ -404,6 +404,7 @@ pub struct Buffer {
     syntax: Box<dyn Highlighter>, // the syntax highlighting to use
     tabs_required: bool,          // whether the format demands actual tabs
     tab_substitution: String,     // spaces to substitute for tabs
+    bookmarks: Vec<usize>,        // saved bookmark positions (sorted)
 }
 
 impl Buffer {
@@ -427,6 +428,7 @@ impl Buffer {
             source,
             undo: vec![],
             redo: vec![],
+            bookmarks: vec![],
         })
     }
 
@@ -447,6 +449,7 @@ impl Buffer {
             source: Source::Tutorial,
             undo: vec![],
             redo: vec![],
+            bookmarks: vec![],
         }
     }
 
@@ -1837,6 +1840,62 @@ impl BufferContext {
             },
         }
     }
+
+    /// If no bookmark at cursor, add one
+    /// If bookmark at cursor, remove one
+    pub fn toggle_bookmark(&mut self) {
+        let mut buf = self.buffer.borrow_mut();
+        match buf.bookmarks.binary_search(&self.cursor) {
+            Ok(bookmark) => {
+                buf.bookmarks.remove(bookmark);
+            }
+            Err(bookmark) => {
+                buf.bookmarks.insert(bookmark, self.cursor);
+            }
+        }
+    }
+
+    fn goto_bookmark(&mut self, forward: bool) {
+        let buf = self.buffer.borrow_move();
+        let bookmarks = &buf.bookmarks;
+        self.cursor = if forward {
+            let (bookmark, offset) = match bookmarks.binary_search(&self.cursor) {
+                Ok(bookmark) => (bookmark, 1),
+                Err(bookmark) => (bookmark, 0),
+            };
+            let Some((first, last)) = bookmarks.split_at_checked(bookmark) else {
+                return;
+            };
+            match last.get(offset).or(first.first()) {
+                Some(pos) => *pos,
+                None => return,
+            }
+        } else {
+            let bookmark = match bookmarks.binary_search(&self.cursor) {
+                Ok(bookmark) => bookmark,
+                Err(bookmark) => bookmark,
+            };
+            let Some((first, last)) = bookmarks.split_at_checked(bookmark) else {
+                return;
+            };
+            match first.last().or(last.last()) {
+                Some(pos) => *pos,
+                None => return,
+            }
+        };
+        self.cursor_column = cursor_column(&buf.rope, self.cursor);
+        self.selection = None;
+    }
+
+    /// Moves to next bookmark, if any
+    pub fn next_bookmark(&mut self) {
+        self.goto_bookmark(true);
+    }
+
+    /// Moves to previous bookmark, if any
+    pub fn previous_bookmark(&mut self) {
+        self.goto_bookmark(false);
+    }
 }
 
 pub struct AltCursor<'b> {
@@ -1845,6 +1904,7 @@ pub struct AltCursor<'b> {
 }
 
 /// A secondary cursor which implements various math operations
+// TODO - adjust bookmark positions also
 struct Secondary<'b> {
     cursor: Option<&'b mut usize>,
     selection: Option<&'b mut usize>,
@@ -3303,6 +3363,13 @@ impl StatefulWidget for BufferWidget<'_> {
                     color: Color::Red,
                 }
             }
+
+            fn bookmark(position: usize) -> Self {
+                Self {
+                    position,
+                    color: Color::Yellow,
+                }
+            }
         }
 
         fn highlight_parens<'s>(
@@ -3314,6 +3381,9 @@ impl StatefulWidget for BufferWidget<'_> {
             let mut colorized: VecDeque<_> = colorized.into();
             let mut highlighted = Vec::with_capacity(colorized.len());
             let mut offset = line_start;
+            while parens.pop_front_if(|p| p.position < offset).is_some() {
+                // drain unwanted preceding elements
+            }
             while let Some(Paren { position, color }) =
                 parens.pop_front_if(|p| p.position >= offset && p.position <= line_end)
             {
@@ -3502,6 +3572,8 @@ impl StatefulWidget for BufferWidget<'_> {
             .map(|line| line.saturating_sub(state.viewport_height / 2))
             .unwrap_or(0);
 
+        let viewport_start = rope.try_line_to_char(viewport_line).unwrap_or(0);
+
         state.viewport_height = text_area.height.into();
 
         let mut hlstate: HighlightState = match syntax.multicomment() {
@@ -3529,32 +3601,46 @@ impl StatefulWidget for BufferWidget<'_> {
         let viewport_size = rope
             .try_line_to_char(current_line.unwrap_or(0) + state.viewport_height)
             .unwrap_or(rope.len_chars())
-            .saturating_sub(rope.try_line_to_char(viewport_line).unwrap_or(0));
+            .saturating_sub(viewport_start);
 
-        let mut parentheses: VecDeque<Paren> =
-            match prev_opening_char(rope, state.cursor, viewport_size) {
-                Some((opener, start)) => match next_closing_char(rope, state.cursor, viewport_size)
-                {
-                    Some((closer, end)) => {
-                        if opener == closer {
-                            vec![
-                                Paren::matching(start.saturating_sub(1)),
-                                Paren::matching(end),
-                            ]
-                            .into()
-                        } else {
-                            vec![
-                                Paren::mismatch(start.saturating_sub(1)),
-                                Paren::mismatch(end),
-                            ]
-                            .into()
-                        }
+        let mut marks: Vec<Paren> = match prev_opening_char(rope, state.cursor, viewport_size) {
+            Some((opener, start)) => match next_closing_char(rope, state.cursor, viewport_size) {
+                Some((closer, end)) => {
+                    if opener == closer {
+                        vec![
+                            Paren::matching(start.saturating_sub(1)),
+                            Paren::matching(end),
+                        ]
+                    } else {
+                        vec![
+                            Paren::mismatch(start.saturating_sub(1)),
+                            Paren::mismatch(end),
+                        ]
                     }
-                    None => vec![Paren::opener(start.saturating_sub(1))].into(),
-                },
-                None => VecDeque::default(),
-            };
-        parentheses.retain(|p| p.position != state.cursor);
+                }
+                None => vec![Paren::opener(start.saturating_sub(1))],
+            },
+            None => vec![],
+        };
+
+        for bookmark in buffer
+            .bookmarks
+            .iter()
+            .copied()
+            .filter(|p| *p >= viewport_start)
+            .map(Paren::bookmark)
+        {
+            match marks.binary_search_by_key(&bookmark.position, |b| b.position) {
+                Ok(pos) => {
+                    marks[pos].color = bookmark.color;
+                }
+                Err(pos) => {
+                    marks.insert(pos, bookmark);
+                }
+            }
+        }
+        marks.retain(|p| p.position != state.cursor);
+        let mut marks = marks.into();
 
         Clear.render(text_area, buf);
         Paragraph::new(match self.mode {
@@ -3684,7 +3770,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                         current_line == Some(number),
                                     ),
                                     range,
-                                    &mut parentheses,
+                                    &mut marks,
                                 )
                                 .into()
                             },
@@ -3715,7 +3801,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                             (selection_start, selection_end),
                                         ),
                                         range,
-                                        &mut parentheses,
+                                        &mut marks,
                                     )
                                     .into()
                                 },
