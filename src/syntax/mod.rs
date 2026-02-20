@@ -33,6 +33,7 @@ mod sh;
 mod sql;
 mod swift;
 mod tex;
+mod ts;
 mod toml;
 mod tutorial;
 mod xml;
@@ -282,6 +283,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("sql") => Box::new(sql::Sql),
         Some("css") => Box::new(css::Css),
         Some("js") => Box::new(js::JavaScript),
+        Some("ts") => Box::new(ts::TypeScript),
         Some("php") => Box::new(php::Php),
         Some("yaml") => Box::new(yaml::Yaml),
         Some("java") => Box::new(java::Java),
