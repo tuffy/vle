@@ -701,6 +701,7 @@ impl BufferContext {
 
     pub fn set_cursor(&mut self, cursor: usize) {
         self.cursor = cursor;
+        self.cursor_column = cursor_column(&self.buffer.borrow_move().rope, self.cursor);
     }
 
     pub fn clear_selection(&mut self) {
@@ -1875,27 +1876,43 @@ impl BufferContext {
     }
 
     pub fn multi_cursor_back(&mut self, matches: &mut [MultiCursor]) {
-        matches
-            .iter_mut()
-            .for_each(|m| m.cursor_back(&mut self.cursor));
+        matches.iter_mut().for_each(|m| {
+            m.cursor_back(
+                &mut self.cursor,
+                &mut self.cursor_column,
+                &self.buffer.borrow_move().rope,
+            )
+        });
     }
 
     pub fn multi_cursor_forward(&mut self, matches: &mut [MultiCursor]) {
-        matches
-            .iter_mut()
-            .for_each(|m| m.cursor_forward(&mut self.cursor));
+        matches.iter_mut().for_each(|m| {
+            m.cursor_forward(
+                &mut self.cursor,
+                &mut self.cursor_column,
+                &self.buffer.borrow_move().rope,
+            )
+        });
     }
 
     pub fn multi_cursor_home(&mut self, matches: &mut [MultiCursor]) {
-        matches
-            .iter_mut()
-            .for_each(|m| m.cursor_home(&mut self.cursor));
+        matches.iter_mut().for_each(|m| {
+            m.cursor_home(
+                &mut self.cursor,
+                &mut self.cursor_column,
+                &self.buffer.borrow_move().rope,
+            )
+        });
     }
 
     pub fn multi_cursor_end(&mut self, matches: &mut [MultiCursor]) {
-        matches
-            .iter_mut()
-            .for_each(|m| m.cursor_end(&mut self.cursor));
+        matches.iter_mut().for_each(|m| {
+            m.cursor_end(
+                &mut self.cursor,
+                &mut self.cursor_column,
+                &self.buffer.borrow_move().rope,
+            )
+        });
     }
 
     pub fn set_error<S: Into<Cow<'static, str>>>(&mut self, err: S) {
@@ -2220,34 +2237,38 @@ impl MultiCursor {
         }
     }
 
-    fn cursor_back(&mut self, cursor: &mut usize) {
+    fn cursor_back(&mut self, cursor: &mut usize, cursor_col: &mut usize, rope: &ropey::Rope) {
         if self.cursor > self.range.start {
             if self.cursor == *cursor {
                 *cursor = cursor.saturating_sub(1);
+                *cursor_col = cursor_column(rope, *cursor);
             }
             self.cursor -= 1;
         }
     }
 
-    fn cursor_forward(&mut self, cursor: &mut usize) {
+    fn cursor_forward(&mut self, cursor: &mut usize, cursor_col: &mut usize, rope: &ropey::Rope) {
         if self.cursor < self.range.end {
             if self.cursor == *cursor {
                 *cursor += 1;
+                *cursor_col = cursor_column(rope, *cursor);
             }
             self.cursor += 1;
         }
     }
 
-    fn cursor_home(&mut self, cursor: &mut usize) {
+    fn cursor_home(&mut self, cursor: &mut usize, cursor_col: &mut usize, rope: &ropey::Rope) {
         if self.cursor == *cursor {
             *cursor = self.range.start;
+            *cursor_col = cursor_column(rope, *cursor);
         }
         self.cursor = self.range.start;
     }
 
-    fn cursor_end(&mut self, cursor: &mut usize) {
+    fn cursor_end(&mut self, cursor: &mut usize, cursor_col: &mut usize, rope: &ropey::Rope) {
         if self.cursor == *cursor {
             *cursor = self.range.end;
+            *cursor_col = cursor_column(rope, *cursor);
         }
         self.cursor = self.range.end;
     }
