@@ -3957,20 +3957,7 @@ impl StatefulWidget for BufferWidget<'_> {
             Some(EditorMode::ReplaceMatches { matches, .. }) => {
                 let (mut cursors, mut ranges): (VecDeque<_>, _) = matches
                     .iter()
-                    .map(|m| {
-                        (
-                            (
-                                m.cursor..m.cursor + 1,
-                                Style::new()
-                                    .fg(Color::Blue)
-                                    .add_modifier(Modifier::REVERSED),
-                            ),
-                            (
-                                m.range.clone(),
-                                Style::new().underlined().underline_color(Color::Blue),
-                            ),
-                        )
-                    })
+                    .map(|m| ((m.cursor..m.cursor + 1, ()), (m.range.clone(), ())))
                     .unzip();
 
                 cursors.retain(|(r, _)| r.start != state.cursor);
@@ -3994,11 +3981,21 @@ impl StatefulWidget for BufferWidget<'_> {
                                     )),
                                     whole_range.clone(),
                                     &mut ranges,
-                                    |span, hl| span.patch_style(hl),
+                                    |span, ()| {
+                                        span.patch_style(
+                                            Style::new().underlined().underline_color(Color::Blue),
+                                        )
+                                    },
                                 ),
                                 whole_range,
                                 &mut cursors,
-                                |span, hl| span.style(hl),
+                                |span, ()| {
+                                    span.style(
+                                        Style::new()
+                                            .fg(Color::Blue)
+                                            .add_modifier(Modifier::REVERSED),
+                                    )
+                                },
                             )
                             .into()
                         },
