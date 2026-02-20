@@ -28,13 +28,14 @@ mod perl;
 mod php;
 mod python;
 mod regex;
+mod ron;
 mod rust;
 mod sh;
 mod sql;
 mod swift;
 mod tex;
-mod ts;
 mod toml;
+mod ts;
 mod tutorial;
 mod xml;
 mod yaml;
@@ -277,6 +278,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("cpp" | "cc" | "cxx" | "c++" | "hh" | "hpp" | "hxx" | "h++") => Box::new(cpp::Cpp),
         Some("py") => Box::new(python::Python),
         Some("json") => Box::new(json::Json),
+        Some("ron") => Box::new(ron::Ron),
         Some("md" | "markdown") => Box::new(markdown::Markdown),
         Some("html" | "htm") => Box::new(html::Html),
         Some("xml" | "svg") => Box::new(xml::Xml),
