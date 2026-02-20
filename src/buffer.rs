@@ -3715,7 +3715,10 @@ impl StatefulWidget for BufferWidget<'_> {
             } else {
                 Line::from(vec![
                     Span::raw("\u{2524}"),
-                    Span::raw(bookmarks.to_string()),
+                    Span::styled(
+                        bookmarks.to_string(),
+                        Style::default().bg(Color::Cyan),
+                    ),
                     Span::raw("\u{251c}"),
                 ])
                 .right_aligned()
