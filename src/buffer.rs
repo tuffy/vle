@@ -3508,7 +3508,7 @@ impl StatefulWidget for BufferWidget<'_> {
             fn opener(position: usize) -> Self {
                 Self {
                     position,
-                    color: Color::Cyan,
+                    color: Color::Green,
                 }
             }
 
@@ -3529,7 +3529,7 @@ impl StatefulWidget for BufferWidget<'_> {
             fn bookmark(position: usize) -> Self {
                 Self {
                     position,
-                    color: Color::Yellow,
+                    color: Color::Cyan,
                 }
             }
         }
@@ -3707,7 +3707,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     Span::raw("\u{252b}"),
                     Span::styled(
                         bookmarks.to_string(),
-                        Style::default().bold().bg(Color::Yellow),
+                        Style::default().bold().bg(Color::Cyan),
                     ),
                     Span::raw("\u{2523}"),
                 ])
