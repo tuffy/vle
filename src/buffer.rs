@@ -1886,6 +1886,18 @@ impl BufferContext {
             .for_each(|m| m.cursor_forward(&mut self.cursor));
     }
 
+    pub fn multi_cursor_home(&mut self, matches: &mut [MultiCursor]) {
+        matches
+            .iter_mut()
+            .for_each(|m| m.cursor_home(&mut self.cursor));
+    }
+
+    pub fn multi_cursor_end(&mut self, matches: &mut [MultiCursor]) {
+        matches
+            .iter_mut()
+            .for_each(|m| m.cursor_end(&mut self.cursor));
+    }
+
     pub fn set_error<S: Into<Cow<'static, str>>>(&mut self, err: S) {
         self.message = Some(BufferMessage::Error(err.into()))
     }
@@ -2224,6 +2236,20 @@ impl MultiCursor {
             }
             self.cursor += 1;
         }
+    }
+
+    fn cursor_home(&mut self, cursor: &mut usize) {
+        if self.cursor == *cursor {
+            *cursor = self.range.start;
+        }
+        self.cursor = self.range.start;
+    }
+
+    fn cursor_end(&mut self, cursor: &mut usize) {
+        if self.cursor == *cursor {
+            *cursor = self.range.end;
+        }
+        self.cursor = self.range.end;
     }
 }
 

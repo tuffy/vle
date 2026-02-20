@@ -271,6 +271,7 @@ pub static BROWSE_MATCHES: &[Keybinding] = &[
 
 pub static REPLACE_MATCHES: &[Keybinding] = &[
     none(&[UP, DOWN], "Select Match"),
+    ctrl(&["Home", "End"], "Start / End of Match"),
     ctrl(&["V"], "Paste From Cut Buffer"),
     none(&["Enter"], "Finish Replacement"),
 ];
