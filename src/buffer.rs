@@ -237,7 +237,7 @@ impl Source {
 }
 
 mod private {
-    use crate::buffer::Buffer;
+    use crate::buffer::{AltCursor, Buffer};
     use std::cell::{Ref, RefCell, RefMut};
     use std::ops::{Deref, DerefMut};
     use std::rc::Rc;
@@ -437,7 +437,95 @@ mod private {
             self.0.dedup();
         }
     }
+
+    /// A secondary cursor which implements various math operations
+    pub struct Secondary<'b, 'm> {
+        cursor_selection: Option<(&'b mut usize, Option<&'b mut usize>)>,
+        bookmarks: &'m mut [usize],
+    }
+
+    impl<'b, 'm> Secondary<'b, 'm> {
+        pub fn new(alt: Option<AltCursor<'b>>, bookmarks: &'m mut [usize]) -> Self {
+            match alt {
+                None => Self {
+                    cursor_selection: None,
+                    bookmarks,
+                },
+                Some(alt) => Self {
+                    cursor_selection: Some((alt.cursor, alt.selection.as_mut())),
+                    bookmarks,
+                },
+            }
+        }
+
+        /// Constrained to values greater than or equal to the cursor
+        pub fn ge(alt: Option<AltCursor<'b>>, bookmarks: &'m mut [usize], cursor: usize) -> Self {
+            Self::filtered(alt, bookmarks, |a| a >= cursor)
+        }
+
+        /// Constrained to values greater than or equal to the cursor
+        pub fn gt(alt: Option<AltCursor<'b>>, bookmarks: &'m mut [usize], cursor: usize) -> Self {
+            Self::filtered(alt, bookmarks, |a| a > cursor)
+        }
+
+        fn filtered(
+            alt: Option<AltCursor<'b>>,
+            mut bookmarks: &'m mut [usize],
+            mut f: impl FnMut(usize) -> bool,
+        ) -> Self {
+            // we can get away with this because f() always does
+            // ordering comparisons (>= or >) and bookmarks
+            // are always in order
+            while let Some(first) = bookmarks.first()
+                && !f(*first)
+            {
+                let _ = bookmarks.split_off_first_mut();
+            }
+
+            match alt {
+                None => Self {
+                    cursor_selection: None,
+                    bookmarks,
+                },
+                Some(alt) => Self {
+                    cursor_selection: f(*alt.cursor)
+                        .then_some((alt.cursor, alt.selection.as_mut().filter(|s| f(**s)))),
+                    bookmarks,
+                },
+            }
+        }
+
+        /// Updates secondary cursor in-place, if available
+        pub fn update(&mut self, mut f: impl FnMut(&mut usize)) {
+            if let Some((cursor, selection)) = &mut self.cursor_selection {
+                f(cursor);
+
+                if let Some(selection) = selection {
+                    f(selection);
+                }
+            }
+            self.bookmarks.iter_mut().for_each(f);
+        }
+    }
+
+    impl std::ops::AddAssign<usize> for Secondary<'_, '_> {
+        fn add_assign(&mut self, rhs: usize) {
+            self.update(|c| {
+                *c += rhs;
+            })
+        }
+    }
+
+    impl std::ops::SubAssign<usize> for Secondary<'_, '_> {
+        fn sub_assign(&mut self, rhs: usize) {
+            self.update(|c| {
+                *c -= rhs;
+            })
+        }
+    }
 }
+
+use private::Secondary;
 
 /// A buffer corresponding to a file on disk (either local or remote)
 ///
@@ -514,7 +602,7 @@ impl Buffer {
             reloaded,
             cursor,
             selection,
-            Secondary::new(alt, &mut self.bookmarks.get_mut(), |_| true),
+            Secondary::new(alt, &mut self.bookmarks.get_mut()),
         );
         self.rope.save();
         self.saved = saved;
@@ -1007,8 +1095,7 @@ impl BufferContext {
                     ['\'', '\''],
                 ),
                 _ => {
-                    let mut alt =
-                        Secondary::new(alt, &mut bookmarks, |a| a >= self.cursor.min(*selection));
+                    let mut alt = Secondary::ge(alt, &mut bookmarks, self.cursor.min(*selection));
                     zap_selection(
                         &mut rope,
                         &mut self.cursor,
@@ -1027,7 +1114,7 @@ impl BufferContext {
                 try_auto_pair(
                     &mut rope,
                     self.cursor,
-                    &mut Secondary::new(alt, &mut bookmarks, |_| true),
+                    &mut Secondary::new(alt, &mut bookmarks),
                     c,
                 );
                 self.cursor += 1;
@@ -1043,7 +1130,7 @@ impl BufferContext {
                     // No active selection, so paste as-is
                     let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
                     let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
-                    let mut alt = Secondary::new(alt, &mut bookmarks, |a| a >= self.cursor);
+                    let mut alt = Secondary::ge(alt, &mut bookmarks, self.cursor);
                     if rope.try_insert(self.cursor, &pasted.data).is_ok() {
                         self.cursor += pasted.chars_len;
                         alt += pasted.chars_len;
@@ -1055,7 +1142,7 @@ impl BufferContext {
                     let (selection_start, selection_end) = reorder(self.cursor, *selection);
                     let cut_range = selection_start..selection_end;
                     let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
-                    let mut alt = Secondary::new(alt, &mut bookmarks, |a| a >= selection_start);
+                    let mut alt = Secondary::ge(alt, &mut bookmarks, selection_start);
 
                     if let Some(cut) = rope.get_slice(cut_range.clone()).map(|slice| slice.into()) {
                         // cut out part of rope we want
@@ -1096,8 +1183,7 @@ impl BufferContext {
 
         let mut alt = match self.selection.take() {
             Some(selection) => {
-                let mut secondary =
-                    Secondary::new(alt, &mut bookmarks, |a| a >= self.cursor.min(selection));
+                let mut secondary = Secondary::ge(alt, &mut bookmarks, self.cursor.min(selection));
 
                 zap_selection(
                     &mut rope,
@@ -1109,7 +1195,7 @@ impl BufferContext {
 
                 secondary
             }
-            None => Secondary::new(alt, &mut bookmarks, |a| a >= self.cursor),
+            None => Secondary::ge(alt, &mut bookmarks, self.cursor),
         };
 
         let (indent, all_indent) = match line_start_to_cursor(&rope, self.cursor) {
@@ -1153,7 +1239,7 @@ impl BufferContext {
                 if try_un_auto_pair(
                     &mut rope,
                     self.cursor,
-                    &mut Secondary::new(alt, &mut bookmarks, |_| true),
+                    &mut Secondary::new(alt, &mut bookmarks),
                 )
                 .is_ok()
                 {
@@ -1162,9 +1248,8 @@ impl BufferContext {
                 }
             }
             Some(current_selection) => {
-                let mut alt = Secondary::new(alt, &mut bookmarks, |a| {
-                    a >= self.cursor.min(current_selection)
-                });
+                let mut alt =
+                    Secondary::ge(alt, &mut bookmarks, self.cursor.min(current_selection));
                 zap_selection(
                     &mut rope,
                     &mut self.cursor,
@@ -1182,7 +1267,7 @@ impl BufferContext {
 
         match &mut self.selection {
             None => {
-                let mut alt = Secondary::new(alt, &mut bookmarks, |a| a > self.cursor);
+                let mut alt = Secondary::gt(alt, &mut bookmarks, self.cursor);
                 if rope.try_remove(self.cursor..(self.cursor + 1)).is_ok() {
                     alt -= 1;
                 }
@@ -1249,7 +1334,7 @@ impl BufferContext {
         let (selection_start, selection_end) = reorder(self.cursor, selection);
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
-        let mut alt = Secondary::new(alt, &mut bookmarks, |a| a >= selection_start);
+        let mut alt = Secondary::ge(alt, &mut bookmarks, selection_start);
 
         rope.get_slice(selection_start..selection_end)
             .map(|r| r.into())
@@ -1378,7 +1463,7 @@ impl BufferContext {
         match self.selection {
             None => {
                 let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
-                let mut alt = Secondary::new(alt, &mut bookmarks, |a| a >= self.cursor);
+                let mut alt = Secondary::ge(alt, &mut bookmarks, self.cursor);
                 if let Ok(line_start) = rope
                     .try_char_to_line(self.cursor)
                     .and_then(|line| rope.try_line_to_char(line))
@@ -1391,7 +1476,7 @@ impl BufferContext {
             selection_opt @ Some(selection) => {
                 let (start, end) = reorder(self.cursor, selection);
                 let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
-                let mut alt = Secondary::new(alt, &mut bookmarks, |a| a >= start);
+                let mut alt = Secondary::ge(alt, &mut bookmarks, start);
                 let indent_lines = selected_lines(&rope, self.cursor, selection_opt)
                     .filter(|l| l.end > l.start)
                     .collect::<Vec<_>>();
@@ -1427,7 +1512,7 @@ impl BufferContext {
         match self.selection {
             None => {
                 let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
-                let mut alt = Secondary::new(alt, &mut bookmarks, |a| a >= self.cursor);
+                let mut alt = Secondary::ge(alt, &mut bookmarks, self.cursor);
 
                 if let Some(line_start) = rope
                     .try_char_to_line(self.cursor)
@@ -1460,7 +1545,7 @@ impl BufferContext {
             selection_opt @ Some(selection) => {
                 let (start, end) = reorder(self.cursor, selection);
                 let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
-                let mut alt = Secondary::new(alt, &mut bookmarks, |a| a >= self.cursor);
+                let mut alt = Secondary::ge(alt, &mut bookmarks, self.cursor);
 
                 let unindent_lines = selected_lines(&rope, self.cursor, selection_opt)
                     .filter(|l| l.end > l.start)
@@ -1712,7 +1797,7 @@ impl BufferContext {
     ) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
-        let mut alt = Secondary::new(alt, &mut bookmarks, |_| true);
+        let mut alt = Secondary::new(alt, &mut bookmarks);
 
         loop {
             match matches {
@@ -1762,7 +1847,7 @@ impl BufferContext {
     ) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
-        let mut alt = Secondary::new(alt, &mut bookmarks, |_| true);
+        let mut alt = Secondary::new(alt, &mut bookmarks);
 
         loop {
             match matches {
@@ -1799,7 +1884,7 @@ impl BufferContext {
     ) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
-        let mut alt = Secondary::new(alt, &mut bookmarks, |_| true);
+        let mut alt = Secondary::new(alt, &mut bookmarks);
 
         loop {
             match matches {
@@ -1828,7 +1913,7 @@ impl BufferContext {
     pub fn multi_backspace(&mut self, alt: Option<AltCursor<'_>>, mut matches: &mut [MultiCursor]) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
-        let mut alt = Secondary::new(alt, &mut bookmarks, |_| true);
+        let mut alt = Secondary::new(alt, &mut bookmarks);
 
         loop {
             match matches {
@@ -1853,7 +1938,7 @@ impl BufferContext {
     pub fn multi_delete(&mut self, alt: Option<AltCursor<'_>>, mut matches: &mut [MultiCursor]) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, mut bookmarks) = buf.rope_bookmarks_mut();
-        let mut alt = Secondary::new(alt, &mut bookmarks, |_| true);
+        let mut alt = Secondary::new(alt, &mut bookmarks);
 
         loop {
             match matches {
@@ -2066,73 +2151,6 @@ impl BufferContext {
 pub struct AltCursor<'b> {
     cursor: &'b mut usize,
     selection: &'b mut Option<usize>,
-}
-
-/// A secondary cursor which implements various math operations
-struct Secondary<'b, 'm> {
-    cursor_selection: Option<(&'b mut usize, Option<&'b mut usize>)>,
-    bookmarks: &'m mut [usize],
-}
-
-impl<'b, 'm> Secondary<'b, 'm> {
-    /// Takes some optional alternative cursor
-    /// and a conditional which takes that cursor's position and
-    /// returns true if the secondary cursor should be manipulated
-    /// and returns ourself, which implements necessary math operations.
-    fn new(
-        alt: Option<AltCursor<'b>>,
-        mut bookmarks: &'m mut [usize],
-        mut f: impl FnMut(usize) -> bool,
-    ) -> Self {
-        // we can get away with the because f() always does
-        // ordering comparisons (>= or >) and bookmarks
-        // is always in order
-        while let Some(first) = bookmarks.first()
-            && !f(*first)
-        {
-            let _ = bookmarks.split_off_first_mut();
-        }
-
-        match alt {
-            None => Self {
-                cursor_selection: None,
-                bookmarks,
-            },
-            Some(alt) => Self {
-                cursor_selection: f(*alt.cursor)
-                    .then_some((alt.cursor, alt.selection.as_mut().filter(|s| f(**s)))),
-                bookmarks,
-            },
-        }
-    }
-
-    /// Updates secondary cursor in-place, if available
-    fn update(&mut self, mut f: impl FnMut(&mut usize)) {
-        if let Some((cursor, selection)) = &mut self.cursor_selection {
-            f(cursor);
-
-            if let Some(selection) = selection {
-                f(selection);
-            }
-        }
-        self.bookmarks.iter_mut().for_each(f);
-    }
-}
-
-impl std::ops::AddAssign<usize> for Secondary<'_, '_> {
-    fn add_assign(&mut self, rhs: usize) {
-        self.update(|c| {
-            *c += rhs;
-        })
-    }
-}
-
-impl std::ops::SubAssign<usize> for Secondary<'_, '_> {
-    fn sub_assign(&mut self, rhs: usize) {
-        self.update(|c| {
-            *c -= rhs;
-        })
-    }
 }
 
 pub struct MultiCursor {
@@ -2850,7 +2868,7 @@ fn perform_surround(
 ) {
     {
         let (start_pos, end_pos) = reorder(&mut *cursor, selection);
-        let mut alt = Secondary::new(alt, bookmarks, |a| a >= *start_pos);
+        let mut alt = Secondary::ge(alt, bookmarks, *start_pos);
         let _ = rope.try_insert_char(*end_pos, end);
         let _ = rope.try_insert_char(*start_pos, start);
         alt.update(|pos| *pos += if *pos > *end_pos { 2 } else { 1 });
@@ -2870,7 +2888,7 @@ fn delete_surround<'s, 'm>(
     bookmarks: &'m mut [usize],
 ) -> Result<(), Secondary<'s, 'm>> {
     let (start, end) = reorder(&mut *cursor, selection);
-    let mut alt = Secondary::new(alt, bookmarks, |a| a >= *start);
+    let mut alt = Secondary::ge(alt, bookmarks, *start);
 
     if let Some(prev_pos) = start.checked_sub(1)
         && let Some(prev_char) = rope.get_char(prev_pos)
