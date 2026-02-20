@@ -14,7 +14,9 @@ mod c;
 mod cpp;
 mod css;
 mod csv;
+mod cue;
 mod fish;
+mod flac;
 mod go;
 mod html;
 mod ini;
@@ -300,6 +302,8 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("swift") => Box::new(swift::Swift),
         Some("pl" | "pm") => Box::new(perl::Perl),
         Some("tex") => Box::new(tex::Tex),
+        Some("ana") => Box::new(flac::Analysis),
+        Some("cue" | "CUE") => Box::new(cue::Cuesheet),
         _ => Box::new(DefaultHighlighter),
     }
 }
