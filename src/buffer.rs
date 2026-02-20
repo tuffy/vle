@@ -3389,11 +3389,12 @@ impl StatefulWidget for BufferWidget<'_> {
 
         // Takes syntaxed-colorized line of text along with
         // highlighted match ranges (in ascending order)
-        // and returns text in those ranges highlighted in blue
-        fn highlight_matches<'s>(
+        // and returns text in those ranges highlighted in some style
+        fn highlight_matches<'s, T: Copy>(
             colorized: Vec<Span<'s>>,
             line_range: RangeInclusive<usize>,
-            matches: &mut VecDeque<(Range<usize>, Style)>,
+            matches: &mut VecDeque<(Range<usize>, T)>,
+            apply: impl Fn(Span<'s>, T) -> Span<'s>,
         ) -> Vec<Span<'s>> {
             // A trivial abstraction to make working
             // simultaneously with both line and match ranges
@@ -3487,7 +3488,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     &mut colorized,
                     match_range.take_both(&mut line_range, match_range.remaining()),
                     &mut highlighted,
-                    |span| span.style(highlight),
+                    |span| apply(span, highlight),
                 );
 
                 // push any remaining partial match back into VecDeque
@@ -3889,6 +3890,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                     ),
                                     range,
                                     &mut matches,
+                                    |span, hl| span.style(hl),
                                 )
                                 .into()
                             },
@@ -3917,6 +3919,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                             ),
                                             range.clone(),
                                             &mut matches,
+                                            |span, hl| span.style(hl),
                                         ),
                                         range.clone(),
                                         (selection_start, selection_end),
@@ -3931,18 +3934,25 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
             Some(EditorMode::ReplaceMatches { matches, .. }) => {
-                let mut cursors = matches
+                let (mut cursors, mut ranges): (VecDeque<_>, _) = matches
                     .iter()
-                    .filter(|m| m.cursor() != state.cursor)
                     .map(|m| {
                         (
-                            m.cursor()..m.cursor() + 1,
-                            Style::new()
-                                .fg(Color::Blue)
-                                .add_modifier(Modifier::REVERSED),
+                            (
+                                m.cursor..m.cursor + 1,
+                                Style::new()
+                                    .fg(Color::Blue)
+                                    .add_modifier(Modifier::REVERSED),
+                            ),
+                            (
+                                m.range.clone(),
+                                Style::new().underlined().underline_color(Color::Blue),
+                            ),
                         )
                     })
-                    .collect();
+                    .unzip();
+
+                cursors.retain(|(r, _)| r.start != state.cursor);
 
                 EditorLine::iter(rope, viewport_line)
                     .map(
@@ -3951,15 +3961,23 @@ impl StatefulWidget for BufferWidget<'_> {
                              range,
                              number,
                          }| {
+                            let whole_range = widen_range(range);
+
                             highlight_matches(
-                                widen(colorize(
-                                    syntax,
-                                    &mut hlstate,
-                                    line,
-                                    current_line == Some(number),
-                                )),
-                                widen_range(range),
+                                highlight_matches(
+                                    widen(colorize(
+                                        syntax,
+                                        &mut hlstate,
+                                        line,
+                                        current_line == Some(number),
+                                    )),
+                                    whole_range.clone(),
+                                    &mut ranges,
+                                    |span, hl| span.patch_style(hl),
+                                ),
+                                whole_range,
                                 &mut cursors,
+                                |span, hl| span.style(hl),
                             )
                             .into()
                         },
