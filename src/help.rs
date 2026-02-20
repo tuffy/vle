@@ -264,6 +264,7 @@ pub static BROWSE_MATCHES: &[Keybinding] = &[
     none(&[UP, DOWN], "Select Match"),
     none(&["Del"], "Remove Match"),
     ctrl_f(&["R"], "F6", "Replace Matches"),
+    ctrl(&["U"], "Update Matches"),
     ctrl(&["B"], "Bookmark Matches"),
     none(&["Enter"], "Finish"),
 ];

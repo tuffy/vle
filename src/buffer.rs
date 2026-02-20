@@ -703,6 +703,10 @@ impl BufferContext {
         self.cursor = cursor;
     }
 
+    pub fn clear_selection(&mut self) {
+        self.selection = None;
+    }
+
     pub fn set_selection(&mut self, start: usize, end: usize) {
         assert!(end >= start);
         let buf = self.buffer.borrow();
@@ -2232,6 +2236,15 @@ impl From<usize> for MultiCursor {
     }
 }
 
+impl From<Range<usize>> for MultiCursor {
+    fn from(range: Range<usize>) -> Self {
+        Self {
+            cursor: range.end,
+            range,
+        }
+    }
+}
+
 impl std::ops::AddAssign<usize> for MultiCursor {
     fn add_assign(&mut self, chars: usize) {
         self.range.start += chars;
@@ -3715,10 +3728,7 @@ impl StatefulWidget for BufferWidget<'_> {
             } else {
                 Line::from(vec![
                     Span::raw("\u{2524}"),
-                    Span::styled(
-                        bookmarks.to_string(),
-                        Style::default().bg(Color::Cyan),
-                    ),
+                    Span::styled(bookmarks.to_string(), Style::default().bg(Color::Cyan)),
                     Span::raw("\u{251c}"),
                 ])
                 .right_aligned()

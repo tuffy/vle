@@ -387,6 +387,21 @@ impl Editor {
                                     groups: groups.into(),
                                 }
                             }
+                            NextModeBrowse::Update => {
+                                buf.set_cursor(matches[*match_idx].0.end);
+                                buf.clear_selection();
+
+                                let (matches, groups): (_, Vec<Vec<_>>) = std::mem::take(matches)
+                                    .into_iter()
+                                    .map(|(r, c)| (r.into(), c))
+                                    .unzip();
+
+                                EditorMode::ReplaceMatches {
+                                    matches,
+                                    match_idx: std::mem::take(match_idx),
+                                    groups: groups.into(),
+                                }
+                            }
                         };
                     }
                 }
@@ -1226,6 +1241,7 @@ fn process_search(
 enum NextModeBrowse {
     Default,
     Replace,
+    Update,
 }
 
 fn process_browse_matches<P>(
@@ -1293,6 +1309,7 @@ fn process_browse_matches<P>(
         }
         key!(Enter) => Some(NextModeBrowse::Default),
         key!(CONTROL, 'r') | key!(F(6)) => Some(NextModeBrowse::Replace),
+        key!(CONTROL, 'u') => Some(NextModeBrowse::Update),
         key!(CONTROL, 'b') => {
             buffer.toggle_bookmarks(matches.iter().map(|(m, _)| m.start));
             None
