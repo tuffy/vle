@@ -3700,6 +3700,28 @@ impl StatefulWidget for BufferWidget<'_> {
             None => block,
         };
 
+        let block = match buffer.bookmarks.len() {
+            0 => block,
+            bookmarks => block.title_top(if self.mode.is_some() {
+                Line::from(vec![
+                    Span::raw("\u{252b}"),
+                    Span::styled(
+                        bookmarks.to_string(),
+                        Style::default().bold().bg(Color::Yellow),
+                    ),
+                    Span::raw("\u{2523}"),
+                ])
+                .right_aligned()
+            } else {
+                Line::from(vec![
+                    Span::raw("\u{2524}"),
+                    Span::raw(bookmarks.to_string()),
+                    Span::raw("\u{251c}"),
+                ])
+                .right_aligned()
+            }),
+        };
+
         let block = block.title_top(
             border_title(
                 match self.mode {
