@@ -180,6 +180,7 @@ pub static F10_SPLIT: Keybinding = ctrl_f(&["N"], "F10", "Un-Split Pane");
 pub static EDITING_2: &[Keybinding] = &[
     ctrl_f(&["L"], "F11", "Reload File"),
     ctrl_f(&["Q"], "F12", "Quit File"),
+    ctrl_f(&["B"], "Ins", "Toggle Bookmark"),
     Keybinding {
         modifier: Some("Shift"),
         keys: &[LEFT, DOWN, UP, RIGHT],
@@ -189,7 +190,6 @@ pub static EDITING_2: &[Keybinding] = &[
     ctrl(&["Home", "End"], "Start / End of Selection"),
     ctrl(&["X", "C", "V"], "Cut / Copy / Paste"),
     ctrl(&["Z", "Y"], "Undo / Redo"),
-    ctrl(&["B"], "Toggle Bookmark"),
     ctrl(&["PgUp", "PgDn"], "Switch File"),
 ];
 
@@ -263,9 +263,9 @@ pub static CREATE_FILE: &[Keybinding] = &[
 pub static BROWSE_MATCHES: &[Keybinding] = &[
     none(&[UP, DOWN], "Select Match"),
     none(&["Del"], "Remove Match"),
+    ctrl_f(&["U"], "Spc", "Update Matches"),
     ctrl_f(&["R"], "F6", "Replace Matches"),
-    ctrl(&["U"], "Update Matches"),
-    ctrl(&["B"], "Bookmark Matches"),
+    ctrl_f(&["B"], "Ins", "Bookmark Matches"),
     none(&["Enter"], "Finish"),
 ];
 
