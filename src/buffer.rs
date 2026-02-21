@@ -438,12 +438,6 @@ mod private {
         }
     }
 
-    impl Drop for BookmarksHandle<'_> {
-        fn drop(&mut self) {
-            self.0.dedup();
-        }
-    }
-
     /// A secondary cursor which implements various math operations
     pub struct Secondary<'b, 'm> {
         cursor_selection: Option<(&'b mut usize, Option<&'b mut usize>)>,
