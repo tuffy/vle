@@ -3922,7 +3922,18 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
         }
-        marks.retain(|p| p.position != state.cursor);
+
+        match self.mode {
+            Some(EditorMode::SelectLine { .. }) => {
+                if let Ok(pos) = marks.binary_search_by_key(&state.cursor, |b| b.position) {
+                    marks[pos].color = Color::Yellow;
+                }
+            }
+            _ => {
+                marks.retain(|p| p.position != state.cursor);
+            }
+        }
+
         let mut marks = marks.into();
 
         Clear.render(text_area, buf);
