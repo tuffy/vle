@@ -272,6 +272,7 @@ pub static BROWSE_MATCHES: &[Keybinding] = &[
 pub static REPLACE_MATCHES: &[Keybinding] = &[
     none(&[UP, DOWN], "Select Match"),
     none(&["Home", "End"], "Start / End of Match"),
+    ctrl_f(&["B"], "Ins", "Bookmark Positions"),
     ctrl(&["V"], "Paste From Cut Buffer"),
     none(&["Enter"], "Finish Replacement"),
 ];

@@ -1368,6 +1368,10 @@ fn process_replace_matches(
             buffer.multi_cursor_end(matches);
             None
         }
+        key!(CONTROL, 'b') | key!(Insert) => {
+            buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));
+            None
+        }
         Event::Key(KeyEvent {
             code: KeyCode::Up,
             modifiers: KeyModifiers::NONE,
