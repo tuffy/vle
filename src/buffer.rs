@@ -541,6 +541,13 @@ mod private {
             }
             range
         }
+
+        /// Increments our position by chars
+        /// returns chars unchanged
+        pub fn inc(&mut self, chars: usize) -> usize {
+            self.update(|a| *a += chars);
+            chars
+        }
     }
 
     impl std::ops::AddAssign<usize> for Secondary<'_, '_> {
@@ -1132,9 +1139,8 @@ impl BufferContext {
                     );
                     self.selection = None;
                     rope.insert_char(self.cursor, c);
-                    self.cursor += 1;
+                    self.cursor += alt.inc(1);
                     self.cursor_column += c.width().unwrap_or(1);
-                    alt += 1;
                 }
             },
             None => {
@@ -1159,8 +1165,7 @@ impl BufferContext {
                     let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
                     let mut alt = Secondary::ge(alt, bookmarks, self.cursor);
                     if rope.try_insert(self.cursor, &pasted.data).is_ok() {
-                        self.cursor += pasted.chars_len;
-                        alt += pasted.chars_len;
+                        self.cursor += alt.inc(pasted.chars_len);
                         self.cursor_column = cursor_column(&rope, self.cursor);
                     }
                 }
@@ -1241,17 +1246,14 @@ impl BufferContext {
         // instead of adding a fresh indentation
         if all_indent {
             rope.insert_char(self.cursor - indent, '\n');
-            self.cursor += 1;
-            alt += 1;
+            self.cursor += alt.inc(1);
         } else {
             rope.insert_char(self.cursor, '\n');
-            self.cursor += 1;
-            alt += 1;
+            self.cursor += alt.inc(1);
             self.cursor_column = 0;
             for _ in 0..indent {
                 rope.insert_char(self.cursor, indent_char);
-                self.cursor += 1;
-                alt += 1;
+                self.cursor += alt.inc(1);
                 self.cursor_column += 1;
             }
         }
