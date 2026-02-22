@@ -421,8 +421,12 @@ mod private {
     pub struct BookmarksHandle<'m>(&'m mut Vec<usize>);
 
     impl BookmarksHandle<'_> {
-        pub fn retain(&mut self, f: impl FnMut(&usize) -> bool) {
-            self.0.retain(f)
+        pub fn extract_if<F, R>(&mut self, range: R, filter: F) -> impl Iterator<Item = usize>
+        where
+            F: FnMut(&mut usize) -> bool,
+            R: std::ops::RangeBounds<usize>,
+        {
+            self.0.extract_if(range, filter)
         }
     }
 
@@ -530,7 +534,11 @@ mod private {
 
         /// Removes bookmarks in range and returns range unchanged
         pub fn remove<R: std::ops::RangeBounds<usize>>(&mut self, range: R) -> R {
-            self.bookmarks.retain(|b| !range.contains(b));
+            if let Some(offset) = self.offset {
+                self.bookmarks
+                    .extract_if(offset.., |b| range.contains(b))
+                    .for_each(drop);
+            }
             range
         }
     }
