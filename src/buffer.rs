@@ -342,11 +342,13 @@ mod private {
             let mut buf = self.0.borrow_mut();
             if let None | Some(Undo { finished: true, .. }) = buf.undo.last() {
                 let rope = buf.rope.clone();
+                let bookmarks = buf.bookmarks.clone();
                 buf.undo.push(Undo {
                     state: BufferState {
                         rope,
                         cursor,
                         cursor_column,
+                        bookmarks,
                     },
                     finished: false,
                 });
@@ -391,7 +393,7 @@ mod private {
         }
     }
 
-    #[derive(Default)]
+    #[derive(Clone, Default)]
     pub struct Bookmarks(Vec<usize>);
 
     impl Bookmarks {
@@ -1430,6 +1432,7 @@ impl BufferContext {
             Some(Undo { mut state, .. }) => {
                 use std::ops::DerefMut;
                 std::mem::swap(buf.rope.get_mut().deref_mut(), &mut state.rope);
+                std::mem::swap(&mut buf.bookmarks, &mut state.bookmarks);
                 std::mem::swap(&mut self.cursor, &mut state.cursor);
                 std::mem::swap(&mut self.cursor_column, &mut state.cursor_column);
                 buf.redo.push(state);
@@ -1447,6 +1450,7 @@ impl BufferContext {
             Some(mut state) => {
                 use std::ops::DerefMut;
                 std::mem::swap(buf.rope.get_mut().deref_mut(), &mut state.rope);
+                std::mem::swap(&mut buf.bookmarks, &mut state.bookmarks);
                 std::mem::swap(&mut self.cursor, &mut state.cursor);
                 std::mem::swap(&mut self.cursor_column, &mut state.cursor_column);
                 buf.undo.push(Undo {
@@ -4404,6 +4408,7 @@ struct BufferState {
     rope: ropey::Rope,
     cursor: usize,
     cursor_column: usize,
+    bookmarks: private::Bookmarks,
 }
 
 struct Undo {
