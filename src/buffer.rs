@@ -469,7 +469,12 @@ mod private {
             bookmarks: BookmarksHandle<'m>,
             cursor: usize,
         ) -> Self {
-            Self::filtered(alt, bookmarks, |a| a >= cursor)
+            Self::filtered(
+                alt,
+                bookmarks.iter().position(|pos| *pos >= cursor),
+                bookmarks,
+                |a| a >= cursor,
+            )
         }
 
         /// Constrained to values greater than or equal to the cursor
@@ -478,18 +483,20 @@ mod private {
             bookmarks: BookmarksHandle<'m>,
             cursor: usize,
         ) -> Self {
-            Self::filtered(alt, bookmarks, |a| a > cursor)
+            Self::filtered(
+                alt,
+                bookmarks.iter().position(|pos| *pos >= cursor),
+                bookmarks,
+                |a| a > cursor,
+            )
         }
 
         fn filtered(
             alt: Option<AltCursor<'b>>,
+            offset: Option<usize>,
             bookmarks: BookmarksHandle<'m>,
             mut f: impl FnMut(usize) -> bool,
         ) -> Self {
-            // f is always a comparison and bookmarks are always in order,
-            // so we can set offset to the first place where the comparison is true
-            let offset = bookmarks.iter().position(|pos| f(*pos));
-
             match alt {
                 None => Self {
                     cursor_selection: None,
