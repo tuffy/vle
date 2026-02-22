@@ -15,6 +15,7 @@ mod editor;
 mod endings;
 mod files;
 mod help;
+mod key;
 mod prompt;
 mod syntax;
 

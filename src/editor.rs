@@ -8,12 +8,14 @@
 
 #[cfg(feature = "ssh")]
 use crate::files::{EitherSource, SshSource};
+use crate::key;
 use crate::{
     buffer::{
         AltCursor, BufferContext, BufferId, BufferList, CutBuffer, MatchCapture, MultiCursor,
         SelectionRange, Source,
     },
     files::{ChooserSource, FileChooserState, LocalSource},
+    key::Binding,
     prompt::{LinePrompt, TextField},
 };
 use crossterm::event::Event;
@@ -118,6 +120,24 @@ impl From<Vec<Vec<Option<MatchCapture>>>> for CaptureGroups {
             Some(total) => CaptureGroups::Some { total, groups },
         }
     }
+}
+
+macro_rules! keybind {
+    ($bind:ident) => {
+        Event::Key(
+            KeyEvent {
+                code: key::$bind::PRIMARY_KEY,
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            } | KeyEvent {
+                code: key::$bind::SECONDARY_KEY,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                ..
+            },
+        )
+    };
 }
 
 macro_rules! key {
@@ -493,7 +513,7 @@ impl Editor {
         };
 
         match event {
-            key!(CONTROL, 'q') | key!(F(12)) => {
+            keybind!(Quit) => {
                 if let Some(buf) = self.layout.selected_buffer_list().current() {
                     if buf.modified() {
                         self.mode = EditorMode::ConfirmClose { buffer: buf.id() };
@@ -504,7 +524,7 @@ impl Editor {
             }
             key!(CONTROL, PageUp) => self.layout.previous_buffer(),
             key!(CONTROL, PageDown) => self.layout.next_buffer(),
-            key!(CONTROL, 'n') | key!(F(10)) => match &mut self.layout {
+            keybind!(SplitPane) => match &mut self.layout {
                 Layout::Vertical {
                     left: buf,
                     right: alt,
@@ -619,7 +639,7 @@ impl Editor {
             key!(Backspace) => self.update_buffer_at(|b, a| b.backspace(a)),
             key!(Delete) => self.update_buffer_at(|b, a| b.delete(a)),
             key!(Enter) => self.update_buffer_at(|b, a| b.newline(a)),
-            key!(CONTROL, 'w') | key!(F(9)) => self.update_buffer(|b| b.select_word_or_lines()),
+            keybind!(WidenSelection) => self.update_buffer(|b| b.select_word_or_lines()),
             key!(CONTROL, 'x') => self.perform_cut(),
             key!(CONTROL, 'c') => self.perform_copy(),
             key!(CONTROL, 'v') => {
@@ -639,26 +659,26 @@ impl Editor {
             }
             key!(CONTROL, 'z') => self.update_buffer(|b| b.perform_undo()),
             key!(CONTROL, 'y') => self.update_buffer(|b| b.perform_redo()),
-            key!(CONTROL, 's') | key!(F(3)) => {
+            keybind!(Save) => {
                 if let Some(Err(crate::buffer::Modified)) = self.on_buffer(|b| b.verified_save()) {
                     self.mode = EditorMode::VerifySave;
                 }
             }
             key!(Tab) => self.update_buffer_at(|b, a| b.indent(a)),
             key!(SHIFT, BackTab) => self.update_buffer_at(|b, a| b.un_indent(a)),
-            key!(CONTROL, 'p') | key!(F(7)) => self.update_buffer(|b| b.select_matching_paren()),
-            key!(CONTROL, 'b') | key!(Insert) => self.update_buffer(|b| b.toggle_bookmark()),
-            key!(CONTROL, 'e') | key!(F(8)) => {
+            keybind!(GotoPair) => self.update_buffer(|b| b.select_matching_paren()),
+            keybind!(Bookmark) => self.update_buffer(|b| b.toggle_bookmark()),
+            keybind!(SelectInside) => {
                 if let Some(Err(())) = self.on_buffer(|b| b.try_auto_pair()) {
                     self.mode = EditorMode::SelectInside;
                 }
             }
-            key!(CONTROL, 't') | key!(F(4)) => {
+            keybind!(GotoLine) => {
                 self.mode = EditorMode::SelectLine {
                     prompt: LinePrompt::default(),
                 };
             }
-            key!(CONTROL, 'f') | key!(F(5)) => {
+            keybind!(Find) => {
                 if let Some(Ok(find)) = self.on_buffer(|b| match b.selection_range() {
                     Some(SelectionType::Term(selection)) => {
                         b.all_matches(None, selection).map(|(match_idx, matches)| {
@@ -680,7 +700,7 @@ impl Editor {
                 }
             }
             #[cfg(not(feature = "ssh"))]
-            key!(CONTROL, 'o') | key!(F(2)) => match FileChooserState::new(LocalSource) {
+            keybind!(Open) => match FileChooserState::new(LocalSource) {
                 Ok(chooser) => {
                     self.mode = EditorMode::Open {
                         chooser: Box::new(chooser),
@@ -691,7 +711,7 @@ impl Editor {
                 }
             },
             #[cfg(feature = "ssh")]
-            key!(CONTROL, 'o') => match self.remote.as_ref() {
+            keybind!(Open) => match self.remote.as_ref() {
                 None => match FileChooserState::new(EitherSource::Local(LocalSource)) {
                     Ok(chooser) => {
                         self.mode = EditorMode::Open {
@@ -718,7 +738,7 @@ impl Editor {
                     }
                 },
             },
-            key!(CONTROL, 'l') | key!(F(11)) => {
+            keybind!(Reload) => {
                 if let Some(new_mode) = self.on_buffer_at(|b, a| {
                     if b.modified() {
                         EditorMode::VerifyReload
@@ -1057,7 +1077,7 @@ fn process_select_line(
             buffer.select_line(buffer.last_line());
             Some(EditorMode::default())
         }
-        key!(CONTROL, 'f') | key!(F(5)) => Some(EditorMode::Search {
+        keybind!(Find) => Some(EditorMode::Search {
             prompt: TextField::default(),
             type_: SearchType::default(),
             range: None,
@@ -1220,7 +1240,7 @@ fn process_search(
                 }
             },
         },
-        key!(CONTROL, 't') | key!(F(4)) => Some(NextModeIncremental::SelectLine),
+        keybind!(GotoLine) => Some(NextModeIncremental::SelectLine),
         key!(CONTROL, 'f') => {
             if prompt.is_empty()
                 && let Some(last) = last_search
@@ -1308,9 +1328,9 @@ fn process_browse_matches<P>(
             }
         }
         key!(Enter) => Some(NextModeBrowse::Default),
-        key!(CONTROL, 'r') | key!(F(6)) => Some(NextModeBrowse::Replace),
-        key!(CONTROL, 'u') | key!(' ') => Some(NextModeBrowse::Update),
-        key!(CONTROL, 'b') | key!(Insert) => {
+        keybind!(Replace) => Some(NextModeBrowse::Replace),
+        keybind!(UpdateMatches) => Some(NextModeBrowse::Update),
+        keybind!(Bookmark) => {
             buffer.toggle_bookmarks(matches.iter().map(|(m, _)| m.start));
             None
         }
@@ -1368,7 +1388,7 @@ fn process_replace_matches(
             buffer.multi_cursor_end(matches);
             None
         }
-        key!(CONTROL, 'b') | key!(Insert) => {
+        keybind!(Bookmark) => {
             buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));
             None
         }

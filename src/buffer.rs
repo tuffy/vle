@@ -704,14 +704,10 @@ pub enum WholeSelect {
 
 impl From<WholeSelect> for crate::help::Keybinding {
     fn from(mode: WholeSelect) -> Self {
-        crate::help::ctrl_f(
-            &["W"],
-            "F9",
-            match mode {
-                WholeSelect::Word => "Select Word",
-                WholeSelect::Lines => "Widen Selection to Lines",
-            },
-        )
+        crate::help::keybind::<crate::key::WidenSelection>(match mode {
+            WholeSelect::Word => "Select Word",
+            WholeSelect::Lines => "Widen Selection to Lines",
+        })
     }
 }
 
@@ -723,15 +719,11 @@ pub enum FindMode {
 
 impl From<FindMode> for crate::help::Keybinding {
     fn from(mode: FindMode) -> Self {
-        crate::help::ctrl_f(
-            &["F"],
-            "F5",
-            match mode {
-                FindMode::WholeFile => "Find in File",
-                FindMode::Selected => "Find Selected Text",
-                FindMode::InSelection => "Find in Selected Lines",
-            },
-        )
+        crate::help::keybind::<crate::key::Find>(match mode {
+            FindMode::WholeFile => "Find in File",
+            FindMode::Selected => "Find Selected Text",
+            FindMode::InSelection => "Find in Selected Lines",
+        })
     }
 }
 
@@ -4145,20 +4137,17 @@ impl StatefulWidget for BufferWidget<'_> {
                     use crate::editor::EditorLayout;
                     use crate::help::{
                         EDITING_0, EDITING_1, EDITING_2, F10_SPLIT, F10_UNSPLIT,
-                        SWITCH_PANE_HORIZONTAL, SWITCH_PANE_VERTICAL, ctrl_f,
+                        SWITCH_PANE_HORIZONTAL, SWITCH_PANE_VERTICAL, keybind,
                     };
+                    use crate::key::GotoLine;
 
                     let mut help = Vec::with_capacity(16);
                     help.extend(EDITING_0);
-                    help.push(ctrl_f(
-                        &["T"],
-                        "F4",
-                        if has_bookmarks {
-                            "Goto Line / Bookmark"
-                        } else {
-                            "Goto Line"
-                        },
-                    ));
+                    help.push(keybind::<GotoLine>(if has_bookmarks {
+                        "Goto Line / Bookmark"
+                    } else {
+                        "Goto Line"
+                    }));
                     help.push(find.into());
                     help.extend(EDITING_1);
                     help.push(select.into());
@@ -4230,7 +4219,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(EditorMode::Search { prompt, type_, .. }) => {
-                use crate::help::{ctrl, ctrl_f, none};
+                use crate::help::{ctrl, keybind, none};
 
                 render_help(
                     text_area,
@@ -4244,15 +4233,11 @@ impl StatefulWidget for BufferWidget<'_> {
                                 SearchType::Regex => "Plain Text Find",
                             },
                         ),
-                        ctrl_f(&["T"], "F4", "Goto Line"),
-                        ctrl_f(
-                            &["F"],
-                            "F5",
-                            match prompt.is_empty() {
-                                true => "Redo Last Find",
-                                false => "Begin New Find",
-                            },
-                        ),
+                        keybind::<crate::key::GotoLine>("Goto Line"),
+                        keybind::<crate::key::Find>(match prompt.is_empty() {
+                            true => "Redo Last Find",
+                            false => "Begin New Find",
+                        }),
                         none(&["Enter"], "Browse All Matches"),
                         none(&["Esc"], "Cancel"),
                     ],

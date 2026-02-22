@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use crate::key;
 use ratatui::widgets::Block;
 
 #[derive(Copy, Clone)]
@@ -25,16 +26,12 @@ pub const fn ctrl(keys: &'static [&'static str], action: &'static str) -> Keybin
     }
 }
 
-pub const fn ctrl_f(
-    keys: &'static [&'static str],
-    f: &'static str,
-    action: &'static str,
-) -> Keybinding {
+pub const fn keybind<B: key::Binding>(action: &'static str) -> Keybinding {
     Keybinding {
         modifier: Some("Ctrl"),
-        keys,
+        keys: &[B::PRIMARY_LABEL],
         action,
-        f,
+        f: B::SECONDARY_LABEL,
     }
 }
 
@@ -164,23 +161,23 @@ static LEFT: &str = "\u{2190}";
 static RIGHT: &str = "\u{2192}";
 
 pub static EDITING_0: &[Keybinding] = &[
-    ctrl_f(&["O"], "F2", "Open File"),
-    ctrl_f(&["S"], "F3", "Save File"),
+    keybind::<key::Open>("Open File"),
+    keybind::<key::Save>("Save File"),
 ];
 
 pub static EDITING_1: &[Keybinding] = &[
     // F6 is for replace text
-    ctrl_f(&["P"], "F7", "Goto Matching Pair"),
-    ctrl_f(&["E"], "F8", "Select Inside Pair"),
+    keybind::<key::GotoPair>("Goto Matching Pair"),
+    keybind::<key::SelectInside>("Select Inside Pair"),
 ];
 
-pub static F10_UNSPLIT: Keybinding = ctrl_f(&["N"], "F10", "Split Pane");
-pub static F10_SPLIT: Keybinding = ctrl_f(&["N"], "F10", "Un-Split Pane");
+pub static F10_UNSPLIT: Keybinding = keybind::<key::SplitPane>("Split Pane");
+pub static F10_SPLIT: Keybinding = keybind::<key::SplitPane>("Un-Split Pane");
 
 pub static EDITING_2: &[Keybinding] = &[
-    ctrl_f(&["L"], "F11", "Reload File"),
-    ctrl_f(&["Q"], "F12", "Quit File"),
-    ctrl_f(&["B"], "Ins", "Toggle Bookmark"),
+    keybind::<key::Reload>("Reload File"),
+    keybind::<key::Quit>("Quit File"),
+    keybind::<key::Bookmark>("Toggle Bookmark"),
     Keybinding {
         modifier: Some("Shift"),
         keys: &[LEFT, DOWN, UP, RIGHT],
@@ -231,7 +228,7 @@ pub static SELECT_LINE: &[Keybinding] = &[
     none(&["Enter"], "Select Line"),
     none(&["Home"], "Goto First Line"),
     none(&["End"], "Goto Last Line"),
-    ctrl_f(&["F"], "F5", "Find Text"),
+    keybind::<key::Find>("Find Text"),
     none(&["Esc"], "Cancel"),
 ];
 
@@ -241,7 +238,7 @@ pub static SELECT_LINE_BOOKMARKED: &[Keybinding] = &[
     none(&["End"], "Goto Last Line"),
     none(&[UP, DOWN], "Select Bookmark"),
     none(&["Del"], "Delete Bookmark"),
-    ctrl_f(&["F"], "F5", "Find Text"),
+    keybind::<key::Find>("Find Text"),
     none(&["Esc"], "Cancel"),
 ];
 
@@ -263,16 +260,16 @@ pub static CREATE_FILE: &[Keybinding] = &[
 pub static BROWSE_MATCHES: &[Keybinding] = &[
     none(&[UP, DOWN], "Select Match"),
     none(&["Del"], "Remove Match"),
-    ctrl_f(&["U"], "Spc", "Update Matches"),
-    ctrl_f(&["R"], "F6", "Replace Matches"),
-    ctrl_f(&["B"], "Ins", "Bookmark Matches"),
+    keybind::<key::UpdateMatches>("Update Matches"),
+    keybind::<key::Replace>("Replace Matches"),
+    keybind::<key::Bookmark>("Bookmark Matches"),
     none(&["Enter"], "Finish"),
 ];
 
 pub static REPLACE_MATCHES: &[Keybinding] = &[
     none(&[UP, DOWN], "Select Match"),
     none(&["Home", "End"], "Start / End of Match"),
-    ctrl_f(&["B"], "Ins", "Bookmark Positions"),
+    keybind::<key::Bookmark>("Bookmark Positions"),
     ctrl(&["V"], "Paste From Cut Buffer"),
     none(&["Enter"], "Finish Replacement"),
 ];
