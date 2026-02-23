@@ -237,7 +237,7 @@ impl Source {
 }
 
 mod private {
-    use crate::buffer::{AltCursor, Buffer};
+    use crate::buffer::{AltCursor, Buffer, Toggle};
     use std::cell::{Ref, RefCell, RefMut};
     use std::ops::{Deref, DerefMut};
     use std::rc::Rc;
@@ -397,24 +397,62 @@ mod private {
     pub struct Bookmarks(Vec<usize>);
 
     impl Bookmarks {
-        pub fn insert(&mut self, index: usize, element: usize) {
-            self.0.insert(index, element)
+        pub fn is_empty(&self) -> bool {
+            self.0.is_empty()
         }
 
-        pub fn remove(&mut self, index: usize) {
-            self.0.remove(index);
+        pub fn len(&self) -> usize {
+            self.0.len()
+        }
+
+        pub fn iter(&self) -> impl Iterator<Item = usize> {
+            self.0.iter().copied()
+        }
+
+        pub fn toggle(&mut self, cursor: usize) -> Toggle {
+            match self.0.binary_search(&cursor) {
+                Ok(bookmark) => {
+                    self.0.remove(bookmark);
+                    Toggle::Removed
+                }
+                Err(bookmark) => {
+                    self.0.insert(bookmark, cursor);
+                    Toggle::Inserted
+                }
+            }
+        }
+
+        /// Returns Ok if bookmark removed
+        pub fn remove(&mut self, cursor: usize) -> Result<(), ()> {
+            let bookmark = self.0.binary_search(&cursor).map_err(|_| ())?;
+            self.0.remove(bookmark);
+            Ok(())
+        }
+
+        /// Returns next bookmark after (but not including) the cursor
+        /// wrapping around to the beginning if necessary
+        pub fn next_after(&self, cursor: usize) -> Option<usize> {
+            let (bookmark, offset) = match self.0.binary_search(&cursor) {
+                Ok(bookmark) => (bookmark, 1),
+                Err(bookmark) => (bookmark, 0),
+            };
+            let (first, last) = self.0.split_at_checked(bookmark)?;
+            last.get(offset).or(first.first()).copied()
+        }
+
+        /// Returns next bookmark before (but not including) the cursor
+        /// wrapping around to the end if necessary
+        pub fn next_before(&self, cursor: usize) -> Option<usize> {
+            let bookmark = match self.0.binary_search(&cursor) {
+                Ok(bookmark) => bookmark,
+                Err(bookmark) => bookmark,
+            };
+            let (first, last) = self.0.split_at_checked(bookmark)?;
+            first.last().or(last.last()).copied()
         }
 
         pub fn get_mut(&mut self) -> BookmarksHandle<'_> {
             BookmarksHandle(&mut self.0)
-        }
-    }
-
-    impl Deref for Bookmarks {
-        type Target = [usize];
-
-        fn deref(&self) -> &[usize] {
-            &self.0
         }
     }
 
@@ -2072,16 +2110,13 @@ impl BufferContext {
     /// If bookmark at cursor, remove one
     pub fn toggle_bookmark(&mut self) {
         let mut buf = self.buffer.borrow_mut();
-        match buf.bookmarks.binary_search(&self.cursor) {
-            Ok(bookmark) => {
-                buf.bookmarks.remove(bookmark);
-                self.message = Some(BufferMessage::Notice("Bookmark Removed".into()));
-            }
-            Err(bookmark) => {
-                buf.bookmarks.insert(bookmark, self.cursor);
-                self.message = Some(BufferMessage::Notice("Bookmark Added".into()));
-            }
-        }
+        self.message = Some(BufferMessage::Notice(
+            (match buf.bookmarks.toggle(self.cursor) {
+                Toggle::Inserted => "Bookmark Added",
+                Toggle::Removed => "Bookmark Removed",
+            })
+            .into(),
+        ))
     }
 
     pub fn toggle_bookmarks(&mut self, positions: impl Iterator<Item = usize>) {
@@ -2090,20 +2125,18 @@ impl BufferContext {
         let mut buf = self.buffer.borrow_mut();
 
         for pos in positions {
-            match buf.bookmarks.binary_search(&pos) {
-                Ok(bookmark) => {
-                    buf.bookmarks.remove(bookmark);
-                    removed += 1;
-                }
-                Err(bookmark) => {
-                    buf.bookmarks.insert(bookmark, pos);
+            match buf.bookmarks.toggle(pos) {
+                Toggle::Inserted => {
                     added += 1;
+                }
+                Toggle::Removed => {
+                    removed += 1;
                 }
             }
         }
 
         match (added, removed) {
-            (0, 0) => { /* nothing to do*/ }
+            (0, 0) => {}
             (1, 0) => {
                 self.message = Some(BufferMessage::Notice("Bookmark Added".into()));
             }
@@ -2128,40 +2161,21 @@ impl BufferContext {
     /// If cursor at a bookmark, delete it
     pub fn delete_bookmark(&mut self) {
         let mut buf = self.buffer.borrow_mut();
-        if let Ok(bookmark) = buf.bookmarks.binary_search(&self.cursor) {
-            buf.bookmarks.remove(bookmark);
+        if let Ok(()) = buf.bookmarks.remove(self.cursor) {
             self.message = Some(BufferMessage::Notice("Bookmark Removed".into()));
         }
     }
 
     fn goto_bookmark(&mut self, forward: bool) {
         let buf = self.buffer.borrow_move();
-        let bookmarks = &buf.bookmarks;
-        self.cursor = if forward {
-            let (bookmark, offset) = match bookmarks.binary_search(&self.cursor) {
-                Ok(bookmark) => (bookmark, 1),
-                Err(bookmark) => (bookmark, 0),
-            };
-            let Some((first, last)) = bookmarks.split_at_checked(bookmark) else {
-                return;
-            };
-            match last.get(offset).or(first.first()) {
-                Some(pos) => *pos,
-                None => return,
-            }
+        let Some(cursor) = (if forward {
+            buf.bookmarks.next_after(self.cursor)
         } else {
-            let bookmark = match bookmarks.binary_search(&self.cursor) {
-                Ok(bookmark) => bookmark,
-                Err(bookmark) => bookmark,
-            };
-            let Some((first, last)) = bookmarks.split_at_checked(bookmark) else {
-                return;
-            };
-            match first.last().or(last.last()) {
-                Some(pos) => *pos,
-                None => return,
-            }
+            buf.bookmarks.next_before(self.cursor)
+        }) else {
+            return;
         };
+        self.cursor = cursor;
         self.cursor_column = cursor_column(&buf.rope, self.cursor);
         self.selection = None;
     }
@@ -3922,7 +3936,6 @@ impl StatefulWidget for BufferWidget<'_> {
         for bookmark in buffer
             .bookmarks
             .iter()
-            .copied()
             .filter(|p| *p >= viewport_start)
             .map(Paren::bookmark)
         {
@@ -4562,6 +4575,11 @@ impl std::fmt::Display for Thousands {
             u => write_separated(u, f),
         }
     }
+}
+
+enum Toggle {
+    Inserted, // new bookmark added
+    Removed,  // existing bookmark removed
 }
 
 #[inline]
