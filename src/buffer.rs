@@ -1165,7 +1165,7 @@ impl BufferContext {
                 }
             },
             None => {
-                try_auto_pair(
+                insert_char_or_pair(
                     &mut rope,
                     self.cursor,
                     &mut Secondary::new(alt, bookmarks),
@@ -1286,7 +1286,7 @@ impl BufferContext {
 
         match self.selection.take() {
             None => {
-                if try_un_auto_pair(&mut rope, self.cursor, &mut Secondary::new(alt, bookmarks))
+                if backspace_or_un_pair(&mut rope, self.cursor, &mut Secondary::new(alt, bookmarks))
                     .is_ok()
                 {
                     self.cursor -= 1;
@@ -2201,7 +2201,7 @@ impl MultiCursor {
     ) -> usize {
         use std::cmp::Ordering;
 
-        let inserted = try_auto_pair(rope, self.cursor, secondary, c);
+        let inserted = insert_char_or_pair(rope, self.cursor, secondary, c);
         *cursor += match self.cursor.cmp(cursor) {
             Ordering::Less => inserted,
             Ordering::Equal => 1,
@@ -2246,7 +2246,7 @@ impl MultiCursor {
             // can't backup before start of range
             return Err(());
         }
-        let removed = try_un_auto_pair(rope, self.cursor, secondary)?;
+        let removed = backspace_or_un_pair(rope, self.cursor, secondary)?;
         *cursor -= match self.cursor.cmp(cursor) {
             Ordering::Less => removed,
             Ordering::Equal => 1,
@@ -2353,7 +2353,12 @@ impl std::ops::SubAssign<usize> for MultiCursor {
 }
 
 /// Returns number of characters inserted (1 or 2)
-fn try_auto_pair(rope: &mut ropey::Rope, cursor: usize, alt: &mut Secondary, c: char) -> usize {
+fn insert_char_or_pair(
+    rope: &mut ropey::Rope,
+    cursor: usize,
+    alt: &mut Secondary,
+    c: char,
+) -> usize {
     match match c {
         '(' => Err("()"),
         '[' => Err("[]"),
@@ -2384,7 +2389,7 @@ fn try_auto_pair(rope: &mut ropey::Rope, cursor: usize, alt: &mut Secondary, c: 
 }
 
 /// On success, returns number of characters removed (1 or 2)
-fn try_un_auto_pair(
+fn backspace_or_un_pair(
     rope: &mut ropey::Rope,
     cursor: usize,
     alt: &mut Secondary,
