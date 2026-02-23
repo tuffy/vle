@@ -239,6 +239,7 @@ impl Source {
 mod private {
     use crate::buffer::{AltCursor, Buffer, Toggle};
     use std::cell::{Ref, RefCell, RefMut};
+    use std::collections::BTreeSet;
     use std::ops::{Deref, DerefMut};
     use std::rc::Rc;
 
@@ -394,7 +395,7 @@ mod private {
     }
 
     #[derive(Clone, Default)]
-    pub struct Bookmarks(Vec<usize>);
+    pub struct Bookmarks(BTreeSet<usize>);
 
     impl Bookmarks {
         pub fn is_empty(&self) -> bool {
@@ -410,45 +411,42 @@ mod private {
         }
 
         pub fn toggle(&mut self, cursor: usize) -> Toggle {
-            match self.0.binary_search(&cursor) {
-                Ok(bookmark) => {
-                    self.0.remove(bookmark);
-                    Toggle::Removed
-                }
-                Err(bookmark) => {
-                    self.0.insert(bookmark, cursor);
-                    Toggle::Inserted
-                }
+            // TODO - convert to Entry API, whenever that stabilizes
+            if self.0.insert(cursor) {
+                Toggle::Inserted
+            } else {
+                assert!(self.0.remove(&cursor));
+                Toggle::Removed
             }
         }
 
         /// Returns Ok if bookmark removed
         pub fn remove(&mut self, cursor: usize) -> Result<(), ()> {
-            let bookmark = self.0.binary_search(&cursor).map_err(|_| ())?;
-            self.0.remove(bookmark);
-            Ok(())
+            self.0.remove(&cursor).then_some(()).ok_or(())
         }
 
         /// Returns next bookmark after (but not including) the cursor
         /// wrapping around to the beginning if necessary
         pub fn next_after(&self, cursor: usize) -> Option<usize> {
-            let (bookmark, offset) = match self.0.binary_search(&cursor) {
-                Ok(bookmark) => (bookmark, 1),
-                Err(bookmark) => (bookmark, 0),
-            };
-            let (first, last) = self.0.split_at_checked(bookmark)?;
-            last.get(offset).or(first.first()).copied()
+            use std::ops::Bound;
+
+            self.0
+                .range((Bound::Excluded(cursor), Bound::Unbounded))
+                .next()
+                .or_else(|| self.0.first())
+                .copied()
         }
 
         /// Returns next bookmark before (but not including) the cursor
         /// wrapping around to the end if necessary
         pub fn next_before(&self, cursor: usize) -> Option<usize> {
-            let bookmark = match self.0.binary_search(&cursor) {
-                Ok(bookmark) => bookmark,
-                Err(bookmark) => bookmark,
-            };
-            let (first, last) = self.0.split_at_checked(bookmark)?;
-            first.last().or(last.last()).copied()
+            use std::ops::Bound;
+
+            self.0
+                .range((Bound::Unbounded, Bound::Excluded(cursor)))
+                .next_back()
+                .or_else(|| self.0.last())
+                .copied()
         }
 
         pub fn get_mut(&mut self) -> BookmarksHandle<'_> {
@@ -456,20 +454,26 @@ mod private {
         }
     }
 
-    pub struct BookmarksHandle<'m>(&'m mut Vec<usize>);
+    pub struct BookmarksHandle<'m>(&'m mut BTreeSet<usize>);
 
     impl BookmarksHandle<'_> {
         /// Update all bookmark entries whose positions are >= cursor
-        pub fn update_ge(&mut self, cursor: usize, update: impl FnMut(&mut usize)) {
-            self.0
-                .iter_mut()
-                .filter(|pos| **pos >= cursor)
-                .for_each(update);
+        pub fn update_ge(&mut self, cursor: usize, mut update: impl FnMut(&mut usize)) {
+            let mut updated = self
+                .0
+                .extract_if(cursor.., |_| true)
+                .map(|mut pos| {
+                    update(&mut pos);
+                    pos
+                })
+                .collect();
+
+            self.0.append(&mut updated);
         }
 
         /// Remove all bookmarks in range
         pub fn remove<R: std::ops::RangeBounds<usize>>(&mut self, range: R) {
-            self.0.retain(|bookmark| !range.contains(bookmark))
+            self.0.extract_if(range, |_| true).for_each(drop);
         }
     }
 
