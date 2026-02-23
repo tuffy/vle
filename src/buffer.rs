@@ -459,48 +459,42 @@ mod private {
     pub struct BookmarksHandle<'m>(&'m mut Vec<usize>);
 
     impl BookmarksHandle<'_> {
-        pub fn extract_if<F, R>(&mut self, range: R, filter: F) -> impl Iterator<Item = usize>
-        where
-            F: FnMut(&mut usize) -> bool,
-            R: std::ops::RangeBounds<usize>,
-        {
-            self.0.extract_if(range, filter)
-        }
-    }
-
-    impl Deref for BookmarksHandle<'_> {
-        type Target = [usize];
-
-        fn deref(&self) -> &[usize] {
+        /// Update all bookmark entries whose positions are >= cursor
+        pub fn update_ge(&mut self, cursor: usize, update: impl FnMut(&mut usize)) {
             self.0
+                .iter_mut()
+                .filter(|pos| **pos >= cursor)
+                .for_each(update);
         }
-    }
 
-    impl DerefMut for BookmarksHandle<'_> {
-        fn deref_mut(&mut self) -> &mut [usize] {
-            self.0
+        /// Remove all bookmarks in range
+        pub fn remove<R: std::ops::RangeBounds<usize>>(&mut self, range: R) {
+            self.0.retain(|bookmark| !range.contains(bookmark))
         }
     }
 
     /// A secondary cursor which implements various math operations
     pub struct Secondary<'b, 'm> {
-        cursor_selection: Option<(&'b mut usize, Option<&'b mut usize>)>,
+        // secondary cursor's position and selection, if any
+        alt_cursor_selection: Option<(&'b mut usize, Option<&'b mut usize>)>,
+        // a handle to the current buffer's bookmarks
         bookmarks: BookmarksHandle<'m>,
-        offset: Option<usize>, // offset of first valid bookmark in set
+        // minimum primary cursor position we're concerned with
+        cursor: usize,
     }
 
     impl<'b, 'm> Secondary<'b, 'm> {
         pub fn new(alt: Option<AltCursor<'b>>, bookmarks: BookmarksHandle<'m>) -> Self {
             match alt {
                 None => Self {
-                    cursor_selection: None,
+                    alt_cursor_selection: None,
                     bookmarks,
-                    offset: Some(0),
+                    cursor: 0,
                 },
                 Some(alt) => Self {
-                    cursor_selection: Some((alt.cursor, alt.selection.as_mut())),
+                    alt_cursor_selection: Some((alt.cursor, alt.selection.as_mut())),
                     bookmarks,
-                    offset: Some(0),
+                    cursor: 0,
                 },
             }
         }
@@ -511,12 +505,7 @@ mod private {
             bookmarks: BookmarksHandle<'m>,
             cursor: usize,
         ) -> Self {
-            Self::filtered(
-                alt,
-                bookmarks.iter().position(|pos| *pos >= cursor),
-                bookmarks,
-                |a| a >= cursor,
-            )
+            Self::filtered(alt, bookmarks, cursor, |a| a >= cursor)
         }
 
         /// Constrained to values greater than or equal to the cursor
@@ -525,58 +514,48 @@ mod private {
             bookmarks: BookmarksHandle<'m>,
             cursor: usize,
         ) -> Self {
-            Self::filtered(
-                alt,
-                bookmarks.iter().position(|pos| *pos >= cursor),
-                bookmarks,
-                |a| a > cursor,
-            )
+            Self::filtered(alt, bookmarks, cursor, |a| a > cursor)
         }
 
         fn filtered(
             alt: Option<AltCursor<'b>>,
-            offset: Option<usize>,
             bookmarks: BookmarksHandle<'m>,
+            cursor: usize,
             mut f: impl FnMut(usize) -> bool,
         ) -> Self {
             match alt {
                 None => Self {
-                    cursor_selection: None,
+                    alt_cursor_selection: None,
                     bookmarks,
-                    offset,
+                    cursor,
                 },
                 Some(alt) => Self {
-                    cursor_selection: f(*alt.cursor)
+                    alt_cursor_selection: f(*alt.cursor)
                         .then_some((alt.cursor, alt.selection.as_mut().filter(|s| f(**s)))),
                     bookmarks,
-                    offset,
+                    cursor,
                 },
             }
         }
 
         /// Updates secondary cursor in-place, if available
         pub fn update(&mut self, mut f: impl FnMut(&mut usize)) {
-            if let Some((cursor, selection)) = &mut self.cursor_selection {
+            if let Some((cursor, selection)) = &mut self.alt_cursor_selection {
                 f(cursor);
 
                 if let Some(selection) = selection {
                     f(selection);
                 }
             }
-            if let Some(offset) = self.offset
-                && let Some((_, valid)) = self.bookmarks.split_at_mut_checked(offset)
-            {
-                valid.iter_mut().for_each(f);
-            }
+            self.bookmarks.update_ge(self.cursor, f);
         }
 
         /// Removes bookmarks in range and returns range unchanged
-        pub fn remove<R: std::ops::RangeBounds<usize>>(&mut self, range: R) -> R {
-            if let Some(offset) = self.offset {
-                self.bookmarks
-                    .extract_if(offset.., |b| range.contains(b))
-                    .for_each(drop);
-            }
+        pub fn remove<R>(&mut self, range: R) -> R
+        where
+            R: std::ops::RangeBounds<usize> + Clone,
+        {
+            self.bookmarks.remove(range.clone());
             range
         }
 
