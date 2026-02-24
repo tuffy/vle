@@ -4158,6 +4158,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     .take(area.height.into())
                     .collect::<Vec<_>>()
             }
+            // TODO - highlight current autocompletion as red underlined
             _ => {
                 match state.selection {
                     // no selection, so nothing to highlight
@@ -4240,7 +4241,7 @@ impl StatefulWidget for BufferWidget<'_> {
         );
 
         match self.mode {
-            None | Some(EditorMode::Editing) => {
+            None | Some(EditorMode::Editing) | Some(EditorMode::Autocomplete { .. }) => {
                 if let Some(Help {
                     select,
                     find,

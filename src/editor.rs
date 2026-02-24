@@ -82,8 +82,13 @@ pub enum EditorMode {
         #[cfg(feature = "ssh")]
         chooser: Box<FileChooserState<EitherSource>>,
     },
+    /// Performing autocomplete on a partial word
+    Autocomplete {
+        offset: usize,            // our character offset in rope
+        completions: Vec<String>, // autocompletion candidates
+        index: usize,             // the current candidate
+    },
 }
-// TODO - add Autocomplete mode
 
 #[derive(Copy, Clone, Default)]
 pub enum SearchType {
@@ -330,6 +335,32 @@ impl Editor {
             }
             event => match &mut self.mode {
                 EditorMode::Editing => self.process_normal_event(area, event),
+                EditorMode::Autocomplete {
+                    offset,
+                    completions,
+                    index,
+                } => match event {
+                    key!(CONTROL, '5') => {
+                        // switch to next candidate
+                        let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
+                        let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
+                        if let Some(primary) = primary.current_mut() {
+                            let next_index = (*index + 1) % completions.len();
+                            primary.autocomplete(
+                                secondary.map(|s| s.alt_cursor()),
+                                *offset,
+                                &completions[*index],
+                                &completions[next_index],
+                            );
+                            *index = next_index;
+                        }
+                    }
+                    event => {
+                        // end autocomplete
+                        self.mode = EditorMode::default();
+                        self.process_normal_event(area, event);
+                    }
+                },
                 EditorMode::ConfirmClose { buffer } => {
                     let buffer = buffer.clone();
                     self.process_confirm_close(event, buffer)
@@ -753,15 +784,20 @@ impl Editor {
             }
             // Works as Ctrl-]
             key!(CONTROL, '5') => {
-                if let Some(Some((offset, matches))) = self.on_buffer(|b| b.autocomplete_matches())
+                if let Some(Some((offset, completions))) =
+                    self.on_buffer(|b| b.autocomplete_matches())
                 {
-                    if let Some(original) = matches.get(0)
-                        && let Some(replacement) = matches.get(1)
+                    if let Some(original) = completions.get(0)
+                        && let Some(replacement) = completions.get(1)
                     {
                         self.update_buffer_at(|b, a| {
                             b.autocomplete(a, offset, &original, &replacement)
                         });
-                        // TODO - switch to autcomplete mode
+                        self.mode = EditorMode::Autocomplete {
+                            offset,
+                            completions,
+                            index: 1,
+                        };
                     } else {
                         self.update_buffer(|b| b.set_error("No Completion Found"));
                     }
