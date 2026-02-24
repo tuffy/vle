@@ -1850,43 +1850,29 @@ impl BufferContext {
     pub fn autocomplete_matches(&self) -> Option<(usize, Vec<String>)> {
         use std::collections::HashMap;
 
-        fn word_char_at(rope: &ropey::Rope, pos: usize) -> bool {
-            match rope.get_char(pos) {
-                Some(c) => is_word(c),
-                None => false,
-            }
-        }
-
         let buf = &mut self.buffer.borrow();
         let rope = &buf.rope;
 
-        let start = self
-            .cursor
-            .checked_sub(1)
-            .filter(|pos| word_char_at(rope, *pos))
-            .or_else(|| word_char_at(rope, self.cursor).then_some(self.cursor))?;
+        if is_word(rope.get_char(self.cursor)?) {
+            return None;
+        }
 
-        let prefix_start = rope
-            .chars_at(start)
+        let prefix_chars = rope
+            .chars_at(self.cursor)
             .reversed()
-            .position(|c| !is_word(c))
-            .and_then(|pos| start.checked_sub(pos))
-            .unwrap_or(0);
+            .take_while(|c| is_word(*c))
+            .collect::<Vec<_>>();
 
-        let prefix_end = rope
-            .chars_at(start)
-            .position(|c| !is_word(c))
-            .map(|pos| start + pos)
-            .unwrap_or(rope.len_chars());
+        let prefix_start = self.cursor.checked_sub(prefix_chars.len())?;
 
-        let prefix = Cow::from(rope.get_slice(prefix_start..prefix_end)?).into_owned();
+        let prefix = prefix_chars.into_iter().rev().collect::<String>();
 
         let mut counts: HashMap<String, u64> = HashMap::default();
 
         for line in rope.lines() {
             let line = Cow::from(line);
-            for (word, _) in
-                lazy_regex::regex_captures_iter!("[[:word:]]+", &line).map(|c| c.extract::<0>())
+            for (word, []) in
+                lazy_regex::regex_captures_iter!("[[:word:]]+", &line).map(|c| c.extract())
             {
                 if word.starts_with(&prefix) && word != prefix {
                     *counts.entry(word.to_string()).or_default() += 1;
