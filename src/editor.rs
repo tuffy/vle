@@ -752,11 +752,19 @@ impl Editor {
             }
             // TODO - make different binding
             key!(CONTROL, 'u') => {
-                // TODO - if matches, replace first match then switch to autocomplete mode
-                self.on_buffer(|b| {
-                    let matches = b.autocomplete_matches();
-                    b.set_error(format!("{matches:?}"));
-                });
+                if let Some(Some((offset, matches))) = self.on_buffer(|b| b.autocomplete_matches())
+                {
+                    if let Some(original) = matches.get(0)
+                        && let Some(replacement) = matches.get(1)
+                    {
+                        self.update_buffer_at(|b, a| {
+                            b.autocomplete(a, offset, &original, &replacement)
+                        });
+                        // TODO - switch to autcomplete mode
+                    } else {
+                        self.update_buffer(|b| b.set_error("No Completion Found"));
+                    }
+                };
             }
             Event::Mouse(MouseEvent {
                 kind: MouseEventKind::ScrollDown,

@@ -1896,6 +1896,32 @@ impl BufferContext {
         ))
     }
 
+    pub fn autocomplete(
+        &mut self,
+        alt: Option<AltCursor<'_>>,
+        offset: usize,
+        original: &str,
+        replacement: &str,
+    ) {
+        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+        let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
+        let mut alt = Secondary::ge(alt, bookmarks, offset);
+
+        // cut out original string at offset
+        let original_chars = original.chars().count();
+        let cut_range = offset..offset + original_chars;
+        rope.remove(alt.remove(cut_range.clone()));
+        alt -= original_chars;
+
+        // insert replacement string at the same offset
+        let replacement_chars = replacement.chars().count();
+        rope.insert(offset, replacement);
+        alt += replacement_chars;
+        self.cursor = offset + replacement_chars;
+        self.cursor_column = cursor_column(&rope, self.cursor);
+        self.selection = None;
+    }
+
     pub fn clear_matches<P>(
         &mut self,
         alt: Option<AltCursor<'_>>,
