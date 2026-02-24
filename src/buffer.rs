@@ -1776,16 +1776,20 @@ impl BufferContext {
                 match rope.get_char(self.cursor) {
                     Some(c) if is_word(c) => {
                         // widen selection to current word
-                        if let Some(word_start) = rope
+                        let word_start = rope
                             .chars_at(self.cursor)
                             .reversed()
                             .position(|c| !is_word(c))
                             .and_then(|pos| self.cursor.checked_sub(pos))
-                            && let Some(word_end) = rope
-                                .chars_at(self.cursor)
-                                .position(|c| !is_word(c))
-                                .map(|pos| self.cursor + pos)
-                        {
+                            .unwrap_or(0);
+
+                        let word_end = rope
+                            .chars_at(self.cursor)
+                            .position(|c| !is_word(c))
+                            .map(|pos| self.cursor + pos)
+                            .unwrap_or(rope.len_chars());
+
+                        if word_start != word_end {
                             self.selection = Some(word_start);
                             self.cursor = word_end;
                             self.cursor_column = cursor_column(rope, self.cursor);
