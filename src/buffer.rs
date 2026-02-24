@@ -1873,7 +1873,7 @@ impl BufferContext {
     /// in the rope in characters.
     /// The partial word being autocompleted will be first in the Vec.
     fn autocomplete_matches(&self) -> Option<(usize, Vec<String>)> {
-        use std::collections::HashMap;
+        use hashbrown::HashMap;
 
         let buf = &mut self.buffer.borrow();
         let rope = &buf.rope;
@@ -1906,7 +1906,7 @@ impl BufferContext {
                 lazy_regex::regex_captures_iter!("[[:word:]]+", &line).map(|c| c.extract())
             {
                 if word.starts_with(&prefix) && word != prefix {
-                    *counts.entry(word.to_string()).or_default() += 1;
+                    *counts.entry_ref(word).or_default() += 1;
                 }
             }
         }
