@@ -1850,24 +1850,33 @@ impl BufferContext {
     pub fn autocomplete_matches(&self) -> Option<(usize, Vec<String>)> {
         use std::collections::HashMap;
 
+        fn word_char_at(rope: &ropey::Rope, pos: usize) -> bool {
+            match rope.get_char(pos) {
+                Some(c) => is_word(c),
+                None => false,
+            }
+        }
+
         let buf = &mut self.buffer.borrow();
         let rope = &buf.rope;
 
-        if !is_word(rope.get_char(self.cursor)?) {
-            return None;
-        }
+        let start = self
+            .cursor
+            .checked_sub(1)
+            .filter(|pos| word_char_at(rope, *pos))
+            .or_else(|| word_char_at(rope, self.cursor).then_some(self.cursor))?;
 
         let prefix_start = rope
-            .chars_at(self.cursor)
+            .chars_at(start)
             .reversed()
             .position(|c| !is_word(c))
-            .and_then(|pos| self.cursor.checked_sub(pos))
+            .and_then(|pos| start.checked_sub(pos))
             .unwrap_or(0);
 
         let prefix_end = rope
-            .chars_at(self.cursor)
+            .chars_at(start)
             .position(|c| !is_word(c))
-            .map(|pos| self.cursor + pos)
+            .map(|pos| start + pos)
             .unwrap_or(rope.len_chars());
 
         let prefix = Cow::from(rope.get_slice(prefix_start..prefix_end)?).into_owned();

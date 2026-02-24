@@ -83,6 +83,7 @@ pub enum EditorMode {
         chooser: Box<FileChooserState<EitherSource>>,
     },
 }
+// TODO - add Autocomplete mode
 
 #[derive(Copy, Clone, Default)]
 pub enum SearchType {
@@ -750,8 +751,8 @@ impl Editor {
                     self.mode = new_mode;
                 }
             }
-            // TODO - make different binding
-            key!(CONTROL, 'u') => {
+            // Works as Ctrl-]
+            key!(CONTROL, '5') => {
                 if let Some(Some((offset, matches))) = self.on_buffer(|b| b.autocomplete_matches())
                 {
                     if let Some(original) = matches.get(0)
