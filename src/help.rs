@@ -178,8 +178,6 @@ pub static EDITING_2: &[Keybinding] = &[
     keybind::<key::Reload>("Reload File"),
     keybind::<key::Quit>("Quit File"),
     keybind::<key::Bookmark>("Toggle Bookmark"),
-    // TODO - make conditional based on editor state
-    none(&["Tab"], "Indent / Autocomplete"),
     Keybinding {
         modifier: Some("Shift"),
         keys: &[LEFT, DOWN, UP, RIGHT],
@@ -187,6 +185,9 @@ pub static EDITING_2: &[Keybinding] = &[
         f: "",
     },
     ctrl(&["Home", "End"], "Start / End of Selection"),
+];
+
+pub static EDITING_3: &[Keybinding] = &[
     ctrl(&["X", "C", "V"], "Cut / Copy / Paste"),
     ctrl(&["Z", "Y"], "Undo / Redo"),
     ctrl(&["PgUp", "PgDn"], "Switch File"),

@@ -776,6 +776,7 @@ pub struct Help {
     select: WholeSelect,
     find: FindMode,
     has_bookmarks: bool,
+    autocomplete: bool,
 }
 
 /// A buffer with additional context on a per-view basis
@@ -1877,7 +1878,9 @@ impl BufferContext {
         let buf = &mut self.buffer.borrow();
         let rope = &buf.rope;
 
-        if is_word(rope.get_char(self.cursor)?) {
+        if let Some(c) = rope.get_char(self.cursor)
+            && is_word(c)
+        {
             return None;
         }
 
@@ -1886,6 +1889,10 @@ impl BufferContext {
             .reversed()
             .take_while(|c| is_word(*c))
             .collect::<Vec<_>>();
+
+        if prefix_chars.is_empty() {
+            return None;
+        }
 
         let prefix_start = self.cursor.checked_sub(prefix_chars.len())?;
 
@@ -2178,15 +2185,30 @@ impl BufferContext {
                     FindMode::InSelection
                 },
                 has_bookmarks,
+                autocomplete: false,
             },
-            None => Help {
-                select: match rope.get_char(self.cursor) {
-                    Some(c) if is_word(c) => WholeSelect::Word,
-                    _ => WholeSelect::Lines,
-                },
-                find: FindMode::WholeFile,
-                has_bookmarks,
-            },
+            None => {
+                let current_char = rope.get_char(self.cursor);
+                Help {
+                    select: match current_char {
+                        Some(c) if is_word(c) => WholeSelect::Word,
+                        _ => WholeSelect::Lines,
+                    },
+                    find: FindMode::WholeFile,
+                    has_bookmarks,
+                    autocomplete: match current_char {
+                        Some(c) if is_word(c) => false,
+                        _ => match self
+                            .cursor
+                            .checked_sub(1)
+                            .and_then(|prev| rope.get_char(prev))
+                        {
+                            Some(c) => is_word(c),
+                            None => false,
+                        },
+                    },
+                }
+            }
         }
     }
 
@@ -4299,12 +4321,13 @@ impl StatefulWidget for BufferWidget<'_> {
                     select,
                     find,
                     has_bookmarks,
+                    autocomplete,
                 }) = self.show_help
                 {
                     use crate::editor::EditorLayout;
                     use crate::help::{
-                        EDITING_0, EDITING_1, EDITING_2, F10_SPLIT, F10_UNSPLIT,
-                        SWITCH_PANE_HORIZONTAL, SWITCH_PANE_VERTICAL, keybind,
+                        EDITING_0, EDITING_1, EDITING_2, EDITING_3, F10_SPLIT, F10_UNSPLIT,
+                        SWITCH_PANE_HORIZONTAL, SWITCH_PANE_VERTICAL, keybind, none,
                     };
                     use crate::key::GotoLine;
 
@@ -4323,6 +4346,15 @@ impl StatefulWidget for BufferWidget<'_> {
                         EditorLayout::Horizontal | EditorLayout::Vertical => F10_SPLIT,
                     });
                     help.extend(EDITING_2);
+                    help.push(none(
+                        &["Tab"],
+                        if autocomplete {
+                            "Autocomplete Word"
+                        } else {
+                            "Indent Text"
+                        },
+                    ));
+                    help.extend(EDITING_3);
                     match self.layout {
                         EditorLayout::Horizontal => help.push(SWITCH_PANE_HORIZONTAL),
                         EditorLayout::Vertical => help.push(SWITCH_PANE_VERTICAL),
