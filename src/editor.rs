@@ -340,7 +340,7 @@ impl Editor {
                     completions,
                     index,
                 } => match event {
-                    key!(CONTROL, '5') => {
+                    key!(Tab) => {
                         // switch to next candidate
                         let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
                         let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
@@ -353,6 +353,22 @@ impl Editor {
                                 &completions[next_index],
                             );
                             *index = next_index;
+                        }
+                    }
+                    key!(SHIFT, BackTab) => {
+                        // switch to previous candidate
+                        let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
+                        let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
+                        if let Some(primary) = primary.current_mut() {
+                            let previous_index =
+                                index.checked_sub(1).unwrap_or(completions.len() - 1);
+                            primary.autocomplete(
+                                secondary.map(|s| s.alt_cursor()),
+                                *offset,
+                                &completions[*index],
+                                &completions[previous_index],
+                            );
+                            *index = previous_index;
                         }
                     }
                     event => {
@@ -696,8 +712,48 @@ impl Editor {
                     self.mode = EditorMode::VerifySave;
                 }
             }
-            key!(Tab) => self.update_buffer_at(|b, a| b.indent(a)),
-            key!(SHIFT, BackTab) => self.update_buffer_at(|b, a| b.un_indent(a)),
+            key!(Tab) => {
+                if let Some(Some((offset, completions))) =
+                    self.on_buffer_at(|b, a| b.compelete_or_indent(a))
+                {
+                    if let Some(original) = completions.get(0)
+                        && let Some(replacement) = completions.get(1)
+                    {
+                        self.update_buffer_at(|b, a| {
+                            b.autocomplete(a, offset, &original, &replacement)
+                        });
+                        self.mode = EditorMode::Autocomplete {
+                            offset,
+                            completions,
+                            index: 1,
+                        };
+                    } else {
+                        self.update_buffer(|b| b.set_error("No Completion Found"));
+                    }
+                };
+            }
+            key!(SHIFT, BackTab) => {
+                if let Some(Some((offset, completions))) =
+                    self.on_buffer_at(|b, a| b.compelete_or_unindent(a))
+                {
+                    if let Some(original) = completions.get(0)
+                        && let Some(index) = completions.len().checked_sub(1)
+                        && index != 0
+                        && let Some(replacement) = completions.get(index)
+                    {
+                        self.update_buffer_at(|b, a| {
+                            b.autocomplete(a, offset, &original, &replacement)
+                        });
+                        self.mode = EditorMode::Autocomplete {
+                            offset,
+                            completions,
+                            index,
+                        };
+                    } else {
+                        self.update_buffer(|b| b.set_error("No Completion Found"));
+                    }
+                };
+            }
             keybind!(GotoPair) => self.update_buffer(|b| b.select_matching_paren()),
             keybind!(Bookmark) => self.update_buffer(|b| b.toggle_bookmark()),
             keybind!(SelectInside) => {
@@ -781,27 +837,6 @@ impl Editor {
                 }) {
                     self.mode = new_mode;
                 }
-            }
-            // Works as Ctrl-]
-            key!(CONTROL, '5') => {
-                if let Some(Some((offset, completions))) =
-                    self.on_buffer(|b| b.autocomplete_matches())
-                {
-                    if let Some(original) = completions.get(0)
-                        && let Some(replacement) = completions.get(1)
-                    {
-                        self.update_buffer_at(|b, a| {
-                            b.autocomplete(a, offset, &original, &replacement)
-                        });
-                        self.mode = EditorMode::Autocomplete {
-                            offset,
-                            completions,
-                            index: 1,
-                        };
-                    } else {
-                        self.update_buffer(|b| b.set_error("No Completion Found"));
-                    }
-                };
             }
             Event::Mouse(MouseEvent {
                 kind: MouseEventKind::ScrollDown,

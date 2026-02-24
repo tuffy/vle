@@ -1503,15 +1503,20 @@ impl BufferContext {
         }
     }
 
-    pub fn indent(&mut self, alt: Option<AltCursor<'_>>) {
-        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
-        let indent = match buf.tabs_required {
-            false => buf.tab_substitution.clone(),
-            true => "\t".to_string(),
-        };
-
+    pub fn compelete_or_indent(
+        &mut self,
+        alt: Option<AltCursor<'_>>,
+    ) -> Option<(usize, Vec<String>)> {
         match self.selection {
             None => {
+                if let matches @ Some(_) = self.autocomplete_matches() {
+                    return matches;
+                }
+                let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+                let indent = match buf.tabs_required {
+                    false => buf.tab_substitution.clone(),
+                    true => "\t".to_string(),
+                };
                 let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
                 let mut alt = Secondary::ge(alt, bookmarks, self.cursor);
                 if let Ok(line_start) = rope
@@ -1522,8 +1527,14 @@ impl BufferContext {
                     self.cursor += indent.len();
                     alt += indent.len();
                 }
+                None
             }
             selection_opt @ Some(selection) => {
+                let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+                let indent = match buf.tabs_required {
+                    false => buf.tab_substitution.clone(),
+                    true => "\t".to_string(),
+                };
                 let (start, end) = reorder(self.cursor, selection);
                 let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
                 let mut alt = Secondary::ge(alt, bookmarks, start);
@@ -1548,19 +1559,25 @@ impl BufferContext {
                         *pos += indent.len() * indent_lines.len()
                     }
                 });
+                None
             }
         }
     }
 
-    pub fn un_indent(&mut self, alt: Option<AltCursor<'_>>) {
-        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
-        let indent = match buf.tabs_required {
-            false => buf.tab_substitution.clone(),
-            true => "\t".to_string(),
-        };
-
+    pub fn compelete_or_unindent(
+        &mut self,
+        alt: Option<AltCursor<'_>>,
+    ) -> Option<(usize, Vec<String>)> {
         match self.selection {
             None => {
+                if let matches @ Some(_) = self.autocomplete_matches() {
+                    return matches;
+                }
+                let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+                let indent = match buf.tabs_required {
+                    false => buf.tab_substitution.clone(),
+                    true => "\t".to_string(),
+                };
                 let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
                 let mut alt = Secondary::ge(alt, bookmarks, self.cursor);
 
@@ -1591,8 +1608,14 @@ impl BufferContext {
                         }
                     });
                 }
+                None
             }
             selection_opt @ Some(selection) => {
+                let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+                let indent = match buf.tabs_required {
+                    false => buf.tab_substitution.clone(),
+                    true => "\t".to_string(),
+                };
                 let (start, end) = reorder(self.cursor, selection);
                 let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
                 let mut alt = Secondary::ge(alt, bookmarks, self.cursor);
@@ -1625,6 +1648,7 @@ impl BufferContext {
                         }
                     });
                 }
+                None
             }
         }
     }
@@ -1847,7 +1871,7 @@ impl BufferContext {
     /// Returns set of autocompletion matches and their offset
     /// in the rope in characters.
     /// The partial word being autocompleted will be first in the Vec.
-    pub fn autocomplete_matches(&self) -> Option<(usize, Vec<String>)> {
+    fn autocomplete_matches(&self) -> Option<(usize, Vec<String>)> {
         use std::collections::HashMap;
 
         let buf = &mut self.buffer.borrow();

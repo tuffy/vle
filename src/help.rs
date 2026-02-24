@@ -178,7 +178,8 @@ pub static EDITING_2: &[Keybinding] = &[
     keybind::<key::Reload>("Reload File"),
     keybind::<key::Quit>("Quit File"),
     keybind::<key::Bookmark>("Toggle Bookmark"),
-    ctrl(&["]"], "Autocomplete Word"),
+    // TODO - make conditional based on editor state
+    none(&["Tab"], "Indent / Autocomplete"),
     Keybinding {
         modifier: Some("Shift"),
         keys: &[LEFT, DOWN, UP, RIGHT],
