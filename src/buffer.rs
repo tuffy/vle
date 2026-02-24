@@ -3672,6 +3672,7 @@ impl StatefulWidget for BufferWidget<'_> {
             colorized: Vec<Span<'s>>,
             line_range: RangeInclusive<usize>,
             (selection_start, selection_end): (usize, usize),
+            highlight: impl Fn(Span<'s>) -> Span<'s>,
         ) -> Vec<Span<'s>> {
             let (line_start, line_end) = line_range.into_inner();
             if selection_end <= line_start || selection_start >= line_end {
@@ -3693,7 +3694,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     &mut colorized,
                     selection_end - selection_start.max(line_start),
                     &mut highlighted,
-                    |span| span.style(EDITING),
+                    |span| highlight(span),
                 );
 
                 // output any remaining characters verbatim
@@ -4098,6 +4099,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                         ),
                                         range.clone(),
                                         (selection_start, selection_end),
+                                        |span| span.style(EDITING),
                                     )
                                     .into()
                                 },
@@ -4158,7 +4160,47 @@ impl StatefulWidget for BufferWidget<'_> {
                     .take(area.height.into())
                     .collect::<Vec<_>>()
             }
-            // TODO - highlight current autocompletion as red underlined
+            Some(EditorMode::Autocomplete {
+                offset,
+                completions,
+                index,
+            }) => {
+                let completion_start = *offset;
+                let completion_end = *offset + completions[*index].chars().count();
+
+                EditorLine::iter(rope, viewport_line)
+                    .map(
+                        |EditorLine {
+                             line,
+                             range,
+                             number,
+                         }| {
+                            highlight_parens(
+                                widen(highlight_selection(
+                                    colorize(
+                                        syntax,
+                                        &mut hlstate,
+                                        line,
+                                        current_line == Some(number),
+                                    ),
+                                    range.clone(),
+                                    (completion_start, completion_end),
+                                    |span| {
+                                        span.patch_style(
+                                            Style::new().underlined().underline_color(Color::Red),
+                                        )
+                                    },
+                                )),
+                                range,
+                                &mut marks,
+                            )
+                            .into()
+                        },
+                    )
+                    .map(|line| widen_tabs(line, &buffer.tab_substitution))
+                    .take(area.height.into())
+                    .collect::<Vec<_>>()
+            }
             _ => {
                 match state.selection {
                     // no selection, so nothing to highlight
@@ -4206,6 +4248,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                             ),
                                             range.clone(),
                                             (selection_start, selection_end),
+                                            |span| span.style(EDITING),
                                         )),
                                         range,
                                         &mut marks,

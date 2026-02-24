@@ -165,7 +165,6 @@ pub static EDITING_0: &[Keybinding] = &[
     keybind::<key::Save>("Save File"),
 ];
 
-// TODO - document autocomplete
 pub static EDITING_1: &[Keybinding] = &[
     // F6 is for replace text
     keybind::<key::GotoPair>("Goto Matching Pair"),
@@ -179,6 +178,7 @@ pub static EDITING_2: &[Keybinding] = &[
     keybind::<key::Reload>("Reload File"),
     keybind::<key::Quit>("Quit File"),
     keybind::<key::Bookmark>("Toggle Bookmark"),
+    ctrl(&["]"], "Autocomplete Word"),
     Keybinding {
         modifier: Some("Shift"),
         keys: &[LEFT, DOWN, UP, RIGHT],
