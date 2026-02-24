@@ -1895,7 +1895,7 @@ impl BufferContext {
         }
 
         let mut counts = counts.into_iter().collect::<Vec<_>>();
-        counts.sort_unstable_by(|(s1, c1), (s2, c2)| c1.cmp(c2).then(s1.cmp(s2)));
+        counts.sort_unstable_by(|(s1, c1), (s2, c2)| c1.cmp(c2).then(s1.cmp(s2).reverse()));
 
         Some((
             prefix_start,
