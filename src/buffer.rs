@@ -1844,6 +1844,58 @@ impl BufferContext {
         }
     }
 
+    /// Returns set of autocompletion matches and their offset
+    /// in the rope in characters.
+    /// The partial word being autocompleted will be first in the Vec.
+    pub fn autocomplete_matches(&self) -> Option<(usize, Vec<String>)> {
+        use std::collections::HashMap;
+
+        let buf = &mut self.buffer.borrow();
+        let rope = &buf.rope;
+
+        if !is_word(rope.get_char(self.cursor)?) {
+            return None;
+        }
+
+        let prefix_start = rope
+            .chars_at(self.cursor)
+            .reversed()
+            .position(|c| !is_word(c))
+            .and_then(|pos| self.cursor.checked_sub(pos))
+            .unwrap_or(0);
+
+        let prefix_end = rope
+            .chars_at(self.cursor)
+            .position(|c| !is_word(c))
+            .map(|pos| self.cursor + pos)
+            .unwrap_or(rope.len_chars());
+
+        let prefix = Cow::from(rope.get_slice(prefix_start..prefix_end)?).into_owned();
+
+        let mut counts: HashMap<String, u64> = HashMap::default();
+
+        for line in rope.lines() {
+            let line = Cow::from(line);
+            for (word, _) in
+                lazy_regex::regex_captures_iter!("[[:word:]]+", &line).map(|c| c.extract::<0>())
+            {
+                if word.starts_with(&prefix) && word != prefix {
+                    *counts.entry(word.to_string()).or_default() += 1;
+                }
+            }
+        }
+
+        let mut counts = counts.into_iter().collect::<Vec<_>>();
+        counts.sort_unstable_by(|(s1, c1), (s2, c2)| c1.cmp(c2).then(s1.cmp(s2)));
+
+        Some((
+            prefix_start,
+            std::iter::once(prefix)
+                .chain(counts.into_iter().map(|(s, _)| s).rev())
+                .collect(),
+        ))
+    }
+
     pub fn clear_matches<P>(
         &mut self,
         alt: Option<AltCursor<'_>>,

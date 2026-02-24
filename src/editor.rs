@@ -750,6 +750,14 @@ impl Editor {
                     self.mode = new_mode;
                 }
             }
+            // TODO - make different binding
+            key!(CONTROL, 'u') => {
+                // TODO - if matches, replace first match then switch to autocomplete mode
+                self.on_buffer(|b| {
+                    let matches = b.autocomplete_matches();
+                    b.set_error(format!("{matches:?}"));
+                });
+            }
             Event::Mouse(MouseEvent {
                 kind: MouseEventKind::ScrollDown,
                 modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
