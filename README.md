@@ -45,9 +45,11 @@ are done via simple environment variables.
 | Split/Un-Split Pane            | <kbd>F10</kbd> | <kbd>Ctrl</kbd>-<kbd>N</kbd>       |
 | Reload File                    | <kbd>F11</kbd> | <kbd>Ctrl</kbd>-<kbd>L</kbd>       |
 | Quit File                      | <kbd>F12</kbd> | <kbd>Ctrl</kbd>-<kbd>Q</kbd>       |
+| Toggle Bookmark                | <kbd>Ins</kbd> | <kbd>Ctrl</kbd>-<kbd>B</kbd>       |
 | Highlight Text                 |                | <kbd>Shift</kbd>-<kbd>Arrows</kbd> |
-| Start                          |                | <kbd>Ctrl</kbd>-<kbd>Home</kbd>    |
+| Start of Selection             |                | <kbd>Ctrl</kbd>-<kbd>Home</kbd>    |
 | End of Selection               |                | <kbd>Ctrl</kbd>-<kbd>End</kbd>     |
+| Indent / Autocomplete          |                | <kbd>Tab</kbd>                     |
 | Cut                            |                | <kbd>Ctrl</kbd>-<kbd>X</kbd>       |
 | Copy                           |                | <kbd>Ctrl</kbd>-<kbd>C</kbd>       |
 | Paste                          |                | <kbd>Ctrl</kbd>-<kbd>V</kbd>       |
@@ -56,7 +58,6 @@ are done via simple environment variables.
 | Previous Buffer                |                | <kbd>Ctrl</kbd>-<kbd>PgUp</kbd>    |
 | Next Buffer                    |                | <kbd>Ctrl</kbd>-<kbd>PgDn</kbd>    |
 | Switch Pane                    |                | <kbd>Ctrl</kbd>-<kbd>Arrows</kbd>  |
-| Toggle Bookmark                |                | <kbd>Ctrl</kbd>-<kbd>B</kbd>       |
 
 Because we have so few features, non-navigational features
 have alternative <kbd>Ctrl</kbd>-based and <kbd>F</kbd>-based keybindings.
@@ -159,6 +160,20 @@ if it has not yet been saved.
 Closes the current file buffer, prompting for a confirmation
 if its contents have not yet been saved.
 The editor quits once all buffers have been closed.
+
+## Toggle Bookmark
+
+Inserts or removes a bookmark in the text,
+which can be navigated using the "Goto Line" mode.
+
+## Autocompletion
+
+If the cursor is located just past the end of a word,
+<kbd>Tab</kbd> will attempt to autocomplete that word
+using the best available candidates.
+
+If the cursor is anywhere else, or a selection is active,
+<kbd>Tab</kbd> will indent the line(s).
 
 # Syntax Highlighting
 
