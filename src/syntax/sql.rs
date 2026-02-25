@@ -75,6 +75,7 @@ enum SqlToken {
     #[token("VALUES")]
     #[token("WHERE")]
     #[token("ON")]
+    #[token("USING")]
     #[token("CASCADE")]
     #[token("REFERENCES")]
     #[token("ENGINE")]
