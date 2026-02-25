@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::Highlight;
+use crate::syntax::{Modifier, Highlight};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -36,6 +36,7 @@ enum TutorialToken {
     #[token("Home")]
     #[token("End")]
     #[token("Del")]
+    #[token("Insert")]
     #[token("Backspace")]
     #[token("Shift")]
     #[token("Enter")]
@@ -53,6 +54,7 @@ enum TutorialToken {
     #[token("Ctrl-O")]
     #[token("Ctrl-Q")]
     #[token("Ctrl-N")]
+    #[token("Ctrl-B")]
     #[token("Ctrl-PgUp")]
     #[token("Ctrl-PgDn")]
     #[token("Ctrl-Home")]
@@ -86,12 +88,15 @@ enum TutorialToken {
     #[token(">>> 333333,44")]
     #[token(">>> 555,66666")]
     #[token(">>> 7777777,8")]
+    #[token(">>> pneumonoultramicroscopicsilicovolcanoconiosis")]
     Correct,
     #[regex(">>> .+", allow_greedy = true)]
     #[token("println!(\"a is {a}\");")]
     #[token("println!(\"b is {b}\");")]
     #[token("println!(\"c is {c}\");")]
     Incorrect,
+    #[regex("[A-Za-z][a-z]*")]
+    Word,
 }
 
 impl TryFrom<TutorialToken> for Highlight {
@@ -100,12 +105,18 @@ impl TryFrom<TutorialToken> for Highlight {
     fn try_from(t: TutorialToken) -> Result<Highlight, ()> {
         match t {
             TutorialToken::Title => Ok(Color::Cyan.into()),
-            TutorialToken::Keybinding => Ok(Color::Magenta.into()),
-            TutorialToken::Header => Ok(Color::Blue.into()),
-            TutorialToken::Subheader => Ok(Color::Blue.into()),
+            TutorialToken::Keybinding => Ok(Highlight {
+                color: Some(Color::Magenta),
+                modifier: Modifier::Bold,
+            }),
+            TutorialToken::Header | TutorialToken::Subheader => Ok(Highlight {
+                color: Some(Color::Blue),
+                modifier: Modifier::Underlined,
+            }),
             TutorialToken::Correct => Ok(Color::Green.into()),
             TutorialToken::Incorrect => Ok(Color::Red.into()),
             TutorialToken::Variable => Ok(Color::Cyan.into()),
+            TutorialToken::Word => Err(()),
         }
     }
 }

@@ -112,12 +112,32 @@ This may be especially handy when the selection has gotten
 quite long or needs to be extended from one side or another.
 
 
+## Autocompleting Text
+
+If the cursor is located just past the end of a word,
+the Tab key will attempt to auto-complete that word.
+
+For example, try moving your cursor to the end of the word "pneu",
+and then hit Tab to fill in the rest.
+
+>>> pneu
+    pneumonoultramicroscopicsilicovolcanoconiosis
+
+Repeatedly pressing Tab will cycle through all possible
+candidates, from most common to least, before returning
+back to the beginning.
+
+Similarly, Shift-Tab will autocomplete in reverse order
+from least common to most (which may be helpful if one
+happens to hit Tab one time too many).
+
+
 ## Indenting Text
 
-Using Tab anywhere in a line will indent that line,
-which inserts four spaces by default.
-If multiple lines are selected, all lines
-will be indented simultaneously.
+Using Tab anywhere outside the end of the word
+will indent that line, which inserts four spaces by default.
+If a selection is active or multiple lines are selected,
+all lines will be indented simultaneously.
 
 Similarly, Shift-Tab will un-indent the current
 or selected lines by the same number of spaces.
@@ -228,7 +248,7 @@ way back to the buffer's state before you undid anything.
 
 Often, you'll find you've made an error at a specific line
 in a file. Ctrl-T/F4 brings up a prompt asking for which
-line you'd like to go to. Going to line 227 will bring
+line you'd like to go to. Going to line 247 will bring
 you to the beginning of this section.
 
 In addition, you may use Home and End within the "goto line"
@@ -355,6 +375,25 @@ Finally, Ctrl-V followed by 1 will place the first column last.
 >>> 44,333333
 >>> 66666,555
 >>> 8,7777777
+
+
+## Bookmarks
+
+Bookmarks provide a way to mark spots in a file
+with the intent of returning to them later.
+Ctrl-B/Insert toggles a bookmark's location,
+inserting one if not present or removing it if present.
+
+The total number of bookmarks present is indicated
+in the file's status bar in the upper right hand corner.
+
+Bookmarks can be navigated between using Ctrl-T/F4
+(the same mode using for going to a particular line)
+and cycled between using ↑ and ↓.
+
+Deleting text under a bookmark will also delete the bookmark itself,
+which may be helpful when bookmarks are attached to TODO items
+within a piece of code and are no longer required.
 
 
 ## Multiple Buffers
