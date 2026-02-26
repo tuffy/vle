@@ -777,6 +777,7 @@ pub struct Help {
     find: FindMode,
     has_bookmarks: bool,
     autocomplete: bool,
+    edit_lines: bool,
 }
 
 /// A buffer with additional context on a per-view basis
@@ -2167,6 +2168,7 @@ impl BufferContext {
                 },
                 has_bookmarks,
                 autocomplete: false,
+                edit_lines: true,
             },
             None => {
                 let current_char = rope.get_char(self.cursor);
@@ -2188,6 +2190,7 @@ impl BufferContext {
                             None => false,
                         },
                     },
+                    edit_lines: false,
                 }
             }
         }
@@ -4327,14 +4330,15 @@ impl StatefulWidget for BufferWidget<'_> {
                     find,
                     has_bookmarks,
                     autocomplete,
+                    edit_lines,
                 }) = self.show_help
                 {
                     use crate::editor::EditorLayout;
                     use crate::help::{
                         EDITING_0, EDITING_1, EDITING_2, EDITING_3, F10_SPLIT, F10_UNSPLIT,
-                        SWITCH_PANE_HORIZONTAL, SWITCH_PANE_VERTICAL, keybind, none,
+                        SWITCH_PANE_HORIZONTAL, SWITCH_PANE_VERTICAL, keybind, none, solo_keybind,
                     };
-                    use crate::key::GotoLine;
+                    use crate::key::{EditMatches, GotoLine};
 
                     let mut help = Vec::with_capacity(16);
                     help.extend(EDITING_0);
@@ -4359,6 +4363,9 @@ impl StatefulWidget for BufferWidget<'_> {
                             "Indent Text"
                         },
                     ));
+                    help.extend(
+                        edit_lines.then_some(solo_keybind::<EditMatches>("Edit Selected Lines")),
+                    );
                     help.extend(EDITING_3);
                     match self.layout {
                         EditorLayout::Horizontal => help.push(SWITCH_PANE_HORIZONTAL),

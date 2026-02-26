@@ -50,6 +50,7 @@ are done via simple environment variables.
 | Start of Selection             |                | <kbd>Ctrl</kbd>-<kbd>Home</kbd>    |
 | End of Selection               |                | <kbd>Ctrl</kbd>-<kbd>End</kbd>     |
 | Indent / Autocomplete          |                | <kbd>Tab</kbd>                     |
+| Edit Selected Lines            |                | <kbd>Ctrl</kbd>-<kbd>Tab</kbd>     |
 | Cut                            |                | <kbd>Ctrl</kbd>-<kbd>X</kbd>       |
 | Copy                           |                | <kbd>Ctrl</kbd>-<kbd>C</kbd>       |
 | Paste                          |                | <kbd>Ctrl</kbd>-<kbd>V</kbd>       |
@@ -174,6 +175,13 @@ using the best available candidates.
 
 If the cursor is anywhere else, or a selection is active,
 <kbd>Tab</kbd> will indent the line(s).
+
+## Edit Selected Lines
+
+If multiple lines are selected, one can edit them as a unit.
+That is, entered characters will be inserted at the cursors
+on all lines simultaneously, left and right will move
+the cursors on all lines simultaneously, and so on.
 
 # Syntax Highlighting
 

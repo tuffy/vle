@@ -35,6 +35,10 @@ pub const fn keybind<B: key::Binding>(action: &'static str) -> Keybinding {
     }
 }
 
+pub const fn solo_keybind<B: key::SoloBinding>(action: &'static str) -> Keybinding {
+    ctrl(&[B::LABEL], action)
+}
+
 pub const fn none(keys: &'static [&'static str], action: &'static str) -> Keybinding {
     Keybinding {
         modifier: None,
@@ -263,15 +267,16 @@ pub static CREATE_FILE: &[Keybinding] = &[
 pub static BROWSE_MATCHES: &[Keybinding] = &[
     none(&[UP, DOWN], "Select Match"),
     none(&["Del"], "Remove Match"),
-    keybind::<key::UpdateMatches>("Update Matches"),
+    solo_keybind::<key::EditMatches>("Update Matches"),
     keybind::<key::Replace>("Replace Matches"),
     keybind::<key::Bookmark>("Bookmark Matches"),
     none(&["Enter"], "Finish"),
 ];
 
 pub static REPLACE_MATCHES: &[Keybinding] = &[
+    none(&[LEFT, RIGHT], "Move Cursors"),
     none(&[UP, DOWN], "Select Match"),
-    none(&["Home", "End"], "Start / End of Match"),
+    none(&["Home", "End"], "Start / End of Matches"),
     keybind::<key::Bookmark>("Bookmark Positions"),
     ctrl(&["V"], "Paste From Cut Buffer"),
     none(&["Enter"], "Finish Replacement"),

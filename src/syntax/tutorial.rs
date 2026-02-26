@@ -62,6 +62,7 @@ enum TutorialToken {
     #[token("Esc")]
     #[token("Tab")]
     #[token("Shift-Tab")]
+    #[token("Ctrl-Tab")]
     Keybinding,
     #[token("VLE_SPACES_PER_TAB")]
     #[token("VLE_ALWAYS_TAB")]
@@ -89,12 +90,20 @@ enum TutorialToken {
     #[token(">>> 555,66666")]
     #[token(">>> 7777777,8")]
     #[token(">>> pneumonoultramicroscopicsilicovolcanoconiosis")]
+    #[token(">>> # Lorem ipsum dolor sit amet, consectetur adipiscing elit.")]
+    #[token(">>> # Nullam viverra est nec sem feugiat blandit.")]
+    #[token(">>> # Vestibulum ante ipsum primis in faucibus orci luctus et")]
+    #[token(">>> # ultrices posuere cubilia curae;")]
+    #[token(">>> # Phasellus consequat massa lorem, vel cursus enim tristique vel.")]
+    #[token(">>> # Nunc dictum imperdiet porttitor.")]
     Correct,
     #[regex(">>> .+", allow_greedy = true)]
     #[token("println!(\"a is {a}\");")]
     #[token("println!(\"b is {b}\");")]
     #[token("println!(\"c is {c}\");")]
     Incorrect,
+    #[regex("    # [A-Za-z ,.;]+")]
+    Comment,
     #[regex("[A-Za-z][a-z]*")]
     Word,
 }
@@ -116,6 +125,10 @@ impl TryFrom<TutorialToken> for Highlight {
             TutorialToken::Correct => Ok(Color::Green.into()),
             TutorialToken::Incorrect => Ok(Color::Red.into()),
             TutorialToken::Variable => Ok(Color::Cyan.into()),
+            TutorialToken::Comment => Ok(Highlight {
+                color: Some(Color::DarkGray),
+                modifier: Modifier::Italic,
+            }),
             TutorialToken::Word => Err(()),
         }
     }

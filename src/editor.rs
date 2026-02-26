@@ -15,7 +15,7 @@ use crate::{
         SelectionRange, Source,
     },
     files::{ChooserSource, FileChooserState, LocalSource},
-    key::Binding,
+    key::{Binding, SoloBinding},
     prompt::{LinePrompt, TextField},
 };
 use crossterm::event::Event;
@@ -143,6 +143,17 @@ macro_rules! keybind {
                 ..
             },
         )
+    };
+}
+
+macro_rules! solo_keybind {
+    ($bind:ident) => {
+        Event::Key(KeyEvent {
+            code: key::$bind::KEY,
+            modifiers: KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press,
+            ..
+        })
     };
 }
 
@@ -1428,7 +1439,7 @@ fn process_browse_matches<P>(
         }
         key!(Enter) => Some(NextModeBrowse::Default),
         keybind!(Replace) => Some(NextModeBrowse::Replace),
-        keybind!(UpdateMatches) => Some(NextModeBrowse::Update),
+        solo_keybind!(EditMatches) | key!(CONTROL, 'u') | key!(' ') => Some(NextModeBrowse::Update),
         keybind!(Bookmark) => {
             buffer.toggle_bookmarks(matches.iter().map(|(m, _)| m.start));
             None

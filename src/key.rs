@@ -15,6 +15,11 @@ pub trait Binding {
     const SECONDARY_LABEL: &'static str;
 }
 
+pub trait SoloBinding {
+    const KEY: KeyCode;
+    const LABEL: &'static str;
+}
+
 macro_rules! binding {
     ($name:ident, $primary:ident, $secondary:ident) => {
         pub struct $name;
@@ -24,6 +29,17 @@ macro_rules! binding {
             const SECONDARY_KEY: KeyCode = Key::$secondary.to_char();
             const PRIMARY_LABEL: &'static str = Key::$primary.to_str();
             const SECONDARY_LABEL: &'static str = Key::$secondary.to_str();
+        }
+    };
+}
+
+macro_rules! solo_binding {
+    ($name:ident, $key:ident) => {
+        pub struct $name;
+
+        impl SoloBinding for $name {
+            const KEY: KeyCode = Key::$key.to_char();
+            const LABEL: &'static str = Key::$key.to_str();
         }
     };
 }
@@ -40,7 +56,7 @@ binding!(SplitPane, N, F10);
 binding!(Reload, L, F11);
 binding!(Quit, Q, F12);
 binding!(Bookmark, B, Insert);
-binding!(UpdateMatches, U, Space);
+solo_binding!(EditMatches, Tab);
 
 #[derive(Copy, Clone)]
 #[allow(unused)]
@@ -85,6 +101,7 @@ enum Key {
     F12,
     Insert,
     Space,
+    Tab,
 }
 
 impl Key {
@@ -130,6 +147,7 @@ impl Key {
             Self::F12 => KeyCode::F(12),
             Self::Insert => KeyCode::Insert,
             Self::Space => KeyCode::Char(' '),
+            Self::Tab => KeyCode::Tab,
         }
     }
     const fn to_str(self) -> &'static str {
@@ -174,6 +192,7 @@ impl Key {
             Self::F12 => "F12",
             Self::Insert => "Ins",
             Self::Space => "Spc",
+            Self::Tab => "Tab",
         }
     }
 }

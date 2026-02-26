@@ -163,6 +163,30 @@ println!("c is {c}");
 }
 
 
+## Editing Multiple Lines Simultaneously
+
+Similar to indenting text, highlighting a selection
+and using Ctrl-Tab will allow one to edit all the lines
+of that selection simultaneously.
+This allows one to comment or un-comment multiple
+lines as a unit, among other things.
+
+For example, let's comment out six lines of placeholder text:
+
+>>> Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+>>> Nullam viverra est nec sem feugiat blandit.
+>>> Vestibulum ante ipsum primis in faucibus orci luctus et
+>>> ultrices posuere cubilia curae;
+>>> Phasellus consequat massa lorem, vel cursus enim tristique vel.
+>>> Nunc dictum imperdiet porttitor.
+    # Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+    # Nullam viverra est nec sem feugiat blandit.
+    # Vestibulum ante ipsum primis in faucibus orci luctus et
+    # ultrices posuere cubilia curae;
+    # Phasellus consequat massa lorem, vel cursus enim tristique vel.
+    # Nunc dictum imperdiet porttitor.
+
+
 ## Surrounded Text
 
 Text surrounded by characters like " or ( are a common
