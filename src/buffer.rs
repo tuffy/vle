@@ -2021,29 +2021,22 @@ impl BufferContext {
     pub fn multi_insert_char(
         &mut self,
         alt: Option<AltCursor<'_>>,
-        mut matches: &mut [MultiCursor],
+        matches: &mut [MultiCursor],
         c: char,
     ) {
+        use std::convert::Infallible;
+
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
 
-        loop {
-            match matches {
-                [] => break,
-                [m] => {
-                    m.insert_char(&mut rope, &mut self.cursor, &mut alt, c);
-                    break;
-                }
-                [m, rest @ ..] => {
-                    let inserted = m.insert_char(&mut rope, &mut self.cursor, &mut alt, c);
-                    for r in rest.iter_mut() {
-                        *r += inserted;
-                    }
-                    matches = rest;
-                }
-            }
-        }
+        multicursor_update(
+            matches,
+            |m| Ok::<usize, Infallible>(m.insert_char(&mut rope, &mut self.cursor, &mut alt, c)),
+            |r, inserted| {
+                *r += inserted;
+            },
+        );
     }
 
     pub fn multi_insert_string(
@@ -2058,85 +2051,52 @@ impl BufferContext {
     pub fn multi_insert_strings<'s>(
         &mut self,
         alt: Option<AltCursor<'_>>,
-        mut matches: &mut [MultiCursor],
-        mut strings: impl Iterator<Item = (usize, &'s str)>,
+        matches: &mut [MultiCursor],
+        mut strings: impl std::iter::FusedIterator<Item = (usize, &'s str)>,
     ) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
 
-        loop {
-            match matches {
-                [] => break,
-                [m] => {
-                    let Some((s_len, s)) = strings.next() else {
-                        return;
-                    };
-                    m.insert_str(&mut rope, &mut self.cursor, &mut alt, s, s_len);
-                    break;
-                }
-                [m, rest @ ..] => {
-                    let Some((s_len, s)) = strings.next() else {
-                        return;
-                    };
-                    m.insert_str(&mut rope, &mut self.cursor, &mut alt, s, s_len);
-                    for r in rest.iter_mut() {
-                        *r += s_len;
-                    }
-                    matches = rest;
-                }
-            }
-        }
+        multicursor_update(
+            matches,
+            |m| {
+                let (s_len, s) = strings.next().ok_or(())?;
+                m.insert_str(&mut rope, &mut self.cursor, &mut alt, s, s_len);
+                Ok::<usize, ()>(s_len)
+            },
+            |r, s_len| {
+                *r += s_len;
+            },
+        );
     }
 
-    pub fn multi_backspace(&mut self, alt: Option<AltCursor<'_>>, mut matches: &mut [MultiCursor]) {
+    pub fn multi_backspace(&mut self, alt: Option<AltCursor<'_>>, matches: &mut [MultiCursor]) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
 
-        loop {
-            match matches {
-                [] => break,
-                [m] => {
-                    // don't worry if backspace unsuccessful
-                    let _ = m.backspace(&mut rope, &mut self.cursor, &mut alt);
-                    break;
-                }
-                [m, rest @ ..] => {
-                    if let Ok(removed) = m.backspace(&mut rope, &mut self.cursor, &mut alt) {
-                        for r in rest.iter_mut() {
-                            *r -= removed;
-                        }
-                    }
-                    matches = rest;
-                }
-            }
-        }
+        multicursor_update(
+            matches,
+            |m| m.backspace(&mut rope, &mut self.cursor, &mut alt),
+            |r, removed| {
+                *r -= removed;
+            },
+        );
     }
 
-    pub fn multi_delete(&mut self, alt: Option<AltCursor<'_>>, mut matches: &mut [MultiCursor]) {
+    pub fn multi_delete(&mut self, alt: Option<AltCursor<'_>>, matches: &mut [MultiCursor]) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
 
-        loop {
-            match matches {
-                [] => break,
-                [m] => {
-                    // don't worry if delete unsuccessful
-                    let _ = m.delete(&mut rope, &mut self.cursor, &mut alt);
-                    break;
-                }
-                [m, rest @ ..] => {
-                    if let Ok(()) = m.delete(&mut rope, &mut self.cursor, &mut alt) {
-                        for r in rest.iter_mut() {
-                            *r -= 1;
-                        }
-                    }
-                    matches = rest;
-                }
-            }
-        }
+        multicursor_update(
+            matches,
+            |m| m.delete(&mut rope, &mut self.cursor, &mut alt),
+            |r, ()| {
+                *r -= 1;
+            },
+        );
     }
 
     pub fn multi_cursor_back(&mut self, matches: &mut [MultiCursor]) {
@@ -2493,6 +2453,30 @@ impl std::ops::SubAssign<usize> for MultiCursor {
         self.range.start -= chars;
         self.range.end -= chars;
         self.cursor -= chars;
+    }
+}
+
+fn multicursor_update<T: Copy, E>(
+    mut cursors: &mut [MultiCursor],
+    mut on_cursor: impl FnMut(&mut MultiCursor) -> Result<T, E>,
+    mut on_next: impl FnMut(&mut MultiCursor, T),
+) {
+    loop {
+        match cursors {
+            [] => break,
+            [m] => {
+                let _ = on_cursor(m);
+                break;
+            }
+            [m, rest @ ..] => {
+                if let Ok(t) = on_cursor(m) {
+                    for r in rest.iter_mut() {
+                        on_next(r, t);
+                    }
+                }
+                cursors = rest;
+            }
+        }
     }
 }
 
@@ -3747,7 +3731,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     &mut colorized,
                     selection_end - selection_start.max(line_start),
                     &mut highlighted,
-                    |span| highlight(span),
+                    highlight,
                 );
 
                 // output any remaining characters verbatim

@@ -716,11 +716,11 @@ impl Editor {
                 if let Some(Some((offset, completions))) =
                     self.on_buffer_at(|b, a| b.compelete_or_indent(a))
                 {
-                    if let Some(original) = completions.get(0)
+                    if let Some(original) = completions.first()
                         && let Some(replacement) = completions.get(1)
                     {
                         self.update_buffer_at(|b, a| {
-                            b.autocomplete(a, offset, &original, &replacement)
+                            b.autocomplete(a, offset, original, replacement)
                         });
                         self.mode = EditorMode::Autocomplete {
                             offset,
@@ -736,13 +736,13 @@ impl Editor {
                 if let Some(Some((offset, completions))) =
                     self.on_buffer_at(|b, a| b.compelete_or_unindent(a))
                 {
-                    if let Some(original) = completions.get(0)
+                    if let Some(original) = completions.first()
                         && let Some(index) = completions.len().checked_sub(1)
                         && index != 0
                         && let Some(replacement) = completions.get(index)
                     {
                         self.update_buffer_at(|b, a| {
-                            b.autocomplete(a, offset, &original, &replacement)
+                            b.autocomplete(a, offset, original, replacement)
                         });
                         self.mode = EditorMode::Autocomplete {
                             offset,
