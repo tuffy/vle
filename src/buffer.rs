@@ -1504,7 +1504,7 @@ impl BufferContext {
         }
     }
 
-    pub fn compelete_or_indent(
+    pub fn complete_or_indent(
         &mut self,
         alt: Option<AltCursor<'_>>,
     ) -> Option<(usize, Vec<String>)> {

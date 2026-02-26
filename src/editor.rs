@@ -714,7 +714,7 @@ impl Editor {
             }
             key!(Tab) => {
                 if let Some(Some((offset, completions))) =
-                    self.on_buffer_at(|b, a| b.compelete_or_indent(a))
+                    self.on_buffer_at(|b, a| b.complete_or_indent(a))
                 {
                     if let Some(original) = completions.first()
                         && let Some(replacement) = completions.get(1)
