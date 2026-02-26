@@ -1659,9 +1659,11 @@ impl BufferContext {
         let buf = self.buffer.borrow_move();
 
         let lines = selected_lines(&buf.rope, self.cursor, self.selection.take())
-            .map(|SelectedLine { start, end }| MultiCursor {
-                range: start..end,
-                cursor: start,
+            .filter_map(|SelectedLine { start, end }| {
+                (start != end).then_some(MultiCursor {
+                    range: start..end,
+                    cursor: start,
+                })
             })
             .collect::<Vec<_>>();
 
