@@ -1997,17 +1997,21 @@ impl StatefulWidget for LayoutWidget<'_> {
             | Layout::SingleHidden {
                 visible: single, ..
             } => {
+                let multiple_buffers = single.multiple_buffers();
+
                 if let Some(buffer) = single.current_mut() {
                     BufferWidget {
                         mode: Some(mode),
                         layout: EditorLayout::Single,
-                        show_help: show_help.then(|| buffer.find_mode()),
+                        show_help: show_help.then(|| buffer.find_mode(multiple_buffers)),
                     }
                     .render(area, buf, buffer);
                 }
             }
             Layout::Horizontal { top, bottom, which } => {
                 use ratatui::layout::{Constraint, Layout};
+
+                let multiple_buffers = top.multiple_buffers();
 
                 let [top_area, bottom_area] =
                     Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
@@ -2020,7 +2024,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                         },
                         layout: EditorLayout::Horizontal,
                         show_help: (show_help && !matches!(which, HorizontalPos::Top))
-                            .then(|| bottom.find_mode())
+                            .then(|| bottom.find_mode(multiple_buffers))
                             .flatten(),
                     }
                     .render(top_area, buf, buffer);
@@ -2033,7 +2037,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                         },
                         layout: EditorLayout::Horizontal,
                         show_help: (show_help && !matches!(which, HorizontalPos::Bottom))
-                            .then(|| top.find_mode())
+                            .then(|| top.find_mode(multiple_buffers))
                             .flatten(),
                     }
                     .render(bottom_area, buf, buffer);
@@ -2041,6 +2045,8 @@ impl StatefulWidget for LayoutWidget<'_> {
             }
             Layout::Vertical { left, right, which } => {
                 use ratatui::layout::{Constraint, Layout};
+
+                let multiple_buffers = left.multiple_buffers();
 
                 let [left_area, right_area] =
                     Layout::horizontal(Constraint::from_fills([1, 1])).areas(area);
@@ -2053,7 +2059,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                         },
                         layout: EditorLayout::Vertical,
                         show_help: (show_help && !matches!(which, VerticalPos::Left))
-                            .then(|| right.find_mode())
+                            .then(|| right.find_mode(multiple_buffers))
                             .flatten(),
                     }
                     .render(left_area, buf, buffer);
@@ -2066,7 +2072,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                         },
                         layout: EditorLayout::Vertical,
                         show_help: (show_help && !matches!(which, VerticalPos::Right))
-                            .then(|| left.find_mode())
+                            .then(|| left.find_mode(multiple_buffers))
                             .flatten(),
                     }
                     .render(right_area, buf, buffer);

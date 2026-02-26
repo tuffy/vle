@@ -777,7 +777,8 @@ pub struct Help {
     find: FindMode,
     has_bookmarks: bool,
     autocomplete: bool,
-    edit_lines: bool,
+    has_selection: bool,
+    multiple_buffers: bool,
 }
 
 /// A buffer with additional context on a per-view basis
@@ -2151,7 +2152,7 @@ impl BufferContext {
         }
     }
 
-    pub fn find_mode(&self) -> Help {
+    pub fn find_mode(&self, multiple_buffers: bool) -> Help {
         let buffer = &self.buffer.borrow();
         let has_bookmarks = buffer.has_bookmarks();
         let rope = &buffer.rope;
@@ -2168,7 +2169,8 @@ impl BufferContext {
                 },
                 has_bookmarks,
                 autocomplete: false,
-                edit_lines: true,
+                has_selection: true,
+                multiple_buffers,
             },
             None => {
                 let current_char = rope.get_char(self.cursor);
@@ -2190,7 +2192,8 @@ impl BufferContext {
                             None => false,
                         },
                     },
-                    edit_lines: false,
+                    has_selection: false,
+                    multiple_buffers,
                 }
             }
         }
@@ -3122,6 +3125,10 @@ impl BufferList {
         self.buffers.is_empty()
     }
 
+    pub fn multiple_buffers(&self) -> bool {
+        self.buffers.len() > 1
+    }
+
     pub fn push(&mut self, buffer: BufferContext, select: bool) {
         self.buffers.push(buffer);
         if select {
@@ -3237,8 +3244,8 @@ impl BufferList {
         self.buffers.len() > 1
     }
 
-    pub fn find_mode(&self) -> Option<Help> {
-        self.current().map(|b| b.find_mode())
+    pub fn find_mode(&self, multiple_buffers: bool) -> Option<Help> {
+        self.current().map(|b| b.find_mode(multiple_buffers))
     }
 }
 
@@ -4330,13 +4337,15 @@ impl StatefulWidget for BufferWidget<'_> {
                     find,
                     has_bookmarks,
                     autocomplete,
-                    edit_lines,
+                    has_selection,
+                    multiple_buffers,
                 }) = self.show_help
                 {
                     use crate::editor::EditorLayout;
                     use crate::help::{
                         EDITING_0, EDITING_1, EDITING_2, EDITING_3, F10_SPLIT, F10_UNSPLIT,
-                        SWITCH_PANE_HORIZONTAL, SWITCH_PANE_VERTICAL, keybind, none, solo_keybind,
+                        SWITCH_PANE_HORIZONTAL, SWITCH_PANE_VERTICAL, ctrl, keybind, none,
+                        solo_keybind,
                     };
                     use crate::key::{EditMatches, GotoLine};
 
@@ -4355,6 +4364,9 @@ impl StatefulWidget for BufferWidget<'_> {
                         EditorLayout::Horizontal | EditorLayout::Vertical => F10_SPLIT,
                     });
                     help.extend(EDITING_2);
+                    help.extend(
+                        has_selection.then_some(ctrl(&["Home", "End"], "Start / End of Selection")),
+                    );
                     help.push(none(
                         &["Tab"],
                         if autocomplete {
@@ -4364,7 +4376,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         },
                     ));
                     help.extend(
-                        edit_lines.then_some(solo_keybind::<EditMatches>("Edit Selected Lines")),
+                        has_selection.then_some(solo_keybind::<EditMatches>("Edit Selected Lines")),
                     );
                     help.extend(EDITING_3);
                     match self.layout {
@@ -4372,6 +4384,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         EditorLayout::Vertical => help.push(SWITCH_PANE_VERTICAL),
                         EditorLayout::Single => { /* do nothing */ }
                     }
+                    help.extend(multiple_buffers.then_some(ctrl(&["PgUp", "PgDn"], "Switch File")));
 
                     crate::help::render_help(text_area, buf, &help, |b| {
                         b.title_top("Keybindings").title_bottom(

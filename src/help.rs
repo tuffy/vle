@@ -188,13 +188,11 @@ pub static EDITING_2: &[Keybinding] = &[
         action: "Highlight Text",
         f: "",
     },
-    ctrl(&["Home", "End"], "Start / End of Selection"),
 ];
 
 pub static EDITING_3: &[Keybinding] = &[
     ctrl(&["X", "C", "V"], "Cut / Copy / Paste"),
     ctrl(&["Z", "Y"], "Undo / Redo"),
-    ctrl(&["PgUp", "PgDn"], "Switch File"),
 ];
 
 pub static SWITCH_PANE_HORIZONTAL: Keybinding = ctrl(&[DOWN, UP], "Switch Pane");
