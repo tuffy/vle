@@ -734,7 +734,7 @@ impl Editor {
             }
             key!(SHIFT, BackTab) => {
                 if let Some(Some((offset, completions))) =
-                    self.on_buffer_at(|b, a| b.compelete_or_unindent(a))
+                    self.on_buffer_at(|b, a| b.complete_or_unindent(a))
                 {
                     if let Some(original) = completions.first()
                         && let Some(index) = completions.len().checked_sub(1)
