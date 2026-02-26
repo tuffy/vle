@@ -838,6 +838,17 @@ impl Editor {
                     self.mode = new_mode;
                 }
             }
+            key!(CONTROL, Tab) => {
+                if let Some(matches) = self.on_buffer(|b| b.selection_cursors())
+                    && let Some(match_idx) = matches.len().checked_sub(1)
+                {
+                    self.mode = EditorMode::ReplaceMatches {
+                        matches,
+                        match_idx,
+                        groups: CaptureGroups::default(),
+                    };
+                }
+            }
             Event::Mouse(MouseEvent {
                 kind: MouseEventKind::ScrollDown,
                 modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,

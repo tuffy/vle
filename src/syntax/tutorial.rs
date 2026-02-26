@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::{Modifier, Highlight};
+use crate::syntax::{Highlight, Modifier};
 use logos::Logos;
 use ratatui::style::Color;
 

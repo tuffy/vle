@@ -1654,6 +1654,25 @@ impl BufferContext {
         }
     }
 
+    /// Takes selection's lines, clears selection, and moves cursor to the last line
+    pub fn selection_cursors(&mut self) -> Vec<MultiCursor> {
+        let buf = self.buffer.borrow_move();
+
+        let lines = selected_lines(&buf.rope, self.cursor, self.selection.take())
+            .map(|SelectedLine { start, end }| MultiCursor {
+                range: start..end,
+                cursor: start,
+            })
+            .collect::<Vec<_>>();
+
+        self.cursor = match lines.last() {
+            Some(MultiCursor { cursor, .. }) => *cursor,
+            None => return vec![],
+        };
+
+        lines
+    }
+
     pub fn select_inside(&mut self, (start, end): (char, char), stack: Option<(char, char)>) {
         let buf = self.buffer.borrow();
         let (stack_back, stack_forward) = match stack {
