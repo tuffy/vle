@@ -2269,6 +2269,7 @@ impl MultiCursor {
     ) -> usize {
         let deleted = self.range.end.saturating_sub(self.range.start);
         if deleted > 0 {
+            let _ = rope.try_remove(secondary.remove(self.range.start..self.range.end));
             if self.range.end <= *cursor {
                 *cursor = cursor.saturating_sub(deleted);
             } else if self.range.start <= *cursor {
@@ -2281,7 +2282,6 @@ impl MultiCursor {
                     *a = self.range.start;
                 }
             });
-            let _ = rope.try_remove(secondary.remove(self.range.start..self.range.end));
             self.range.end = self.range.start;
             self.cursor = self.range.start;
         }
