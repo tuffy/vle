@@ -56,7 +56,7 @@ binding!(SplitPane, N, F10);
 binding!(Reload, L, F11);
 binding!(Quit, Q, F12);
 binding!(Bookmark, B, Insert);
-solo_binding!(EditMatches, Tab);
+solo_binding!(EditMatches, U);
 
 #[derive(Copy, Clone)]
 #[allow(unused)]

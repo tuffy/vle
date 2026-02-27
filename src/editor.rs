@@ -849,7 +849,7 @@ impl Editor {
                     self.mode = new_mode;
                 }
             }
-            key!(CONTROL, Tab) => {
+            solo_keybind!(EditMatches) => {
                 if let Some(matches) = self.on_buffer(|b| b.selection_cursors())
                     && let Some(match_idx) = matches.len().checked_sub(1)
                 {
@@ -1439,7 +1439,7 @@ fn process_browse_matches<P>(
         }
         key!(Enter) => Some(NextModeBrowse::Default),
         keybind!(Replace) => Some(NextModeBrowse::Replace),
-        solo_keybind!(EditMatches) | key!(CONTROL, 'u') | key!(' ') => Some(NextModeBrowse::Update),
+        solo_keybind!(EditMatches) | key!(' ') => Some(NextModeBrowse::Update),
         keybind!(Bookmark) => {
             buffer.toggle_bookmarks(matches.iter().map(|(m, _)| m.start));
             None

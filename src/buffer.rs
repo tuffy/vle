@@ -4376,7 +4376,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         },
                     ));
                     help.extend(
-                        has_selection.then_some(solo_keybind::<EditMatches>("Edit Selected Lines")),
+                        has_selection.then_some(solo_keybind::<EditMatches>("Update Selected Lines")),
                     );
                     help.extend(EDITING_3);
                     match self.layout {

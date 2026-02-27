@@ -166,7 +166,7 @@ println!("c is {c}");
 ## Editing Multiple Lines Simultaneously
 
 Similar to indenting text, highlighting a selection
-and using Ctrl-Tab will allow one to edit all the lines
+and using Ctrl-U will allow one to edit all the lines
 of that selection simultaneously.
 This allows one to comment or un-comment multiple
 lines as a unit, among other things.
