@@ -475,7 +475,7 @@ impl Editor {
                                 }
                             }
                             NextModeBrowse::Update => {
-                                buf.set_cursor(matches[*match_idx].0.end);
+                                buf.set_cursor(matches[*match_idx].0.start);
                                 buf.clear_selection();
 
                                 let (matches, groups): (_, Vec<Vec<_>>) = std::mem::take(matches)

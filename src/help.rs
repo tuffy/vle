@@ -277,14 +277,6 @@ pub static REPLACE_MATCHES: &[Keybinding] = &[
     none(&[UP, DOWN], "Select Match"),
     ctrl(&["Del"], "Remove Match"),
     keybind::<key::Bookmark>("Bookmark Positions"),
-    ctrl(&["V"], "Paste From Cut Buffer"),
-    none(&["Enter"], "Finish"),
-];
-
-pub static REPLACE_MATCHES_REGEX: &[Keybinding] = &[
-    none(&[UP, DOWN], "Select Match"),
-    ctrl(&["V"], "Paste From Group or Cut Buffer"),
-    none(&["Enter"], "Finish Replacement"),
 ];
 
 pub static PASTE_GROUP: &[Keybinding] = &[

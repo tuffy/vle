@@ -2440,7 +2440,7 @@ impl From<usize> for MultiCursor {
 impl From<Range<usize>> for MultiCursor {
     fn from(range: Range<usize>) -> Self {
         Self {
-            cursor: range.end,
+            cursor: range.start,
             range,
         }
     }
@@ -3265,9 +3265,9 @@ impl StatefulWidget for BufferWidget<'_> {
     fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer, state: &mut BufferContext) {
         use crate::editor::SearchType;
         use crate::help::{
-            BROWSE_MATCHES, CONFIRM_CLOSE, PASTE_GROUP, REPLACE_MATCHES, REPLACE_MATCHES_REGEX,
-            SELECT_INSIDE, SELECT_LINE, SELECT_LINE_BOOKMARKED, SPLIT_PANE, VERIFY_RELOAD,
-            VERIFY_SAVE, render_help,
+            BROWSE_MATCHES, CONFIRM_CLOSE, PASTE_GROUP, REPLACE_MATCHES, SELECT_INSIDE,
+            SELECT_LINE, SELECT_LINE_BOOKMARKED, SPLIT_PANE, VERIFY_RELOAD, VERIFY_SAVE,
+            render_help,
         };
         use crate::prompt::TextField;
         use crate::syntax::{HighlightState, Highlighter, MultiComment, MultiCommentType};
@@ -4498,22 +4498,26 @@ impl StatefulWidget for BufferWidget<'_> {
                 match_idx,
                 groups,
             }) => {
-                render_help(
-                    text_area,
-                    buf,
+                use crate::help::{ctrl, none};
+
+                let mut help = REPLACE_MATCHES.iter().cloned().collect::<Vec<_>>();
+                help.push(ctrl(
+                    &["V"],
                     if matches!(groups, crate::editor::CaptureGroups::None) {
-                        REPLACE_MATCHES
+                        "Paste From Cut Buffer"
                     } else {
-                        REPLACE_MATCHES_REGEX
+                        "Paste From Group or Cut Buffer"
                     },
-                    |block| {
-                        block.title(format!(
-                            "Replacement {} / {}",
-                            *match_idx + 1,
-                            matches.len()
-                        ))
-                    },
-                );
+                ));
+                help.push(none(&["Enter"], "Finish"));
+
+                render_help(text_area, buf, &help, |block| {
+                    block.title(format!(
+                        "Replacement {} / {}",
+                        *match_idx + 1,
+                        matches.len()
+                    ))
+                });
             }
             Some(EditorMode::PasteGroup { total, .. }) => {
                 render_help(
