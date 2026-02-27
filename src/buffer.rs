@@ -4357,6 +4357,9 @@ impl StatefulWidget for BufferWidget<'_> {
                         "Goto Line"
                     }));
                     help.push(find.into());
+                    help.extend(
+                        has_selection.then_some(solo_keybind::<EditMatches>("Update Selected Lines")),
+                    );
                     help.extend(EDITING_1);
                     help.push(select.into());
                     help.push(match self.layout {
@@ -4375,9 +4378,6 @@ impl StatefulWidget for BufferWidget<'_> {
                             "Indent Text"
                         },
                     ));
-                    help.extend(
-                        has_selection.then_some(solo_keybind::<EditMatches>("Update Selected Lines")),
-                    );
                     help.extend(EDITING_3);
                     match self.layout {
                         EditorLayout::Horizontal => help.push(SWITCH_PANE_HORIZONTAL),
