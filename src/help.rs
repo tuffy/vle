@@ -262,15 +262,6 @@ pub static CREATE_FILE: &[Keybinding] = &[
     none(&["Esc"], "Cancel"),
 ];
 
-pub static BROWSE_MATCHES: &[Keybinding] = &[
-    none(&[UP, DOWN], "Select Match"),
-    none(&["Del"], "Remove Match"),
-    solo_keybind::<key::EditMatches>("Update Matches"),
-    keybind::<key::Replace>("Replace Matches"),
-    keybind::<key::Bookmark>("Bookmark Matches"),
-    none(&["Enter"], "Finish"),
-];
-
 pub static REPLACE_MATCHES: &[Keybinding] = &[
     none(&[LEFT, RIGHT], "Move Cursors"),
     none(&["Home", "End"], "Start / End of Matches"),

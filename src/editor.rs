@@ -57,11 +57,6 @@ pub enum EditorMode {
         type_: SearchType,
         range: Option<SelectionRange>,
     },
-    /// Browsing search results
-    BrowseMatches {
-        matches: Vec<(Range<usize>, Vec<Option<MatchCapture>>)>,
-        match_idx: usize,
-    },
     /// Replacing search results
     ReplaceMatches {
         matches: Vec<MultiCursor>,
@@ -436,59 +431,21 @@ impl Editor {
                     {
                         self.mode = match new_mode {
                             NextModeIncremental::Browse { match_idx, matches } => {
-                                EditorMode::BrowseMatches { match_idx, matches }
+                                buf.set_cursor(matches[match_idx].0.start);
+                                buf.clear_selection();
+
+                                let (matches, groups): (_, Vec<Vec<_>>) =
+                                    matches.into_iter().map(|(r, c)| (r.into(), c)).unzip();
+
+                                EditorMode::ReplaceMatches {
+                                    matches,
+                                    match_idx,
+                                    groups: groups.into(),
+                                }
                             }
                             NextModeIncremental::SelectLine => EditorMode::SelectLine {
                                 prompt: LinePrompt::default(),
                             },
-                        };
-                    }
-                }
-                EditorMode::BrowseMatches { matches, match_idx } => {
-                    let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
-                    let primary_idx = primary.current_index();
-                    if let Some(buf) = primary.current_mut()
-                        && let Some(new_mode) =
-                            process_browse_matches(buf, matches, match_idx, event)
-                    {
-                        self.mode = match new_mode {
-                            NextModeBrowse::Default => EditorMode::default(),
-                            NextModeBrowse::Replace => {
-                                if let Some(buf) = primary.current_mut() {
-                                    buf.clear_matches(
-                                        secondary
-                                            .and_then(|l| l.get_mut(primary_idx))
-                                            .map(|b| b.alt_cursor()),
-                                        matches,
-                                    );
-                                }
-
-                                let (matches, groups): (_, Vec<Vec<_>>) = std::mem::take(matches)
-                                    .into_iter()
-                                    .map(|(r, c)| (r.start.into(), c))
-                                    .unzip();
-
-                                EditorMode::ReplaceMatches {
-                                    matches,
-                                    match_idx: std::mem::take(match_idx),
-                                    groups: groups.into(),
-                                }
-                            }
-                            NextModeBrowse::Update => {
-                                buf.set_cursor(matches[*match_idx].0.start);
-                                buf.clear_selection();
-
-                                let (matches, groups): (_, Vec<Vec<_>>) = std::mem::take(matches)
-                                    .into_iter()
-                                    .map(|(r, c)| (r.into(), c))
-                                    .unzip();
-
-                                EditorMode::ReplaceMatches {
-                                    matches,
-                                    match_idx: std::mem::take(match_idx),
-                                    groups: groups.into(),
-                                }
-                            }
                         };
                     }
                 }
@@ -790,7 +747,17 @@ impl Editor {
                 if let Some(Ok(find)) = self.on_buffer(|b| match b.selection_range() {
                     Some(SelectionType::Term(selection)) => {
                         b.all_matches(None, selection).map(|(match_idx, matches)| {
-                            EditorMode::BrowseMatches { match_idx, matches }
+                            b.set_cursor(matches[match_idx].0.start);
+                            b.clear_selection();
+
+                            let (matches, groups): (_, Vec<Vec<_>>) =
+                                matches.into_iter().map(|(r, c)| (r.into(), c)).unzip();
+
+                            EditorMode::ReplaceMatches {
+                                matches,
+                                match_idx,
+                                groups: groups.into(),
+                            }
                         })
                     }
                     Some(SelectionType::Range(range)) => Ok(EditorMode::Search {
@@ -1374,86 +1341,6 @@ fn process_search(
             prompt.process_event(event);
             None
         }
-    }
-}
-
-enum NextModeBrowse {
-    Default,
-    Replace,
-    Update,
-}
-
-fn process_browse_matches<P>(
-    buffer: &mut BufferContext,
-    matches: &mut Vec<(Range<usize>, P)>,
-    match_idx: &mut usize,
-    event: Event,
-) -> Option<NextModeBrowse> {
-    use crossterm::event::{
-        Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
-    };
-
-    match event {
-        Event::Key(KeyEvent {
-            code: KeyCode::Up,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        })
-        | Event::Mouse(MouseEvent {
-            kind: MouseEventKind::ScrollUp,
-            ..
-        }) => {
-            *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
-            if let Some((r, _)) = matches.get(*match_idx) {
-                buffer.set_selection(r.start, r.end);
-            }
-            None
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::Down,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        })
-        | Event::Mouse(MouseEvent {
-            kind: MouseEventKind::ScrollDown,
-            ..
-        }) => {
-            *match_idx = (*match_idx + 1) % matches.len();
-            if let Some((r, _)) = matches.get(*match_idx) {
-                buffer.set_selection(r.start, r.end);
-            }
-            None
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::Delete,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            if *match_idx < matches.len() {
-                matches.remove(*match_idx);
-            }
-            match matches.len().checked_sub(1) {
-                None => Some(NextModeBrowse::Default),
-                Some(new_max) => {
-                    *match_idx = (*match_idx).min(new_max);
-                    if let Some((r, _)) = matches.get(*match_idx) {
-                        buffer.set_selection(r.start, r.end);
-                    }
-                    None
-                }
-            }
-        }
-        key!(Enter) => Some(NextModeBrowse::Default),
-        keybind!(Replace) => Some(NextModeBrowse::Replace),
-        solo_keybind!(EditMatches) | key!(' ') => Some(NextModeBrowse::Update),
-        keybind!(Bookmark) => {
-            buffer.toggle_bookmarks(matches.iter().map(|(m, _)| m.start));
-            None
-        }
-        _ => None, // ignore other events
     }
 }
 

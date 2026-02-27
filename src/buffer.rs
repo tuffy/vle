@@ -854,14 +854,6 @@ impl BufferContext {
         self.selection = None;
     }
 
-    pub fn set_selection(&mut self, start: usize, end: usize) {
-        assert!(end >= start);
-        let buf = self.buffer.borrow();
-        self.cursor = start;
-        self.selection = Some(end);
-        self.cursor_column = cursor_column(&buf.rope, self.cursor);
-    }
-
     /// Returns cursor position in rope as (row, col), if possible
     ///
     /// Both indexes start from 0
@@ -1968,55 +1960,6 @@ impl BufferContext {
         alt += replacement_chars;
         self.cursor = offset + replacement_chars;
         self.cursor_column = cursor_column(&rope, self.cursor);
-        self.selection = None;
-    }
-
-    pub fn clear_matches<P>(
-        &mut self,
-        alt: Option<AltCursor<'_>>,
-        mut matches: &mut [(Range<usize>, P)],
-    ) {
-        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
-        let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
-        let mut alt = Secondary::new(alt, bookmarks);
-
-        loop {
-            match matches {
-                [] => break,
-                [(r, _)] => {
-                    let _ = rope.try_remove(alt.remove(r.clone()));
-                    if r.start <= self.cursor {
-                        self.cursor = self
-                            .cursor
-                            .saturating_sub((r.end - r.start).min(self.cursor - r.start));
-                    }
-                    alt.update(|cursor| {
-                        if r.start <= *cursor {
-                            *cursor =
-                                cursor.saturating_sub((r.end - r.start).min(*cursor - r.start));
-                        }
-                    });
-                    break;
-                }
-                [(r, _), rest @ ..] => {
-                    let len = r.end - r.start;
-                    let _ = rope.try_remove(alt.remove(r.clone()));
-                    if r.start <= self.cursor {
-                        self.cursor = self.cursor.saturating_sub(len.min(self.cursor - r.start));
-                    }
-                    alt.update(|cursor| {
-                        if r.start <= *cursor {
-                            *cursor = cursor.saturating_sub(len.min(*cursor - r.start));
-                        }
-                    });
-                    for (r, _) in rest.iter_mut() {
-                        r.start -= len;
-                        r.end -= len;
-                    }
-                    matches = rest;
-                }
-            }
-        }
         self.selection = None;
     }
 
@@ -3310,9 +3253,8 @@ impl StatefulWidget for BufferWidget<'_> {
     fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer, state: &mut BufferContext) {
         use crate::editor::SearchType;
         use crate::help::{
-            BROWSE_MATCHES, CONFIRM_CLOSE, PASTE_GROUP, REPLACE_MATCHES, SELECT_INSIDE,
-            SELECT_LINE, SELECT_LINE_BOOKMARKED, SPLIT_PANE, VERIFY_RELOAD, VERIFY_SAVE,
-            render_help,
+            CONFIRM_CLOSE, PASTE_GROUP, REPLACE_MATCHES, SELECT_INSIDE, SELECT_LINE,
+            SELECT_LINE_BOOKMARKED, SPLIT_PANE, VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
         use crate::prompt::TextField;
         use crate::syntax::{HighlightState, Highlighter, MultiComment, MultiCommentType};
@@ -3333,9 +3275,6 @@ impl StatefulWidget for BufferWidget<'_> {
         use std::ops::RangeInclusive;
 
         const EDITING: Style = Style::new().add_modifier(Modifier::REVERSED);
-        const HIGHLIGHTED: Style = Style::new()
-            .fg(Color::Yellow)
-            .add_modifier(Modifier::REVERSED);
 
         struct EditorLine<'s> {
             line: Cow<'s, str>,
@@ -3911,58 +3850,6 @@ impl StatefulWidget for BufferWidget<'_> {
             .render(dialog_area, buf);
         }
 
-        fn sub_match_ranges(
-            matches: &[(Range<usize>, Vec<Option<MatchCapture>>)],
-        ) -> VecDeque<(Range<usize>, Style)> {
-            let mut ranges = VecDeque::with_capacity(matches.len());
-
-            for (whole_range, sub_captures) in matches {
-                let mut whole_range = whole_range.clone();
-                if sub_captures.is_empty() {
-                    ranges.push_back((whole_range, HIGHLIGHTED));
-                } else {
-                    for (sub_capture, style) in sub_captures
-                        .iter()
-                        .skip(1)
-                        .zip(
-                            [
-                                Style::new()
-                                    .bg(Color::Blue)
-                                    .fg(Color::Yellow)
-                                    .add_modifier(Modifier::REVERSED),
-                                Style::new()
-                                    .bg(Color::Green)
-                                    .fg(Color::Yellow)
-                                    .add_modifier(Modifier::REVERSED),
-                                Style::new()
-                                    .bg(Color::Magenta)
-                                    .fg(Color::Yellow)
-                                    .add_modifier(Modifier::REVERSED),
-                                Style::new()
-                                    .bg(Color::Cyan)
-                                    .fg(Color::Yellow)
-                                    .add_modifier(Modifier::REVERSED),
-                            ]
-                            .into_iter()
-                            .cycle(),
-                        )
-                        .filter_map(|(sub_cap, style)| Some((sub_cap.as_ref()?, style)))
-                    {
-                        if whole_range.start < sub_capture.start {
-                            ranges.push_back((whole_range.start..sub_capture.start, HIGHLIGHTED));
-                        }
-                        ranges.push_back((sub_capture.start..sub_capture.end, style));
-                        whole_range.start = sub_capture.end;
-                    }
-                    if whole_range.start < whole_range.end {
-                        ranges.push_back((whole_range, HIGHLIGHTED));
-                    }
-                }
-            }
-
-            ranges
-        }
-
         if let Some(EditorMode::Open { chooser }) = self.mode {
             // file selection mode overrides main editing mode
             use crate::files::FileChooser;
@@ -4136,72 +4023,6 @@ impl StatefulWidget for BufferWidget<'_> {
 
         Clear.render(text_area, buf);
         Paragraph::new(match self.mode {
-            Some(EditorMode::BrowseMatches { matches, .. }) => {
-                let mut matches = sub_match_ranges(matches);
-
-                match state.selection {
-                    // no selection, so highlight matches only
-                    // (this shouldn't happen)
-                    None => EditorLine::iter(rope, viewport_line)
-                        .map(
-                            |EditorLine {
-                                 line,
-                                 range,
-                                 number,
-                             }| {
-                                highlight_matches(
-                                    colorize(
-                                        syntax,
-                                        &mut hlstate,
-                                        line,
-                                        current_line == Some(number),
-                                    ),
-                                    range,
-                                    &mut matches,
-                                    |span, hl| span.style(hl),
-                                )
-                                .into()
-                            },
-                        )
-                        .map(|line| widen_tabs(line, &buffer.tab_substitution))
-                        .take(area.height.into())
-                        .collect::<Vec<_>>(),
-                    // highlight both matches *and* selection
-                    Some(selection) => {
-                        let (selection_start, selection_end) = reorder(state.cursor, selection);
-
-                        EditorLine::iter(rope, viewport_line)
-                            .map(
-                                |EditorLine {
-                                     line,
-                                     range,
-                                     number,
-                                 }| {
-                                    highlight_selection(
-                                        highlight_matches(
-                                            colorize(
-                                                syntax,
-                                                &mut hlstate,
-                                                line,
-                                                current_line == Some(number),
-                                            ),
-                                            range.clone(),
-                                            &mut matches,
-                                            |span, hl| span.style(hl),
-                                        ),
-                                        range.clone(),
-                                        (selection_start, selection_end),
-                                        |span| span.style(EDITING),
-                                    )
-                                    .into()
-                                },
-                            )
-                            .map(|line| widen_tabs(line, &buffer.tab_substitution))
-                            .take(area.height.into())
-                            .collect::<Vec<_>>()
-                    }
-                }
-            }
             Some(EditorMode::ReplaceMatches { matches, .. }) => {
                 let (mut cursors, mut ranges): (VecDeque<_>, _) = matches
                     .iter()
@@ -4532,11 +4353,6 @@ impl StatefulWidget for BufferWidget<'_> {
                         _ => b.title_top(type_.to_string()),
                     },
                 );
-            }
-            Some(EditorMode::BrowseMatches { matches, match_idx }) => {
-                render_help(text_area, buf, BROWSE_MATCHES, |block| {
-                    block.title(format!("Match {} / {}", *match_idx + 1, matches.len()))
-                });
             }
             Some(EditorMode::ReplaceMatches {
                 matches,

@@ -316,41 +316,23 @@ but don't know exactly which line it's on.
 Ctrl-F/F5 prompts for text to search for.
 
 Once you've entered the text you need,
-Enter will highlight all matches (if any)
+Enter will underline all matches (if any)
 and move your cursor to the first one so you
-may browse them all.
+may browse or edit them all.
 
 If text has already been highlighted,
 Ctrl-F/F5 will locate all instances of that text
-and jump directly to browse mode.
-
+and jump directly to browse/edit mode.
 This may be more convenient than typing it in by hand.
 
-
-## Browsing Matches
-
-Browsing allows one to use the arrow keys to cycle
-through all possible matches.
-From this mode, Enter is used to finish browsing,
-Del to remove a match from the set of matches,
-or Ctrl-R/F6 to replace all selected matches.
-
-
-## Replacing Text
-
-Using Ctrl-R/F6 from browse mode deletes all the highlighted
-matches and prompts us for a new value.
-Note that replace mode doesn't offer a text box
-for the replacement; the replacement text is inserted
-where all the matches were simultaneously and is
-completed with the Enter key.
+Hitting Enter again allows us to finish the find,
+or Ctrl-R/F6 will remove the text of all candidates
+and allow us to replace them with something else.
 
 Let's walk through this whole process.
 
 Start with Ctrl-F/F5 to find the first instance of the word to replace.
-This will highlight all three instances of that word, below.
-
-Hit Enter to browse all three instances of that word.
+This will underline all three instances of that word, below.
 
 Next, type Ctrl-R/F6 to replace those three instances,
 which will remove them from the text.
