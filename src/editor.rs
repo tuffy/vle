@@ -119,6 +119,14 @@ pub enum CaptureGroups {
     },
 }
 
+impl CaptureGroups {
+    fn remove(&mut self, match_idx: usize) {
+        if let Self::Some { groups, .. } = self {
+            groups.remove(match_idx);
+        }
+    }
+}
+
 impl From<Vec<Vec<Option<MatchCapture>>>> for CaptureGroups {
     fn from(groups: Vec<Vec<Option<MatchCapture>>>) -> Self {
         match groups.first().map(|g| g.len()) {
@@ -518,6 +526,7 @@ impl Editor {
                             event => process_replace_matches(
                                 buf,
                                 matches,
+                                groups,
                                 match_idx,
                                 event,
                                 alt_buf_list
@@ -1450,7 +1459,8 @@ fn process_browse_matches<P>(
 
 fn process_replace_matches(
     buffer: &mut BufferContext,
-    matches: &mut [MultiCursor],
+    matches: &mut Vec<MultiCursor>,
+    groups: &mut CaptureGroups,
     match_idx: &mut usize,
     event: Event,
     alt: Option<AltCursor<'_>>,
@@ -1480,6 +1490,18 @@ fn process_replace_matches(
         key!(Delete) => {
             buffer.multi_delete(alt, matches);
             None
+        }
+        key!(CONTROL, Delete) => {
+            matches.remove(*match_idx);
+            groups.remove(*match_idx);
+            match matches.len().checked_sub(1) {
+                Some(max) => {
+                    *match_idx = (*match_idx).min(max);
+                    buffer.set_cursor(matches.get(*match_idx)?.cursor());
+                    None
+                }
+                None => Some(EditorMode::default()),
+            }
         }
         key!(Enter) => Some(EditorMode::default()),
         key!(Left) => {

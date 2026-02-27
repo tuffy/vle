@@ -273,11 +273,12 @@ pub static BROWSE_MATCHES: &[Keybinding] = &[
 
 pub static REPLACE_MATCHES: &[Keybinding] = &[
     none(&[LEFT, RIGHT], "Move Cursors"),
-    none(&[UP, DOWN], "Select Match"),
     none(&["Home", "End"], "Start / End of Matches"),
+    none(&[UP, DOWN], "Select Match"),
+    ctrl(&["Del"], "Remove Match"),
     keybind::<key::Bookmark>("Bookmark Positions"),
     ctrl(&["V"], "Paste From Cut Buffer"),
-    none(&["Enter"], "Finish Replacement"),
+    none(&["Enter"], "Finish"),
 ];
 
 pub static REPLACE_MATCHES_REGEX: &[Keybinding] = &[

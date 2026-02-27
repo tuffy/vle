@@ -751,7 +751,7 @@ impl From<WholeSelect> for crate::help::Keybinding {
     fn from(mode: WholeSelect) -> Self {
         crate::help::keybind::<crate::key::WidenSelection>(match mode {
             WholeSelect::Word => "Select Word",
-            WholeSelect::Lines => "Widen Selection to Lines",
+            WholeSelect::Lines => "Widen Selection",
         })
     }
 }
@@ -4358,7 +4358,8 @@ impl StatefulWidget for BufferWidget<'_> {
                     }));
                     help.push(find.into());
                     help.extend(
-                        has_selection.then_some(solo_keybind::<EditMatches>("Update Selected Lines")),
+                        has_selection
+                            .then_some(solo_keybind::<EditMatches>("Update Selected Lines")),
                     );
                     help.extend(EDITING_1);
                     help.push(select.into());
