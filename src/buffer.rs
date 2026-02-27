@@ -4212,7 +4212,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         EDITING_0, EDITING_1, EDITING_2, EDITING_3, F10_SPLIT, F10_UNSPLIT,
                         SWITCH_PANE_HORIZONTAL, SWITCH_PANE_VERTICAL, ctrl, keybind, none,
                     };
-                    use crate::key::{Replace, GotoLine};
+                    use crate::key::{GotoLine, Replace};
 
                     let mut help = Vec::with_capacity(16);
                     help.extend(EDITING_0);
@@ -4356,6 +4356,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 matches,
                 match_idx,
                 groups,
+                ..
             }) => {
                 use crate::help::{ctrl, none};
 
@@ -4371,11 +4372,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 help.push(none(&["Enter"], "Finish"));
 
                 render_help(text_area, buf, &help, |block| {
-                    block.title(format!(
-                        "Replacement {} / {}",
-                        *match_idx + 1,
-                        matches.len()
-                    ))
+                    block.title(format!("Match {} / {}", *match_idx + 1, matches.len()))
                 });
             }
             Some(EditorMode::PasteGroup { total, .. }) => {

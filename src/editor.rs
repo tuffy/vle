@@ -62,6 +62,7 @@ pub enum EditorMode {
         matches: Vec<MultiCursor>,
         match_idx: usize,
         groups: CaptureGroups,
+        range: Option<SelectionRange>,
     },
     /// Querying for what regex group to paste
     PasteGroup {
@@ -69,6 +70,7 @@ pub enum EditorMode {
         match_idx: usize,
         total: usize,
         groups: Vec<Vec<Option<MatchCapture>>>,
+        range: Option<SelectionRange>,
     },
     /// Opening a new file
     Open {
@@ -430,6 +432,7 @@ impl Editor {
                                     matches,
                                     match_idx,
                                     groups: groups.into(),
+                                    range: range.take(),
                                 }
                             }
                             NextModeIncremental::SelectLine => EditorMode::SelectLine {
@@ -442,6 +445,7 @@ impl Editor {
                     matches,
                     match_idx,
                     groups,
+                    range,
                 } => {
                     let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
                     let cur_idx = cur_buf_list.current_index();
@@ -454,6 +458,7 @@ impl Editor {
                                         match_idx: std::mem::take(match_idx),
                                         total: std::mem::take(total),
                                         groups: std::mem::take(groups),
+                                        range: range.take(),
                                     })
                                 }
                                 _ => {
@@ -473,6 +478,7 @@ impl Editor {
                                 buf,
                                 matches,
                                 groups,
+                                range,
                                 match_idx,
                                 event,
                                 alt_buf_list
@@ -489,6 +495,7 @@ impl Editor {
                     match_idx,
                     total,
                     groups,
+                    range,
                 } => {
                     let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
                     let cur_idx = cur_buf_list.current_index();
@@ -512,6 +519,7 @@ impl Editor {
                             total: std::mem::take(total),
                             groups: std::mem::take(groups),
                         },
+                        range: range.take(),
                     };
                 }
                 EditorMode::SplitPane => self.process_split_pane(event),
@@ -746,6 +754,7 @@ impl Editor {
                                 matches,
                                 match_idx,
                                 groups: groups.into(),
+                                range: None,
                             }
                         })
                     }
@@ -822,6 +831,7 @@ impl Editor {
                         matches,
                         match_idx,
                         groups: CaptureGroups::default(),
+                        range: None,
                     };
                 }
             }
@@ -1337,6 +1347,7 @@ fn process_replace_matches(
     buffer: &mut BufferContext,
     matches: &mut Vec<MultiCursor>,
     groups: &mut CaptureGroups,
+    range: &mut Option<SelectionRange>,
     match_idx: &mut usize,
     event: Event,
     alt: Option<AltCursor<'_>>,
@@ -1379,6 +1390,11 @@ fn process_replace_matches(
                 None => Some(EditorMode::default()),
             }
         }
+        keybind!(Find) => Some(EditorMode::Search {
+            prompt: TextField::default(),
+            type_: SearchType::default(),
+            range: range.take(),
+        }),
         keybind!(Replace) => {
             buffer.multi_clear(alt, matches);
             None
