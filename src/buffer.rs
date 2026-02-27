@@ -4023,7 +4023,9 @@ impl StatefulWidget for BufferWidget<'_> {
 
         Clear.render(text_area, buf);
         Paragraph::new(match self.mode {
-            Some(EditorMode::ReplaceMatches { matches, .. }) => {
+            Some(
+                EditorMode::ReplaceMatches { matches, .. } | EditorMode::PasteGroup { matches, .. },
+            ) => {
                 let (mut cursors, mut ranges): (VecDeque<_>, _) = matches
                     .iter()
                     .map(|m| ((m.cursor..m.cursor + 1, ()), (m.range.clone(), ())))
