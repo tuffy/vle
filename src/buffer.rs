@@ -4211,9 +4211,8 @@ impl StatefulWidget for BufferWidget<'_> {
                     use crate::help::{
                         EDITING_0, EDITING_1, EDITING_2, EDITING_3, F10_SPLIT, F10_UNSPLIT,
                         SWITCH_PANE_HORIZONTAL, SWITCH_PANE_VERTICAL, ctrl, keybind, none,
-                        solo_keybind,
                     };
-                    use crate::key::{EditMatches, GotoLine};
+                    use crate::key::{Replace, GotoLine};
 
                     let mut help = Vec::with_capacity(16);
                     help.extend(EDITING_0);
@@ -4224,8 +4223,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     }));
                     help.push(find.into());
                     help.extend(
-                        has_selection
-                            .then_some(solo_keybind::<EditMatches>("Update Selected Lines")),
+                        has_selection.then_some(keybind::<Replace>("Update Selected Lines")),
                     );
                     help.extend(EDITING_1);
                     help.push(select.into());

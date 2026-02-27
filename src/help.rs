@@ -35,10 +35,6 @@ pub const fn keybind<B: key::Binding>(action: &'static str) -> Keybinding {
     }
 }
 
-pub const fn solo_keybind<B: key::SoloBinding>(action: &'static str) -> Keybinding {
-    ctrl(&[B::LABEL], action)
-}
-
 pub const fn none(keys: &'static [&'static str], action: &'static str) -> Keybinding {
     Keybinding {
         modifier: None,

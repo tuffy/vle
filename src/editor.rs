@@ -15,7 +15,7 @@ use crate::{
         SelectionRange, Source,
     },
     files::{ChooserSource, FileChooserState, LocalSource},
-    key::{Binding, SoloBinding},
+    key::Binding,
     prompt::{LinePrompt, TextField},
 };
 use crossterm::event::Event;
@@ -146,17 +146,6 @@ macro_rules! keybind {
                 ..
             },
         )
-    };
-}
-
-macro_rules! solo_keybind {
-    ($bind:ident) => {
-        Event::Key(KeyEvent {
-            code: key::$bind::KEY,
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            ..
-        })
     };
 }
 
@@ -825,7 +814,7 @@ impl Editor {
                     self.mode = new_mode;
                 }
             }
-            solo_keybind!(EditMatches) => {
+            keybind!(Replace) => {
                 if let Some(matches) = self.on_buffer(|b| b.selection_cursors())
                     && let Some(match_idx) = matches.len().checked_sub(1)
                 {
