@@ -1977,7 +1977,7 @@ impl BufferContext {
 
         multicursor_update(
             matches,
-            |m| Ok::<usize, Infallible>(m.insert_char(&mut rope, &mut self.cursor, &mut alt, c)),
+            |m| Ok::<_, Infallible>(m.insert_char(&mut rope, &mut self.cursor, &mut alt, c)),
             |r, inserted| {
                 *r += inserted;
             },
@@ -2053,7 +2053,7 @@ impl BufferContext {
 
         multicursor_update(
             matches,
-            |m| Ok::<usize, Infallible>(m.clear(&mut rope, &mut self.cursor, &mut alt)),
+            |m| Ok::<_, Infallible>(m.clear(&mut rope, &mut self.cursor, &mut alt)),
             |r, removed| {
                 *r -= removed;
             },
