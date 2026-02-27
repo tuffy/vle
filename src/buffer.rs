@@ -2101,6 +2101,22 @@ impl BufferContext {
         );
     }
 
+    pub fn multi_clear(&mut self, alt: Option<AltCursor<'_>>, matches: &mut [MultiCursor]) {
+        use std::convert::Infallible;
+
+        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+        let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
+        let mut alt = Secondary::new(alt, bookmarks);
+
+        multicursor_update(
+            matches,
+            |m| Ok::<usize, Infallible>(m.clear(&mut rope, &mut self.cursor, &mut alt)),
+            |r, removed| {
+                *r -= removed;
+            },
+        );
+    }
+
     pub fn multi_cursor_back(&mut self, matches: &mut [MultiCursor]) {
         matches.iter_mut().for_each(|m| {
             m.cursor_back(
@@ -2301,6 +2317,34 @@ impl MultiCursor {
         self.cursor
     }
 
+    /// Clears cursor's contents and returns characters removed
+    fn clear(
+        &mut self,
+        rope: &mut ropey::Rope,
+        cursor: &mut usize,
+        secondary: &mut Secondary,
+    ) -> usize {
+        let deleted = self.range.end.saturating_sub(self.range.start);
+        if deleted > 0 {
+            if self.range.end <= *cursor {
+                *cursor = cursor.saturating_sub(deleted);
+            } else if self.range.start <= *cursor {
+                *cursor = self.range.start;
+            }
+            secondary.update(|a| {
+                if self.range.end <= *a {
+                    *a = a.saturating_sub(deleted);
+                } else if self.range.start <= *a {
+                    *a = self.range.start;
+                }
+            });
+            let _ = rope.try_remove(secondary.remove(self.range.start..self.range.end));
+            self.range.end = self.range.start;
+            self.cursor = self.range.start;
+        }
+        deleted
+    }
+
     /// Returns number of characters inserted (1 or 2)
     fn insert_char(
         &mut self,
@@ -2343,7 +2387,8 @@ impl MultiCursor {
         self.range.end += s_len;
     }
 
-    /// Returns Ok if backspace performed successfully
+    /// Returns Ok and number of characters removed
+    /// if backspace performed successfully
     fn backspace(
         &mut self,
         rope: &mut ropey::Rope,

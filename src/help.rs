@@ -276,6 +276,7 @@ pub static REPLACE_MATCHES: &[Keybinding] = &[
     none(&["Home", "End"], "Start / End of Matches"),
     none(&[UP, DOWN], "Select Match"),
     ctrl(&["Del"], "Remove Match"),
+    keybind::<key::Replace>("Replace Matches"),
     keybind::<key::Bookmark>("Bookmark Positions"),
 ];
 

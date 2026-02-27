@@ -1503,6 +1503,10 @@ fn process_replace_matches(
                 None => Some(EditorMode::default()),
             }
         }
+        keybind!(Replace) => {
+            buffer.multi_clear(alt, matches);
+            None
+        }
         key!(Enter) => Some(EditorMode::default()),
         key!(Left) => {
             buffer.multi_cursor_back(matches);
