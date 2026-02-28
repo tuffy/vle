@@ -3419,9 +3419,10 @@ impl StatefulWidget for BufferWidget<'_> {
                         &mut input,
                         underline.end - underline.start,
                         &mut output,
-                        |span| Span {
-                            content: span.content,
-                            style: span.style.underlined(),
+                        |span| {
+                            span.patch_style(
+                                Style::new().underlined().underline_color(Color::DarkGray),
+                            )
                         },
                     );
                     idx = underline.end;
