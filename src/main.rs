@@ -19,7 +19,7 @@ mod key;
 mod prompt;
 mod syntax;
 
-use editor::Editor;
+use editor::{Editor, LineNumber};
 
 fn main() {
     use crossterm::event::{Event, MouseEvent, MouseEventKind, read};
@@ -64,12 +64,17 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
     #[command(version)]
     #[command(about = "Very Little Editor")]
     struct Opt {
+        #[clap(short = 'l', long = "line", help = "starting line number")]
+        line: Option<LineNumber>,
         files: Vec<PathBuf>,
     }
 
-    Ok(Editor::new(
-        Opt::parse().files.into_iter().map(buffer::Source::from),
-    )?)
+    let Opt { line, files } = Opt::parse();
+    let editor = Editor::new(files.into_iter().map(buffer::Source::from))?;
+    Ok(match line {
+        None => editor,
+        Some(line) => editor.at_line(line),
+    })
 }
 
 #[cfg(feature = "ssh")]
@@ -84,6 +89,8 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
     #[command(version)]
     #[command(about = "Very Little Editor")]
     struct Opt {
+        #[clap(short = 'l', long = "line", help = "starting line number")]
+        line: Option<LineNumber>,
         files: Vec<PathBuf>,
         #[clap(short = 's', long = "ssh", help = "remote SSH host")]
         host: Option<String>,
@@ -110,8 +117,15 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
     match Opt::parse() {
         Opt {
             files, host: None, ..
-        } => Ok(Editor::new(files.into_iter().map(buffer::Source::from))?),
+        } => {
+            let editor = Editor::new(files.into_iter().map(buffer::Source::from))?;
+            Ok(match line {
+                None => editor,
+                Some(line) => editor.at_line(line),
+            })
+        }
         Opt {
+            line,
             files,
             host: Some(host),
             username,
@@ -124,7 +138,7 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
                 None => Text::new("Username").prompt()?,
             };
 
-            Ok(Editor::new_remote(
+            let editor = Editor::new_remote(
                 files.into_iter().map(buffer::Source::from),
                 match private_key {
                     Some(private_key) => {
@@ -159,7 +173,12 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
                         sess
                     }
                 },
-            )?)
+            )?;
+
+            Ok(match line {
+                None => editor,
+                Some(line) => editor.at_line(line),
+            })
         }
     }
 }

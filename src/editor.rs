@@ -241,6 +241,17 @@ impl Editor {
         })
     }
 
+    pub fn at_line(mut self, LineNumber { line, column }: LineNumber) -> Self {
+        let buffers = self.layout.selected_buffer_list_mut();
+        if let Some(first) = buffers.current_mut() {
+            match column {
+                None => first.select_line(line),
+                Some(column) => first.select_line_and_column(line, column),
+            }
+        }
+        self
+    }
+
     pub fn has_open_buffers(&self) -> bool {
         self.layout.has_open_buffers()
     }
@@ -2013,5 +2024,50 @@ impl StatefulWidget for LayoutWidget<'_> {
                 }
             }
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct LineNumber {
+    line: usize,
+    column: Option<usize>,
+}
+
+impl std::str::FromStr for LineNumber {
+    type Err = InvalidLine;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.split_once(':') {
+            Some((line, column)) => Ok(Self {
+                line: line
+                    .parse::<usize>()
+                    .map_err(|_| InvalidLine)?
+                    .saturating_sub(1),
+                column: Some(
+                    column
+                        .parse::<usize>()
+                        .map_err(|_| InvalidLine)?
+                        .saturating_sub(1),
+                ),
+            }),
+            None => Ok(Self {
+                line: s
+                    .parse::<usize>()
+                    .map_err(|_| InvalidLine)?
+                    .saturating_sub(1),
+                column: None,
+            }),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct InvalidLine;
+
+impl std::error::Error for InvalidLine {}
+
+impl std::fmt::Display for InvalidLine {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        "invalid line".fmt(f)
     }
 }

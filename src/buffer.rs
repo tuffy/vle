@@ -3937,13 +3937,13 @@ impl StatefulWidget for BufferWidget<'_> {
 
         let current_line = rope.try_char_to_line(state.cursor).ok();
 
+        state.viewport_height = text_area.height.into();
+
         let viewport_line: usize = current_line
             .map(|line| line.saturating_sub(state.viewport_height / 2))
             .unwrap_or(0);
 
         let viewport_start = rope.try_line_to_char(viewport_line).unwrap_or(0);
-
-        state.viewport_height = text_area.height.into();
 
         let mut hlstate: HighlightState = match syntax.multicomment() {
             Some(MultiCommentType::Bidirectional(f)) => rope
