@@ -28,5 +28,5 @@ unicode-width = "0.2"
 ssh2 = { version = "0.9", optional = true }
 inquire = { version = "0.9", optional = true }
 fancy-regex = "0.17"
-lazy-regex = "3.6.0"
-hashbrown = "0.16"
+lazy-regex = "3.6"
+radix_trie = "0.3"

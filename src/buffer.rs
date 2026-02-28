@@ -1888,7 +1888,7 @@ impl BufferContext {
     /// in the rope in characters.
     /// The partial word being autocompleted will be first in the Vec.
     fn autocomplete_matches(&self) -> Option<(usize, Vec<String>)> {
-        use hashbrown::HashMap;
+        use radix_trie::{Trie, TrieCommon};
 
         let buf = &mut self.buffer.borrow();
         let rope = &buf.rope;
@@ -1913,7 +1913,7 @@ impl BufferContext {
 
         let prefix = prefix_chars.into_iter().rev().collect::<String>();
 
-        let mut counts: HashMap<String, u64> = HashMap::default();
+        let mut counts: Trie<String, u64> = Trie::default();
 
         for line in rope.lines() {
             let line = Cow::from(line);
@@ -1921,12 +1921,15 @@ impl BufferContext {
                 lazy_regex::regex_captures_iter!("[[:word:]]+", &line).map(|c| c.extract())
             {
                 if word.starts_with(&prefix) && word != prefix {
-                    *counts.entry_ref(word).or_default() += 1;
+                    counts.map_with_default(word.to_string(), |c| *c += 1, 1);
                 }
             }
         }
 
-        let mut counts = counts.into_iter().collect::<Vec<_>>();
+        let mut counts = counts
+            .iter()
+            .map(|(s, c)| (s.to_string(), c))
+            .collect::<Vec<_>>();
         counts.sort_unstable_by(|(s1, c1), (s2, c2)| c1.cmp(c2).then(s1.cmp(s2).reverse()));
 
         Some((
