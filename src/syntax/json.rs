@@ -40,7 +40,7 @@ impl TryFrom<JsonToken> for Highlight {
     fn try_from(t: JsonToken) -> Result<Highlight, ()> {
         match t {
             JsonToken::Name => Ok(color::TYPE),
-            JsonToken::String => Err(()),
+            JsonToken::String => Ok(color::STRING),
             JsonToken::Number => Ok(color::NUMBER),
             JsonToken::Literal => Ok(Color::Red.into()),
             JsonToken::Punctuation1 => Ok(Color::LightBlue.into()),
