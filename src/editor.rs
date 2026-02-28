@@ -63,6 +63,7 @@ pub enum EditorMode {
         match_idx: usize,
         groups: CaptureGroups,
         range: Option<SelectionRange>,
+        highlight: Option<Highlight>,
     },
     /// Querying for what regex group to paste
     PasteGroup {
@@ -71,6 +72,7 @@ pub enum EditorMode {
         total: usize,
         groups: Vec<Vec<Option<MatchCapture>>>,
         range: Option<SelectionRange>,
+        highlight: Option<Highlight>,
     },
     /// Opening a new file
     Open {
@@ -86,6 +88,8 @@ pub enum EditorMode {
         index: usize,             // the current candidate
     },
 }
+
+pub struct Highlight;
 
 #[derive(Copy, Clone, Default)]
 pub enum SearchType {
@@ -433,6 +437,7 @@ impl Editor {
                                     match_idx,
                                     groups: groups.into(),
                                     range: range.take(),
+                                    highlight: Some(Highlight),
                                 }
                             }
                             NextModeIncremental::SelectLine => EditorMode::SelectLine {
@@ -446,6 +451,7 @@ impl Editor {
                     match_idx,
                     groups,
                     range,
+                    highlight,
                 } => {
                     let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
                     let cur_idx = cur_buf_list.current_index();
@@ -459,6 +465,7 @@ impl Editor {
                                         total: std::mem::take(total),
                                         groups: std::mem::take(groups),
                                         range: range.take(),
+                                        highlight: std::mem::take(highlight),
                                     })
                                 }
                                 _ => {
@@ -480,6 +487,7 @@ impl Editor {
                                 groups,
                                 range,
                                 match_idx,
+                                highlight,
                                 event,
                                 alt_buf_list
                                     .and_then(|l| l.get_mut(cur_idx))
@@ -496,6 +504,7 @@ impl Editor {
                     total,
                     groups,
                     range,
+                    highlight,
                 } => {
                     let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
                     let cur_idx = cur_buf_list.current_index();
@@ -520,6 +529,7 @@ impl Editor {
                             groups: std::mem::take(groups),
                         },
                         range: range.take(),
+                        highlight: std::mem::take(highlight),
                     };
                 }
                 EditorMode::SplitPane => self.process_split_pane(event),
@@ -755,6 +765,7 @@ impl Editor {
                                 match_idx,
                                 groups: groups.into(),
                                 range: None,
+                                highlight: Some(Highlight),
                             }
                         })
                     }
@@ -832,6 +843,7 @@ impl Editor {
                         match_idx,
                         groups: CaptureGroups::default(),
                         range: None,
+                        highlight: None,
                     };
                 }
             }
@@ -1349,6 +1361,7 @@ fn process_replace_matches(
     groups: &mut CaptureGroups,
     range: &mut Option<SelectionRange>,
     match_idx: &mut usize,
+    highlight: &mut Option<Highlight>,
     event: Event,
     alt: Option<AltCursor<'_>>,
 ) -> Option<EditorMode> {
@@ -1379,6 +1392,7 @@ fn process_replace_matches(
             None
         }
         key!(CONTROL, Delete) => {
+            *highlight = Some(Highlight);
             matches.remove(*match_idx);
             groups.remove(*match_idx);
             match matches.len().checked_sub(1) {
@@ -1430,6 +1444,7 @@ fn process_replace_matches(
             kind: MouseEventKind::ScrollUp,
             ..
         }) => {
+            *highlight = Some(Highlight);
             *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
             if let Some(r) = matches.get(*match_idx) {
                 buffer.set_cursor(r.cursor());
@@ -1446,6 +1461,7 @@ fn process_replace_matches(
             kind: MouseEventKind::ScrollDown,
             ..
         }) => {
+            *highlight = Some(Highlight);
             *match_idx = (*match_idx + 1) % matches.len();
             if let Some(r) = matches.get(*match_idx) {
                 buffer.set_cursor(r.cursor());

@@ -4024,56 +4024,118 @@ impl StatefulWidget for BufferWidget<'_> {
         Clear.render(text_area, buf);
         Paragraph::new(match self.mode {
             Some(
-                EditorMode::ReplaceMatches { matches, .. } | EditorMode::PasteGroup { matches, .. },
+                EditorMode::ReplaceMatches {
+                    matches,
+                    highlight,
+                    match_idx,
+                    ..
+                }
+                | EditorMode::PasteGroup {
+                    matches,
+                    highlight,
+                    match_idx,
+                    ..
+                },
             ) => {
-                let (mut cursors, mut ranges): (VecDeque<_>, _) = matches
-                    .iter()
-                    .map(|m| ((m.cursor..m.cursor + 1, ()), (m.range.clone(), ())))
-                    .unzip();
+                if matches!(highlight.take(), Some(crate::editor::Highlight)) {
+                    const HIGHLIGHTED: Style = Style::new()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::REVERSED);
 
-                cursors.retain(|(r, _)| r.start != state.cursor);
+                    fn sub_match_ranges(
+                        matches: &[MultiCursor],
+                    ) -> VecDeque<(Range<usize>, Style)> {
+                        matches
+                            .iter()
+                            .map(|m| (m.range.start..m.range.end, HIGHLIGHTED))
+                            .collect()
+                    }
 
-                EditorLine::iter(rope, viewport_line)
-                    .map(
-                        |EditorLine {
-                             line,
-                             range,
-                             number,
-                         }| {
-                            let whole_range = widen_range(range);
+                    let selection_start = matches[*match_idx].range.start;
+                    let selection_end = matches[*match_idx].range.end;
+                    let mut matches = sub_match_ranges(matches);
 
-                            highlight_matches(
+                    EditorLine::iter(rope, viewport_line)
+                        .map(
+                            |EditorLine {
+                                 line,
+                                 range,
+                                 number,
+                             }| {
+                                highlight_selection(
+                                    highlight_matches(
+                                        colorize(
+                                            syntax,
+                                            &mut hlstate,
+                                            line,
+                                            current_line == Some(number),
+                                        ),
+                                        range.clone(),
+                                        &mut matches,
+                                        |span, hl| span.style(hl),
+                                    ),
+                                    range.clone(),
+                                    (selection_start, selection_end),
+                                    |span| span.style(EDITING),
+                                )
+                                .into()
+                            },
+                        )
+                        .map(|line| widen_tabs(line, &buffer.tab_substitution))
+                        .take(area.height.into())
+                        .collect::<Vec<_>>()
+                } else {
+                    let (mut cursors, mut ranges): (VecDeque<_>, _) = matches
+                        .iter()
+                        .map(|m| ((m.cursor..m.cursor + 1, ()), (m.range.clone(), ())))
+                        .unzip();
+
+                    cursors.retain(|(r, _)| r.start != state.cursor);
+
+                    EditorLine::iter(rope, viewport_line)
+                        .map(
+                            |EditorLine {
+                                 line,
+                                 range,
+                                 number,
+                             }| {
+                                let whole_range = widen_range(range);
+
                                 highlight_matches(
-                                    widen(colorize(
-                                        syntax,
-                                        &mut hlstate,
-                                        line,
-                                        current_line == Some(number),
-                                    )),
-                                    whole_range.clone(),
-                                    &mut ranges,
+                                    highlight_matches(
+                                        widen(colorize(
+                                            syntax,
+                                            &mut hlstate,
+                                            line,
+                                            current_line == Some(number),
+                                        )),
+                                        whole_range.clone(),
+                                        &mut ranges,
+                                        |span, ()| {
+                                            span.patch_style(
+                                                Style::new()
+                                                    .underlined()
+                                                    .underline_color(Color::Blue),
+                                            )
+                                        },
+                                    ),
+                                    whole_range,
+                                    &mut cursors,
                                     |span, ()| {
-                                        span.patch_style(
-                                            Style::new().underlined().underline_color(Color::Blue),
+                                        span.style(
+                                            Style::new()
+                                                .fg(Color::Blue)
+                                                .add_modifier(Modifier::REVERSED),
                                         )
                                     },
-                                ),
-                                whole_range,
-                                &mut cursors,
-                                |span, ()| {
-                                    span.style(
-                                        Style::new()
-                                            .fg(Color::Blue)
-                                            .add_modifier(Modifier::REVERSED),
-                                    )
-                                },
-                            )
-                            .into()
-                        },
-                    )
-                    .map(|line| widen_tabs(line, &buffer.tab_substitution))
-                    .take(area.height.into())
-                    .collect::<Vec<_>>()
+                                )
+                                .into()
+                            },
+                        )
+                        .map(|line| widen_tabs(line, &buffer.tab_substitution))
+                        .take(area.height.into())
+                        .collect::<Vec<_>>()
+                }
             }
             Some(EditorMode::Autocomplete {
                 offset,

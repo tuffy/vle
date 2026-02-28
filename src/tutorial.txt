@@ -316,7 +316,7 @@ but don't know exactly which line it's on.
 Ctrl-F/F5 prompts for text to search for.
 
 Once you've entered the text you need,
-Enter will underline all matches (if any)
+Enter will highlight all matches (if any)
 and move your cursor to the first one so you
 may browse or edit them all.
 
@@ -332,7 +332,7 @@ and allow us to replace them with something else.
 Let's walk through this whole process.
 
 Start with Ctrl-F/F5 to find the first instance of the word to replace.
-This will underline all three instances of that word, below.
+This will highlight all three instances of that word, below.
 
 Next, type Ctrl-R/F6 to replace those three instances,
 which will remove them from the text.
