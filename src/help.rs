@@ -10,15 +10,21 @@ use crate::key;
 use ratatui::widgets::Block;
 
 #[derive(Copy, Clone)]
-pub struct Keybinding {
-    modifier: Option<&'static str>,
-    keys: &'static [&'static str],
-    action: &'static str,
-    f: &'static str,
+pub enum Keybinding {
+    Standard {
+        action: &'static str,
+        modifier: Option<&'static str>,
+        keys: &'static [&'static str],
+        f: &'static str,
+    },
+    Group {
+        action: &'static str,
+        keys: &'static [&'static str],
+    },
 }
 
 pub const fn ctrl(keys: &'static [&'static str], action: &'static str) -> Keybinding {
-    Keybinding {
+    Keybinding::Standard {
         modifier: Some("Ctrl"),
         keys,
         action,
@@ -27,7 +33,7 @@ pub const fn ctrl(keys: &'static [&'static str], action: &'static str) -> Keybin
 }
 
 pub const fn keybind<B: key::Binding>(action: &'static str) -> Keybinding {
-    Keybinding {
+    Keybinding::Standard {
         modifier: Some("Ctrl"),
         keys: &[B::PRIMARY_LABEL],
         action,
@@ -36,12 +42,16 @@ pub const fn keybind<B: key::Binding>(action: &'static str) -> Keybinding {
 }
 
 pub const fn none(keys: &'static [&'static str], action: &'static str) -> Keybinding {
-    Keybinding {
+    Keybinding::Standard {
         modifier: None,
         keys,
         action,
         f: "",
     }
+}
+
+pub const fn group(keys: &'static [&'static str], action: &'static str) -> Keybinding {
+    Keybinding::Group { action, keys }
 }
 
 pub fn help_message(keybindings: &[Keybinding]) -> ratatui::widgets::Paragraph<'_> {
@@ -67,30 +77,49 @@ pub fn help_message(keybindings: &[Keybinding]) -> ratatui::widgets::Paragraph<'
             .iter()
             .map(|k| {
                 let mut line = vec![];
-                line.extend(spaces(action_width - k.action.width()));
-                line.push(Span::from(k.action));
-                line.push(Span::from(" : "));
-                if f_width > 0 {
-                    if k.f.is_empty() {
-                        line.extend(spaces(f_width));
-                    } else {
-                        line.push(key(k.f));
-                        line.extend(spaces(f_width.saturating_sub(k.f.width())));
+                match k {
+                    Keybinding::Standard {
+                        modifier,
+                        keys,
+                        action,
+                        f,
+                    } => {
+                        line.extend(spaces(action_width - action.width()));
+                        line.push(Span::from(*action));
+                        line.push(Span::from(" : "));
+                        if f_width > 0 {
+                            if f.is_empty() {
+                                line.extend(spaces(f_width));
+                            } else {
+                                line.push(key(f));
+                                line.extend(spaces(f_width.saturating_sub(f.width())));
+                            }
+                        }
+                        match modifier {
+                            Some(modifier) => {
+                                line.extend(spaces(mod_width.saturating_sub(modifier.width() + 1)));
+                                line.push(key(modifier));
+                                line.push(Span::from("-"));
+                            }
+                            None => {
+                                line.extend(spaces(mod_width));
+                            }
+                        }
+                        for k in keys.iter() {
+                            line.push(key(k));
+                            line.push(Span::from(" "));
+                        }
                     }
-                }
-                match k.modifier {
-                    Some(modifier) => {
-                        line.extend(spaces(mod_width.saturating_sub(modifier.width() + 1)));
-                        line.push(key(modifier));
-                        line.push(Span::from("-"));
+                    Keybinding::Group { action, keys } => {
+                        line.extend(spaces(action_width - action.width()));
+                        line.push(Span::from(*action));
+                        line.push(Span::from(" : "));
+
+                        for k in keys.iter() {
+                            line.push(key(k));
+                            line.push(Span::from(" "));
+                        }
                     }
-                    None => {
-                        line.extend(spaces(mod_width));
-                    }
-                }
-                for k in k.keys {
-                    line.push(key(k));
-                    line.push(Span::from(" "));
                 }
 
                 Line::from(line)
@@ -104,14 +133,13 @@ pub fn field_widths(keybindings: &[Keybinding]) -> [usize; 5] {
 
     keybindings.iter().fold(
         [0, 2, 0, 0, 0],
-        |[action_len, _, f_len, mod_len, keys_len]: [usize; 5],
-         Keybinding {
-             modifier,
-             keys,
-             action,
-             f,
-         }: &Keybinding| {
-            [
+        |[action_len, _, f_len, mod_len, keys_len]: [usize; 5], key| match key {
+            Keybinding::Standard {
+                modifier,
+                keys,
+                action,
+                f,
+            } => [
                 action_len.max(action.width()),
                 2,
                 f_len.max(if !f.is_empty() { f.width() + 1 } else { 0 }),
@@ -120,7 +148,10 @@ pub fn field_widths(keybindings: &[Keybinding]) -> [usize; 5] {
                     None => 0,
                 }),
                 keys_len.max(keys.iter().map(|k| k.width() + 1).sum()),
-            ]
+            ],
+            Keybinding::Group { action, .. } => {
+                [action_len.max(action.width()), 2, f_len, mod_len, keys_len]
+            }
         },
     )
 }
@@ -178,7 +209,7 @@ pub static EDITING_2: &[Keybinding] = &[
     keybind::<key::Reload>("Reload File"),
     keybind::<key::Quit>("Quit File"),
     keybind::<key::Bookmark>("Toggle Bookmark"),
-    Keybinding {
+    Keybinding::Standard {
         modifier: Some("Shift"),
         keys: &[LEFT, DOWN, UP, RIGHT],
         action: "Highlight Text",
@@ -259,8 +290,7 @@ pub static CREATE_FILE: &[Keybinding] = &[
 ];
 
 pub static REPLACE_MATCHES: &[Keybinding] = &[
-    none(&[LEFT, RIGHT], "Move Cursors"),
-    none(&["Home", "End"], "Start / End of Matches"),
+    group(&["Home", LEFT, RIGHT, "End"], "Move Cursors"),
     none(&[UP, DOWN], "Select Match"),
     ctrl(&["Del"], "Remove Match"),
     keybind::<key::Find>("New Search"),
