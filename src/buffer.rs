@@ -239,7 +239,7 @@ impl Source {
 mod private {
     use crate::buffer::{AltCursor, Buffer, Toggle};
     use std::cell::{Ref, RefCell, RefMut};
-    use std::collections::BTreeSet;
+    use std::collections::BTreeMap;
     use std::ops::{Deref, DerefMut};
     use std::rc::Rc;
 
@@ -395,7 +395,7 @@ mod private {
     }
 
     #[derive(Clone, Default)]
-    pub struct Bookmarks(BTreeSet<usize>);
+    pub struct Bookmarks(BTreeMap<usize, ()>);
 
     impl Bookmarks {
         pub fn is_empty(&self) -> bool {
@@ -407,22 +407,27 @@ mod private {
         }
 
         pub fn iter(&self) -> impl Iterator<Item = usize> {
-            self.0.iter().copied()
+            self.0.keys().copied()
         }
 
         pub fn toggle(&mut self, cursor: usize) -> Toggle {
-            // TODO - convert to Entry API, whenever that stabilizes
-            if self.0.insert(cursor) {
-                Toggle::Inserted
-            } else {
-                assert!(self.0.remove(&cursor));
-                Toggle::Removed
+            use std::collections::btree_map::Entry;
+
+            match self.0.entry(cursor) {
+                Entry::Vacant(v) => {
+                    v.insert(());
+                    Toggle::Inserted
+                }
+                Entry::Occupied(o) => {
+                    let () = o.remove();
+                    Toggle::Removed
+                }
             }
         }
 
         /// Returns Ok if bookmark removed
         pub fn remove(&mut self, cursor: usize) -> Result<(), ()> {
-            self.0.remove(&cursor).then_some(()).ok_or(())
+            self.0.remove(&cursor).ok_or(())
         }
 
         /// Returns next bookmark after (but not including) the cursor
@@ -433,7 +438,8 @@ mod private {
             self.0
                 .range((Bound::Excluded(cursor), Bound::Unbounded))
                 .next()
-                .or_else(|| self.0.first())
+                .or_else(|| self.0.first_key_value())
+                .map(|(k, ())| k)
                 .copied()
         }
 
@@ -445,7 +451,8 @@ mod private {
             self.0
                 .range((Bound::Unbounded, Bound::Excluded(cursor)))
                 .next_back()
-                .or_else(|| self.0.last())
+                .or_else(|| self.0.last_key_value())
+                .map(|(k, ())| k)
                 .copied()
         }
 
@@ -454,17 +461,17 @@ mod private {
         }
     }
 
-    pub struct BookmarksHandle<'m>(&'m mut BTreeSet<usize>);
+    pub struct BookmarksHandle<'m>(&'m mut BTreeMap<usize, ()>);
 
     impl BookmarksHandle<'_> {
         /// Update all bookmark entries whose positions are >= cursor
         pub fn update_ge(&mut self, cursor: usize, mut update: impl FnMut(&mut usize)) {
             let mut updated = self
                 .0
-                .extract_if(cursor.., |_| true)
-                .map(|mut pos| {
+                .extract_if(cursor.., |_, _| true)
+                .map(|(mut pos, ())| {
                     update(&mut pos);
-                    pos
+                    (pos, ())
                 })
                 .collect();
 
@@ -473,7 +480,7 @@ mod private {
 
         /// Remove all bookmarks in range
         pub fn remove<R: std::ops::RangeBounds<usize>>(&mut self, range: R) {
-            self.0.extract_if(range, |_| true).for_each(drop);
+            self.0.extract_if(range, |_, _| true).for_each(drop);
         }
     }
 
