@@ -1548,7 +1548,7 @@ impl BufferContext {
                 multicursor_update(
                     &mut indent_lines,
                     |m| {
-                        m.indent(&mut rope, &mut self.cursor, &mut alt, &indent, indent_chars);
+                        m.indent(&mut rope, &mut alt, &indent, indent_chars);
                         Ok::<_, Infallible>(())
                     },
                     |m, ()| {
@@ -1630,11 +1630,17 @@ impl BufferContext {
                     let mut alt = Secondary::new(alt, bookmarks);
                     multicursor_update(
                         &mut unindent_lines,
-                        |m| m.un_indent(&mut rope, &mut self.cursor, &mut alt, indent_chars),
+                        |m| m.un_indent(&mut rope, &mut alt, indent_chars),
                         |m, ()| {
                             *m -= indent_chars;
                         },
                     );
+                    if let Some(start) = unindent_lines.first()
+                        && let Some(end) = unindent_lines.last()
+                    {
+                        self.selection = Some(start.range.start);
+                        self.cursor = end.range.end;
+                    }
                 }
                 None
             }
@@ -2329,14 +2335,10 @@ impl MultiCursor {
     fn indent(
         &mut self,
         rope: &mut ropey::Rope,
-        cursor: &mut usize,
         secondary: &mut Secondary,
         indent: &str,
         indent_len: usize,
     ) {
-        if self.range.start <= *cursor {
-            *cursor += indent_len;
-        }
         secondary.update(|a| {
             if self.range.start <= *a {
                 *a += indent_len;
@@ -2356,7 +2358,6 @@ impl MultiCursor {
     fn un_indent(
         &mut self,
         rope: &mut ropey::Rope,
-        cursor: &mut usize,
         secondary: &mut Secondary,
         indent_len: usize,
     ) -> Result<(), ()> {
@@ -2365,9 +2366,6 @@ impl MultiCursor {
         self.cursor = self.cursor.saturating_sub(indent_len);
         self.range.end -= indent_len;
 
-        if self.range.start <= *cursor {
-            *cursor = cursor.saturating_sub(indent_len);
-        }
         secondary.update(|a| {
             if self.range.start <= *a {
                 *a = a.saturating_sub(indent_len);
