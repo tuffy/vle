@@ -1531,36 +1531,36 @@ impl BufferContext {
                 }
                 None
             }
-            selection_opt @ Some(selection) => {
+            selection_opt @ Some(_) => {
+                use std::convert::Infallible;
+
                 let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
                 let indent = match buf.tabs_required {
                     false => buf.tab_substitution.clone(),
                     true => "\t".to_string(),
                 };
-                let (start, end) = reorder(self.cursor, selection);
-                let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
-                let mut alt = Secondary::ge(alt, bookmarks, start);
-                let indent_lines = selected_lines(&rope, self.cursor, selection_opt)
-                    .filter(|l| l.end > l.start)
+                let indent_chars = indent.chars().count();
+                let mut indent_lines = selected_lines(&buf.rope, self.cursor, selection_opt)
+                    .map(|line| line.into())
                     .collect::<Vec<_>>();
-
-                for SelectedLine { start, .. } in indent_lines.iter().rev() {
-                    rope.insert(*start, &indent);
+                let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
+                let mut alt = Secondary::new(alt, bookmarks);
+                multicursor_update(
+                    &mut indent_lines,
+                    |m| {
+                        m.indent(&mut rope, &mut self.cursor, &mut alt, &indent, indent_chars);
+                        Ok::<_, Infallible>(())
+                    },
+                    |m, ()| {
+                        *m += indent_chars;
+                    },
+                );
+                if let Some(start) = indent_lines.first()
+                    && let Some(end) = indent_lines.last()
+                {
+                    self.selection = Some(start.range.start);
+                    self.cursor = end.range.end;
                 }
-
-                self.selection = indent_lines.first().map(|l| l.start);
-                self.cursor = indent_lines
-                    .last()
-                    .map(|l| l.end + (indent.len() * indent_lines.len()))
-                    .unwrap_or(0);
-
-                alt.update(|pos| {
-                    if (start..end).contains(pos) {
-                        *pos = self.cursor;
-                    } else {
-                        *pos += indent.len() * indent_lines.len()
-                    }
-                });
                 None
             }
         }
@@ -1612,43 +1612,29 @@ impl BufferContext {
                 }
                 None
             }
-            selection_opt @ Some(selection) => {
+            selection_opt @ Some(_) => {
                 let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
                 let indent = match buf.tabs_required {
                     false => buf.tab_substitution.clone(),
                     true => "\t".to_string(),
                 };
-                let (start, end) = reorder(self.cursor, selection);
-                let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
-                let mut alt = Secondary::ge(alt, bookmarks, self.cursor);
-
-                let unindent_lines = selected_lines(&rope, self.cursor, selection_opt)
-                    .filter(|l| l.end > l.start)
+                let indent_chars = indent.chars().count();
+                let mut unindent_lines = selected_lines(&buf.rope, self.cursor, selection_opt)
+                    .map(|line| line.into())
                     .collect::<Vec<_>>();
-
-                // un-indent whole selection as a unit
-                // so long as each non-empty line has the proper amount
-                // of prefixed spaces
-                if unindent_lines.iter().all(|SelectedLine { start, .. }| {
-                    rope.chars_at(*start).take(indent.len()).eq(indent.chars())
-                }) {
-                    for line in unindent_lines.iter().rev() {
-                        rope.remove(alt.remove(line.start..line.start + indent.len()));
-                    }
-
-                    self.selection = unindent_lines.first().map(|l| l.start);
-                    self.cursor = unindent_lines
-                        .last()
-                        .map(|l| l.end - (unindent_lines.len() * indent.len()))
-                        .unwrap_or(0);
-
-                    alt.update(|pos| {
-                        if (start..end).contains(pos) {
-                            *pos = self.cursor;
-                        } else {
-                            *pos = pos.saturating_sub(indent.len() * unindent_lines.len());
-                        }
-                    });
+                let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
+                if unindent_lines
+                    .iter()
+                    .all(|l: &MultiCursor| l.can_unindent(&rope, &indent, indent_chars))
+                {
+                    let mut alt = Secondary::new(alt, bookmarks);
+                    multicursor_update(
+                        &mut unindent_lines,
+                        |m| m.un_indent(&mut rope, &mut self.cursor, &mut alt, indent_chars),
+                        |m, ()| {
+                            *m -= indent_chars;
+                        },
+                    );
                 }
                 None
             }
@@ -2340,6 +2326,56 @@ impl MultiCursor {
         self.range.end += s_len;
     }
 
+    fn indent(
+        &mut self,
+        rope: &mut ropey::Rope,
+        cursor: &mut usize,
+        secondary: &mut Secondary,
+        indent: &str,
+        indent_len: usize,
+    ) {
+        if self.range.start <= *cursor {
+            *cursor += indent_len;
+        }
+        secondary.update(|a| {
+            if self.range.start <= *a {
+                *a += indent_len;
+            }
+        });
+        rope.insert(self.range.start, indent);
+        self.cursor += indent_len;
+        self.range.end += indent_len;
+    }
+
+    fn can_unindent(&self, rope: &ropey::Rope, indent: &str, indent_len: usize) -> bool {
+        rope.chars_at(self.range.start)
+            .take(indent_len)
+            .eq(indent.chars())
+    }
+
+    fn un_indent(
+        &mut self,
+        rope: &mut ropey::Rope,
+        cursor: &mut usize,
+        secondary: &mut Secondary,
+        indent_len: usize,
+    ) -> Result<(), ()> {
+        rope.try_remove(secondary.remove(self.range.start..self.range.start + indent_len))
+            .map_err(|_| ())?;
+        self.cursor = self.cursor.saturating_sub(indent_len);
+        self.range.end -= indent_len;
+
+        if self.range.start <= *cursor {
+            *cursor = cursor.saturating_sub(indent_len);
+        }
+        secondary.update(|a| {
+            if self.range.start <= *a {
+                *a = a.saturating_sub(indent_len);
+            }
+        });
+        Ok(())
+    }
+
     /// Returns Ok and number of characters removed
     /// if backspace performed successfully
     fn backspace(
@@ -2440,6 +2476,15 @@ impl From<Range<usize>> for MultiCursor {
         Self {
             cursor: range.start,
             range,
+        }
+    }
+}
+
+impl From<SelectedLine> for MultiCursor {
+    fn from(line: SelectedLine) -> Self {
+        Self {
+            cursor: line.start,
+            range: line.start..line.end,
         }
     }
 }
@@ -4435,7 +4480,7 @@ impl StatefulWidget for BufferWidget<'_> {
             }) => {
                 use crate::help::{ctrl, none};
 
-                let mut help = REPLACE_MATCHES.iter().cloned().collect::<Vec<_>>();
+                let mut help = REPLACE_MATCHES.to_vec();
                 help.push(ctrl(
                     &["V"],
                     if matches!(groups, crate::editor::CaptureGroups::None) {
