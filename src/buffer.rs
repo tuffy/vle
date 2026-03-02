@@ -1887,8 +1887,6 @@ impl BufferContext {
     /// in the rope in characters.
     /// The partial word being autocompleted will be first in the Vec.
     fn autocomplete_matches(&self) -> Option<(usize, Vec<String>)> {
-        use radix_trie::{Trie, TrieCommon};
-
         let buf = &mut self.buffer.borrow();
         let rope = &buf.rope;
 
@@ -1910,33 +1908,15 @@ impl BufferContext {
 
         let prefix_start = self.cursor.checked_sub(prefix_chars.len())?;
 
-        let prefix = prefix_chars.into_iter().rev().collect::<String>();
-
-        let mut counts: Trie<String, u64> = Trie::default();
-
-        for line in rope.lines() {
-            let line = Cow::from(line);
-            for (word, []) in
-                lazy_regex::regex_captures_iter!("[[:word:]]+", &line).map(|c| c.extract())
-            {
-                if word.starts_with(&prefix) && word != prefix {
-                    counts.map_with_default(word.to_string(), |c| *c += 1, 1);
-                }
-            }
-        }
-
-        let mut counts = counts
-            .iter()
-            .map(|(s, c)| (s.to_string(), c))
-            .collect::<Vec<_>>();
-        counts.sort_unstable_by(|(s1, c1), (s2, c2)| c1.cmp(c2).then(s1.cmp(s2).reverse()));
-
         Some((
             prefix_start,
-            std::iter::once(prefix)
-                .chain(counts.into_iter().map(|(s, _)| s).rev())
-                .collect(),
+            autocomplete_matches(rope, prefix_chars.into_iter().rev().collect()),
         ))
+    }
+
+    /// Returns autocomplete matches for a Find prompt
+    pub fn search_autocomplete_matches(&self, prefix: String) -> Vec<String> {
+        autocomplete_matches(&self.buffer.borrow().rope, prefix)
     }
 
     pub fn autocomplete(
@@ -3871,37 +3851,70 @@ impl StatefulWidget for BufferWidget<'_> {
             Regex,
         }
 
-        fn render_find_prompt<S: Highlighter>(
-            syntax: FindSyntax<'_, S>,
+        fn render_find_prompt<'t, 's, S: Highlighter>(
+            syntax: FindSyntax<'t, S>,
             text_area: Rect,
             buf: &mut ratatui::buffer::Buffer,
             prompt: &TextField,
-            f: impl FnOnce(Block) -> Block,
+            highlight: impl FnOnce(Vec<Span<'s>>) -> Vec<Span<'s>>,
+            block: impl FnOnce(Block) -> Block,
         ) {
             let [_, dialog_area, _] =
                 Layout::vertical([Min(0), Length(3), Min(0)]).areas(text_area);
 
             Clear.render(dialog_area, buf);
             Paragraph::new(Line::from(match syntax {
-                FindSyntax::Plain(syntax) => colorize(
+                FindSyntax::Plain(syntax) => highlight(colorize(
                     syntax,
                     &mut HighlightState::default(),
                     prompt.chars().collect::<String>().into(),
                     true,
-                ),
-                FindSyntax::Regex => colorize(
+                )),
+                FindSyntax::Regex => highlight(colorize(
                     &crate::syntax::Regex,
                     &mut HighlightState::default(),
                     prompt.chars().collect::<String>().into(),
                     true,
-                ),
+                )),
             }))
             .scroll((
                 0,
                 (prompt.cursor_column() as u16).saturating_sub(dialog_area.width.saturating_sub(2)),
             ))
-            .block(f(Block::bordered().border_type(BorderType::Rounded)))
+            .block(block(Block::bordered().border_type(BorderType::Rounded)))
             .render(dialog_area, buf);
+        }
+
+        fn find_mode_help(prompt: &TextField, type_: SearchType) -> Vec<crate::help::Keybinding> {
+            use crate::help::{ctrl, keybind, none};
+
+            let mut help = if prompt.is_empty() {
+                // Tab when buffer is empty switches mode
+                vec![none(
+                    &["Tab"],
+                    match type_ {
+                        SearchType::Plain => "Regex Find",
+                        SearchType::Regex => "Plain Text Find",
+                    },
+                )]
+            } else if prompt.can_autocomplete() {
+                vec![none(&["Tab"], "Autocomplete Word")]
+            } else {
+                vec![]
+            };
+
+            help.extend([
+                ctrl(&["V"], "Paste From Cut Buffer"),
+                keybind::<crate::key::GotoLine>("Goto Line"),
+                keybind::<crate::key::Find>(match prompt.is_empty() {
+                    true => "Redo Last Find",
+                    false => "Begin New Find",
+                }),
+                none(&["Enter"], "Browse All Matches"),
+                none(&["Esc"], "Cancel"),
+            ]);
+
+            help
         }
 
         if let Some(EditorMode::Open { chooser }) = self.mode {
@@ -4426,34 +4439,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(EditorMode::Search { prompt, type_, .. }) => {
-                use crate::help::{ctrl, keybind, none};
-
-                let mut help = if prompt.is_empty() {
-                    // Tab when buffer is empty switches mode
-                    vec![none(
-                        &["Tab"],
-                        match type_ {
-                            SearchType::Plain => "Regex Find",
-                            SearchType::Regex => "Plain Text Find",
-                        },
-                    )]
-                } else {
-                    // TODO - Tab at end of word indicates tab completion
-                    vec![]
-                };
-
-                help.extend([
-                    ctrl(&["V"], "Paste From Cut Buffer"),
-                    keybind::<crate::key::GotoLine>("Goto Line"),
-                    keybind::<crate::key::Find>(match prompt.is_empty() {
-                        true => "Redo Last Find",
-                        false => "Begin New Find",
-                    }),
-                    none(&["Enter"], "Browse All Matches"),
-                    none(&["Esc"], "Cancel"),
-                ]);
-
-                render_help(text_area, buf, &help, |b| b);
+                render_help(text_area, buf, &find_mode_help(prompt, *type_), |b| b);
                 render_find_prompt(
                     match type_ {
                         SearchType::Plain => FindSyntax::Plain(syntax),
@@ -4462,6 +4448,56 @@ impl StatefulWidget for BufferWidget<'_> {
                     text_area,
                     buf,
                     prompt,
+                    |s| s,
+                    |b| match state
+                        .message
+                        .take_if(|m| matches!(m, BufferMessage::Error(_)))
+                    {
+                        Some(BufferMessage::Error(err)) => b
+                            .title_top(type_.to_string())
+                            .title_bottom(Line::from(err.to_string()).centered())
+                            .border_style(Style::default().fg(Color::Red)),
+                        _ => b.title_top(type_.to_string()),
+                    },
+                );
+            }
+            Some(EditorMode::AutocompleteSearch { prompt, type_, offset, completions, index, .. }) => {
+                render_help(text_area, buf, &find_mode_help(prompt, *type_), |b| b);
+                render_find_prompt(
+                    match type_ {
+                        SearchType::Plain => FindSyntax::Plain(syntax),
+                        SearchType::Regex => FindSyntax::Regex,
+                    },
+                    text_area,
+                    buf,
+                    prompt,
+                    |s| {
+                        let mut colorized = VecDeque::from(s);
+                        let mut highlighted = Vec::with_capacity(colorized.len());
+
+                        // output everything to offset verbatim
+                        extract(
+                            &mut colorized,
+                            *offset,
+                            &mut highlighted,
+                            |span| span,
+                        );
+
+                        // output autcompleted text underlined
+                        extract(
+                            &mut colorized,
+                            completions[*index].chars().count(),
+                            &mut highlighted,
+                            |span| span.patch_style(
+                                Style::new().underlined().underline_color(Color::Red),
+                            ),
+                        );
+
+                        // output the rest verbatim
+                        highlighted.extend(colorized);
+
+                        highlighted
+                    },
                     |b| match state
                         .message
                         .take_if(|m| matches!(m, BufferMessage::Error(_)))
@@ -4726,6 +4762,34 @@ fn patch_rope(
     }
 }
 
+fn autocomplete_matches(rope: &ropey::Rope, prefix: String) -> Vec<String> {
+    use radix_trie::{Trie, TrieCommon};
+
+    let mut counts: Trie<String, u64> = Trie::default();
+
+    for line in rope.lines() {
+        let line = Cow::from(line);
+        for (word, []) in
+            lazy_regex::regex_captures_iter!("[[:word:]]+", &line).map(|c| c.extract())
+        {
+            if word.starts_with(&prefix) && word != prefix {
+                counts.map_with_default(word.to_string(), |c| *c += 1, 1);
+            }
+        }
+    }
+
+    let mut counts = counts
+        .iter()
+        .map(|(s, c)| (s.to_string(), c))
+        .collect::<Vec<_>>();
+
+    counts.sort_unstable_by(|(s1, c1), (s2, c2)| c1.cmp(c2).then(s1.cmp(s2).reverse()));
+
+    std::iter::once(prefix)
+        .chain(counts.into_iter().map(|(s, _)| s).rev())
+        .collect()
+}
+
 struct Thousands(usize);
 
 impl std::fmt::Display for Thousands {
@@ -4756,7 +4820,7 @@ enum Toggle {
 }
 
 #[inline]
-fn is_word(c: char) -> bool {
+pub fn is_word(c: char) -> bool {
     c == '_' || c.is_alphanumeric()
 }
 

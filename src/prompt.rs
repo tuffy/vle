@@ -84,6 +84,47 @@ impl TextField {
         self.cursor = 0;
     }
 
+    /// Returns true if cursor if cursor is at end of word
+    pub fn can_autocomplete(&self) -> bool {
+        self.autocomplete_word().is_some()
+    }
+
+    /// If cursor is at end of word, returns offset and prefix
+    pub fn autocomplete_word(&self) -> Option<(usize, String)> {
+        use crate::buffer::is_word;
+
+        if let Some(c) = self.chars.get(self.cursor)
+            && is_word(*c)
+        {
+            return None;
+        }
+
+        let prefix_chars = self.chars[0..self.cursor]
+            .iter()
+            .rev()
+            .take_while(|c| is_word(**c))
+            .collect::<Vec<_>>();
+
+        if prefix_chars.is_empty() {
+            return None;
+        }
+
+        let prefix_start = self.cursor.checked_sub(prefix_chars.len())?;
+
+        Some((prefix_start, prefix_chars.into_iter().rev().collect()))
+    }
+
+    /// Replaces original with replacement at offset
+    pub fn autocomplete(&mut self, offset: usize, original: &str, replacement: &str) {
+        self.chars
+            .splice(
+                offset..offset + original.chars().count(),
+                replacement.chars(),
+            )
+            .for_each(drop);
+        self.cursor = offset + replacement.chars().count();
+    }
+
     pub fn process_event(&mut self, event: crossterm::event::Event) {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 

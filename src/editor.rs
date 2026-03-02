@@ -87,6 +87,14 @@ pub enum EditorMode {
         completions: Vec<String>, // autocompletion candidates
         index: usize,             // the current candidate
     },
+    AutocompleteSearch {
+        prompt: TextField,
+        type_: SearchType,
+        range: Option<SelectionRange>,
+        offset: usize,            // our character offset in rope
+        completions: Vec<String>, // autocompletion candidates
+        index: usize,             // the current candidate
+    },
 }
 
 pub struct Highlight;
@@ -397,6 +405,43 @@ impl Editor {
                         self.process_normal_event(area, event);
                     }
                 },
+                EditorMode::AutocompleteSearch {
+                    prompt,
+                    type_,
+                    range,
+                    offset,
+                    index,
+                    completions,
+                } => match event {
+                    key!(Tab) => {
+                        // switch to next candidate
+                        let next_index = (*index + 1) % completions.len();
+                        prompt.autocomplete(
+                            *offset,
+                            &completions[*index],
+                            &completions[next_index],
+                        );
+                        *index = next_index;
+                    }
+                    key!(SHIFT, BackTab) => {
+                        let previous_index = index.checked_sub(1).unwrap_or(completions.len() - 1);
+                        prompt.autocomplete(
+                            *offset,
+                            &completions[*index],
+                            &completions[previous_index],
+                        );
+                        *index = previous_index;
+                    }
+                    event => {
+                        // end autocomplete
+                        self.mode = EditorMode::Search {
+                            prompt: std::mem::take(prompt),
+                            type_: std::mem::take(type_),
+                            range: std::mem::take(range),
+                        };
+                        self.process_event(area, event);
+                    }
+                },
                 EditorMode::ConfirmClose { buffer } => {
                     let buffer = buffer.clone();
                     self.process_confirm_close(event, buffer)
@@ -451,6 +496,18 @@ impl Editor {
                                     highlight: Some(Highlight),
                                 }
                             }
+                            NextModeIncremental::Autocomplete {
+                                offset,
+                                completions,
+                                index,
+                            } => EditorMode::AutocompleteSearch {
+                                prompt: std::mem::take(prompt),
+                                type_: std::mem::take(type_),
+                                range: std::mem::take(range),
+                                offset,
+                                completions,
+                                index,
+                            },
                             NextModeIncremental::SelectLine => EditorMode::SelectLine {
                                 prompt: LinePrompt::default(),
                             },
@@ -1288,8 +1345,12 @@ enum NextModeIncremental {
         matches: Vec<(Range<usize>, Vec<Option<MatchCapture>>)>,
     },
     SelectLine,
+    Autocomplete {
+        offset: usize,
+        completions: Vec<String>,
+        index: usize,
+    },
 }
-// TODO - Add Autocomplete option
 
 fn process_search(
     buffer: &mut BufferContext,
@@ -1320,9 +1381,52 @@ fn process_search(
                     SearchType::Plain => SearchType::Regex,
                     SearchType::Regex => SearchType::Plain,
                 };
+                None
+            } else {
+                let (offset, search) = prompt.autocomplete_word()?;
+                let completions = buffer.search_autocomplete_matches(search);
+                if let Some(original) = completions.first()
+                    && let Some(replacement) = completions.get(1)
+                {
+                    prompt.autocomplete(offset, original, replacement);
+                    Some(NextModeIncremental::Autocomplete {
+                        offset,
+                        completions,
+                        index: 1,
+                    })
+                } else {
+                    buffer.set_error("No Completions Found");
+                    None
+                }
             }
-            // TODO - if prompt at end of word, start autocomplete
-            None
+        }
+        key!(SHIFT, BackTab) => {
+            if prompt.is_empty() {
+                prompt.reset();
+                *type_ = match *type_ {
+                    SearchType::Plain => SearchType::Regex,
+                    SearchType::Regex => SearchType::Plain,
+                };
+                None
+            } else {
+                let (offset, search) = prompt.autocomplete_word()?;
+                let completions = buffer.search_autocomplete_matches(search);
+                if let Some(original) = completions.first()
+                    && let Some(index) = completions.len().checked_sub(1)
+                    && index != 0
+                    && let Some(replacement) = completions.get(index)
+                {
+                    prompt.autocomplete(offset, original, replacement);
+                    Some(NextModeIncremental::Autocomplete {
+                        offset,
+                        completions,
+                        index,
+                    })
+                } else {
+                    buffer.set_error("No Completions Found");
+                    None
+                }
+            }
         }
         key!(Enter) => match type_ {
             SearchType::Plain => match buffer.all_matches(range, prompt.value()?) {
@@ -1757,7 +1861,8 @@ impl Layout {
                     x: text_area.x + text_area.width,
                     y: text_area.y.saturating_sub(1),
                 }),
-                EditorMode::Search { prompt, .. } => {
+                EditorMode::Search { prompt, .. }
+                | EditorMode::AutocompleteSearch { prompt, .. } => {
                     let [_, dialog_area, _] =
                         Layout::vertical([Min(0), Length(3), Min(0)]).areas(text_area);
                     let dialog_area = Block::bordered().inner(dialog_area);
