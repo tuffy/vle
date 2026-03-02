@@ -15,7 +15,7 @@ By restricting our feature set to less than twenty powerful features,
 we can devote more mental effort to our projects and less mental
 effort to our tools.
 
-[![asciicast](https://asciinema.org/a/MBH2FO9IU6LNWUvC.svg)](https://asciinema.org/a/MBH2FO9IU6LNWUvC)
+[![asciicast](https://asciinema.org/a/G2sA2qvYk0kkYoHf.svg)](https://asciinema.org/a/G2sA2qvYk0kkYoHf)
 
 # Installation
 
@@ -30,15 +30,16 @@ Its syntax highlighting for different languages are built-in
 and it uses no configuration file; its minimal configuration options
 are done via simple environment variables.
 
-# Keybindings and Features
+# Keybindings
 
 | Action                         | Shortcut       | Shortcut                           |
 |-------------------------------:|----------------|------------------------------------|
+| Toggle Keybindings Display     | <kbd>F1</kbd>  |                                    |
 | Open File                      | <kbd>F2</kbd>  | <kbd>Ctrl</kbd>-<kbd>O</kbd>       |
 | Save File                      | <kbd>F3</kbd>  | <kbd>Ctrl</kbd>-<kbd>S</kbd>       |
-| Goto Line                      | <kbd>F4</kbd>  | <kbd>Ctrl</kbd>-<kbd>T</kbd>       |
-| Find Text                      | <kbd>F5</kbd>  | <kbd>Ctrl</kbd>-<kbd>F</kbd>       |
-| Replace Text                   | <kbd>F6</kbd>  | <kbd>Ctrl</kbd>-<kbd>R</kbd>       |
+| Goto Line or Bookmark          | <kbd>F4</kbd>  | <kbd>Ctrl</kbd>-<kbd>T</kbd>       |
+| Find Text in File or Selection | <kbd>F5</kbd>  | <kbd>Ctrl</kbd>-<kbd>F</kbd>       |
+| Edit Lines or Replace Text     | <kbd>F6</kbd>  | <kbd>Ctrl</kbd>-<kbd>R</kbd>       |
 | Goto Matching Pair             | <kbd>F7</kbd>  | <kbd>Ctrl</kbd>-<kbd>P</kbd>       |
 | Select Inside Pair             | <kbd>F8</kbd>  | <kbd>Ctrl</kbd>-<kbd>E</kbd>       |
 | Select Word or Whole Lines     | <kbd>F9</kbd>  | <kbd>Ctrl</kbd>-<kbd>W</kbd>       |
@@ -49,188 +50,79 @@ are done via simple environment variables.
 | Highlight Text                 |                | <kbd>Shift</kbd>-<kbd>Arrows</kbd> |
 | Start of Selection             |                | <kbd>Ctrl</kbd>-<kbd>Home</kbd>    |
 | End of Selection               |                | <kbd>Ctrl</kbd>-<kbd>End</kbd>     |
-| Indent / Autocomplete          |                | <kbd>Tab</kbd>                     |
-| Edit Selected Lines            |                | <kbd>Ctrl</kbd>-<kbd>Tab</kbd>     |
+| Indent or Autocomplete         |                | <kbd>Tab</kbd>                     |
 | Cut                            |                | <kbd>Ctrl</kbd>-<kbd>X</kbd>       |
 | Copy                           |                | <kbd>Ctrl</kbd>-<kbd>C</kbd>       |
 | Paste                          |                | <kbd>Ctrl</kbd>-<kbd>V</kbd>       |
 | Undo                           |                | <kbd>Ctrl</kbd>-<kbd>Z</kbd>       |
 | Redo                           |                | <kbd>Ctrl</kbd>-<kbd>Y</kbd>       |
+| Switch Pane                    |                | <kbd>Ctrl</kbd>-<kbd>Arrows</kbd>  |
 | Previous Buffer                |                | <kbd>Ctrl</kbd>-<kbd>PgUp</kbd>    |
 | Next Buffer                    |                | <kbd>Ctrl</kbd>-<kbd>PgDn</kbd>    |
-| Switch Pane                    |                | <kbd>Ctrl</kbd>-<kbd>Arrows</kbd>  |
 
 Because we have so few features, non-navigational features
 have alternative <kbd>Ctrl</kbd>-based and <kbd>F</kbd>-based keybindings.
 This also helps maintain compatibility with terminal multiplexers
 which have many of their own dedicated <kbd>Ctrl</kbd> bindings.
 
-## Open File
+# Key Features
 
-Files to open can be provided on the command line,
-or via the open files dialog.  A filename can be provided
-if one needs to open a new file. One can select a file
-by navigating the filesystem interactively. Or one can tag
-multiple files and open several of them simultaneously.
+## Multi Cursor-Style Find and Replace
 
-## Save File
+<kbd>Ctrl</kbd>-<kbd>F</kbd> / <kbd>F5</kbd> to find text will highlight
+all matches and move your cursor to the next available match, if any.
+Matches can be cycled between using the up and down arrow keys.
+This much is unremarkable.
 
-Writes any changes back to the file on disk.
-Will report an I/O errors during writing, and will prompt
-to overwrite a file should it be changed out from under us.
+However, you may also *edit* found matches simply by
+repositioning the cursor with the left and right arrow keys
+and typing in new text. New text is inserted simultaneously
+at all matches interactively as if you'd typed it in at each one.
 
-## Highlight Text and Cut / Copy / Paste
+Text can also be replaced at all matches with
+<kbd>Ctrl</kbd>-<kbd>R</kbd> / <kbd>F6</kbd>,
+which removes the contents of all matches and allows you to enter new text.
 
-Highlighted text will be overwritten by the next keystroke,
-or can be cut / copied to the cut buffer where it can be pasted
-somewhere else.
+Additionally, for regular-expression based searches,
+captured groups can be pasted to all matches simultaneously.
 
-## Undo and Redo
+[![asciicast](https://asciinema.org/a/g3Bbnn6kwbJLUKVg.svg)](https://asciinema.org/a/g3Bbnn6kwbJLUKVg)
 
-VLE features a limitless undo stack, which can back up
-to the state of the file when first opened if necessary.
-Or, if one undoes a little too much, a redo stack
-to redo those changes is also provided.
+## Multi Cursor-Style Line Editing
 
-## Goto Line
+Similar to find-and-replace, you can simply highlight a selection of
+lines and use <kbd>Ctrl</kbd>-<kbd>R</kbd> / <kbd>F6</kbd> to edit
+each of them simultaneously as a unit.
 
-Prompts one for a line number to jump to and navigates to
-that position in the file.
-Can also navigate directly to the first and last lines of the
-file without having to type in their respective line numbers.
+[![asciicast](https://asciinema.org/a/g3Bbnn6kwbJLUKVg.svg)](https://asciinema.org/a/g3Bbnn6kwbJLUKVg)
 
-## Find Text
+## Bookmarks
 
-Prompts for text to search for and highlights all possible matches.
-Use arrow keys to cycle forward or backward through
-all possible matches in the file.
-The <kbd>Del</kbd> key can be used to cull matches from the match list.
+Have a spot in your file you'd like to mark and return to later?
+Place bookmarks with <kbd>Ctrl</kbd>-<kbd>B</kbd> / <kbd>Insert</kbd>,
+which drops visible positions in the text that remain fixed in place.
+<kbd>Ctrl</kbd>-<kbd>T</kbd> / <kbd>F4</kbd> doubles as
+both a way to jump to a specific line and also a means to
+cycle between bookmarks using the arrow keys.
 
-## Replace Text
+Bookmarks can be removed either by
+<kbd>Ctrl</kbd>-<kbd>B</kbd> / <kbd>Insert</kbd> on the same position,
+or simply by erasing the text containing the bookmark.
+Hando for TODO items which are no longer needed.
 
-Must be initiated during the "Find Text" process
-(we first find the text, then replace that text).
-Removes all matches from the text and prompts one for
-new text which is inserted interactively at all
-matches simultaneously.
-Feel free to use arrow keys to cycle between matches
-during the replacement process.
+[![asciicast](https://asciinema.org/a/NK0fyxZXrAEtTqBV.svg)](https://asciinema.org/a/NK0fyxZXrAEtTqBV)
 
-## Goto Matching Pair
+## Split Pane Views
 
-When the cursor is positioned at some directional
-paired character (such as <kbd>(</kbd>, <kbd>[</kbd>, <kbd>{</kbd>, <kbd>&lt;</kbd>),
-this will jump forward or backward to its paired counterpart
-(<kbd>)</kbd>, <kbd>]</kbd>, <kbd>}</kbd>, <kbd>&gt;</kbd>).
+The editor's viewport can be split into two vertical or two horizontal panes
+using <kbd>Ctrl</kbd>-<kbd>N</kbd> / <kbd>F10</kbd>.
+Each pane can contain a different file, or different spots within the same file.
+Switch between them using <kbd>Ctrl</kbd>-<kbd>Arrows</kbd>.
+Use <kbd>Ctrl</kbd>-<kbd>N</kbd> / <kbd>F10</kbd> to un-split the panes.
+Un-splitting panes is a lossless operation; splitting panes again
+will maintain the same cursor positions as before.
 
-## Select Inside Pair
-
-When the cursor is positioned between two paired characters,
-this will select all the text between them.
-Executing the command again will widen the selection to include
-the paired characters themselves.
-And executing the command yet again will widen the selection
-steadily outward to the next set of paired characters.
-
-If it can't determine which pair of characters you mean
-automatically, it will prompt for which set to use.
-
-## Widen Selection to Whole Lines
-
-If the start and end points of the selection are not at
-the start and end of a line, this widens the selection until it is.
-
-## Split Pane
-
-Divides a single large window into two separate panes,
-either horizontally or vertically.
-Each pane may contain a different buffer, or different
-locations within the same buffer.
-
-## Reload File
-
-Performs the inverse of a file save; updates our text to
-reflect the contents of the file on disk.
-Sometimes handy if some other tool modifies our file
-and we wish to continue working on it.
-Prompts whether to overwrite our buffer's contents
-if it has not yet been saved.
-
-## Quit Buffer
-
-Closes the current file buffer, prompting for a confirmation
-if its contents have not yet been saved.
-The editor quits once all buffers have been closed.
-
-## Toggle Bookmark
-
-Inserts or removes a bookmark in the text,
-which can be navigated using the "Goto Line" mode.
-
-## Autocompletion
-
-If the cursor is located just past the end of a word,
-<kbd>Tab</kbd> will attempt to autocomplete that word
-using the best available candidates.
-
-If the cursor is anywhere else, or a selection is active,
-<kbd>Tab</kbd> will indent the line(s).
-
-## Edit Selected Lines
-
-If multiple lines are selected, one can edit them as a unit.
-That is, entered characters will be inserted at the cursors
-on all lines simultaneously, left and right will move
-the cursors on all lines simultaneously, and so on.
-
-# Syntax Highlighting
-
-VLE has syntax has built-in syntax highlighting for the following
-languages / file formats:
-
-- Bourne Shell
-- C
-- C++
-- CSS
-- CSV
-- Fish Shell
-- Go
-- HTML
-- INI
-- Java
-- JavaScript
-- JSON
-- Makefile
-- Markdown
-- Patch
-- Perl
-- PHP
-- Python
-- Rust
-- SQL
-- Swift
-- (La)TeX
-- TOML
-- XML
-- YAML
-- Zig
-
-Syntax highlighting is done naively with an emphasis
-on colorizing known keywords, strings, etc.
-
-The syntax highlighting to use for a file is usually determined
-by its file extension (`.rs` for Rust files, `.py` for Python, etc.).
-If you find yourself with files using some non-standard extension,
-the `VLE_EXT_MAP` environmental variable can be used to
-map the extension to something else.  Its syntax is simply
-a set of comma-delimited `src=target` pairs.
-
-For example, given a file with a `.tpl` extension that we'd like
-treated as an `.html` file:
-
-```bash
-VLE_EXT_MAP=tpl=html vle file.tpl
-```
+[![asciicast](https://asciinema.org/a/LaNkdwl3xufCJAL6.svg)](https://asciinema.org/a/LaNkdwl3xufCJAL6)
 
 # Configuration
 
@@ -246,6 +138,19 @@ Any configuration is performed with three environmental variables:
 
 No config file means there's one less thing to install,
 learn the format of, modify or break.
+
+## Extension Mapping
+
+Syntax highlighting is determined by a file's extension.
+If you have files with some non-standard extension,
+the `VLE_EXT_MAP` environmental variable can map them
+from one to another. Its syntax is a comma-separated list
+of `src=target` key-value pairs. For example, if one has
+a `file.tpl` that's should be highlighted as HTML, try:
+
+```bash
+VLE_EXT_MAP=tpl=html vle file.tpl
+```
 
 # Why Another Editor?
 

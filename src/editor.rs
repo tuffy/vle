@@ -262,8 +262,8 @@ impl Editor {
             let area = frame.area();
             frame.render_stateful_widget(
                 LayoutWidget {
+                    show_help: self.show_help && matches!(&self.mode, EditorMode::Editing),
                     mode: &mut self.mode,
-                    show_help: self.show_help,
                 },
                 area,
                 &mut self.layout,
