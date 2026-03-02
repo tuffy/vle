@@ -373,14 +373,13 @@ impl Editor {
                         let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
                         let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
                         if let Some(primary) = primary.current_mut() {
-                            let next_index = (*index + 1) % completions.len();
+                            let (current, next) = complete_forward(index, completions);
                             primary.autocomplete(
                                 secondary.map(|s| s.alt_cursor()),
                                 *offset,
-                                &completions[*index],
-                                &completions[next_index],
+                                current,
+                                next,
                             );
-                            *index = next_index;
                         }
                     }
                     key!(SHIFT, BackTab) => {
@@ -388,15 +387,13 @@ impl Editor {
                         let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
                         let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
                         if let Some(primary) = primary.current_mut() {
-                            let previous_index =
-                                index.checked_sub(1).unwrap_or(completions.len() - 1);
+                            let (current, previous) = complete_backward(index, completions);
                             primary.autocomplete(
                                 secondary.map(|s| s.alt_cursor()),
                                 *offset,
-                                &completions[*index],
-                                &completions[previous_index],
+                                current,
+                                previous,
                             );
-                            *index = previous_index;
                         }
                     }
                     event => {
@@ -415,22 +412,13 @@ impl Editor {
                 } => match event {
                     key!(Tab) => {
                         // switch to next candidate
-                        let next_index = (*index + 1) % completions.len();
-                        prompt.autocomplete(
-                            *offset,
-                            &completions[*index],
-                            &completions[next_index],
-                        );
-                        *index = next_index;
+                        let (current, next) = complete_forward(index, completions);
+                        prompt.autocomplete(*offset, current, next);
                     }
                     key!(SHIFT, BackTab) => {
-                        let previous_index = index.checked_sub(1).unwrap_or(completions.len() - 1);
-                        prompt.autocomplete(
-                            *offset,
-                            &completions[*index],
-                            &completions[previous_index],
-                        );
-                        *index = previous_index;
+                        // switch to previous candidate
+                        let (current, previous) = complete_backward(index, completions);
+                        prompt.autocomplete(*offset, current, previous);
                     }
                     event => {
                         // end autocomplete
@@ -768,19 +756,20 @@ impl Editor {
                 if let Some(Some((offset, completions))) =
                     self.on_buffer_at(|b, a| b.complete_or_indent(a))
                 {
-                    if let Some(original) = completions.first()
-                        && let Some(replacement) = completions.get(1)
-                    {
-                        self.update_buffer_at(|b, a| {
-                            b.autocomplete(a, offset, original, replacement)
-                        });
-                        self.mode = EditorMode::Autocomplete {
-                            offset,
-                            completions,
-                            index: 1,
-                        };
-                    } else {
-                        self.update_buffer(|b| b.set_error("No Completion Found"));
+                    match init_complete_forward(&completions) {
+                        Some((index, original, replacement)) => {
+                            self.update_buffer_at(|b, a| {
+                                b.autocomplete(a, offset, original, replacement)
+                            });
+                            self.mode = EditorMode::Autocomplete {
+                                offset,
+                                completions,
+                                index,
+                            };
+                        }
+                        None => {
+                            self.update_buffer(|b| b.set_error("No Completion Found"));
+                        }
                     }
                 };
             }
@@ -788,21 +777,20 @@ impl Editor {
                 if let Some(Some((offset, completions))) =
                     self.on_buffer_at(|b, a| b.complete_or_unindent(a))
                 {
-                    if let Some(original) = completions.first()
-                        && let Some(index) = completions.len().checked_sub(1)
-                        && index != 0
-                        && let Some(replacement) = completions.get(index)
-                    {
-                        self.update_buffer_at(|b, a| {
-                            b.autocomplete(a, offset, original, replacement)
-                        });
-                        self.mode = EditorMode::Autocomplete {
-                            offset,
-                            completions,
-                            index,
-                        };
-                    } else {
-                        self.update_buffer(|b| b.set_error("No Completion Found"));
+                    match init_complete_backward(&completions) {
+                        Some((index, original, replacement)) => {
+                            self.update_buffer_at(|b, a| {
+                                b.autocomplete(a, offset, original, replacement)
+                            });
+                            self.mode = EditorMode::Autocomplete {
+                                offset,
+                                completions,
+                                index,
+                            };
+                        }
+                        None => {
+                            self.update_buffer(|b| b.set_error("No Completion Found"));
+                        }
                     }
                 };
             }
@@ -1385,18 +1373,19 @@ fn process_search(
             } else {
                 let (offset, search) = prompt.autocomplete_word()?;
                 let completions = buffer.search_autocomplete_matches(search);
-                if let Some(original) = completions.first()
-                    && let Some(replacement) = completions.get(1)
-                {
-                    prompt.autocomplete(offset, original, replacement);
-                    Some(NextModeIncremental::Autocomplete {
-                        offset,
-                        completions,
-                        index: 1,
-                    })
-                } else {
-                    buffer.set_error("No Completions Found");
-                    None
+                match init_complete_forward(&completions) {
+                    Some((index, original, replacement)) => {
+                        prompt.autocomplete(offset, original, replacement);
+                        Some(NextModeIncremental::Autocomplete {
+                            offset,
+                            completions,
+                            index,
+                        })
+                    }
+                    None => {
+                        buffer.set_error("No Completions Found");
+                        None
+                    }
                 }
             }
         }
@@ -1411,20 +1400,19 @@ fn process_search(
             } else {
                 let (offset, search) = prompt.autocomplete_word()?;
                 let completions = buffer.search_autocomplete_matches(search);
-                if let Some(original) = completions.first()
-                    && let Some(index) = completions.len().checked_sub(1)
-                    && index != 0
-                    && let Some(replacement) = completions.get(index)
-                {
-                    prompt.autocomplete(offset, original, replacement);
-                    Some(NextModeIncremental::Autocomplete {
-                        offset,
-                        completions,
-                        index,
-                    })
-                } else {
-                    buffer.set_error("No Completions Found");
-                    None
+                match init_complete_backward(&completions) {
+                    Some((index, original, replacement)) => {
+                        prompt.autocomplete(offset, original, replacement);
+                        Some(NextModeIncremental::Autocomplete {
+                            offset,
+                            completions,
+                            index,
+                        })
+                    }
+                    None => {
+                        buffer.set_error("No Completions Found");
+                        None
+                    }
                 }
             }
         }
@@ -2179,4 +2167,64 @@ impl std::fmt::Display for InvalidLine {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         "invalid line".fmt(f)
     }
+}
+
+/// Returns (index, original, replacement)
+fn init_complete_forward<T, R>(completions: &[T]) -> Option<(usize, &R, &R)>
+where
+    T: AsRef<R>,
+    R: ?Sized,
+{
+    if let Some(original) = completions.first()
+        && let Some(replacement) = completions.get(1)
+    {
+        Some((1, original.as_ref(), replacement.as_ref()))
+    } else {
+        None
+    }
+}
+
+/// Returns current and next autocompletion, and increments index
+/// completions.len() must be > 0
+fn complete_forward<'c, T, R>(index: &mut usize, completions: &'c mut [T]) -> (&'c R, &'c R)
+where
+    T: AsRef<R>,
+    R: ?Sized,
+{
+    let next_index = (*index + 1) % completions.len();
+    (
+        completions[std::mem::replace(index, next_index)].as_ref(),
+        completions[next_index].as_ref(),
+    )
+}
+
+/// Returns (index, original, replacement)
+fn init_complete_backward<T, R>(completions: &[T]) -> Option<(usize, &R, &R)>
+where
+    T: AsRef<R>,
+    R: ?Sized,
+{
+    if let Some(original) = completions.first()
+        && let Some(index) = completions.len().checked_sub(1)
+        && index != 0
+        && let Some(replacement) = completions.get(index)
+    {
+        Some((index, original.as_ref(), replacement.as_ref()))
+    } else {
+        None
+    }
+}
+
+/// Returns current and next autocompletion, and increments index
+/// completions.len() must be > 0
+fn complete_backward<'c, T, R>(index: &mut usize, completions: &'c mut [T]) -> (&'c R, &'c R)
+where
+    T: AsRef<R>,
+    R: ?Sized,
+{
+    let previous_index = index.checked_sub(1).unwrap_or(completions.len() - 1);
+    (
+        completions[std::mem::replace(index, previous_index)].as_ref(),
+        completions[previous_index].as_ref(),
+    )
 }
