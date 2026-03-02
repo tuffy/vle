@@ -94,7 +94,7 @@ Similar to find-and-replace, you can simply highlight a selection of
 lines and use <kbd>Ctrl</kbd>-<kbd>R</kbd> / <kbd>F6</kbd> to edit
 each of them simultaneously as a unit.
 
-[![asciicast](https://asciinema.org/a/g3Bbnn6kwbJLUKVg.svg)](https://asciinema.org/a/g3Bbnn6kwbJLUKVg)
+[![asciicast](https://asciinema.org/a/T17MMuMZoFLqI21P.svg)](https://asciinema.org/a/T17MMuMZoFLqI21P)
 
 ## Bookmarks
 
