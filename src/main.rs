@@ -116,7 +116,10 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
 
     match Opt::parse() {
         Opt {
-            files, host: None, ..
+            files,
+            line,
+            host: None,
+            ..
         } => {
             let editor = Editor::new(files.into_iter().map(buffer::Source::from))?;
             Ok(match line {
