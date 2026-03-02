@@ -1541,7 +1541,7 @@ impl BufferContext {
                 };
                 let indent_chars = indent.chars().count();
                 let mut indent_lines = selected_lines(&buf.rope, self.cursor, selection_opt)
-                    .map(|line| line.into())
+                    .filter_map(|line| (!line.is_empty()).then(|| line.into()))
                     .collect::<Vec<_>>();
                 let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
                 let mut alt = Secondary::new(alt, bookmarks);
@@ -1620,7 +1620,7 @@ impl BufferContext {
                 };
                 let indent_chars = indent.chars().count();
                 let mut unindent_lines = selected_lines(&buf.rope, self.cursor, selection_opt)
-                    .map(|line| line.into())
+                    .filter_map(|line| (!line.is_empty()).then(|| line.into()))
                     .collect::<Vec<_>>();
                 let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
                 if unindent_lines
@@ -2675,6 +2675,12 @@ fn line_char_range(rope: &ropey::Rope, line: usize) -> Option<(usize, usize)> {
 struct SelectedLine {
     start: usize,
     end: usize,
+}
+
+impl SelectedLine {
+    fn is_empty(&self) -> bool {
+        self.start >= self.end
+    }
 }
 
 // Iterates over position ranges of all selected lines
@@ -4461,7 +4467,14 @@ impl StatefulWidget for BufferWidget<'_> {
                     },
                 );
             }
-            Some(EditorMode::AutocompleteSearch { prompt, type_, offset, completions, index, .. }) => {
+            Some(EditorMode::AutocompleteSearch {
+                prompt,
+                type_,
+                offset,
+                completions,
+                index,
+                ..
+            }) => {
                 render_help(text_area, buf, &find_mode_help(prompt, *type_), |b| b);
                 render_find_prompt(
                     match type_ {
@@ -4476,21 +4489,18 @@ impl StatefulWidget for BufferWidget<'_> {
                         let mut highlighted = Vec::with_capacity(colorized.len());
 
                         // output everything to offset verbatim
-                        extract(
-                            &mut colorized,
-                            *offset,
-                            &mut highlighted,
-                            |span| span,
-                        );
+                        extract(&mut colorized, *offset, &mut highlighted, |span| span);
 
                         // output autcompleted text underlined
                         extract(
                             &mut colorized,
                             completions[*index].chars().count(),
                             &mut highlighted,
-                            |span| span.patch_style(
-                                Style::new().underlined().underline_color(Color::Red),
-                            ),
+                            |span| {
+                                span.patch_style(
+                                    Style::new().underlined().underline_color(Color::Red),
+                                )
+                            },
                         );
 
                         // output the rest verbatim
