@@ -1289,6 +1289,7 @@ enum NextModeIncremental {
     },
     SelectLine,
 }
+// TODO - Add Autocomplete option
 
 fn process_search(
     buffer: &mut BufferContext,
@@ -1313,11 +1314,14 @@ fn process_search(
             None
         }
         key!(Tab) => {
-            prompt.reset();
-            *type_ = match *type_ {
-                SearchType::Plain => SearchType::Regex,
-                SearchType::Regex => SearchType::Plain,
-            };
+            if prompt.is_empty() {
+                prompt.reset();
+                *type_ = match *type_ {
+                    SearchType::Plain => SearchType::Regex,
+                    SearchType::Regex => SearchType::Plain,
+                };
+            }
+            // TODO - if prompt at end of word, start autocomplete
             None
         }
         key!(Enter) => match type_ {

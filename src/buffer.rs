@@ -4428,28 +4428,32 @@ impl StatefulWidget for BufferWidget<'_> {
             Some(EditorMode::Search { prompt, type_, .. }) => {
                 use crate::help::{ctrl, keybind, none};
 
-                render_help(
-                    text_area,
-                    buf,
-                    &[
-                        ctrl(&["V"], "Paste From Cut Buffer"),
-                        none(
-                            &["Tab"],
-                            match type_ {
-                                SearchType::Plain => "Regex Find",
-                                SearchType::Regex => "Plain Text Find",
-                            },
-                        ),
-                        keybind::<crate::key::GotoLine>("Goto Line"),
-                        keybind::<crate::key::Find>(match prompt.is_empty() {
-                            true => "Redo Last Find",
-                            false => "Begin New Find",
-                        }),
-                        none(&["Enter"], "Browse All Matches"),
-                        none(&["Esc"], "Cancel"),
-                    ],
-                    |b| b,
-                );
+                let mut help = if prompt.is_empty() {
+                    // Tab when buffer is empty switches mode
+                    vec![none(
+                        &["Tab"],
+                        match type_ {
+                            SearchType::Plain => "Regex Find",
+                            SearchType::Regex => "Plain Text Find",
+                        },
+                    )]
+                } else {
+                    // TODO - Tab at end of word indicates tab completion
+                    vec![]
+                };
+
+                help.extend([
+                    ctrl(&["V"], "Paste From Cut Buffer"),
+                    keybind::<crate::key::GotoLine>("Goto Line"),
+                    keybind::<crate::key::Find>(match prompt.is_empty() {
+                        true => "Redo Last Find",
+                        false => "Begin New Find",
+                    }),
+                    none(&["Enter"], "Browse All Matches"),
+                    none(&["Esc"], "Cancel"),
+                ]);
+
+                render_help(text_area, buf, &help, |b| b);
                 render_find_prompt(
                     match type_ {
                         SearchType::Plain => FindSyntax::Plain(syntax),
