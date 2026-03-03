@@ -2151,7 +2151,11 @@ impl StatefulWidget for LayoutWidget<'_> {
 
             let [tabs_area, layout_area] = Layout::vertical([Length(1), Min(0)]).areas(area);
             Tabs::new(tabs)
-                .highlight_style(Style::default().bold().underlined())
+                .highlight_style(if self.focused {
+                    Style::default().bold().underlined()
+                } else {
+                    Style::default()
+                })
                 .divider(symbols::DOT)
                 .select(index)
                 .render(tabs_area, buf);
