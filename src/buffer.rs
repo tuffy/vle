@@ -338,23 +338,8 @@ mod private {
 
         /// If we're updating the buffer, log its old state on the undo stack
         pub fn borrow_update(&self, cursor: usize, cursor_column: usize) -> RefMut<'_, Buffer> {
-            use crate::buffer::{BufferState, Undo};
-
             let mut buf = self.0.borrow_mut();
-            if let None | Some(Undo { finished: true, .. }) = buf.undo.last() {
-                let rope = buf.rope.clone();
-                let bookmarks = buf.bookmarks.clone();
-                buf.undo.push(Undo {
-                    state: BufferState {
-                        rope,
-                        cursor,
-                        cursor_column,
-                        bookmarks,
-                    },
-                    finished: false,
-                });
-                buf.redo.clear();
-            }
+            buf.perform_update(cursor, cursor_column);
             buf
         }
 
@@ -388,9 +373,7 @@ mod private {
 
     impl Drop for MoveHandle<'_> {
         fn drop(&mut self) {
-            if let Some(last) = self.0.undo.last_mut() {
-                last.finished = true;
-            }
+            self.0.undo_finished = true;
         }
     }
 
@@ -605,7 +588,8 @@ pub struct Buffer {
     endings: LineEndings,          // the source file's line endings
     saved: Option<SystemTime>,     // when the file was last saved
     rope: private::Rope,           // the data rope
-    undo: Vec<Undo>,               // the undo stack
+    undo: Vec<BufferState>,        // the undo stack
+    undo_finished: bool,           // whether cursor moved since last undo
     redo: Vec<BufferState>,        // the redo stack
     syntax: Box<dyn Highlighter>,  // the syntax highlighting to use
     tabs_required: bool,           // whether the format demands actual tabs
@@ -633,6 +617,7 @@ impl Buffer {
             syntax,
             source,
             undo: vec![],
+            undo_finished: true,
             redo: vec![],
             bookmarks: private::Bookmarks::default(),
         })
@@ -654,6 +639,7 @@ impl Buffer {
             tabs_required: *ALWAYS_TAB || crate::syntax::Tutorial.tabs_required(),
             source: Source::Tutorial,
             undo: vec![],
+            undo_finished: true,
             redo: vec![],
             bookmarks: private::Bookmarks::default(),
         }
@@ -676,9 +662,7 @@ impl Buffer {
         );
         self.rope.save();
         self.saved = saved;
-        if let Some(last) = self.undo.last_mut() {
-            last.finished = true;
-        }
+        self.undo_finished = true;
         Ok(())
     }
 
@@ -699,9 +683,7 @@ impl Buffer {
             self.source.save_data(&rope, self.endings)?
         };
         self.rope.save();
-        if let Some(last) = self.undo.last_mut() {
-            last.finished = true;
-        }
+        self.undo_finished = true;
         Ok(())
     }
 
@@ -735,6 +717,19 @@ impl Buffer {
     /// Whether this buffer has any bookmarks
     pub fn has_bookmarks(&self) -> bool {
         !self.bookmarks.is_empty()
+    }
+
+    /// Adjust internal state for a move
+    pub fn perform_update(&mut self, cursor: usize, cursor_column: usize) {
+        if std::mem::take(&mut self.undo_finished) {
+            self.undo.push(BufferState {
+                rope: self.rope.clone(),
+                cursor,
+                cursor_column,
+                bookmarks: self.bookmarks.clone(),
+            });
+            self.redo.clear();
+        }
     }
 }
 
@@ -1471,7 +1466,7 @@ impl BufferContext {
     pub fn perform_undo(&mut self) {
         let mut buf = self.buffer.borrow_mut();
         match buf.undo.pop() {
-            Some(Undo { mut state, .. }) => {
+            Some(mut state) => {
                 use std::ops::DerefMut;
                 std::mem::swap(buf.rope.get_mut().deref_mut(), &mut state.rope);
                 std::mem::swap(&mut buf.bookmarks, &mut state.bookmarks);
@@ -1495,10 +1490,8 @@ impl BufferContext {
                 std::mem::swap(&mut buf.bookmarks, &mut state.bookmarks);
                 std::mem::swap(&mut self.cursor, &mut state.cursor);
                 std::mem::swap(&mut self.cursor_column, &mut state.cursor_column);
-                buf.undo.push(Undo {
-                    state,
-                    finished: true,
-                });
+                buf.undo.push(state);
+                buf.undo_finished = true;
                 self.selection = None;
             }
             None => {
@@ -4895,11 +4888,6 @@ struct BufferState {
     cursor: usize,
     cursor_column: usize,
     bookmarks: private::Bookmarks,
-}
-
-struct Undo {
-    state: BufferState,
-    finished: bool, // whether we've done any movement since undo added
 }
 
 #[derive(Clone)]
