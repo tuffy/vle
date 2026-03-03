@@ -63,7 +63,7 @@ pub enum EditorMode {
         match_idx: usize,
         groups: CaptureGroups,
         range: Option<SelectionRange>,
-        highlight: Option<Highlight>,
+        highlight: bool,
     },
     /// Querying for what regex group to paste
     PasteGroup {
@@ -72,7 +72,7 @@ pub enum EditorMode {
         total: usize,
         groups: Vec<Vec<Option<MatchCapture>>>,
         range: Option<SelectionRange>,
-        highlight: Option<Highlight>,
+        highlight: bool,
     },
     /// Opening a new file
     Open {
@@ -105,8 +105,6 @@ pub enum EditorMode {
         index: usize,             // current autocompletion candidate
     },
 }
-
-pub struct Highlight;
 
 #[derive(Copy, Clone, Default)]
 pub enum SearchType {
@@ -500,7 +498,7 @@ impl Editor {
                             match_idx: std::mem::take(match_idx),
                             groups: std::mem::take(groups),
                             range: std::mem::take(range),
-                            highlight: None,
+                            highlight: false,
                         };
                         self.process_event(area, event);
                     }
@@ -556,7 +554,7 @@ impl Editor {
                                     match_idx,
                                     groups: groups.into(),
                                     range: range.take(),
-                                    highlight: Some(Highlight),
+                                    highlight: true,
                                 }
                             }
                             NextModeIncremental::Autocomplete {
@@ -896,7 +894,7 @@ impl Editor {
                                 match_idx,
                                 groups: groups.into(),
                                 range: None,
-                                highlight: Some(Highlight),
+                                highlight: true,
                             }
                         })
                     }
@@ -974,7 +972,7 @@ impl Editor {
                         match_idx,
                         groups: CaptureGroups::default(),
                         range: None,
-                        highlight: None,
+                        highlight: false,
                     };
                 }
             }
@@ -1545,7 +1543,7 @@ fn process_replace_matches(
     groups: &mut CaptureGroups,
     range: &mut Option<SelectionRange>,
     match_idx: &mut usize,
-    highlight: &mut Option<Highlight>,
+    highlight: &mut bool,
     event: Event,
     alt: Option<AltCursor<'_>>,
 ) -> Option<EditorMode> {
@@ -1560,23 +1558,27 @@ fn process_replace_matches(
             kind: KeyEventKind::Press,
             ..
         }) => {
+            *highlight = false;
             buffer.multi_insert_char(alt, matches, c);
             None
         }
         Event::Paste(pasted) => {
+            *highlight = false;
             buffer.multi_insert_string(alt, matches, &pasted);
             None
         }
         key!(Backspace) => {
+            *highlight = false;
             buffer.multi_backspace(alt, matches);
             None
         }
         key!(Delete) => {
+            *highlight = false;
             buffer.multi_delete(alt, matches);
             None
         }
         key!(CONTROL, Delete) => {
-            *highlight = Some(Highlight);
+            *highlight = true;
             matches.remove(*match_idx);
             groups.remove(*match_idx);
             match matches.len().checked_sub(1) {
@@ -1594,27 +1596,33 @@ fn process_replace_matches(
             range: range.take(),
         }),
         keybind!(Replace) => {
+            *highlight = false;
             buffer.multi_clear(alt, matches);
             None
         }
         key!(Enter) => Some(EditorMode::default()),
         key!(Left) => {
+            *highlight = false;
             buffer.multi_cursor_back(matches);
             None
         }
         key!(Right) => {
+            *highlight = false;
             buffer.multi_cursor_forward(matches);
             None
         }
         key!(Home) => {
+            *highlight = false;
             buffer.multi_cursor_home(matches);
             None
         }
         key!(End) => {
+            *highlight = false;
             buffer.multi_cursor_end(matches);
             None
         }
         keybind!(Bookmark) => {
+            *highlight = false;
             buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));
             None
         }
@@ -1670,7 +1678,7 @@ fn process_replace_matches(
             kind: MouseEventKind::ScrollUp,
             ..
         }) => {
-            *highlight = Some(Highlight);
+            *highlight = true;
             *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
             if let Some(r) = matches.get(*match_idx) {
                 buffer.set_cursor(r.cursor());
@@ -1687,7 +1695,7 @@ fn process_replace_matches(
             kind: MouseEventKind::ScrollDown,
             ..
         }) => {
-            *highlight = Some(Highlight);
+            *highlight = true;
             *match_idx = (*match_idx + 1) % matches.len();
             if let Some(r) = matches.get(*match_idx) {
                 buffer.set_cursor(r.cursor());
