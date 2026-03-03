@@ -192,18 +192,25 @@ fn execute_terminal<T>(
 ) -> std::io::Result<T> {
     use crossterm::{
         event::{
-            DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+            DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
+            EnableFocusChange, EnableMouseCapture,
         },
         execute,
     };
 
     let mut term = ratatui::init();
-    execute!(std::io::stdout(), EnableBracketedPaste, EnableMouseCapture)?;
+    execute!(
+        std::io::stdout(),
+        EnableBracketedPaste,
+        EnableMouseCapture,
+        EnableFocusChange
+    )?;
     let result = f(&mut term);
     execute!(
         std::io::stdout(),
         DisableBracketedPaste,
-        DisableMouseCapture
+        DisableMouseCapture,
+        DisableFocusChange,
     )?;
     ratatui::restore();
     result

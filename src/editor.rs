@@ -217,6 +217,7 @@ macro_rules! key {
 
 pub struct Editor {
     layout: Layout,                       // the editor's pane layout
+    focused: bool,                        // whether the editor has focus
     mode: EditorMode,                     // what mode the editing is in
     cut_buffer: Option<CutBuffer>,        // contents of cut buffer
     last_plain_search: Option<TextField>, // previous plaintext search
@@ -230,6 +231,7 @@ impl Editor {
     pub fn new(buffers: impl IntoIterator<Item = Source>) -> std::io::Result<Self> {
         Ok(Self {
             layout: Layout::Single(BufferList::new(buffers)?),
+            focused: true,
             mode: EditorMode::default(),
             cut_buffer: None,
             last_plain_search: None,
@@ -279,6 +281,7 @@ impl Editor {
             let area = frame.area();
             frame.render_stateful_widget(
                 LayoutWidget {
+                    focused: self.focused,
                     show_help: self.show_help && matches!(&self.mode, EditorMode::Editing),
                     mode: &mut self.mode,
                 },
@@ -369,6 +372,12 @@ impl Editor {
                 ..
             }) => {
                 self.show_help = !self.show_help;
+            }
+            Event::FocusGained => {
+                self.focused = true;
+            }
+            Event::FocusLost => {
+                self.focused = false;
             }
             event => match &mut self.mode {
                 EditorMode::Editing => self.process_normal_event(area, event),
@@ -1949,8 +1958,8 @@ impl Layout {
         ) -> Option<Position> {
             use ratatui::widgets::Block;
 
-            let [text_area, _] = Layout::horizontal([Min(0), Length(1)])
-                .areas(Block::bordered().inner(area));
+            let [text_area, _] =
+                Layout::horizontal([Min(0), Length(1)]).areas(Block::bordered().inner(area));
 
             match mode {
                 // SelectLine pushes the cursor up into the title bar,
@@ -2107,6 +2116,7 @@ impl Layout {
 }
 
 struct LayoutWidget<'e> {
+    focused: bool,
     mode: &'e mut EditorMode,
     show_help: bool,
 }
@@ -2122,7 +2132,11 @@ impl StatefulWidget for LayoutWidget<'_> {
     ) {
         use crate::buffer::BufferWidget;
 
-        let Self { mode, show_help } = self;
+        let Self {
+            mode,
+            show_help,
+            focused,
+        } = self;
 
         if let Some((index, tabs)) = layout.selected_buffer_list().tabs() {
             use ratatui::{
@@ -2153,6 +2167,7 @@ impl StatefulWidget for LayoutWidget<'_> {
 
                 if let Some(buffer) = single.current_mut() {
                     BufferWidget {
+                        focused,
                         mode: Some(mode),
                         layout: EditorLayout::Single,
                         show_help: show_help.then(|| buffer.find_mode(multiple_buffers)),
@@ -2170,6 +2185,7 @@ impl StatefulWidget for LayoutWidget<'_> {
 
                 if let Some(buffer) = top.current_mut() {
                     BufferWidget {
+                        focused,
                         mode: match which {
                             HorizontalPos::Top => Some(mode),
                             HorizontalPos::Bottom => None,
@@ -2183,6 +2199,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                 }
                 if let Some(buffer) = bottom.current_mut() {
                     BufferWidget {
+                        focused,
                         mode: match which {
                             HorizontalPos::Top => None,
                             HorizontalPos::Bottom => Some(mode),
@@ -2205,6 +2222,7 @@ impl StatefulWidget for LayoutWidget<'_> {
 
                 if let Some(buffer) = left.current_mut() {
                     BufferWidget {
+                        focused,
                         mode: match which {
                             VerticalPos::Left => Some(mode),
                             VerticalPos::Right => None,
@@ -2218,6 +2236,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                 }
                 if let Some(buffer) = right.current_mut() {
                     BufferWidget {
+                        focused,
                         mode: match which {
                             VerticalPos::Left => None,
                             VerticalPos::Right => Some(mode),

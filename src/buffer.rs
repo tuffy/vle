@@ -896,8 +896,8 @@ impl BufferContext {
         };
 
         // rebuild layout from BufferWidget
-        let [text_area, _] = Layout::horizontal([Min(0), Length(1)])
-            .areas(Block::bordered().inner(area));
+        let [text_area, _] =
+            Layout::horizontal([Min(0), Length(1)]).areas(Block::bordered().inner(area));
 
         if !text_area.contains(position) {
             return;
@@ -3415,6 +3415,7 @@ impl BufferList {
 }
 
 pub struct BufferWidget<'e> {
+    pub focused: bool,
     pub mode: Option<&'e mut EditorMode>,
     pub layout: crate::editor::EditorLayout,
     pub show_help: Option<Help>,
@@ -4072,9 +4073,10 @@ impl StatefulWidget for BufferWidget<'_> {
         let buffer = state.buffer.borrow();
         let rope = &buffer.rope;
         let syntax = &buffer.syntax;
+        let focused = self.focused && self.mode.is_some();
 
         let block = Block::bordered()
-            .border_type(if self.mode.is_some() {
+            .border_type(if focused {
                 BorderType::Thick
             } else {
                 BorderType::Plain
@@ -4085,19 +4087,17 @@ impl StatefulWidget for BufferWidget<'_> {
                 } else {
                     buffer.source.name().to_string()
                 },
-                self.mode.is_some(),
+                focused,
             ));
 
         let block = match buffer.endings.name() {
-            Some(name) => {
-                block.title_top(border_title(name.to_string(), self.mode.is_some()).right_aligned())
-            }
+            Some(name) => block.title_top(border_title(name.to_string(), focused).right_aligned()),
             None => block,
         };
 
         let block = match buffer.bookmarks.len() {
             0 => block,
-            bookmarks => block.title_top(if self.mode.is_some() {
+            bookmarks => block.title_top(if focused {
                 Line::from(vec![
                     Span::raw("\u{252b}"),
                     Span::styled(
@@ -4135,7 +4135,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         Err(_) => "???".to_string(),
                     },
                 },
-                self.mode.is_some(),
+                focused,
             )
             .right_aligned(),
         );

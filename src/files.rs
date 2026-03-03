@@ -205,8 +205,8 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
             style::{Modifier, Style},
             text::{Line, Span},
             widgets::{
-                Block, BorderType, List, ListState, Paragraph, Scrollbar,
-                ScrollbarOrientation, ScrollbarState, Widget,
+                Block, BorderType, List, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
+                ScrollbarState, Widget,
             },
         };
         use std::borrow::Cow;
