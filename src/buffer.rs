@@ -892,12 +892,12 @@ impl BufferContext {
                 Constraint::{Length, Min},
                 Layout,
             },
-            widgets::{Block, Borders},
+            widgets::Block,
         };
 
         // rebuild layout from BufferWidget
         let [text_area, _] = Layout::horizontal([Min(0), Length(1)])
-            .areas(Block::bordered().borders(Borders::TOP).inner(area));
+            .areas(Block::bordered().inner(area));
 
         if !text_area.contains(position) {
             return;
@@ -3443,7 +3443,7 @@ impl StatefulWidget for BufferWidget<'_> {
             style::{Color, Modifier, Style},
             text::{Line, Span},
             widgets::{
-                Block, BorderType, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation,
+                Block, BorderType, Clear, Paragraph, Scrollbar, ScrollbarOrientation,
                 ScrollbarState, Widget,
             },
         };
@@ -4074,7 +4074,6 @@ impl StatefulWidget for BufferWidget<'_> {
         let syntax = &buffer.syntax;
 
         let block = Block::bordered()
-            .borders(Borders::TOP)
             .border_type(if self.mode.is_some() {
                 BorderType::Thick
             } else {

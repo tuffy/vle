@@ -1947,10 +1947,10 @@ impl Layout {
             (row, col): (usize, usize),
             mode: &EditorMode,
         ) -> Option<Position> {
-            use ratatui::widgets::{Block, Borders};
+            use ratatui::widgets::Block;
 
             let [text_area, _] = Layout::horizontal([Min(0), Length(1)])
-                .areas(Block::bordered().borders(Borders::TOP).inner(area));
+                .areas(Block::bordered().inner(area));
 
             match mode {
                 // SelectLine pushes the cursor up into the title bar,

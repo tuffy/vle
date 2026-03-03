@@ -205,7 +205,7 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
             style::{Modifier, Style},
             text::{Line, Span},
             widgets::{
-                Block, BorderType, Borders, List, ListState, Paragraph, Scrollbar,
+                Block, BorderType, List, ListState, Paragraph, Scrollbar,
                 ScrollbarOrientation, ScrollbarState, Widget,
             },
         };
@@ -213,7 +213,6 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
 
         let block = Block::bordered()
             .border_type(BorderType::Thick)
-            .borders(Borders::TOP)
             .title_top(Line::from(vec![
                 Span::raw("\u{252b}"),
                 Span::styled(state.dir.display().to_string(), Style::default().bold()),
