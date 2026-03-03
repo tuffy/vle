@@ -43,6 +43,15 @@ mod xml;
 mod yaml;
 mod zig;
 
+// This editor is intended to be used on terminals with both
+// light text on dark backgrounds as well as dark text on light backgrounds
+// without having to modify any colors or probe for the terminal's color scheme.
+// As such, predefined colors (red, green, yellow, blue, magenta, etc.)
+// should be preferred instead of RGB colors (since users can redefine them)
+// and black/white should be avoided altogether.
+// Boldface is also difficult to detect in a dark color scheme
+// and shouldn't be relied upon.
+
 #[derive(Default)]
 pub enum HighlightState {
     #[default]
