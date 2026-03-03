@@ -788,6 +788,8 @@ pub struct Help {
     multiple_buffers: bool,
 }
 
+type MatchAndRange = (Range<usize>, Vec<Option<MatchCapture>>);
+
 /// A buffer with additional context on a per-view basis
 #[derive(Clone)]
 pub struct BufferContext {
@@ -1408,7 +1410,7 @@ impl BufferContext {
         &mut self,
         range: Option<&SelectionRange>,
         term: S,
-    ) -> Result<(usize, Vec<(Range<usize>, Vec<Option<MatchCapture>>)>), S> {
+    ) -> Result<(usize, Vec<MatchAndRange>), S> {
         let buf = self.buffer.borrow_move();
         let rope = &buf.rope;
 
@@ -1883,8 +1885,8 @@ impl BufferContext {
         }
     }
 
-    /// Returns set of autocompletion matches and their offset
-    /// in the rope in characters.
+    /// Returns set of autocompletion matches and their offset in the rope,
+    /// in characters.
     /// The partial word being autocompleted will be first in the Vec.
     fn autocomplete_matches(&self) -> Option<(usize, Vec<String>)> {
         let buf = &mut self.buffer.borrow();
@@ -1919,6 +1921,36 @@ impl BufferContext {
         autocomplete_matches(&self.buffer.borrow().rope, prefix)
     }
 
+    /// Given a set of cursors, attempts to find a common search prefix.
+    /// If found, returns set of completions.
+    pub fn multi_autocomplete_matches(
+        &self,
+        cursors: &[MultiCursor],
+    ) -> Option<(Vec<usize>, Vec<String>)> {
+        let buf = &mut self.buffer.borrow();
+        let rope = &buf.rope;
+
+        let mut offsets = Vec::with_capacity(cursors.len());
+        let mut prefix = None;
+
+        for cursor in cursors {
+            let (offset, p) = cursor.autocomplete_prefix(rope)?;
+            offsets.push(offset);
+            match &mut prefix {
+                None => {
+                    prefix = Some(p);
+                }
+                Some(prefix) => {
+                    if prefix != &p {
+                        return None;
+                    }
+                }
+            }
+        }
+
+        Some((offsets, autocomplete_matches(rope, prefix?)))
+    }
+
     pub fn autocomplete(
         &mut self,
         alt: Option<AltCursor<'_>>,
@@ -1943,6 +1975,43 @@ impl BufferContext {
         self.cursor = offset + replacement_chars;
         self.cursor_column = cursor_column(&rope, self.cursor);
         self.selection = None;
+    }
+
+    pub fn multi_autocomplete(
+        &mut self,
+        alt: Option<AltCursor<'_>>,
+        matches: &mut [MultiCursor],
+        mut offsets: &[usize],
+        original: &str,
+        replacement: &str,
+    ) {
+        let original_chars = original.chars().count();
+        let replacement_chars = replacement.chars().count();
+
+        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+        let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
+        let mut alt = Secondary::new(alt, bookmarks);
+
+        multicursor_update(
+            matches,
+            |m| {
+                let offset = offsets.split_off_first().ok_or(())?;
+                m.autocomplete(
+                    &mut rope,
+                    &mut self.cursor,
+                    &mut alt,
+                    *offset,
+                    original_chars,
+                    replacement,
+                    replacement_chars,
+                );
+                Ok::<_, ()>(())
+            },
+            |r, ()| {
+                *r -= original_chars;
+                *r += replacement_chars;
+            },
+        );
     }
 
     pub fn multi_insert_char(
@@ -2297,19 +2366,19 @@ impl MultiCursor {
         cursor: &mut usize,
         secondary: &mut Secondary,
         s: &str,
-        s_len: usize,
+        s_chars: usize,
     ) {
         if self.cursor <= *cursor {
-            *cursor += s_len;
+            *cursor += s_chars;
         }
         secondary.update(|a| {
             if self.cursor <= *a {
-                *a += s_len;
+                *a += s_chars;
             }
         });
         rope.insert(self.cursor, s);
-        self.cursor += s_len;
-        self.range.end += s_len;
+        self.cursor += s_chars;
+        self.range.end += s_chars;
     }
 
     fn indent(
@@ -2317,16 +2386,16 @@ impl MultiCursor {
         rope: &mut ropey::Rope,
         secondary: &mut Secondary,
         indent: &str,
-        indent_len: usize,
+        indent_chars: usize,
     ) {
         secondary.update(|a| {
             if self.range.start <= *a {
-                *a += indent_len;
+                *a += indent_chars;
             }
         });
         rope.insert(self.range.start, indent);
-        self.cursor += indent_len;
-        self.range.end += indent_len;
+        self.cursor += indent_chars;
+        self.range.end += indent_chars;
     }
 
     fn can_unindent(&self, rope: &ropey::Rope, indent: &str, indent_len: usize) -> bool {
@@ -2339,16 +2408,16 @@ impl MultiCursor {
         &mut self,
         rope: &mut ropey::Rope,
         secondary: &mut Secondary,
-        indent_len: usize,
+        indent_chars: usize,
     ) -> Result<(), ()> {
-        rope.try_remove(secondary.remove(self.range.start..self.range.start + indent_len))
+        rope.try_remove(secondary.remove(self.range.start..self.range.start + indent_chars))
             .map_err(|_| ())?;
-        self.cursor = self.cursor.saturating_sub(indent_len);
-        self.range.end -= indent_len;
+        self.cursor = self.cursor.saturating_sub(indent_chars);
+        self.range.end -= indent_chars;
 
         secondary.update(|a| {
             if self.range.start <= *a {
-                *a = a.saturating_sub(indent_len);
+                *a = a.saturating_sub(indent_chars);
             }
         });
         Ok(())
@@ -2437,6 +2506,82 @@ impl MultiCursor {
             *cursor_col = cursor_column(rope, *cursor);
         }
         self.cursor = self.range.end;
+    }
+
+    /// If cursor is just past a word, return prefix and prefix's offset
+    /// where offset is relative to start of this cursor's range
+    /// (*not* start of entire rope)
+    fn autocomplete_prefix(&self, rope: &ropey::Rope) -> Option<(usize, String)> {
+        if let Some(c) = rope.get_char(self.cursor)
+            && is_word(c)
+        {
+            return None;
+        }
+
+        let prefix_chars = rope
+            .chars_at(self.cursor)
+            .reversed()
+            // don't walk past start of cursor's range
+            .take(self.cursor - self.range.start)
+            .take_while(|c| is_word(*c))
+            .collect::<Vec<_>>();
+
+        if prefix_chars.is_empty() {
+            return None;
+        }
+
+        let offset = self
+            .cursor
+            .checked_sub(prefix_chars.len())?
+            .checked_sub(self.range.start)?;
+
+        Some((offset, prefix_chars.into_iter().rev().collect()))
+    }
+
+    /// Clears out everything from offset..offset + original_chars
+    /// Replaces it with replacement string which has the given chars length
+    // Yes, I know it has a lot of arguments
+    #[allow(clippy::too_many_arguments)]
+    fn autocomplete(
+        &mut self,
+        rope: &mut ropey::Rope,
+        cursor: &mut usize,
+        secondary: &mut Secondary<'_, '_>,
+        offset: usize,
+        original_chars: usize,
+        replacement: &str,
+        replacement_chars: usize,
+    ) {
+        // make relative offset an absolute offset
+        let abs_start = self.range.start + offset;
+
+        // remove old autocomplete match
+        rope.remove(secondary.remove(abs_start..abs_start + original_chars));
+        if self.range.start <= *cursor {
+            *cursor -= original_chars;
+        }
+        secondary.update(|a| {
+            if self.range.start <= *a {
+                *a -= original_chars;
+            }
+        });
+        self.range.end -= original_chars;
+
+        // replace with new autocomplete match
+        rope.insert(abs_start, replacement);
+        if self.range.start <= *cursor {
+            *cursor += replacement_chars;
+        }
+        secondary.update(|a| {
+            if self.range.start <= *a {
+                *a += replacement_chars;
+            }
+        });
+
+        // place cursor at end of replacement
+        // (which isn't necessarily the end of its total range)
+        self.cursor = abs_start + replacement_chars;
+        self.range.end += replacement_chars;
     }
 }
 
@@ -4210,6 +4355,90 @@ impl StatefulWidget for BufferWidget<'_> {
                         .collect::<Vec<_>>()
                 }
             }
+            Some(EditorMode::AutocompleteReplace {
+                matches,
+                offsets,
+                completions,
+                index,
+                ..
+            }) => {
+                // We're underlining the multicursors' effective range (in blue),
+                // the autocompletion replacements (in red)
+                // *and* the cursors themselves (as a blue block).
+                // Yes, I know it's a lot.
+
+                let (mut cursors, mut ranges): (VecDeque<_>, _) = matches
+                    .iter()
+                    .map(|m| ((m.cursor..m.cursor + 1, ()), (m.range.clone(), ())))
+                    .unzip();
+
+                let completion_chars = completions[*index].chars().count();
+                let mut replacements = matches
+                    .iter()
+                    .zip(offsets)
+                    .map(|(m, o)| {
+                        (
+                            m.range.start + *o..m.range.start + *o + completion_chars,
+                            (),
+                        )
+                    })
+                    .collect();
+
+                cursors.retain(|(r, _)| r.start != state.cursor);
+
+                EditorLine::iter(rope, viewport_line)
+                    .map(
+                        |EditorLine {
+                             line,
+                             range,
+                             number,
+                         }| {
+                            let whole_range = widen_range(range);
+
+                            highlight_matches(
+                                highlight_matches(
+                                    highlight_matches(
+                                        widen(colorize(
+                                            syntax,
+                                            &mut hlstate,
+                                            line,
+                                            current_line == Some(number),
+                                        )),
+                                        whole_range.clone(),
+                                        &mut ranges,
+                                        |span, ()| {
+                                            span.patch_style(
+                                                Style::new()
+                                                    .underlined()
+                                                    .underline_color(Color::Blue),
+                                            )
+                                        },
+                                    ),
+                                    whole_range.clone(),
+                                    &mut replacements,
+                                    |span, ()| {
+                                        span.patch_style(
+                                            Style::new().underlined().underline_color(Color::Red),
+                                        )
+                                    },
+                                ),
+                                whole_range,
+                                &mut cursors,
+                                |span, ()| {
+                                    span.style(
+                                        Style::new()
+                                            .fg(Color::Blue)
+                                            .add_modifier(Modifier::REVERSED),
+                                    )
+                                },
+                            )
+                            .into()
+                        },
+                    )
+                    .map(|line| widen_tabs(line, &buffer.tab_substitution))
+                    .take(area.height.into())
+                    .collect::<Vec<_>>()
+            }
             Some(EditorMode::Autocomplete {
                 offset,
                 completions,
@@ -4520,12 +4749,20 @@ impl StatefulWidget for BufferWidget<'_> {
                     },
                 );
             }
-            Some(EditorMode::ReplaceMatches {
-                matches,
-                match_idx,
-                groups,
-                ..
-            }) => {
+            Some(
+                EditorMode::ReplaceMatches {
+                    matches,
+                    match_idx,
+                    groups,
+                    ..
+                }
+                | EditorMode::AutocompleteReplace {
+                    matches,
+                    match_idx,
+                    groups,
+                    ..
+                },
+            ) => {
                 use crate::help::{ctrl, none};
 
                 let mut help = REPLACE_MATCHES.to_vec();

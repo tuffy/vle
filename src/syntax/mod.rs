@@ -101,6 +101,8 @@ impl From<Highlight> for ratatui::style::Style {
     }
 }
 
+type Underliner = for<'s> fn(&'s str) -> Box<dyn Iterator<Item = std::ops::Range<usize>> + 's>;
+
 /// Implemented for different syntax highlighters
 pub trait Highlighter: std::fmt::Debug + std::fmt::Display {
     /// Yields portions of the string to highlight in a particular color
@@ -113,9 +115,7 @@ pub trait Highlighter: std::fmt::Debug + std::fmt::Display {
 
     /// Yields portions of the string to underline
     /// range is in bytes
-    fn underline(
-        &self,
-    ) -> Option<for<'s> fn(&'s str) -> Box<dyn Iterator<Item = std::ops::Range<usize>> + 's>> {
+    fn underline(&self) -> Option<Underliner> {
         None
     }
 

@@ -95,6 +95,15 @@ pub enum EditorMode {
         completions: Vec<String>, // autocompletion candidates
         index: usize,             // the current candidate
     },
+    AutocompleteReplace {
+        matches: Vec<MultiCursor>,
+        match_idx: usize,
+        groups: CaptureGroups,
+        range: Option<SelectionRange>,
+        offsets: Vec<usize>,      // autocompletion offsets
+        completions: Vec<String>, // autocompletion candidates
+        index: usize,             // current autocompletion candidate
+    },
 }
 
 pub struct Highlight;
@@ -426,6 +435,63 @@ impl Editor {
                             prompt: std::mem::take(prompt),
                             type_: std::mem::take(type_),
                             range: std::mem::take(range),
+                        };
+                        self.process_event(area, event);
+                    }
+                },
+                EditorMode::AutocompleteReplace {
+                    matches,
+                    match_idx,
+                    groups,
+                    range,
+                    offsets,
+                    completions,
+                    index,
+                } => match event {
+                    key!(Tab) => {
+                        // switch to next candidate
+                        let (current, next) = complete_forward(index, completions);
+                        let (cur_buf_list, alt_buf_list) =
+                            self.layout.selected_buffer_list_pair_mut();
+                        let cur_idx = cur_buf_list.current_index();
+                        if let Some(buffer) = cur_buf_list.current_mut() {
+                            buffer.multi_autocomplete(
+                                alt_buf_list
+                                    .and_then(|l| l.get_mut(cur_idx))
+                                    .map(|b| b.alt_cursor()),
+                                matches,
+                                offsets,
+                                current,
+                                next,
+                            );
+                        }
+                    }
+                    key!(SHIFT, BackTab) => {
+                        // switch to previous candidate
+                        let (current, previous) = complete_backward(index, completions);
+                        let (cur_buf_list, alt_buf_list) =
+                            self.layout.selected_buffer_list_pair_mut();
+                        let cur_idx = cur_buf_list.current_index();
+                        if let Some(buffer) = cur_buf_list.current_mut() {
+                            buffer.multi_autocomplete(
+                                alt_buf_list
+                                    .and_then(|l| l.get_mut(cur_idx))
+                                    .map(|b| b.alt_cursor()),
+                                matches,
+                                offsets,
+                                current,
+                                previous,
+                            );
+                        }
+                    }
+                    event => {
+                        // end autocomplete
+                        self.mode = EditorMode::ReplaceMatches {
+                            matches: std::mem::take(matches),
+                            match_idx: std::mem::take(match_idx),
+                            groups: std::mem::take(groups),
+                            range: std::mem::take(range),
+                            highlight: None,
                         };
                         self.process_event(area, event);
                     }
@@ -1462,6 +1528,8 @@ fn process_search(
     }
 }
 
+// Yes, I know this has a lot of arguments
+#[allow(clippy::too_many_arguments)]
 fn process_replace_matches(
     buffer: &mut BufferContext,
     matches: &mut Vec<MultiCursor>,
@@ -1540,6 +1608,48 @@ fn process_replace_matches(
         keybind!(Bookmark) => {
             buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));
             None
+        }
+        key!(Tab) => {
+            let (offsets, completions) = buffer.multi_autocomplete_matches(matches)?;
+            match init_complete_forward(&completions) {
+                Some((index, original, replacement)) => {
+                    buffer.multi_autocomplete(alt, matches, &offsets, original, replacement);
+                    Some(EditorMode::AutocompleteReplace {
+                        matches: std::mem::take(matches),
+                        match_idx: std::mem::take(match_idx),
+                        groups: std::mem::take(groups),
+                        range: std::mem::take(range),
+                        offsets,
+                        completions,
+                        index,
+                    })
+                }
+                None => {
+                    buffer.set_error("No Completions Found");
+                    None
+                }
+            }
+        }
+        key!(SHIFT, BackTab) => {
+            let (offsets, completions) = buffer.multi_autocomplete_matches(matches)?;
+            match init_complete_backward(&completions) {
+                Some((index, original, replacement)) => {
+                    buffer.multi_autocomplete(alt, matches, &offsets, original, replacement);
+                    Some(EditorMode::AutocompleteReplace {
+                        matches: std::mem::take(matches),
+                        match_idx: std::mem::take(match_idx),
+                        groups: std::mem::take(groups),
+                        range: std::mem::take(range),
+                        offsets,
+                        completions,
+                        index,
+                    })
+                }
+                None => {
+                    buffer.set_error("No Completions Found");
+                    None
+                }
+            }
         }
         Event::Key(KeyEvent {
             code: KeyCode::Up,
