@@ -476,15 +476,14 @@ mod private {
             self.0.extract_if(range, |_, _| true).for_each(drop);
         }
 
-        /// Iterators over all bookmarks in range
-        pub fn range<R>(&self, range: R) -> impl Iterator<Item = usize>
+        pub fn extract<R>(&mut self, range: R) -> impl Iterator<Item = usize>
         where
             R: std::ops::RangeBounds<usize>,
         {
-            self.0.range(range).map(|(b, ())| *b)
+            self.0.extract_if(range, |_, _| true).map(|(b, ())| b)
         }
 
-        pub fn add_bookmarks(&mut self, bookmarks: impl Iterator<Item = usize>) {
+        pub fn add(&mut self, bookmarks: impl Iterator<Item = usize>) {
             self.0.extend(bookmarks.into_iter().map(|b| (b, ())));
         }
     }
@@ -566,17 +565,17 @@ mod private {
             self.bookmarks.update_ge(self.cursor, f);
         }
 
-        /// Returns iterator of all bookmarks in range
-        pub fn bookmarks<R>(&self, range: R) -> impl Iterator<Item = usize>
+        /// Inserts fresh bookmarks into bookmarks set
+        pub fn add_bookmarks(&mut self, bookmarks: impl Iterator<Item = usize>) {
+            self.bookmarks.add(bookmarks);
+        }
+
+        /// Removes and returns bookmarks in the given range
+        pub fn extract_bookmarks<R>(&mut self, range: R) -> impl Iterator<Item = usize>
         where
             R: std::ops::RangeBounds<usize>,
         {
-            self.bookmarks.range(range)
-        }
-
-        /// Inserts fresh bookmarks into bookmarks set
-        pub fn add_bookmarks(&mut self, bookmarks: impl Iterator<Item = usize>) {
-            self.bookmarks.add_bookmarks(bookmarks);
+            self.bookmarks.extract(range)
         }
 
         /// Removes bookmarks in range and returns range unchanged
@@ -1236,12 +1235,12 @@ impl BufferContext {
                     if let Some(cut) = rope.get_slice(cut_range.clone()).map(|slice| {
                         CutBuffer::new(
                             slice,
-                            alt.bookmarks(cut_range.clone())
+                            alt.extract_bookmarks(cut_range.clone())
                                 .map(|b| b - cut_range.start),
                         )
                     }) {
                         // cut out part of rope we want
-                        rope.remove(alt.remove(cut_range.clone()));
+                        rope.remove(cut_range.clone());
                         alt.update(|pos| {
                             if (cut_range.clone()).contains(pos) {
                                 *pos = selection_start;
@@ -1435,12 +1434,12 @@ impl BufferContext {
             .map(|r| {
                 CutBuffer::new(
                     r,
-                    alt.bookmarks(selection_start..selection_end)
+                    alt.extract_bookmarks(selection_start..selection_end)
                         .map(|b| b - selection_start),
                 )
             })
             .inspect(|_| {
-                rope.remove(alt.remove(selection_start..selection_end));
+                rope.remove(selection_start..selection_end);
                 self.cursor = selection_start;
                 self.cursor_column = cursor_column(&rope, self.cursor);
                 alt.update(|pos| {
