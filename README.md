@@ -15,7 +15,7 @@ By restricting our feature set to less than twenty powerful features,
 we can devote more mental effort to our projects and less mental
 effort to our tools.
 
-[![asciicast](https://asciinema.org/a/G2sA2qvYk0kkYoHf.svg)](https://asciinema.org/a/G2sA2qvYk0kkYoHf)
+[![asciicast](https://asciinema.org/a/w3izdnnA393wJBSO.svg)](https://asciinema.org/a/w3izdnnA393wJBSO)
 
 # Installation
 
@@ -86,7 +86,7 @@ which removes the contents of all matches and allows you to enter new text.
 Additionally, for regular-expression based searches,
 captured groups can be pasted to all matches simultaneously.
 
-[![asciicast](https://asciinema.org/a/g3Bbnn6kwbJLUKVg.svg)](https://asciinema.org/a/g3Bbnn6kwbJLUKVg)
+[![asciicast](https://asciinema.org/a/s7NyodZz7bUtLK8n.svg)](https://asciinema.org/a/s7NyodZz7bUtLK8n)
 
 ## Multi Cursor-Style Line Editing
 
@@ -94,7 +94,7 @@ Similar to find-and-replace, you can simply highlight a selection of
 lines and use <kbd>Ctrl</kbd>-<kbd>R</kbd> / <kbd>F6</kbd> to edit
 each of them simultaneously as a unit.
 
-[![asciicast](https://asciinema.org/a/T17MMuMZoFLqI21P.svg)](https://asciinema.org/a/T17MMuMZoFLqI21P)
+[![asciicast](https://asciinema.org/a/4epQUJHnkS34d9LG.svg)](https://asciinema.org/a/4epQUJHnkS34d9LG)
 
 ## Bookmarks
 
@@ -110,7 +110,7 @@ Bookmarks can be removed either by
 or simply by erasing the text containing the bookmark.
 Hando for TODO items which are no longer needed.
 
-[![asciicast](https://asciinema.org/a/NK0fyxZXrAEtTqBV.svg)](https://asciinema.org/a/NK0fyxZXrAEtTqBV)
+[![asciicast](https://asciinema.org/a/2tbWv93snNkYatjO.svg)](https://asciinema.org/a/2tbWv93snNkYatjO)
 
 ## Split Pane Views
 
@@ -122,7 +122,7 @@ Use <kbd>Ctrl</kbd>-<kbd>N</kbd> / <kbd>F10</kbd> to un-split the panes.
 Un-splitting panes is a lossless operation; splitting panes again
 will maintain the same cursor positions as before.
 
-[![asciicast](https://asciinema.org/a/LaNkdwl3xufCJAL6.svg)](https://asciinema.org/a/LaNkdwl3xufCJAL6)
+[![asciicast](https://asciinema.org/a/2tbWv93snNkYatjO.svg)](https://asciinema.org/a/2tbWv93snNkYatjO)
 
 # Configuration
 
