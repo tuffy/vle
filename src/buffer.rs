@@ -4090,6 +4090,12 @@ impl StatefulWidget for BufferWidget<'_> {
                 focused,
             ));
 
+        let block = if focused {
+            block
+        } else {
+            block.style(Style::default().dim())
+        };
+
         let block = match buffer.endings.name() {
             Some(name) => block.title_top(border_title(name.to_string(), focused).right_aligned()),
             None => block,
