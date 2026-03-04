@@ -4097,8 +4097,10 @@ impl StatefulWidget for BufferWidget<'_> {
         };
 
         let block = match buffer.endings.name() {
-            Some(name) => block.title_top(border_title(name.to_string(), focused).right_aligned()),
-            None => block,
+            Some(name) => block
+                .title_bottom(border_title(syntax.to_string(), focused).right_aligned())
+                .title_bottom(border_title(name.to_string(), focused)),
+            None => block.title_bottom(border_title(syntax.to_string(), focused).right_aligned()),
         };
 
         let block = match buffer.bookmarks.len() {
@@ -4145,6 +4147,24 @@ impl StatefulWidget for BufferWidget<'_> {
             )
             .right_aligned(),
         );
+
+        let block = match self.mode {
+            Some(
+                EditorMode::ReplaceMatches {
+                    match_idx, matches, ..
+                }
+                | EditorMode::AutocompleteReplace {
+                    match_idx, matches, ..
+                },
+            ) => block.title_bottom(
+                border_title(
+                    format!("Match {} / {}", *match_idx + 1, matches.len()),
+                    focused,
+                )
+                .centered(),
+            ),
+            _ => block,
+        };
 
         let [text_area, scrollbar_area] =
             Layout::horizontal([Min(0), Length(1)]).areas(block.inner(area));
@@ -4754,18 +4774,8 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(
-                EditorMode::ReplaceMatches {
-                    matches,
-                    match_idx,
-                    groups,
-                    ..
-                }
-                | EditorMode::AutocompleteReplace {
-                    matches,
-                    match_idx,
-                    groups,
-                    ..
-                },
+                EditorMode::ReplaceMatches { groups, .. }
+                | EditorMode::AutocompleteReplace { groups, .. },
             ) => {
                 use crate::help::{ctrl, none};
 
@@ -4780,9 +4790,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 ));
                 help.push(none(&["Enter"], "Finish"));
 
-                render_help(text_area, buf, &help, |block| {
-                    block.title(format!("Match {} / {}", *match_idx + 1, matches.len()))
-                });
+                render_help(text_area, buf, &help, |block| block);
             }
             Some(EditorMode::PasteGroup { total, .. }) => {
                 render_help(
