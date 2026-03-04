@@ -40,7 +40,7 @@ pub struct Ini;
 
 impl std::fmt::Display for Ini {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        "TOML".fmt(f)
+        "INI".fmt(f)
     }
 }
 

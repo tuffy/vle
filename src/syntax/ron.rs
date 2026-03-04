@@ -64,7 +64,7 @@ pub struct Ron;
 
 impl std::fmt::Display for Ron {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        "Ron".fmt(f)
+        "RON".fmt(f)
     }
 }
 

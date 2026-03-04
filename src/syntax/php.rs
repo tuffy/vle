@@ -134,7 +134,7 @@ pub struct Php;
 
 impl std::fmt::Display for Php {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        "Php".fmt(f)
+        "PHP".fmt(f)
     }
 }
 

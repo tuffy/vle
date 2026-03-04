@@ -54,7 +54,7 @@ pub struct Json;
 
 impl std::fmt::Display for Json {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        "Json".fmt(f)
+        "JSON".fmt(f)
     }
 }
 
