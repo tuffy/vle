@@ -393,6 +393,13 @@ mod private {
             self.0.keys().copied()
         }
 
+        pub fn range<R>(&self, range: R) -> impl Iterator<Item = usize>
+        where
+            R: std::ops::RangeBounds<usize>,
+        {
+            self.0.range(range).map(|(b, ())| *b)
+        }
+
         pub fn toggle(&mut self, cursor: usize) -> Toggle {
             use std::collections::btree_map::Entry;
 
@@ -462,8 +469,23 @@ mod private {
         }
 
         /// Remove all bookmarks in range
-        pub fn remove<R: std::ops::RangeBounds<usize>>(&mut self, range: R) {
+        pub fn remove<R>(&mut self, range: R)
+        where
+            R: std::ops::RangeBounds<usize>,
+        {
             self.0.extract_if(range, |_, _| true).for_each(drop);
+        }
+
+        /// Iterators over all bookmarks in range
+        pub fn range<R>(&self, range: R) -> impl Iterator<Item = usize>
+        where
+            R: std::ops::RangeBounds<usize>,
+        {
+            self.0.range(range).map(|(b, ())| *b)
+        }
+
+        pub fn add_bookmarks(&mut self, bookmarks: impl Iterator<Item = usize>) {
+            self.0.extend(bookmarks.into_iter().map(|b| (b, ())));
         }
     }
 
@@ -542,6 +564,19 @@ mod private {
                 }
             }
             self.bookmarks.update_ge(self.cursor, f);
+        }
+
+        /// Returns iterator of all bookmarks in range
+        pub fn bookmarks<R>(&self, range: R) -> impl Iterator<Item = usize>
+        where
+            R: std::ops::RangeBounds<usize>,
+        {
+            self.bookmarks.range(range)
+        }
+
+        /// Inserts fresh bookmarks into bookmarks set
+        pub fn add_bookmarks(&mut self, bookmarks: impl Iterator<Item = usize>) {
+            self.bookmarks.add_bookmarks(bookmarks);
         }
 
         /// Removes bookmarks in range and returns range unchanged
@@ -1185,7 +1220,9 @@ impl BufferContext {
                     let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
                     let mut alt = Secondary::ge(alt, bookmarks, self.cursor);
                     if rope.try_insert(self.cursor, &pasted.data).is_ok() {
+                        let old_cursor = self.cursor;
                         self.cursor += alt.inc(pasted.chars_len);
+                        alt.add_bookmarks(pasted.bookmarks.iter().map(|b| old_cursor + b));
                         self.cursor_column = cursor_column(&rope, self.cursor);
                     }
                 }
@@ -1196,7 +1233,13 @@ impl BufferContext {
                     let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
                     let mut alt = Secondary::ge(alt, bookmarks, selection_start);
 
-                    if let Some(cut) = rope.get_slice(cut_range.clone()).map(|slice| slice.into()) {
+                    if let Some(cut) = rope.get_slice(cut_range.clone()).map(|slice| {
+                        CutBuffer::new(
+                            slice,
+                            alt.bookmarks(cut_range.clone())
+                                .map(|b| b - cut_range.start),
+                        )
+                    }) {
                         // cut out part of rope we want
                         rope.remove(alt.remove(cut_range.clone()));
                         alt.update(|pos| {
@@ -1212,7 +1255,9 @@ impl BufferContext {
                         // and transfer cut rope into cut buffer
                         let pasted = std::mem::replace(pasted, cut);
                         if rope.try_insert(self.cursor, &pasted.data).is_ok() {
+                            let old_cursor = self.cursor;
                             alt += pasted.chars_len;
+                            alt.add_bookmarks(pasted.bookmarks.iter().map(|b| old_cursor + b));
                             self.selection = Some(selection_start);
                             self.cursor = selection_start + pasted.chars_len;
                             self.cursor_column = cursor_column(&rope, self.cursor);
@@ -1369,11 +1414,14 @@ impl BufferContext {
     pub fn get_selection(&mut self) -> Option<CutBuffer> {
         let selection = self.selection.take()?;
         let (selection_start, selection_end) = reorder(self.cursor, selection);
-        self.buffer
-            .borrow()
-            .rope
-            .get_slice(selection_start..selection_end)
-            .map(|r| r.into())
+        let buffer = self.buffer.borrow();
+        Some(CutBuffer::new(
+            buffer.rope.get_slice(selection_start..selection_end)?,
+            buffer
+                .bookmarks
+                .range(selection_start..selection_end)
+                .map(|b| b - selection_start),
+        ))
     }
 
     pub fn take_selection(&mut self, alt: Option<AltCursor<'_>>) -> Option<CutBuffer> {
@@ -1384,7 +1432,13 @@ impl BufferContext {
         let mut alt = Secondary::ge(alt, bookmarks, selection_start);
 
         rope.get_slice(selection_start..selection_end)
-            .map(|r| r.into())
+            .map(|r| {
+                CutBuffer::new(
+                    r,
+                    alt.bookmarks(selection_start..selection_end)
+                        .map(|b| b - selection_start),
+                )
+            })
             .inspect(|_| {
                 rope.remove(alt.remove(selection_start..selection_end));
                 self.cursor = selection_start;
@@ -2037,6 +2091,30 @@ impl BufferContext {
         self.multi_insert_strings(alt, matches, std::iter::repeat((s.chars().count(), s)))
     }
 
+    pub fn multi_paste(
+        &mut self,
+        alt: Option<AltCursor<'_>>,
+        matches: &mut [MultiCursor],
+        cut: &CutBuffer,
+    ) {
+        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+        let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
+        let mut alt = Secondary::new(alt, bookmarks);
+
+        let cut_chars = cut.as_str().chars().count();
+
+        multicursor_update(
+            matches,
+            |m| {
+                m.paste(&mut rope, &mut self.cursor, &mut alt, cut, cut_chars);
+                Ok::<(), std::convert::Infallible>(())
+            },
+            |r, ()| {
+                *r += cut_chars;
+            },
+        );
+    }
+
     pub fn multi_insert_strings<'s>(
         &mut self,
         alt: Option<AltCursor<'_>>,
@@ -2372,6 +2450,28 @@ impl MultiCursor {
         rope.insert(self.cursor, s);
         self.cursor += s_chars;
         self.range.end += s_chars;
+    }
+
+    fn paste(
+        &mut self,
+        rope: &mut ropey::Rope,
+        cursor: &mut usize,
+        secondary: &mut Secondary,
+        cut: &CutBuffer,
+        cut_chars: usize,
+    ) {
+        if self.cursor <= *cursor {
+            *cursor += cut_chars;
+        }
+        secondary.update(|a| {
+            if self.cursor <= *a {
+                *a += cut_chars;
+            }
+        });
+        rope.insert(self.cursor, cut.as_str());
+        secondary.add_bookmarks(cut.bookmarks.iter().map(|b| self.cursor + b));
+        self.cursor += cut_chars;
+        self.range.end += cut_chars;
     }
 
     fn indent(
@@ -4842,20 +4942,23 @@ pub fn render_message(area: Rect, buf: &mut ratatui::buffer::Buffer, message: Bu
 pub struct CutBuffer {
     data: String,
     chars_len: usize,
+    bookmarks: Vec<usize>, // positions relative to start of cut buffer
 }
 
 impl CutBuffer {
+    pub fn new<B>(rope: ropey::RopeSlice<'_>, bookmarks: B) -> Self
+    where
+        B: IntoIterator<Item = usize>,
+    {
+        Self {
+            chars_len: rope.len_chars(),
+            data: rope.chunks().collect(),
+            bookmarks: bookmarks.into_iter().collect(),
+        }
+    }
+
     pub fn as_str(&self) -> &str {
         self.data.as_str()
-    }
-}
-
-impl From<ropey::RopeSlice<'_>> for CutBuffer {
-    fn from(slice: ropey::RopeSlice<'_>) -> Self {
-        Self {
-            data: slice.chunks().collect(),
-            chars_len: slice.len_chars(),
-        }
     }
 }
 
@@ -4864,6 +4967,7 @@ impl From<String> for CutBuffer {
         Self {
             chars_len: data.chars().count(),
             data,
+            bookmarks: vec![],
         }
     }
 }

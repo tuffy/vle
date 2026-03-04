@@ -599,12 +599,12 @@ impl Editor {
                                 }
                                 _ => {
                                     if let Some(cut) = &self.cut_buffer {
-                                        buf.multi_insert_string(
+                                        buf.multi_paste(
                                             alt_buf_list
                                                 .and_then(|l| l.get_mut(cur_idx))
                                                 .map(|b| b.alt_cursor()),
                                             matches,
-                                            cut.as_str(),
+                                            cut,
                                         );
                                     }
                                     None
@@ -1748,7 +1748,7 @@ fn process_paste_group(
         }
         key!(CONTROL, 'v') => {
             if let Some(cut) = cut_buffer {
-                buf.multi_insert_string(alt, matches, cut.as_str());
+                buf.multi_paste(alt, matches, cut);
             }
         }
         _ => { /* ignore other events */ }
