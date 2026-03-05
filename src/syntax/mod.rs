@@ -35,6 +35,7 @@ mod rust;
 mod sh;
 mod sql;
 mod swift;
+mod test;
 mod tex;
 mod toml;
 mod ts;
@@ -186,6 +187,7 @@ impl std::fmt::Display for DefaultHighlighter {
 }
 
 pub use regex::Regex;
+pub use test::Test;
 pub use tutorial::Tutorial;
 
 pub trait Plain {
@@ -272,6 +274,10 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
             })
             .unwrap_or_default()
     });
+
+    if matches!(source, Source::Test) {
+        return Box::new(Test);
+    }
 
     match source
         .extension()

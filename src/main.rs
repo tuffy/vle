@@ -66,11 +66,18 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
     struct Opt {
         #[clap(short = 'l', long = "line", help = "starting line number")]
         line: Option<LineNumber>,
+        #[clap(long = "test", help = "display terminal test")]
+        test: bool,
         files: Vec<PathBuf>,
     }
 
-    let Opt { line, files } = Opt::parse();
-    let editor = Editor::new(files.into_iter().map(buffer::Source::from))?;
+    let Opt { line, files, test } = Opt::parse();
+    let editor = Editor::new(
+        files
+            .into_iter()
+            .map(buffer::Source::from)
+            .chain(test.then_some(buffer::Source::Test)),
+    )?;
     Ok(match line {
         None => editor,
         Some(line) => editor.at_line(line),
@@ -90,6 +97,8 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
     struct Opt {
         #[clap(short = 'l', long = "line", help = "starting line number")]
         line: Option<LineNumber>,
+        #[clap(long = "test", help = "display terminal test")]
+        test: bool,
         files: Vec<PathBuf>,
         #[clap(
             short = 's',
@@ -123,12 +132,18 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
     match Opt::parse() {
         Opt {
             files,
+            test,
             line,
             host: None,
             username: None,
             ..
         } => {
-            let editor = Editor::new(files.into_iter().map(buffer::Source::from))?;
+            let editor = Editor::new(
+                files
+                    .into_iter()
+                    .map(buffer::Source::from)
+                    .chain(test.then_some(buffer::Source::Test)),
+            )?;
             Ok(match line {
                 None => editor,
                 Some(line) => editor.at_line(line),
@@ -137,6 +152,7 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
         Opt {
             line,
             files,
+            test,
             host: Some(host),
             username: Some(username),
             no_password,
@@ -145,7 +161,10 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
             port,
         } => {
             let editor = Editor::new_remote(
-                files.into_iter().map(buffer::Source::from),
+                files
+                    .into_iter()
+                    .map(buffer::Source::from)
+                    .chain(test.then_some(buffer::Source::Test)),
                 match private_key {
                     Some(private_key) => {
                         let password = if no_password {

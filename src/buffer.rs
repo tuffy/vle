@@ -41,6 +41,7 @@ pub enum Source {
         path: PathBuf,
     },
     Tutorial,
+    Test,
 }
 
 #[cfg(not(feature = "ssh"))]
@@ -49,6 +50,7 @@ impl PartialEq for Source {
         match (self, other) {
             (Self::Local(x), Self::Local(y)) => x == y,
             (Self::Tutorial, Self::Tutorial) => true,
+            (Self::Test, Self::Test) => true,
             _ => false,
         }
     }
@@ -63,6 +65,7 @@ impl PartialEq for Source {
                 Rc::ptr_eq(s1, s2) && x == y
             }
             (Self::Tutorial, Self::Tutorial) => true,
+            (Self::Test, Self::Test) => true,
             _ => false,
         }
     }
@@ -84,6 +87,7 @@ impl Source {
             #[cfg(feature = "ssh")]
             Self::Ssh { path, .. } => path.to_string_lossy(),
             Self::Tutorial => "Welcome!".into(),
+            Self::Test => "Terminal Test".into(),
         }
     }
 
@@ -100,6 +104,7 @@ impl Source {
                 .map(|s| s.to_string_lossy())
                 .unwrap_or_else(|| "???".into()),
             Self::Tutorial => "Welcome!".into(),
+            Self::Test => "Terminal Test".into(),
         }
     }
 
@@ -110,6 +115,7 @@ impl Source {
             #[cfg(feature = "ssh")]
             Self::Ssh { path, .. } => path.file_name().map(|s| s.to_string_lossy()),
             Self::Tutorial => None,
+            Self::Test => None,
         }
     }
 
@@ -120,6 +126,7 @@ impl Source {
             #[cfg(feature = "ssh")]
             Self::Ssh { path, .. } => path.extension().and_then(|s| s.to_str()),
             Self::Tutorial => None,
+            Self::Test => None,
         }
     }
 
@@ -147,6 +154,7 @@ impl Source {
                 None,
                 include_str!("tutorial.txt").replacen("VERSION", env!("CARGO_PKG_VERSION"), 1),
             )),
+            Self::Test => Ok((None, include_str!("test.txt").to_string())),
         }
     }
 
@@ -182,7 +190,7 @@ impl Source {
                 }
                 Err(e) => Err(e.into()),
             },
-            Self::Tutorial => self
+            Self::Tutorial | Self::Test => self
                 .read_string(LineEndings::default())
                 .map(|(t, s)| (t, ropey::Rope::from(s), LineEndings::default())),
         }
@@ -214,7 +222,7 @@ impl Source {
                 }
                 Err(e) => Err(e.into()),
             },
-            Self::Tutorial => Ok(None),
+            Self::Tutorial | Self::Test => Ok(None),
         }
     }
 
@@ -231,7 +239,7 @@ impl Source {
                         SystemTime::UNIX_EPOCH.checked_add(std::time::Duration::from_secs(secs))
                     })
             }
-            Self::Tutorial => None,
+            Self::Tutorial | Self::Test => None,
         }
     }
 }
