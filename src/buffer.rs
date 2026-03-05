@@ -1712,6 +1712,7 @@ impl BufferContext {
                 (start != end).then_some(MultiCursor {
                     range: start..end,
                     cursor: start,
+                    selection: None,
                 })
             })
             .collect::<Vec<_>>();
@@ -2083,7 +2084,8 @@ impl BufferContext {
         multicursor_update(
             matches,
             |m| Ok::<_, Infallible>(m.insert_char(&mut rope, &mut self.cursor, &mut alt, c)),
-            |r, inserted| {
+            |r, (zapped, inserted)| {
+                *r -= zapped;
                 *r += inserted;
             },
         );
@@ -2113,10 +2115,11 @@ impl BufferContext {
         multicursor_update(
             matches,
             |m| {
-                m.paste(&mut rope, &mut self.cursor, &mut alt, cut, cut_chars);
-                Ok::<(), std::convert::Infallible>(())
+                let zapped = m.paste(&mut rope, &mut self.cursor, &mut alt, cut, cut_chars);
+                Ok::<_, std::convert::Infallible>(zapped)
             },
-            |r, ()| {
+            |r, zapped| {
+                *r -= zapped;
                 *r += cut_chars;
             },
         );
@@ -2136,10 +2139,11 @@ impl BufferContext {
             matches,
             |m| {
                 let (s_len, s) = strings.next().ok_or(())?;
-                m.insert_str(&mut rope, &mut self.cursor, &mut alt, s, s_len);
-                Ok::<usize, ()>(s_len)
+                let zapped = m.insert_str(&mut rope, &mut self.cursor, &mut alt, s, s_len);
+                Ok::<_, ()>((zapped, s_len))
             },
-            |r, s_len| {
+            |r, (zapped, s_len)| {
+                *r -= zapped;
                 *r += s_len;
             },
         );
@@ -2167,8 +2171,8 @@ impl BufferContext {
         multicursor_update(
             matches,
             |m| m.delete(&mut rope, &mut self.cursor, &mut alt),
-            |r, ()| {
-                *r -= 1;
+            |r, removed| {
+                *r -= removed;
             },
         );
     }
@@ -2189,42 +2193,46 @@ impl BufferContext {
         );
     }
 
-    pub fn multi_cursor_back(&mut self, matches: &mut [MultiCursor]) {
+    pub fn multi_cursor_back(&mut self, matches: &mut [MultiCursor], selecting: bool) {
         matches.iter_mut().for_each(|m| {
             m.cursor_back(
                 &mut self.cursor,
                 &mut self.cursor_column,
                 &self.buffer.borrow_move().rope,
+                selecting,
             )
         });
     }
 
-    pub fn multi_cursor_forward(&mut self, matches: &mut [MultiCursor]) {
+    pub fn multi_cursor_forward(&mut self, matches: &mut [MultiCursor], selecting: bool) {
         matches.iter_mut().for_each(|m| {
             m.cursor_forward(
                 &mut self.cursor,
                 &mut self.cursor_column,
                 &self.buffer.borrow_move().rope,
+                selecting,
             )
         });
     }
 
-    pub fn multi_cursor_home(&mut self, matches: &mut [MultiCursor]) {
+    pub fn multi_cursor_home(&mut self, matches: &mut [MultiCursor], selecting: bool) {
         matches.iter_mut().for_each(|m| {
             m.cursor_home(
                 &mut self.cursor,
                 &mut self.cursor_column,
                 &self.buffer.borrow_move().rope,
+                selecting,
             )
         });
     }
 
-    pub fn multi_cursor_end(&mut self, matches: &mut [MultiCursor]) {
+    pub fn multi_cursor_end(&mut self, matches: &mut [MultiCursor], selecting: bool) {
         matches.iter_mut().for_each(|m| {
             m.cursor_end(
                 &mut self.cursor,
                 &mut self.cursor_column,
                 &self.buffer.borrow_move().rope,
+                selecting,
             )
         });
     }
@@ -2382,6 +2390,8 @@ pub struct MultiCursor {
     range: Range<usize>,
     /// cursor's position in rope, in characters
     cursor: usize,
+    /// cursor's selection anchor in rope, in characters, if any
+    selection: Option<usize>,
 }
 
 impl MultiCursor {
@@ -2396,6 +2406,7 @@ impl MultiCursor {
         cursor: &mut usize,
         secondary: &mut Secondary,
     ) -> usize {
+        self.selection = None;
         let deleted = self.range.end.saturating_sub(self.range.start);
         if deleted > 0 {
             let _ = rope.try_remove(secondary.remove(self.range.start..self.range.end));
@@ -2417,16 +2428,50 @@ impl MultiCursor {
         deleted
     }
 
-    /// Returns number of characters inserted (1 or 2)
+    /// If a selection is active, removes all characters
+    /// between start and end of selection, erases selection,
+    /// and moves cursor to start of selection.
+    /// Returns number of characters removed from selection, if any.
+    fn zap_selection(
+        &mut self,
+        rope: &mut ropey::Rope,
+        cursor: &mut usize,
+        secondary: &mut Secondary,
+    ) -> Option<usize> {
+        let selection = self.selection.take()?;
+        let (start, end) = reorder(self.cursor, selection);
+        let removed = end - start;
+        rope.try_remove(secondary.remove(start..end)).ok()?;
+        if end <= *cursor {
+            *cursor -= removed;
+        } else if start <= *cursor {
+            *cursor = start;
+        }
+        secondary.update(|a| {
+            if start <= *a {
+                *a -= removed;
+            }
+        });
+        self.cursor = start;
+        self.range.end -= removed;
+        Some(removed)
+    }
+
+    /// Returns number of characters zapped (0 or more)
+    /// and number of characters inserted (1 or 2)
+    #[must_use]
     fn insert_char(
         &mut self,
         rope: &mut ropey::Rope,
         cursor: &mut usize,
         secondary: &mut Secondary,
         c: char,
-    ) -> usize {
+    ) -> (usize, usize) {
         use std::cmp::Ordering;
 
+        let zapped = self
+            .zap_selection(rope, cursor, secondary)
+            .unwrap_or_default();
         let inserted = insert_char_or_pair(rope, self.cursor, secondary, c);
         *cursor += match self.cursor.cmp(cursor) {
             Ordering::Less => inserted,
@@ -2435,9 +2480,11 @@ impl MultiCursor {
         };
         self.cursor += 1;
         self.range.end += inserted;
-        inserted
+        (zapped, inserted)
     }
 
+    /// Returns number of zapped characters, if any
+    #[must_use]
     fn insert_str(
         &mut self,
         rope: &mut ropey::Rope,
@@ -2445,7 +2492,10 @@ impl MultiCursor {
         secondary: &mut Secondary,
         s: &str,
         s_chars: usize,
-    ) {
+    ) -> usize {
+        let zapped = self
+            .zap_selection(rope, cursor, secondary)
+            .unwrap_or_default();
         if self.cursor <= *cursor {
             *cursor += s_chars;
         }
@@ -2457,8 +2507,11 @@ impl MultiCursor {
         rope.insert(self.cursor, s);
         self.cursor += s_chars;
         self.range.end += s_chars;
+        zapped
     }
 
+    /// Returns number of zapped characters, if any
+    #[must_use]
     fn paste(
         &mut self,
         rope: &mut ropey::Rope,
@@ -2466,7 +2519,12 @@ impl MultiCursor {
         secondary: &mut Secondary,
         cut: &CutBuffer,
         cut_chars: usize,
-    ) {
+    ) -> usize {
+        // TODO - swap cut buffer and zapped selection, later
+
+        let zapped = self
+            .zap_selection(rope, cursor, secondary)
+            .unwrap_or_default();
         if self.cursor <= *cursor {
             *cursor += cut_chars;
         }
@@ -2479,6 +2537,7 @@ impl MultiCursor {
         secondary.add_bookmarks(cut.bookmarks.iter().map(|b| self.cursor + b));
         self.cursor += cut_chars;
         self.range.end += cut_chars;
+        zapped
     }
 
     fn indent(
@@ -2488,6 +2547,7 @@ impl MultiCursor {
         indent: &str,
         indent_chars: usize,
     ) {
+        // there shouldn't be a selection anchor to clear
         secondary.update(|a| {
             if self.range.start <= *a {
                 *a += indent_chars;
@@ -2510,6 +2570,7 @@ impl MultiCursor {
         secondary: &mut Secondary,
         indent_chars: usize,
     ) -> Result<(), ()> {
+        // there shouldn't be a selection anchor to clear
         rope.try_remove(secondary.remove(self.range.start..self.range.start + indent_chars))
             .map_err(|_| ())?;
         self.cursor = self.cursor.saturating_sub(indent_chars);
@@ -2537,15 +2598,20 @@ impl MultiCursor {
             // can't backup before start of range
             return Err(());
         }
-        let removed = backspace_or_un_pair(rope, self.cursor, secondary)?;
-        *cursor -= match self.cursor.cmp(cursor) {
-            Ordering::Less => removed,
-            Ordering::Equal => 1,
-            Ordering::Greater => 0,
-        };
-        self.cursor -= 1;
-        self.range.end -= removed;
-        Ok(removed)
+        match self.zap_selection(rope, cursor, secondary) {
+            None => {
+                let removed = backspace_or_un_pair(rope, self.cursor, secondary)?;
+                *cursor -= match self.cursor.cmp(cursor) {
+                    Ordering::Less => removed,
+                    Ordering::Equal => 1,
+                    Ordering::Greater => 0,
+                };
+                self.cursor -= 1;
+                self.range.end -= removed;
+                Ok(removed)
+            }
+            Some(removed) => Ok(removed),
+        }
     }
 
     /// Returns Ok if delete performed successfully
@@ -2554,57 +2620,90 @@ impl MultiCursor {
         rope: &mut ropey::Rope,
         cursor: &mut usize,
         secondary: &mut Secondary,
-    ) -> Result<(), ()> {
+    ) -> Result<usize, ()> {
         if self.cursor < self.range.end {
-            if self.cursor < *cursor {
-                *cursor = cursor.saturating_sub(1);
-            }
-            secondary.update(|a| {
-                if self.cursor < *a {
-                    *a = a.saturating_sub(1);
+            match self.zap_selection(rope, cursor, secondary) {
+                None => {
+                    if self.cursor < *cursor {
+                        *cursor = cursor.saturating_sub(1);
+                    }
+                    secondary.update(|a| {
+                        if self.cursor < *a {
+                            *a = a.saturating_sub(1);
+                        }
+                    });
+                    let _ = rope.try_remove(secondary.remove(self.cursor..self.cursor + 1));
+                    self.range.end -= 1;
+                    Ok(1)
                 }
-            });
-            let _ = rope.try_remove(secondary.remove(self.cursor..self.cursor + 1));
-            self.range.end -= 1;
-            Ok(())
+                Some(zapped) => Ok(zapped),
+            }
         } else {
             Err(())
         }
     }
 
-    fn cursor_back(&mut self, cursor: &mut usize, cursor_col: &mut usize, rope: &ropey::Rope) {
+    fn cursor_back(
+        &mut self,
+        cursor: &mut usize,
+        cursor_col: &mut usize,
+        rope: &ropey::Rope,
+        selecting: bool,
+    ) {
         if self.cursor > self.range.start {
             if self.cursor == *cursor {
                 *cursor = cursor.saturating_sub(1);
                 *cursor_col = cursor_column(rope, *cursor);
             }
+            update_selection(&mut self.selection, self.cursor, selecting);
             self.cursor -= 1;
         }
     }
 
-    fn cursor_forward(&mut self, cursor: &mut usize, cursor_col: &mut usize, rope: &ropey::Rope) {
+    fn cursor_forward(
+        &mut self,
+        cursor: &mut usize,
+        cursor_col: &mut usize,
+        rope: &ropey::Rope,
+        selecting: bool,
+    ) {
         if self.cursor < self.range.end {
             if self.cursor == *cursor {
                 *cursor += 1;
                 *cursor_col = cursor_column(rope, *cursor);
             }
+            update_selection(&mut self.selection, self.cursor, selecting);
             self.cursor += 1;
         }
     }
 
-    fn cursor_home(&mut self, cursor: &mut usize, cursor_col: &mut usize, rope: &ropey::Rope) {
+    fn cursor_home(
+        &mut self,
+        cursor: &mut usize,
+        cursor_col: &mut usize,
+        rope: &ropey::Rope,
+        selecting: bool,
+    ) {
         if self.cursor == *cursor {
             *cursor = self.range.start;
             *cursor_col = cursor_column(rope, *cursor);
         }
+        update_selection(&mut self.selection, self.cursor, selecting);
         self.cursor = self.range.start;
     }
 
-    fn cursor_end(&mut self, cursor: &mut usize, cursor_col: &mut usize, rope: &ropey::Rope) {
+    fn cursor_end(
+        &mut self,
+        cursor: &mut usize,
+        cursor_col: &mut usize,
+        rope: &ropey::Rope,
+        selecting: bool,
+    ) {
         if self.cursor == *cursor {
             *cursor = self.range.end;
             *cursor_col = cursor_column(rope, *cursor);
         }
+        update_selection(&mut self.selection, self.cursor, selecting);
         self.cursor = self.range.end;
     }
 
@@ -2652,6 +2751,8 @@ impl MultiCursor {
         replacement: &str,
         replacement_chars: usize,
     ) {
+        self.selection = None;
+
         // make relative offset an absolute offset
         let abs_start = self.range.start + offset;
 
@@ -2683,6 +2784,13 @@ impl MultiCursor {
         self.cursor = abs_start + replacement_chars;
         self.range.end += replacement_chars;
     }
+
+    fn selection_range(&self) -> Option<Range<usize>> {
+        self.selection.map(|sel| {
+            let (start, end) = reorder(self.cursor, sel);
+            start..end
+        })
+    }
 }
 
 impl From<usize> for MultiCursor {
@@ -2690,6 +2798,7 @@ impl From<usize> for MultiCursor {
         Self {
             range: cursor..cursor,
             cursor,
+            selection: None,
         }
     }
 }
@@ -2699,6 +2808,7 @@ impl From<Range<usize>> for MultiCursor {
         Self {
             cursor: range.start,
             range,
+            selection: None,
         }
     }
 }
@@ -2708,6 +2818,7 @@ impl From<SelectedLine> for MultiCursor {
         Self {
             cursor: line.start,
             range: line.start..line.end,
+            selection: None,
         }
     }
 }
@@ -2717,6 +2828,9 @@ impl std::ops::AddAssign<usize> for MultiCursor {
         self.range.start += chars;
         self.range.end += chars;
         self.cursor += chars;
+        if let Some(selection) = &mut self.selection {
+            *selection += chars;
+        }
     }
 }
 
@@ -2725,6 +2839,9 @@ impl std::ops::SubAssign<usize> for MultiCursor {
         self.range.start -= chars;
         self.range.end -= chars;
         self.cursor -= chars;
+        if let Some(selection) = &mut self.selection {
+            *selection -= chars;
+        }
     }
 }
 
@@ -4437,12 +4554,23 @@ impl StatefulWidget for BufferWidget<'_> {
                     ..
                 },
             ) => {
-                let (mut cursors, mut ranges): (VecDeque<_>, _) = matches
-                    .iter()
-                    .map(|m| ((m.cursor..m.cursor + 1, ()), (m.range.clone(), ())))
-                    .unzip();
+                fn tupled<T>(v: T) -> (T, ()) {
+                    (v, ())
+                }
+
+                let (mut cursors, (mut ranges, selections)): (VecDeque<_>, (_, VecFiltered<_>)) =
+                    matches
+                        .iter()
+                        .map(|m| {
+                            (
+                                tupled(m.cursor..m.cursor + 1),
+                                (tupled(m.range.clone()), m.selection_range().map(tupled)),
+                            )
+                        })
+                        .unzip();
 
                 cursors.retain(|(r, _)| r.start != state.cursor);
+                let mut selections = selections.into();
 
                 EditorLine::iter(rope, viewport_line)
                     .map(
@@ -4455,19 +4583,26 @@ impl StatefulWidget for BufferWidget<'_> {
 
                             highlight_matches(
                                 highlight_matches(
-                                    widen(colorize(
-                                        syntax,
-                                        &mut hlstate,
-                                        line,
-                                        current_line == Some(number),
-                                    )),
+                                    highlight_matches(
+                                        widen(colorize(
+                                            syntax,
+                                            &mut hlstate,
+                                            line,
+                                            current_line == Some(number),
+                                        )),
+                                        whole_range.clone(),
+                                        &mut ranges,
+                                        |span, ()| {
+                                            span.patch_style(
+                                                Style::new()
+                                                    .underlined()
+                                                    .underline_color(Color::Blue),
+                                            )
+                                        },
+                                    ),
                                     whole_range.clone(),
-                                    &mut ranges,
-                                    |span, ()| {
-                                        span.patch_style(
-                                            Style::new().underlined().underline_color(Color::Blue),
-                                        )
-                                    },
+                                    &mut selections,
+                                    |span, ()| span.style(EDITING),
                                 ),
                                 whole_range,
                                 &mut cursors,
@@ -5182,6 +5317,21 @@ impl std::fmt::Display for Thousands {
 enum Toggle {
     Inserted, // new bookmark added
     Removed,  // existing bookmark removed
+}
+
+#[derive(Default)]
+struct VecFiltered<T>(Vec<T>);
+
+impl<T> Extend<Option<T>> for VecFiltered<T> {
+    fn extend<I: IntoIterator<Item = Option<T>>>(&mut self, iter: I) {
+        self.0.extend(iter.into_iter().flatten());
+    }
+}
+
+impl<T> From<VecFiltered<T>> for std::collections::VecDeque<T> {
+    fn from(v: VecFiltered<T>) -> Self {
+        v.0.into()
+    }
 }
 
 #[inline]

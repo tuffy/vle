@@ -1601,26 +1601,48 @@ fn process_replace_matches(
             None
         }
         key!(Enter) => Some(EditorMode::default()),
-        key!(Left) => {
+        Event::Key(KeyEvent {
+            code: KeyCode::Left,
+            modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
             *highlight = false;
-            buffer.multi_cursor_back(matches);
+            buffer.multi_cursor_back(matches, modifiers.contains(KeyModifiers::SHIFT));
             None
         }
-        key!(Right) => {
+        Event::Key(KeyEvent {
+            code: KeyCode::Right,
+            modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
             *highlight = false;
-            buffer.multi_cursor_forward(matches);
+            buffer.multi_cursor_forward(matches, modifiers.contains(KeyModifiers::SHIFT));
             None
         }
-        key!(Home) => {
+        Event::Key(KeyEvent {
+            code: KeyCode::Home,
+            modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
             *highlight = false;
-            buffer.multi_cursor_home(matches);
+            buffer.multi_cursor_home(matches, modifiers.contains(KeyModifiers::SHIFT));
             None
         }
-        key!(End) => {
+        Event::Key(KeyEvent {
+            code: KeyCode::End,
+            modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
             *highlight = false;
-            buffer.multi_cursor_end(matches);
+            buffer.multi_cursor_end(matches, modifiers.contains(KeyModifiers::SHIFT));
             None
         }
+        // TODO - add option to cut selected areas to cut buffer(s)
+        // TODO - add option to copy selected areas to cut buffer(s)
         keybind!(Bookmark) => {
             *highlight = false;
             buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));
