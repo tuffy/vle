@@ -24,6 +24,7 @@ enum TomlToken {
     #[token("true")]
     #[token("false")]
     #[regex(r#"\"[^\"]*\""#)]
+    #[regex(r#"'[^']*'"#)]
     Value,
     #[regex("#.*", allow_greedy = true)]
     Comment,
