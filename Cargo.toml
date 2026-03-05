@@ -15,7 +15,7 @@ name = "vle"
 path = "src/main.rs"
 
 [features]
-ssh = ["dep:ssh2", "dep:inquire"]
+ssh = ["dep:ssh2", "dep:rpassword"]
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
@@ -26,7 +26,7 @@ ratatui = { version = "0.30", features = ["underline-color"] }
 ropey = "1.6"
 unicode-width = "0.2"
 ssh2 = { version = "0.9", optional = true }
-inquire = { version = "0.9", optional = true }
+rpassword = { version = "7.4", optional = true }
 fancy-regex = "0.17"
 lazy-regex = "3.6"
 radix_trie = "0.3"

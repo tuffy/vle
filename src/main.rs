@@ -80,7 +80,6 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
 #[cfg(feature = "ssh")]
 fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
     use clap::Parser;
-    use inquire::{Password, PasswordDisplayMode, Text};
     use ssh2::Session;
     use std::net::TcpStream;
     use std::path::PathBuf;
@@ -92,7 +91,12 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
         #[clap(short = 'l', long = "line", help = "starting line number")]
         line: Option<LineNumber>,
         files: Vec<PathBuf>,
-        #[clap(short = 's', long = "ssh", help = "remote SSH host")]
+        #[clap(
+            short = 's',
+            long = "ssh",
+            help = "remote SSH host",
+            requires = "username"
+        )]
         host: Option<String>,
         #[clap(
             short = 'u',
@@ -101,6 +105,8 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
             requires = "host"
         )]
         username: Option<String>,
+        #[clap(long = "no-passwd", help = "don't use password")]
+        no_password: bool,
         #[clap(short = 'P', long = "private", help = "private key", requires = "host")]
         private_key: Option<PathBuf>,
         #[clap(
@@ -119,6 +125,7 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
             files,
             line,
             host: None,
+            username: None,
             ..
         } => {
             let editor = Editor::new(files.into_iter().map(buffer::Source::from))?;
@@ -131,25 +138,21 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
             line,
             files,
             host: Some(host),
-            username,
+            username: Some(username),
+            no_password,
             private_key,
             public_key,
             port,
         } => {
-            let username = match username {
-                Some(username) => username,
-                None => Text::new("Username").prompt()?,
-            };
-
             let editor = Editor::new_remote(
                 files.into_iter().map(buffer::Source::from),
                 match private_key {
                     Some(private_key) => {
-                        let password = Password::new("Private Key Password")
-                            .with_display_mode(PasswordDisplayMode::Masked)
-                            .without_confirmation()
-                            .prompt_skippable()?;
-
+                        let password = if no_password {
+                            None
+                        } else {
+                            Some(rpassword::prompt_password("Private Key Password : ")?)
+                        };
                         let tcp = TcpStream::connect(&format!("{host}:{port}"))?;
                         let mut sess = Session::new()?;
                         sess.set_tcp_stream(tcp);
@@ -163,11 +166,7 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
                         sess
                     }
                     None => {
-                        let password = Password::new("Password")
-                            .with_display_mode(PasswordDisplayMode::Masked)
-                            .without_confirmation()
-                            .prompt()?;
-
+                        let password = rpassword::prompt_password("Password : ")?;
                         let tcp = TcpStream::connect(&format!("{host}:{port}"))?;
                         let mut sess = Session::new()?;
                         sess.set_tcp_stream(tcp);
@@ -182,6 +181,21 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
                 None => editor,
                 Some(line) => editor.at_line(line),
             })
+        }
+        _ => {
+            #[derive(Debug)]
+            struct ArgumentsMismatch;
+
+            impl std::error::Error for ArgumentsMismatch {}
+
+            impl std::fmt::Display for ArgumentsMismatch {
+                fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    "host requires username".fmt(f)
+                }
+            }
+
+            // this shouldn't happen since host requires username
+            Err(Box::new(ArgumentsMismatch))
         }
     }
 }
