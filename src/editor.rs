@@ -585,44 +585,19 @@ impl Editor {
                     let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
                     let cur_idx = cur_buf_list.current_index();
                     if let Some(buf) = cur_buf_list.current_mut()
-                        && let Some(new_mode) = match event {
-                            key!(CONTROL, 'v') => match groups {
-                                CaptureGroups::Some { total, groups } => {
-                                    Some(EditorMode::PasteGroup {
-                                        matches: std::mem::take(matches),
-                                        match_idx: std::mem::take(match_idx),
-                                        total: std::mem::take(total),
-                                        groups: std::mem::take(groups),
-                                        range: range.take(),
-                                        highlight: std::mem::take(highlight),
-                                    })
-                                }
-                                _ => {
-                                    if let Some(cut) = &self.cut_buffer {
-                                        buf.multi_paste(
-                                            alt_buf_list
-                                                .and_then(|l| l.get_mut(cur_idx))
-                                                .map(|b| b.alt_cursor()),
-                                            matches,
-                                            cut,
-                                        );
-                                    }
-                                    None
-                                }
-                            },
-                            event => process_replace_matches(
-                                buf,
-                                matches,
-                                groups,
-                                range,
-                                match_idx,
-                                highlight,
-                                event,
-                                alt_buf_list
-                                    .and_then(|l| l.get_mut(cur_idx))
-                                    .map(|b| b.alt_cursor()),
-                            ),
-                        }
+                        && let Some(new_mode) = process_replace_matches(
+                            buf,
+                            &mut self.cut_buffer,
+                            matches,
+                            groups,
+                            range,
+                            match_idx,
+                            highlight,
+                            event,
+                            alt_buf_list
+                                .and_then(|l| l.get_mut(cur_idx))
+                                .map(|b| b.alt_cursor()),
+                        )
                     {
                         self.mode = new_mode;
                     }
@@ -1539,6 +1514,7 @@ fn process_search(
 #[allow(clippy::too_many_arguments)]
 fn process_replace_matches(
     buffer: &mut BufferContext,
+    cut_buffer: &mut Option<EditorCutBuffer>,
     matches: &mut Vec<MultiCursor>,
     groups: &mut CaptureGroups,
     range: &mut Option<SelectionRange>,
@@ -1641,8 +1617,24 @@ fn process_replace_matches(
             buffer.multi_cursor_end(matches, modifiers.contains(KeyModifiers::SHIFT));
             None
         }
-        // TODO - add option to cut selected areas to cut buffer(s)
+        key!(CONTROL, 'v') => match groups {
+            CaptureGroups::Some { total, groups } => Some(EditorMode::PasteGroup {
+                matches: std::mem::take(matches),
+                match_idx: std::mem::take(match_idx),
+                total: std::mem::take(total),
+                groups: std::mem::take(groups),
+                range: range.take(),
+                highlight: std::mem::take(highlight),
+            }),
+            _ => {
+                if let Some(cut) = cut_buffer {
+                    buffer.multi_paste(alt, matches, cut);
+                }
+                None
+            }
+        },
         // TODO - add option to copy selected areas to cut buffer(s)
+        // TODO - add option to cut selected areas to cut buffer(s)
         keybind!(Bookmark) => {
             *highlight = false;
             buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));
