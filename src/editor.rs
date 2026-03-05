@@ -11,7 +11,7 @@ use crate::files::{EitherSource, SshSource};
 use crate::key;
 use crate::{
     buffer::{
-        AltCursor, BufferContext, BufferId, BufferList, CutBuffer, MatchCapture, MultiCursor,
+        AltCursor, BufferContext, BufferId, BufferList, EditorCutBuffer, MatchCapture, MultiCursor,
         SelectionRange, Source,
     },
     files::{ChooserSource, FileChooserState, LocalSource},
@@ -217,7 +217,7 @@ pub struct Editor {
     layout: Layout,                       // the editor's pane layout
     focused: bool,                        // whether the editor has focus
     mode: EditorMode,                     // what mode the editing is in
-    cut_buffer: Option<CutBuffer>,        // contents of cut buffer
+    cut_buffer: Option<EditorCutBuffer>,  // contents of cut buffer
     last_plain_search: Option<TextField>, // previous plaintext search
     last_regex_search: Option<TextField>, // previous regex search
     show_help: bool,                      // whether to show keybindinings
@@ -342,7 +342,7 @@ impl Editor {
                     .map(|b| b.alt_cursor()),
             )
         {
-            self.cut_buffer = Some(selection);
+            self.cut_buffer = Some(EditorCutBuffer::Single(selection));
         }
     }
 
@@ -350,7 +350,7 @@ impl Editor {
         if let Some(buffer) = self.layout.selected_buffer_list_mut().current_mut()
             && let Some(selection) = buffer.get_selection()
         {
-            self.cut_buffer = Some(selection);
+            self.cut_buffer = Some(EditorCutBuffer::Single(selection));
         }
     }
 
@@ -811,7 +811,7 @@ impl Editor {
                 }
             }
             Event::Paste(pasted) => {
-                self.cut_buffer = Some(pasted.into());
+                self.cut_buffer = Some(EditorCutBuffer::Single(pasted.into()));
                 let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
                 let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
                 if let Some(primary) = primary.current_mut() {
@@ -1415,7 +1415,7 @@ enum NextModeIncremental {
 
 fn process_search(
     buffer: &mut BufferContext,
-    cut_buffer: Option<&CutBuffer>,
+    cut_buffer: Option<&EditorCutBuffer>,
     last_search: &mut Option<TextField>,
     prompt: &mut TextField,
     type_: &mut SearchType,
@@ -1430,8 +1430,8 @@ fn process_search(
 
     match event {
         key!(CONTROL, 'v') => {
-            if let Some(buf) = cut_buffer {
-                prompt.paste(buf.as_str());
+            if let Some(s) = cut_buffer.and_then(|b| b.cut_str()) {
+                prompt.paste(s);
             }
             None
         }
@@ -1731,7 +1731,7 @@ fn process_replace_matches(
 fn process_paste_group(
     buf: &mut BufferContext,
     matches: &mut [MultiCursor],
-    cut_buffer: Option<&CutBuffer>,
+    cut_buffer: Option<&EditorCutBuffer>,
     groups: &mut [Vec<Option<MatchCapture>>],
     event: Event,
     alt: Option<AltCursor<'_>>,

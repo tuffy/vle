@@ -1218,65 +1218,68 @@ impl BufferContext {
         }
     }
 
-    pub fn paste(&mut self, alt: Option<AltCursor<'_>>, cut_buffer: &mut Option<CutBuffer>) {
-        if let Some(pasted) = cut_buffer {
-            match self.selection.as_mut() {
-                None => {
-                    // No active selection, so paste as-is
-                    let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
-                    let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
-                    let mut alt = Secondary::ge(alt, bookmarks, self.cursor);
-                    if rope.try_insert(self.cursor, &pasted.data).is_ok() {
-                        let old_cursor = self.cursor;
-                        self.cursor += alt.inc(pasted.chars_len);
-                        alt.add_bookmarks(pasted.bookmarks.iter().map(|b| old_cursor + b));
-                        self.cursor_column = cursor_column(&rope, self.cursor);
-                    }
-                }
-                Some(selection) => {
-                    let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
-                    let (selection_start, selection_end) = reorder(self.cursor, *selection);
-                    let cut_range = selection_start..selection_end;
-                    let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
-                    let mut alt = Secondary::ge(alt, bookmarks, selection_start);
-
-                    if let Some(cut) = rope.get_slice(cut_range.clone()).map(|slice| {
-                        CutBuffer::new(
-                            slice,
-                            alt.extract_bookmarks(cut_range.clone())
-                                .map(|b| b - cut_range.start),
-                        )
-                    }) {
-                        // cut out part of rope we want
-                        rope.remove(cut_range.clone());
-                        alt.update(|pos| {
-                            if (cut_range.clone()).contains(pos) {
-                                *pos = selection_start;
-                            } else {
-                                *pos -= selection_end - selection_start;
-                            }
-                        });
-                        self.cursor = selection_start;
-
-                        // insert contents of cut buffer
-                        // and transfer cut rope into cut buffer
-                        let pasted = std::mem::replace(pasted, cut);
+    pub fn paste(&mut self, alt: Option<AltCursor<'_>>, cut_buffer: &mut Option<EditorCutBuffer>) {
+        match cut_buffer {
+            Some(EditorCutBuffer::Single(pasted)) => {
+                match self.selection.as_mut() {
+                    None => {
+                        // No active selection, so paste as-is
+                        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+                        let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
+                        let mut alt = Secondary::ge(alt, bookmarks, self.cursor);
                         if rope.try_insert(self.cursor, &pasted.data).is_ok() {
                             let old_cursor = self.cursor;
-                            alt += pasted.chars_len;
+                            self.cursor += alt.inc(pasted.chars_len);
                             alt.add_bookmarks(pasted.bookmarks.iter().map(|b| old_cursor + b));
-                            self.selection = Some(selection_start);
-                            self.cursor = selection_start + pasted.chars_len;
                             self.cursor_column = cursor_column(&rope, self.cursor);
                         }
+                    }
+                    Some(selection) => {
+                        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+                        let (selection_start, selection_end) = reorder(self.cursor, *selection);
+                        let cut_range = selection_start..selection_end;
+                        let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
+                        let mut alt = Secondary::ge(alt, bookmarks, selection_start);
 
-                        // display indicator
-                        self.message = Some(BufferMessage::Notice(
-                            "swapped cut buffer with selection".into(),
-                        ));
+                        if let Some(cut) = rope.get_slice(cut_range.clone()).map(|slice| {
+                            CutBuffer::new(
+                                slice,
+                                alt.extract_bookmarks(cut_range.clone())
+                                    .map(|b| b - cut_range.start),
+                            )
+                        }) {
+                            // cut out part of rope we want
+                            rope.remove(cut_range.clone());
+                            alt.update(|pos| {
+                                if (cut_range.clone()).contains(pos) {
+                                    *pos = selection_start;
+                                } else {
+                                    *pos -= selection_end - selection_start;
+                                }
+                            });
+                            self.cursor = selection_start;
+
+                            // insert contents of cut buffer
+                            // and transfer cut rope into cut buffer
+                            let pasted = std::mem::replace(pasted, cut);
+                            if rope.try_insert(self.cursor, &pasted.data).is_ok() {
+                                let old_cursor = self.cursor;
+                                alt += pasted.chars_len;
+                                alt.add_bookmarks(pasted.bookmarks.iter().map(|b| old_cursor + b));
+                                self.selection = Some(selection_start);
+                                self.cursor = selection_start + pasted.chars_len;
+                                self.cursor_column = cursor_column(&rope, self.cursor);
+                            }
+
+                            // display indicator
+                            self.message = Some(BufferMessage::Notice(
+                                "swapped cut buffer with selection".into(),
+                            ));
+                        }
                     }
                 }
             }
+            None => { /* nothing in cut buffer, so nothing to do */ }
         }
     }
 
@@ -2104,25 +2107,29 @@ impl BufferContext {
         &mut self,
         alt: Option<AltCursor<'_>>,
         matches: &mut [MultiCursor],
-        cut: &CutBuffer,
+        cut: &EditorCutBuffer,
     ) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
 
-        let cut_chars = cut.as_str().chars().count();
+        match cut {
+            EditorCutBuffer::Single(cut) => {
+                let cut_chars = cut.as_str().chars().count();
 
-        multicursor_update(
-            matches,
-            |m| {
-                let zapped = m.paste(&mut rope, &mut self.cursor, &mut alt, cut, cut_chars);
-                Ok::<_, std::convert::Infallible>(zapped)
-            },
-            |r, zapped| {
-                *r -= zapped;
-                *r += cut_chars;
-            },
-        );
+                multicursor_update(
+                    matches,
+                    |m| {
+                        let zapped = m.paste(&mut rope, &mut self.cursor, &mut alt, cut, cut_chars);
+                        Ok::<_, std::convert::Infallible>(zapped)
+                    },
+                    |r, zapped| {
+                        *r -= zapped;
+                        *r += cut_chars;
+                    },
+                );
+            }
+        }
     }
 
     pub fn multi_insert_strings<'s>(
@@ -5079,6 +5086,18 @@ pub fn render_message(area: Rect, buf: &mut ratatui::buffer::Buffer, message: Bu
         })
         .block(Block::bordered().border_type(BorderType::Rounded))
         .render(dialog_area, buf);
+}
+
+pub enum EditorCutBuffer {
+    Single(CutBuffer),
+}
+
+impl EditorCutBuffer {
+    pub fn cut_str(&self) -> Option<&str> {
+        match self {
+            Self::Single(b) => Some(b.as_str()),
+        }
+    }
 }
 
 pub struct CutBuffer {
