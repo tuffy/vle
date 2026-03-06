@@ -1633,8 +1633,18 @@ fn process_replace_matches(
                 None
             }
         },
-        // TODO - add option to copy selected areas to cut buffer(s)
-        // TODO - add option to cut selected areas to cut buffer(s)
+        key!(CONTROL, 'c') => {
+            if let cut @ Some(_) = buffer.multi_cursor_copy(matches) {
+                *cut_buffer = cut;
+            }
+            None
+        }
+        key!(CONTROL, 'x') => {
+            if let cut @ Some(_) = buffer.multi_cursor_cut(alt, matches) {
+                *cut_buffer = cut;
+            }
+            None
+        }
         keybind!(Bookmark) => {
             *highlight = false;
             buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));
