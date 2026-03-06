@@ -4664,7 +4664,13 @@ impl StatefulWidget for BufferWidget<'_> {
                                 ),
                                 range.clone(),
                                 (selection_start, selection_end),
-                                |span| span.style(EDITING),
+                                |span| {
+                                    span.style(
+                                        Style::new()
+                                            .fg(Color::Red)
+                                            .add_modifier(Modifier::REVERSED),
+                                    )
+                                },
                             )
                             .into()
                         },
