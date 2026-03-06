@@ -5196,7 +5196,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(EditorMode::ReplaceMatches { .. } | EditorMode::AutocompleteReplace { .. }) => {
-                render_help(text_area, buf, &REPLACE_MATCHES, |block| block);
+                render_help(text_area, buf, REPLACE_MATCHES, |block| block);
             }
             Some(EditorMode::PasteGroup { total, .. }) => {
                 render_help(

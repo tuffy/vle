@@ -76,39 +76,37 @@ pub fn help_message(keybindings: &[Keybinding]) -> ratatui::widgets::Paragraph<'
             .iter()
             .map(|k| {
                 let mut line = vec![];
-                match k {
-                    Keybinding {
-                        modifier,
-                        keys,
-                        action,
-                        f,
-                    } => {
-                        line.extend(spaces(action_width - action.width()));
-                        line.push(Span::from(*action));
-                        line.push(Span::from(" : "));
-                        if f_width > 0 {
-                            if f.is_empty() {
-                                line.extend(spaces(f_width));
-                            } else {
-                                line.push(key(f));
-                                line.extend(spaces(f_width.saturating_sub(f.width())));
-                            }
-                        }
-                        match modifier {
-                            Some(modifier) => {
-                                line.extend(spaces(mod_width.saturating_sub(modifier.width() + 1)));
-                                line.push(key(modifier));
-                                line.push(Span::from("-"));
-                            }
-                            None => {
-                                line.extend(spaces(mod_width));
-                            }
-                        }
-                        for k in keys.iter() {
-                            line.push(key(k));
-                            line.push(Span::from(" "));
-                        }
+                let Keybinding {
+                    modifier,
+                    keys,
+                    action,
+                    f,
+                } = k;
+
+                line.extend(spaces(action_width - action.width()));
+                line.push(Span::from(*action));
+                line.push(Span::from(" : "));
+                if f_width > 0 {
+                    if f.is_empty() {
+                        line.extend(spaces(f_width));
+                    } else {
+                        line.push(key(f));
+                        line.extend(spaces(f_width.saturating_sub(f.width())));
                     }
+                }
+                match modifier {
+                    Some(modifier) => {
+                        line.extend(spaces(mod_width.saturating_sub(modifier.width() + 1)));
+                        line.push(key(modifier));
+                        line.push(Span::from("-"));
+                    }
+                    None => {
+                        line.extend(spaces(mod_width));
+                    }
+                }
+                for k in keys.iter() {
+                    line.push(key(k));
+                    line.push(Span::from(" "));
                 }
 
                 Line::from(line)
@@ -122,13 +120,14 @@ pub fn field_widths(keybindings: &[Keybinding]) -> [usize; 5] {
 
     keybindings.iter().fold(
         [0, 2, 0, 0, 0],
-        |[action_len, _, f_len, mod_len, keys_len]: [usize; 5], key| match key {
-            Keybinding {
+        |[action_len, _, f_len, mod_len, keys_len]: [usize; 5], key| {
+            let Keybinding {
                 modifier,
                 keys,
                 action,
                 f,
-            } => [
+            } = key;
+            [
                 action_len.max(action.width()),
                 2,
                 f_len.max(if !f.is_empty() { f.width() + 1 } else { 0 }),
@@ -137,7 +136,7 @@ pub fn field_widths(keybindings: &[Keybinding]) -> [usize; 5] {
                     None => 0,
                 }),
                 keys_len.max(keys.iter().map(|k| k.width() + 1).sum()),
-            ],
+            ]
         },
     )
 }
