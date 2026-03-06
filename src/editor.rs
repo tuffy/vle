@@ -1672,6 +1672,10 @@ fn process_replace_matches(
             }
             None
         }
+        keybind!(WidenSelection) => {
+            matches.iter_mut().for_each(|m| m.widen_selection());
+            None
+        }
         keybind!(Bookmark) => {
             *highlight = false;
             buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));

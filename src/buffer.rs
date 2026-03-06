@@ -2533,6 +2533,12 @@ impl MultiCursor {
         deleted
     }
 
+    /// Widens select to whole multi-cursor area
+    pub fn widen_selection(&mut self) {
+        self.selection = Some(self.range.start);
+        self.cursor = self.range.end;
+    }
+
     /// If a selection is active, removes all characters
     /// between start and end of selection, erases selection,
     /// and moves cursor to start of selection.
