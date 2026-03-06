@@ -1218,19 +1218,60 @@ impl BufferContext {
         }
     }
 
-    pub fn paste(&mut self, alt: Option<AltCursor<'_>>, cut_buffer: &mut Option<EditorCutBuffer>) {
+    #[must_use]
+    pub fn paste(
+        &mut self,
+        alt: Option<AltCursor<'_>>,
+        cut_buffer: &mut Option<EditorCutBuffer>,
+    ) -> Option<Vec<MultiCursor>> {
         match self.selection.as_mut() {
             None => {
-                if let Some(pasted) = cut_buffer.as_ref().and_then(|c| c.primary()) {
-                    // No active selection, so paste as-is
-                    let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
-                    let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
-                    let mut alt = Secondary::ge(alt, bookmarks, self.cursor);
-                    if rope.try_insert(self.cursor, &pasted.data).is_ok() {
-                        let old_cursor = self.cursor;
-                        self.cursor += alt.inc(pasted.chars_len);
-                        alt.add_bookmarks(pasted.bookmarks.iter().map(|b| old_cursor + b));
-                        self.cursor_column = cursor_column(&rope, self.cursor);
+                // No active selection, so paste as-is
+
+                let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+                let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
+                let mut alt = Secondary::ge(alt, bookmarks, self.cursor);
+
+                match cut_buffer.as_ref()? {
+                    EditorCutBuffer::Single(pasted) => {
+                        if rope.try_insert(self.cursor, &pasted.data).is_ok() {
+                            let old_cursor = self.cursor;
+                            self.cursor += alt.inc(pasted.chars_len);
+                            alt.add_bookmarks(pasted.bookmarks.iter().map(|b| old_cursor + b));
+                            self.cursor_column = cursor_column(&rope, self.cursor);
+                        }
+                        None
+                    }
+                    EditorCutBuffer::Multiple(pasted_items) => {
+                        // insert each cut item in its own line
+                        // and return multi-cursors of pasted items
+                        Some(
+                            last_iter(pasted_items.iter())
+                                .map(|(is_last, pasted_item)| {
+                                    let mut cursor = MultiCursor::from(self.cursor);
+                                    // new cursors shouldn't have zapped characters
+                                    assert_eq!(
+                                        cursor.paste_single(
+                                            &mut rope,
+                                            &mut self.cursor,
+                                            &mut alt,
+                                            pasted_item
+                                        ),
+                                        0
+                                    );
+                                    if !is_last {
+                                        rope.insert_char(self.cursor, '\n');
+                                        alt.update(|a| {
+                                            if *a >= self.cursor {
+                                                *a += 1;
+                                            }
+                                        });
+                                        self.cursor += 1;
+                                    }
+                                    cursor
+                                })
+                                .collect(),
+                        )
                     }
                 }
             }
@@ -1279,6 +1320,7 @@ impl BufferContext {
                         ));
                     }
                 }
+                None
             }
         }
     }
@@ -2263,12 +2305,13 @@ impl BufferContext {
 
     pub fn multi_cursor_copy(&mut self, matches: &mut [MultiCursor]) -> Option<EditorCutBuffer> {
         let buffer = &self.buffer.borrow();
-        EditorCutBuffer::deduplicate(
-            matches
-                .iter_mut()
-                .filter_map(|m| m.get_selection(&buffer.rope, &buffer.bookmarks))
-                .collect(),
-        )
+
+        let copies = matches
+            .iter_mut()
+            .filter_map(|m| m.get_selection(&buffer.rope, &buffer.bookmarks))
+            .collect::<Vec<_>>();
+
+        (!copies.is_empty()).then_some(EditorCutBuffer::Multiple(copies))
     }
 
     pub fn multi_cursor_cut(
@@ -2296,7 +2339,7 @@ impl BufferContext {
             },
         );
 
-        EditorCutBuffer::deduplicate(cut_buffers)
+        (!cut_buffers.is_empty()).then_some(EditorCutBuffer::Multiple(cut_buffers))
     }
 
     pub fn set_error<S: Into<Cow<'static, str>>>(&mut self, err: S) {
@@ -5225,34 +5268,6 @@ impl EditorCutBuffer {
     pub fn cut_str(&self) -> Option<&str> {
         self.primary().map(|c| c.as_str())
     }
-
-    /// Stores set of cut buffers as single if all contents are identical
-    /// Otherwise stores them separately
-    pub fn deduplicate(mut buffers: Vec<CutBuffer>) -> Option<Self> {
-        match buffers.as_slice() {
-            [] => None,
-            [_] => buffers
-                .pop()
-                .and_then(|c| (!c.data.is_empty()).then_some(Self::Single(c))),
-            [first, rest @ ..] => {
-                if rest.iter().all(|c| c.data == first.data) {
-                    // all contents are the same,
-                    // so merge any bookmarks together
-                    let initial = buffers.pop()?;
-                    Some(buffers.into_iter().fold(initial, |mut acc, c| {
-                        acc.bookmarks.extend(c.bookmarks);
-                        acc.bookmarks.sort_unstable();
-                        acc.bookmarks.dedup();
-                        acc
-                    }))
-                    .and_then(|c| (!c.data.is_empty()).then_some(Self::Single(c)))
-                } else {
-                    // cut buffers are different, so store them separately
-                    Some(Self::Multiple(buffers))
-                }
-            }
-        }
-    }
 }
 
 #[derive(Default)]
@@ -5507,6 +5522,12 @@ impl<T> From<VecFiltered<T>> for std::collections::VecDeque<T> {
     fn from(v: VecFiltered<T>) -> Self {
         v.0.into()
     }
+}
+
+/// Indicates whether item is last in iterator
+fn last_iter<T>(iter: impl Iterator<Item = T>) -> impl Iterator<Item = (bool, T)> {
+    let mut iter = iter.peekable();
+    std::iter::from_fn(move || iter.next().map(|item| (iter.peek().is_none(), item)))
 }
 
 #[inline]
