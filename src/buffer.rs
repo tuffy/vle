@@ -2311,7 +2311,17 @@ impl BufferContext {
             .filter_map(|m| m.get_selection(&buffer.rope, &buffer.bookmarks))
             .collect::<Vec<_>>();
 
-        (!copies.is_empty()).then_some(EditorCutBuffer::Multiple(copies))
+        match copies.len() {
+            0 => None,
+            1 => {
+                self.message = Some(BufferMessage::Notice("Copied 1 Item".into()));
+                Some(EditorCutBuffer::Multiple(copies))
+            }
+            n => {
+                self.message = Some(BufferMessage::Notice(format!("Copied {n} Items").into()));
+                Some(EditorCutBuffer::Multiple(copies))
+            }
+        }
     }
 
     pub fn multi_cursor_cut(
@@ -2339,7 +2349,17 @@ impl BufferContext {
             },
         );
 
-        (!cut_buffers.is_empty()).then_some(EditorCutBuffer::Multiple(cut_buffers))
+        match cut_buffers.len() {
+            0 => None,
+            1 => {
+                self.message = Some(BufferMessage::Notice("Cut 1 Item".into()));
+                Some(EditorCutBuffer::Multiple(cut_buffers))
+            }
+            n => {
+                self.message = Some(BufferMessage::Notice(format!("Cut {n} Items").into()));
+                Some(EditorCutBuffer::Multiple(cut_buffers))
+            }
+        }
     }
 
     pub fn set_error<S: Into<Cow<'static, str>>>(&mut self, err: S) {
