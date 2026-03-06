@@ -325,19 +325,16 @@ Ctrl-F/F5 will locate all instances of that text
 and jump directly to browse/edit mode.
 This may be more convenient than typing it in by hand.
 
-Hitting Enter again allows us to finish the find,
-or Ctrl-R/F6 will remove the text of all candidates
-and allow us to replace them with something else.
+Found items are highlighted by default.
+Entering new text will zap the current selections
+and enter new text, just as in regular editing mode.
 
 Let's walk through this whole process.
 
 Start with Ctrl-F/F5 to find the first instance of the word to replace.
 This will highlight all three instances of that word, below.
 
-Next, type Ctrl-R/F6 to replace those three instances,
-which will remove them from the text.
-
-Finally, type "fixed" to replace all three instances
+Then type "fixed" to replace all three instances
 and hit Enter when finished.
 
 >>> toreplace
@@ -370,10 +367,8 @@ Then type
 followed by Enter to find our comma-separated numbers
 and capture them in two groups.
 
-Type Ctrl-R/F6 to replace our found text,
-which will erase everything while still capturing the found text.
-
-Ctrl-V followed by 2 followed by a , will place the second column first.
+Ctrl-V followed by 2 followed by a , will zap the current selections
+and place the second column first.
 
 Finally, Ctrl-V followed by 1 will place the first column last.
 

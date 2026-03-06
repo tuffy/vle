@@ -1564,8 +1564,8 @@ impl BufferContext {
             .find(|(_, (m, _))| m.start >= start)
             .or_else(|| matches.first().map(|m| (0, m)))
             .ok_or(term)?;
-        self.cursor = next_match.start;
-        self.selection = Some(next_match.end);
+        self.cursor = next_match.end;
+        self.selection = None;
         Ok((idx, matches))
     }
 
@@ -2243,22 +2243,6 @@ impl BufferContext {
         );
     }
 
-    pub fn multi_clear(&mut self, alt: Option<AltCursor<'_>>, matches: &mut [MultiCursor]) {
-        use std::convert::Infallible;
-
-        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
-        let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
-        let mut alt = Secondary::new(alt, bookmarks);
-
-        multicursor_update(
-            matches,
-            |m| Ok::<_, Infallible>(m.clear(&mut rope, &mut self.cursor, &mut alt)),
-            |r, removed| {
-                *r -= removed;
-            },
-        );
-    }
-
     pub fn multi_cursor_back(&mut self, matches: &mut [MultiCursor], selecting: bool) {
         matches.iter_mut().for_each(|m| {
             m.cursor_back(
@@ -2530,35 +2514,6 @@ impl MultiCursor {
         self.cursor
     }
 
-    /// Clears cursor's contents and returns characters removed
-    fn clear(
-        &mut self,
-        rope: &mut ropey::Rope,
-        cursor: &mut usize,
-        secondary: &mut Secondary,
-    ) -> usize {
-        self.selection = None;
-        let deleted = self.range.end.saturating_sub(self.range.start);
-        if deleted > 0 {
-            let _ = rope.try_remove(secondary.remove(self.range.start..self.range.end));
-            if self.range.end <= *cursor {
-                *cursor = cursor.saturating_sub(deleted);
-            } else if self.range.start <= *cursor {
-                *cursor = self.range.start;
-            }
-            secondary.update(|a| {
-                if self.range.end <= *a {
-                    *a = a.saturating_sub(deleted);
-                } else if self.range.start <= *a {
-                    *a = self.range.start;
-                }
-            });
-            self.range.end = self.range.start;
-            self.cursor = self.range.start;
-        }
-        deleted
-    }
-
     /// Widens select to whole multi-cursor area
     pub fn widen_selection(&mut self, cursor: &mut usize) {
         self.selection = Some(self.range.start);
@@ -2820,6 +2775,8 @@ impl MultiCursor {
             }
             update_selection(&mut self.selection, self.cursor, selecting);
             self.cursor -= 1;
+        } else if !selecting {
+            self.selection = None;
         }
     }
 
@@ -2837,6 +2794,8 @@ impl MultiCursor {
             }
             update_selection(&mut self.selection, self.cursor, selecting);
             self.cursor += 1;
+        } else if !selecting {
+            self.selection = None;
         }
     }
 
@@ -3015,9 +2974,9 @@ impl From<usize> for MultiCursor {
 impl From<Range<usize>> for MultiCursor {
     fn from(range: Range<usize>) -> Self {
         Self {
-            cursor: range.start,
+            cursor: range.end,
+            selection: Some(range.start),
             range,
-            selection: None,
         }
     }
 }

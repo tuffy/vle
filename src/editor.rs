@@ -551,7 +551,7 @@ impl Editor {
                     {
                         self.mode = match new_mode {
                             NextModeIncremental::Browse { match_idx, matches } => {
-                                buf.set_cursor(matches[match_idx].0.start);
+                                buf.set_cursor(matches[match_idx].0.end);
                                 buf.clear_selection();
 
                                 let (matches, groups): (_, Vec<Vec<_>>) =
@@ -884,7 +884,7 @@ impl Editor {
                 if let Some(Ok(find)) = self.on_buffer(|b| match b.selection_range() {
                     Some(SelectionType::Term(selection)) => {
                         b.all_matches(None, selection).map(|(match_idx, matches)| {
-                            b.set_cursor(matches[match_idx].0.start);
+                            b.set_cursor(matches[match_idx].0.end);
                             b.clear_selection();
 
                             let (matches, groups): (_, Vec<Vec<_>>) =
@@ -1528,7 +1528,7 @@ fn process_search(
             },
         },
         keybind!(GotoLine) => Some(NextModeIncremental::SelectLine),
-        key!(CONTROL, 'f') => {
+        keybind!(Find) => {
             if prompt.is_empty()
                 && let Some(last) = last_search
             {
@@ -1606,11 +1606,6 @@ fn process_replace_matches(
             type_: SearchType::default(),
             range: range.take(),
         }),
-        keybind!(Replace) => {
-            *highlight = false;
-            buffer.multi_clear(alt, matches);
-            None
-        }
         key!(Enter) => Some(EditorMode::default()),
         Event::Key(KeyEvent {
             code: KeyCode::Left,

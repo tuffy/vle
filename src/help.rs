@@ -273,7 +273,6 @@ pub static REPLACE_MATCHES: &[Keybinding] = &[
     none(&[UP, DOWN], "Select Match"),
     ctrl(&["Del"], "Remove Match"),
     keybind::<key::Find>("New Search"),
-    keybind::<key::Replace>("Replace Matches"),
     keybind::<key::WidenSelection>("Widen Selections"),
     keybind::<key::Bookmark>("Bookmark Positions"),
     none(&[LEFT, RIGHT], "Move Cursors"),
