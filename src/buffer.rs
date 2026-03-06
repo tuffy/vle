@@ -2379,7 +2379,7 @@ impl BufferContext {
         }
     }
 
-    pub fn find_mode(&self, multiple_buffers: bool) -> Help {
+    pub fn help_options(&self, multiple_buffers: bool) -> Help {
         let buffer = &self.buffer.borrow();
         let has_bookmarks = buffer.has_bookmarks();
         let rope = &buffer.rope;
@@ -3842,8 +3842,8 @@ impl BufferList {
         self.buffers.len() > 1
     }
 
-    pub fn find_mode(&self, multiple_buffers: bool) -> Option<Help> {
-        self.current().map(|b| b.find_mode(multiple_buffers))
+    pub fn help_options(&self, multiple_buffers: bool) -> Option<Help> {
+        self.current().map(|b| b.help_options(multiple_buffers))
     }
 }
 
@@ -3852,6 +3852,7 @@ pub struct BufferWidget<'e> {
     pub mode: Option<&'e mut EditorMode>,
     pub layout: crate::editor::EditorLayout,
     pub show_help: Option<Help>,
+    pub show_sub_help: bool,
 }
 
 impl BufferWidget<'_> {
@@ -4507,6 +4508,25 @@ impl StatefulWidget for BufferWidget<'_> {
         let rope = &buffer.rope;
         let syntax = &buffer.syntax;
         let focused = self.focused && self.mode.is_some();
+        let show_sub_help: fn(
+            ratatui::layout::Rect,
+            &mut ratatui::buffer::Buffer,
+            &[crate::help::Keybinding],
+        ) = if self.show_sub_help {
+            |text_area, buf, keybindings| {
+                render_help(text_area, buf, keybindings, |b| {
+                    b.title_bottom(
+                        Line::from(vec![
+                            Span::styled("F1", Style::default().add_modifier(Modifier::REVERSED)),
+                            Span::raw(" to toggle"),
+                        ])
+                        .centered(),
+                    )
+                })
+            }
+        } else {
+            |_, _, _| { /* do nothing */ }
+        };
 
         let block = Block::bordered()
             .border_type(if focused {
@@ -5113,7 +5133,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
             Some(EditorMode::ConfirmClose { .. }) => {
-                render_help(text_area, buf, CONFIRM_CLOSE, |b| b);
+                show_sub_help(text_area, buf, CONFIRM_CLOSE);
                 render_message(
                     text_area,
                     buf,
@@ -5121,7 +5141,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(EditorMode::VerifySave) => {
-                render_help(text_area, buf, VERIFY_SAVE, |b| b);
+                show_sub_help(text_area, buf, VERIFY_SAVE);
                 render_message(
                     text_area,
                     buf,
@@ -5129,10 +5149,10 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(EditorMode::SplitPane) => {
-                render_help(text_area, buf, SPLIT_PANE, |b| b);
+                show_sub_help(text_area, buf, SPLIT_PANE);
             }
             Some(EditorMode::VerifyReload) => {
-                render_help(text_area, buf, VERIFY_RELOAD, |b| b);
+                show_sub_help(text_area, buf, VERIFY_RELOAD);
                 render_message(
                     text_area,
                     buf,
@@ -5140,10 +5160,10 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(EditorMode::SelectInside) => {
-                render_help(text_area, buf, SELECT_INSIDE, |b| b);
+                show_sub_help(text_area, buf, SELECT_INSIDE);
             }
             Some(EditorMode::SelectLine { .. }) => {
-                render_help(
+                show_sub_help(
                     text_area,
                     buf,
                     if buffer.has_bookmarks() {
@@ -5151,11 +5171,10 @@ impl StatefulWidget for BufferWidget<'_> {
                     } else {
                         SELECT_LINE
                     },
-                    |b| b,
                 );
             }
             Some(EditorMode::Search { prompt, type_, .. }) => {
-                render_help(text_area, buf, &find_mode_help(prompt, *type_), |b| b);
+                show_sub_help(text_area, buf, &find_mode_help(prompt, *type_));
                 render_find_prompt(
                     match type_ {
                         SearchType::Plain => FindSyntax::Plain(syntax),
@@ -5185,7 +5204,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 index,
                 ..
             }) => {
-                render_help(text_area, buf, &find_mode_help(prompt, *type_), |b| b);
+                show_sub_help(text_area, buf, &find_mode_help(prompt, *type_));
                 render_find_prompt(
                     match type_ {
                         SearchType::Plain => FindSyntax::Plain(syntax),
@@ -5231,10 +5250,10 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(EditorMode::ReplaceMatches { .. } | EditorMode::AutocompleteReplace { .. }) => {
-                render_help(text_area, buf, REPLACE_MATCHES, |block| block);
+                show_sub_help(text_area, buf, REPLACE_MATCHES);
             }
             Some(EditorMode::PasteGroup { total, .. }) => {
-                render_help(
+                show_sub_help(
                     text_area,
                     buf,
                     PASTE_GROUP
@@ -5243,7 +5262,6 @@ impl StatefulWidget for BufferWidget<'_> {
                         .take(*total + 1)
                         .collect::<Vec<_>>()
                         .as_slice(),
-                    |b| b,
                 );
             }
             Some(EditorMode::Open { .. }) => { /* already handled, above */ }

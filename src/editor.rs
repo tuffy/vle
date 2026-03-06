@@ -221,6 +221,7 @@ pub struct Editor {
     last_plain_search: Option<TextField>, // previous plaintext search
     last_regex_search: Option<TextField>, // previous regex search
     show_help: bool,                      // whether to show keybindinings
+    show_sub_help: bool,                  // whether to show sub-mode help
     #[cfg(feature = "ssh")]
     remote: Option<ssh2::Session>, // remote SSH session
 }
@@ -235,6 +236,7 @@ impl Editor {
             last_plain_search: None,
             last_regex_search: None,
             show_help: false,
+            show_sub_help: true,
             #[cfg(feature = "ssh")]
             remote: None,
         })
@@ -281,6 +283,7 @@ impl Editor {
                 LayoutWidget {
                     focused: self.focused,
                     show_help: self.show_help && matches!(&self.mode, EditorMode::Editing),
+                    show_sub_help: self.show_sub_help,
                     mode: &mut self.mode,
                 },
                 area,
@@ -368,9 +371,14 @@ impl Editor {
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 ..
-            }) => {
-                self.show_help = !self.show_help;
-            }
+            }) => match self.mode {
+                EditorMode::Editing => {
+                    self.show_help = !self.show_help;
+                }
+                _ => {
+                    self.show_sub_help = !self.show_sub_help;
+                }
+            },
             Event::FocusGained => {
                 self.focused = true;
             }
@@ -2182,6 +2190,7 @@ struct LayoutWidget<'e> {
     focused: bool,
     mode: &'e mut EditorMode,
     show_help: bool,
+    show_sub_help: bool,
 }
 
 impl StatefulWidget for LayoutWidget<'_> {
@@ -2198,6 +2207,7 @@ impl StatefulWidget for LayoutWidget<'_> {
         let Self {
             mode,
             show_help,
+            show_sub_help,
             focused,
         } = self;
 
@@ -2237,7 +2247,8 @@ impl StatefulWidget for LayoutWidget<'_> {
                         focused,
                         mode: Some(mode),
                         layout: EditorLayout::Single,
-                        show_help: show_help.then(|| buffer.find_mode(multiple_buffers)),
+                        show_help: show_help.then(|| buffer.help_options(multiple_buffers)),
+                        show_sub_help,
                     }
                     .render(area, buf, buffer);
                 }
@@ -2259,8 +2270,9 @@ impl StatefulWidget for LayoutWidget<'_> {
                         },
                         layout: EditorLayout::Horizontal,
                         show_help: (show_help && !matches!(which, HorizontalPos::Top))
-                            .then(|| bottom.find_mode(multiple_buffers))
+                            .then(|| bottom.help_options(multiple_buffers))
                             .flatten(),
+                        show_sub_help,
                     }
                     .render(top_area, buf, buffer);
                 }
@@ -2273,8 +2285,9 @@ impl StatefulWidget for LayoutWidget<'_> {
                         },
                         layout: EditorLayout::Horizontal,
                         show_help: (show_help && !matches!(which, HorizontalPos::Bottom))
-                            .then(|| top.find_mode(multiple_buffers))
+                            .then(|| top.help_options(multiple_buffers))
                             .flatten(),
+                        show_sub_help,
                     }
                     .render(bottom_area, buf, buffer);
                 }
@@ -2296,8 +2309,9 @@ impl StatefulWidget for LayoutWidget<'_> {
                         },
                         layout: EditorLayout::Vertical,
                         show_help: (show_help && !matches!(which, VerticalPos::Left))
-                            .then(|| right.find_mode(multiple_buffers))
+                            .then(|| right.help_options(multiple_buffers))
                             .flatten(),
+                        show_sub_help,
                     }
                     .render(left_area, buf, buffer);
                 }
@@ -2310,8 +2324,9 @@ impl StatefulWidget for LayoutWidget<'_> {
                         },
                         layout: EditorLayout::Vertical,
                         show_help: (show_help && !matches!(which, VerticalPos::Right))
-                            .then(|| left.find_mode(multiple_buffers))
+                            .then(|| left.help_options(multiple_buffers))
                             .flatten(),
+                        show_sub_help,
                     }
                     .render(right_area, buf, buffer);
                 }
