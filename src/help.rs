@@ -10,21 +10,24 @@ use crate::key;
 use ratatui::widgets::Block;
 
 #[derive(Copy, Clone)]
-pub enum Keybinding {
-    Standard {
-        action: &'static str,
-        modifier: Option<&'static str>,
-        keys: &'static [&'static str],
-        f: &'static str,
-    },
-    Group {
-        action: &'static str,
-        keys: &'static [&'static str],
-    },
+pub struct Keybinding {
+    action: &'static str,
+    modifier: Option<&'static str>,
+    keys: &'static [&'static str],
+    f: &'static str,
+}
+
+pub const fn shift(keys: &'static [&'static str], action: &'static str) -> Keybinding {
+    Keybinding {
+        modifier: Some("Shift"),
+        keys,
+        action,
+        f: "",
+    }
 }
 
 pub const fn ctrl(keys: &'static [&'static str], action: &'static str) -> Keybinding {
-    Keybinding::Standard {
+    Keybinding {
         modifier: Some("Ctrl"),
         keys,
         action,
@@ -33,7 +36,7 @@ pub const fn ctrl(keys: &'static [&'static str], action: &'static str) -> Keybin
 }
 
 pub const fn keybind<B: key::Binding>(action: &'static str) -> Keybinding {
-    Keybinding::Standard {
+    Keybinding {
         modifier: Some("Ctrl"),
         keys: &[B::PRIMARY_LABEL],
         action,
@@ -42,16 +45,12 @@ pub const fn keybind<B: key::Binding>(action: &'static str) -> Keybinding {
 }
 
 pub const fn none(keys: &'static [&'static str], action: &'static str) -> Keybinding {
-    Keybinding::Standard {
+    Keybinding {
         modifier: None,
         keys,
         action,
         f: "",
     }
-}
-
-pub const fn group(keys: &'static [&'static str], action: &'static str) -> Keybinding {
-    Keybinding::Group { action, keys }
 }
 
 pub fn help_message(keybindings: &[Keybinding]) -> ratatui::widgets::Paragraph<'_> {
@@ -78,7 +77,7 @@ pub fn help_message(keybindings: &[Keybinding]) -> ratatui::widgets::Paragraph<'
             .map(|k| {
                 let mut line = vec![];
                 match k {
-                    Keybinding::Standard {
+                    Keybinding {
                         modifier,
                         keys,
                         action,
@@ -110,16 +109,6 @@ pub fn help_message(keybindings: &[Keybinding]) -> ratatui::widgets::Paragraph<'
                             line.push(Span::from(" "));
                         }
                     }
-                    Keybinding::Group { action, keys } => {
-                        line.extend(spaces(action_width - action.width()));
-                        line.push(Span::from(*action));
-                        line.push(Span::from(" : "));
-
-                        for k in keys.iter() {
-                            line.push(key(k));
-                            line.push(Span::from(" "));
-                        }
-                    }
                 }
 
                 Line::from(line)
@@ -134,7 +123,7 @@ pub fn field_widths(keybindings: &[Keybinding]) -> [usize; 5] {
     keybindings.iter().fold(
         [0, 2, 0, 0, 0],
         |[action_len, _, f_len, mod_len, keys_len]: [usize; 5], key| match key {
-            Keybinding::Standard {
+            Keybinding {
                 modifier,
                 keys,
                 action,
@@ -149,9 +138,6 @@ pub fn field_widths(keybindings: &[Keybinding]) -> [usize; 5] {
                 }),
                 keys_len.max(keys.iter().map(|k| k.width() + 1).sum()),
             ],
-            Keybinding::Group { action, .. } => {
-                [action_len.max(action.width()), 2, f_len, mod_len, keys_len]
-            }
         },
     )
 }
@@ -209,12 +195,7 @@ pub static EDITING_2: &[Keybinding] = &[
     keybind::<key::Reload>("Reload File"),
     keybind::<key::Quit>("Quit File"),
     keybind::<key::Bookmark>("Toggle Bookmark"),
-    Keybinding::Standard {
-        modifier: Some("Shift"),
-        keys: &[LEFT, DOWN, UP, RIGHT],
-        action: "Highlight Text",
-        f: "",
-    },
+    shift(&[LEFT, DOWN, UP, RIGHT], "Highlight Text"),
 ];
 
 pub static EDITING_3: &[Keybinding] = &[
@@ -290,12 +271,15 @@ pub static CREATE_FILE: &[Keybinding] = &[
 ];
 
 pub static REPLACE_MATCHES: &[Keybinding] = &[
-    group(&["Home", LEFT, RIGHT, "End"], "Move Cursors"),
     none(&[UP, DOWN], "Select Match"),
     ctrl(&["Del"], "Remove Match"),
     keybind::<key::Find>("New Search"),
     keybind::<key::Replace>("Replace Matches"),
     keybind::<key::Bookmark>("Bookmark Positions"),
+    none(&[LEFT, RIGHT], "Move Cursors"),
+    shift(&[LEFT, RIGHT], "Highlight Text"),
+    ctrl(&["X", "C", "V"], "Cut / Copy / Paste"),
+    none(&["Enter"], "Finish"),
 ];
 
 pub static PASTE_GROUP: &[Keybinding] = &[

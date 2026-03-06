@@ -5152,24 +5152,8 @@ impl StatefulWidget for BufferWidget<'_> {
                     },
                 );
             }
-            Some(
-                EditorMode::ReplaceMatches { groups, .. }
-                | EditorMode::AutocompleteReplace { groups, .. },
-            ) => {
-                use crate::help::{ctrl, none};
-
-                let mut help = REPLACE_MATCHES.to_vec();
-                help.push(ctrl(
-                    &["V"],
-                    if matches!(groups, crate::editor::CaptureGroups::None) {
-                        "Paste From Cut Buffer"
-                    } else {
-                        "Paste From Group or Cut Buffer"
-                    },
-                ));
-                help.push(none(&["Enter"], "Finish"));
-
-                render_help(text_area, buf, &help, |block| block);
+            Some(EditorMode::ReplaceMatches { .. } | EditorMode::AutocompleteReplace { .. }) => {
+                render_help(text_area, buf, &REPLACE_MATCHES, |block| block);
             }
             Some(EditorMode::PasteGroup { total, .. }) => {
                 render_help(
