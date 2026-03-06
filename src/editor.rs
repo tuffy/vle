@@ -616,7 +616,7 @@ impl Editor {
                         process_paste_group(
                             buf,
                             matches,
-                            self.cut_buffer.as_ref(),
+                            self.cut_buffer.as_mut(),
                             groups,
                             event,
                             alt_buf_list
@@ -1733,7 +1733,7 @@ fn process_replace_matches(
 fn process_paste_group(
     buf: &mut BufferContext,
     matches: &mut [MultiCursor],
-    cut_buffer: Option<&EditorCutBuffer>,
+    cut_buffer: Option<&mut EditorCutBuffer>,
     groups: &mut [Vec<Option<MatchCapture>>],
     event: Event,
     alt: Option<AltCursor<'_>>,

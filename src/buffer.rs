@@ -2107,7 +2107,7 @@ impl BufferContext {
         &mut self,
         alt: Option<AltCursor<'_>>,
         matches: &mut [MultiCursor],
-        cut: &EditorCutBuffer,
+        cut: &mut EditorCutBuffer,
     ) {
         let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
@@ -2118,7 +2118,7 @@ impl BufferContext {
                 multicursor_update(
                     matches,
                     |m| {
-                        let zapped = m.paste(&mut rope, &mut self.cursor, &mut alt, cut);
+                        let zapped = m.paste_single(&mut rope, &mut self.cursor, &mut alt, cut);
                         Ok::<_, std::convert::Infallible>(zapped)
                     },
                     |r, zapped| {
@@ -2128,13 +2128,12 @@ impl BufferContext {
                 );
             }
             EditorCutBuffer::Multiple(cuts) => {
-                let mut cuts = cuts.iter();
+                let mut cuts = cuts.iter_mut();
                 multicursor_update(
                     matches,
                     |m| match cuts.next() {
                         Some(cut) => {
-                            let zapped = m.paste(&mut rope, &mut self.cursor, &mut alt, cut);
-                            Ok((zapped, cut.chars_len))
+                            Ok(m.paste_multiple(&mut rope, &mut self.cursor, &mut alt, cut))
                         }
                         None => {
                             m.selection = None;
@@ -2574,18 +2573,17 @@ impl MultiCursor {
 
     /// Returns number of zapped characters, if any
     #[must_use]
-    fn paste(
+    fn paste_single(
         &mut self,
         rope: &mut ropey::Rope,
         cursor: &mut usize,
         secondary: &mut Secondary,
         cut: &CutBuffer,
     ) -> usize {
-        // TODO - swap cut buffer and zapped selection, later
-
         let zapped = self
             .zap_selection(rope, cursor, secondary)
             .unwrap_or_default();
+
         if self.cursor <= *cursor {
             *cursor += cut.chars_len;
         }
@@ -2599,6 +2597,32 @@ impl MultiCursor {
         self.cursor += cut.chars_len;
         self.range.end += cut.chars_len;
         zapped
+    }
+
+    /// Returns number of zapped characters and added characters
+    #[must_use]
+    fn paste_multiple(
+        &mut self,
+        rope: &mut ropey::Rope,
+        cursor: &mut usize,
+        secondary: &mut Secondary,
+        cut: &mut CutBuffer,
+    ) -> (usize, usize) {
+        match self.take_selection(rope, cursor, secondary) {
+            None => (
+                self.paste_single(rope, cursor, secondary, cut),
+                cut.chars_len,
+            ),
+            Some(mut old_selection) => {
+                let zapped = old_selection.chars_len;
+                let added = cut.chars_len;
+                // taking the selection clears the selection
+                // so there's nothing left for paste_single to zap
+                assert_eq!(self.paste_single(rope, cursor, secondary, cut), 0);
+                std::mem::swap(&mut old_selection, cut);
+                (zapped, added)
+            }
+        }
     }
 
     fn indent(
