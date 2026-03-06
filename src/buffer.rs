@@ -2362,6 +2362,12 @@ impl BufferContext {
         }
     }
 
+    pub fn multi_cursor_widen(&mut self, matches: &mut [MultiCursor]) {
+        matches
+            .iter_mut()
+            .for_each(|m| m.widen_selection(&mut self.cursor));
+    }
+
     pub fn set_error<S: Into<Cow<'static, str>>>(&mut self, err: S) {
         self.message = Some(BufferMessage::Error(err.into()))
     }
@@ -2554,8 +2560,11 @@ impl MultiCursor {
     }
 
     /// Widens select to whole multi-cursor area
-    pub fn widen_selection(&mut self) {
+    pub fn widen_selection(&mut self, cursor: &mut usize) {
         self.selection = Some(self.range.start);
+        if *cursor == self.cursor {
+            *cursor = self.range.end;
+        }
         self.cursor = self.range.end;
     }
 

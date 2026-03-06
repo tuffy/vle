@@ -1673,7 +1673,7 @@ fn process_replace_matches(
             None
         }
         keybind!(WidenSelection) => {
-            matches.iter_mut().for_each(|m| m.widen_selection());
+            buffer.multi_cursor_widen(matches);
             None
         }
         keybind!(Bookmark) => {
