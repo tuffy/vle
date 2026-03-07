@@ -282,7 +282,11 @@ impl Editor {
             frame.render_stateful_widget(
                 LayoutWidget {
                     focused: self.focused,
-                    show_help: self.show_help && matches!(&self.mode, EditorMode::Editing),
+                    show_help: self.show_help
+                        && matches!(
+                            &self.mode,
+                            EditorMode::Editing | EditorMode::Autocomplete { .. }
+                        ),
                     show_sub_help: self.show_sub_help,
                     mode: &mut self.mode,
                 },
