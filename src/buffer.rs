@@ -4554,7 +4554,25 @@ impl StatefulWidget for BufferWidget<'_> {
                 )
                 .centered(),
             ),
-            _ => block,
+            Some(EditorMode::Open { .. }) => block,
+            _ => match state.selection {
+                Some(selection) => {
+                    let (start, end) = reorder(state.cursor, selection);
+                    let lines = rope.char_to_line(end) - rope.char_to_line(start);
+                    block.title_bottom(
+                        // TODO - use different title style
+                        border_title(
+                            match lines {
+                                0 => "1 Line".to_string(),
+                                n => format!("{} Lines", n + 1),
+                            },
+                            focused,
+                        )
+                        .centered(),
+                    )
+                }
+                None => block,
+            },
         };
 
         let [text_area, scrollbar_area] =
