@@ -789,34 +789,16 @@ impl Editor {
             key!(CONTROL, 'v') => {
                 let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
                 let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
-                if let Some(primary) = primary.current_mut()
-                    && let Some(matches) =
-                        primary.paste(secondary.map(|s| s.alt_cursor()), &mut self.cut_buffer)
-                {
-                    self.mode = EditorMode::MultiCursor {
-                        matches,
-                        match_idx: 0,
-                        groups: CaptureGroups::default(),
-                        range: None,
-                        highlight: false,
-                    };
+                if let Some(primary) = primary.current_mut() {
+                    primary.paste(secondary.map(|s| s.alt_cursor()), &mut self.cut_buffer)
                 }
             }
             Event::Paste(pasted) => {
                 self.cut_buffer = Some(EditorCutBuffer::Single(pasted.into()));
                 let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
                 let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
-                if let Some(primary) = primary.current_mut()
-                    && let Some(matches) =
-                        primary.paste(secondary.map(|s| s.alt_cursor()), &mut self.cut_buffer)
-                {
-                    self.mode = EditorMode::MultiCursor {
-                        matches,
-                        match_idx: 0,
-                        groups: CaptureGroups::default(),
-                        range: None,
-                        highlight: false,
-                    };
+                if let Some(primary) = primary.current_mut() {
+                    primary.paste(secondary.map(|s| s.alt_cursor()), &mut self.cut_buffer)
                 }
             }
             key!(CONTROL, 'z') => self.update_buffer(|b| b.perform_undo()),
@@ -1034,17 +1016,8 @@ impl Editor {
                     .set_cursor_focus(area, Position { y: row, x: column });
                 let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
                 let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
-                if let Some(primary) = primary.current_mut()
-                    && let Some(matches) =
-                        primary.paste(secondary.map(|s| s.alt_cursor()), &mut self.cut_buffer)
-                {
-                    self.mode = EditorMode::MultiCursor {
-                        matches,
-                        match_idx: 0,
-                        groups: CaptureGroups::default(),
-                        range: None,
-                        highlight: false,
-                    };
+                if let Some(primary) = primary.current_mut() {
+                    primary.paste(secondary.map(|s| s.alt_cursor()), &mut self.cut_buffer)
                 }
             }
             _ => { /* ignore other events */ }

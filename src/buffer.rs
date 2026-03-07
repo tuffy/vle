@@ -1218,12 +1218,7 @@ impl BufferContext {
         }
     }
 
-    #[must_use]
-    pub fn paste(
-        &mut self,
-        alt: Option<AltCursor<'_>>,
-        cut_buffer: &mut Option<EditorCutBuffer>,
-    ) -> Option<Vec<MultiCursor>> {
+    pub fn paste(&mut self, alt: Option<AltCursor<'_>>, cut_buffer: &mut Option<EditorCutBuffer>) {
         match self.selection.as_mut() {
             None => {
                 // No active selection, so paste as-is
@@ -1232,47 +1227,28 @@ impl BufferContext {
                 let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
                 let mut alt = Secondary::ge(alt, bookmarks, self.cursor);
 
-                match cut_buffer.as_ref()? {
-                    EditorCutBuffer::Single(pasted) => {
+                match cut_buffer {
+                    Some(EditorCutBuffer::Single(pasted)) => {
                         if rope.try_insert(self.cursor, &pasted.data).is_ok() {
                             let old_cursor = self.cursor;
                             self.cursor += alt.inc(pasted.chars_len);
                             alt.add_bookmarks(pasted.bookmarks.iter().map(|b| old_cursor + b));
                             self.cursor_column = cursor_column(&rope, self.cursor);
                         }
-                        None
                     }
-                    EditorCutBuffer::Multiple(pasted_items) => {
-                        // insert each cut item in its own line
-                        // and return multi-cursors of pasted items
-                        Some(
-                            last_iter(pasted_items.iter())
-                                .map(|(is_last, pasted_item)| {
-                                    let mut cursor = MultiCursor::from(self.cursor);
-                                    // new cursors shouldn't have zapped characters
-                                    assert_eq!(
-                                        cursor.paste_single(
-                                            &mut rope,
-                                            &mut self.cursor,
-                                            &mut alt,
-                                            pasted_item
-                                        ),
-                                        0
-                                    );
-                                    if !is_last {
-                                        rope.insert_char(self.cursor, '\n');
-                                        alt.update(|a| {
-                                            if *a >= self.cursor {
-                                                *a += 1;
-                                            }
-                                        });
-                                        self.cursor += 1;
-                                    }
-                                    cursor
-                                })
-                                .collect(),
-                        )
+                    Some(EditorCutBuffer::Multiple(pasted_items)) => {
+                        // insert first pasted item and rotate
+                        if let Some(pasted) = pasted_items.first() {
+                            if rope.try_insert(self.cursor, &pasted.data).is_ok() {
+                                let old_cursor = self.cursor;
+                                self.cursor += alt.inc(pasted.chars_len);
+                                alt.add_bookmarks(pasted.bookmarks.iter().map(|b| old_cursor + b));
+                                self.cursor_column = cursor_column(&rope, self.cursor);
+                            }
+                            pasted_items.rotate_left(1);
+                        }
                     }
+                    None => { /* nothing in cut buffer, so nothing to do */ }
                 }
             }
             Some(selection) => {
@@ -1320,7 +1296,6 @@ impl BufferContext {
                         ));
                     }
                 }
-                None
             }
         }
     }
@@ -2170,11 +2145,13 @@ impl BufferContext {
                 );
             }
             EditorCutBuffer::Multiple(cuts) => {
-                let mut cuts = cuts.iter_mut();
+                let mut cuts_iter = cuts.iter_mut();
+                let mut pasted = 0;
                 multicursor_update(
                     matches,
-                    |m| match cuts.next() {
+                    |m| match cuts_iter.next() {
                         Some(cut) => {
+                            pasted += 1;
                             Ok(m.paste_multiple(&mut rope, &mut self.cursor, &mut alt, cut))
                         }
                         None => {
@@ -2186,7 +2163,9 @@ impl BufferContext {
                         *r -= zapped;
                         *r += s_len;
                     },
-                )
+                );
+                let cuts_len = cuts.len();
+                cuts.rotate_left(pasted % cuts_len);
             }
         }
     }
@@ -5534,12 +5513,6 @@ impl<T> From<VecFiltered<T>> for std::collections::VecDeque<T> {
     fn from(v: VecFiltered<T>) -> Self {
         v.0.into()
     }
-}
-
-/// Indicates whether item is last in iterator
-fn last_iter<T>(iter: impl Iterator<Item = T>) -> impl Iterator<Item = (bool, T)> {
-    let mut iter = iter.peekable();
-    std::iter::from_fn(move || iter.next().map(|item| (iter.peek().is_none(), item)))
 }
 
 #[inline]
