@@ -4562,10 +4562,10 @@ impl StatefulWidget for BufferWidget<'_> {
 
         let block = match self.mode {
             Some(
-                EditorMode::ReplaceMatches {
+                EditorMode::MultiCursor {
                     match_idx, matches, ..
                 }
-                | EditorMode::AutocompleteReplace {
+                | EditorMode::AutocompleteMulti {
                     match_idx, matches, ..
                 },
             ) => block.title_bottom(
@@ -4672,7 +4672,7 @@ impl StatefulWidget for BufferWidget<'_> {
         Clear.render(text_area, buf);
         Paragraph::new(match self.mode {
             Some(
-                EditorMode::ReplaceMatches {
+                EditorMode::MultiCursor {
                     matches,
                     match_idx,
                     highlight: true,
@@ -4737,7 +4737,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     .collect::<Vec<_>>()
             }
             Some(
-                EditorMode::ReplaceMatches {
+                EditorMode::MultiCursor {
                     matches,
                     highlight: false,
                     ..
@@ -4815,7 +4815,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     .take(area.height.into())
                     .collect::<Vec<_>>()
             }
-            Some(EditorMode::AutocompleteReplace {
+            Some(EditorMode::AutocompleteMulti {
                 matches,
                 offsets,
                 completions,
@@ -5038,7 +5038,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         EDITING_0, EDITING_1, EDITING_2, EDITING_3, F10_SPLIT, F10_UNSPLIT,
                         SWITCH_PANE_HORIZONTAL, SWITCH_PANE_VERTICAL, ctrl, keybind, none,
                     };
-                    use crate::key::{GotoLine, Replace};
+                    use crate::key::{GotoLine, SelectLines};
 
                     let mut help = Vec::with_capacity(16);
                     help.extend(EDITING_0);
@@ -5049,7 +5049,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     }));
                     help.push(find.into());
                     help.extend(
-                        has_selection.then_some(keybind::<Replace>("Update Selected Lines")),
+                        has_selection.then_some(keybind::<SelectLines>("Update Selected Lines")),
                     );
                     help.extend(EDITING_1);
                     help.push(select.into());
@@ -5208,7 +5208,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     },
                 );
             }
-            Some(EditorMode::ReplaceMatches { .. } | EditorMode::AutocompleteReplace { .. }) => {
+            Some(EditorMode::MultiCursor { .. } | EditorMode::AutocompleteMulti { .. }) => {
                 show_sub_help(text_area, buf, REPLACE_MATCHES);
             }
             Some(EditorMode::PasteGroup { total, .. }) => {

@@ -57,8 +57,8 @@ pub enum EditorMode {
         type_: SearchType,
         range: Option<SelectionRange>,
     },
-    /// Replacing search results
-    ReplaceMatches {
+    /// Multi-cursor operation
+    MultiCursor {
         matches: Vec<MultiCursor>,
         match_idx: usize,
         groups: CaptureGroups,
@@ -95,7 +95,7 @@ pub enum EditorMode {
         completions: Vec<String>, // autocompletion candidates
         index: usize,             // the current candidate
     },
-    AutocompleteReplace {
+    AutocompleteMulti {
         matches: Vec<MultiCursor>,
         match_idx: usize,
         groups: CaptureGroups,
@@ -454,7 +454,7 @@ impl Editor {
                         self.process_event(area, event);
                     }
                 },
-                EditorMode::AutocompleteReplace {
+                EditorMode::AutocompleteMulti {
                     matches,
                     match_idx,
                     groups,
@@ -501,7 +501,7 @@ impl Editor {
                     }
                     event => {
                         // end autocomplete
-                        self.mode = EditorMode::ReplaceMatches {
+                        self.mode = EditorMode::MultiCursor {
                             matches: std::mem::take(matches),
                             match_idx: std::mem::take(match_idx),
                             groups: std::mem::take(groups),
@@ -557,7 +557,7 @@ impl Editor {
                                 let (matches, groups): (_, Vec<Vec<_>>) =
                                     matches.into_iter().map(|(r, c)| (r.into(), c)).unzip();
 
-                                EditorMode::ReplaceMatches {
+                                EditorMode::MultiCursor {
                                     matches,
                                     match_idx,
                                     groups: groups.into(),
@@ -583,7 +583,7 @@ impl Editor {
                         };
                     }
                 }
-                EditorMode::ReplaceMatches {
+                EditorMode::MultiCursor {
                     matches,
                     match_idx,
                     groups,
@@ -633,7 +633,7 @@ impl Editor {
                         );
                     }
 
-                    self.mode = EditorMode::ReplaceMatches {
+                    self.mode = EditorMode::MultiCursor {
                         matches: std::mem::take(matches),
                         match_idx: std::mem::take(match_idx),
                         groups: CaptureGroups::Some {
@@ -793,7 +793,7 @@ impl Editor {
                     && let Some(matches) =
                         primary.paste(secondary.map(|s| s.alt_cursor()), &mut self.cut_buffer)
                 {
-                    self.mode = EditorMode::ReplaceMatches {
+                    self.mode = EditorMode::MultiCursor {
                         matches,
                         match_idx: 0,
                         groups: CaptureGroups::default(),
@@ -810,7 +810,7 @@ impl Editor {
                     && let Some(matches) =
                         primary.paste(secondary.map(|s| s.alt_cursor()), &mut self.cut_buffer)
                 {
-                    self.mode = EditorMode::ReplaceMatches {
+                    self.mode = EditorMode::MultiCursor {
                         matches,
                         match_idx: 0,
                         groups: CaptureGroups::default(),
@@ -890,7 +890,7 @@ impl Editor {
                             let (matches, groups): (_, Vec<Vec<_>>) =
                                 matches.into_iter().map(|(r, c)| (r.into(), c)).unzip();
 
-                            EditorMode::ReplaceMatches {
+                            EditorMode::MultiCursor {
                                 matches,
                                 match_idx,
                                 groups: groups.into(),
@@ -964,11 +964,11 @@ impl Editor {
                     self.mode = new_mode;
                 }
             }
-            keybind!(Replace) => {
+            keybind!(SelectLines) => {
                 if let Some(matches) = self.on_buffer(|b| b.selection_cursors())
                     && let Some(match_idx) = matches.len().checked_sub(1)
                 {
-                    self.mode = EditorMode::ReplaceMatches {
+                    self.mode = EditorMode::MultiCursor {
                         matches,
                         match_idx,
                         groups: CaptureGroups::default(),
@@ -1038,7 +1038,7 @@ impl Editor {
                     && let Some(matches) =
                         primary.paste(secondary.map(|s| s.alt_cursor()), &mut self.cut_buffer)
                 {
-                    self.mode = EditorMode::ReplaceMatches {
+                    self.mode = EditorMode::MultiCursor {
                         matches,
                         match_idx: 0,
                         groups: CaptureGroups::default(),
@@ -1689,7 +1689,7 @@ fn process_replace_matches(
             match init_complete_forward(&completions) {
                 Some((index, original, replacement)) => {
                     buffer.multi_autocomplete(alt, matches, &offsets, original, replacement);
-                    Some(EditorMode::AutocompleteReplace {
+                    Some(EditorMode::AutocompleteMulti {
                         matches: std::mem::take(matches),
                         match_idx: std::mem::take(match_idx),
                         groups: std::mem::take(groups),
@@ -1710,7 +1710,7 @@ fn process_replace_matches(
             match init_complete_backward(&completions) {
                 Some((index, original, replacement)) => {
                     buffer.multi_autocomplete(alt, matches, &offsets, original, replacement);
-                    Some(EditorMode::AutocompleteReplace {
+                    Some(EditorMode::AutocompleteMulti {
                         matches: std::mem::take(matches),
                         match_idx: std::mem::take(match_idx),
                         groups: std::mem::take(groups),
