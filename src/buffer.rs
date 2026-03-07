@@ -1596,11 +1596,11 @@ impl BufferContext {
                     true => "\t".to_string(),
                 };
                 let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
-                let mut alt = Secondary::ge(alt, bookmarks, self.cursor);
                 if let Ok(line_start) = rope
                     .try_char_to_line(self.cursor)
                     .and_then(|line| rope.try_line_to_char(line))
                 {
+                    let mut alt = Secondary::ge(alt, bookmarks, line_start);
                     rope.insert(line_start, &indent);
                     self.cursor += indent.len();
                     alt += indent.len();
@@ -1657,7 +1657,6 @@ impl BufferContext {
                     true => "\t".to_string(),
                 };
                 let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
-                let mut alt = Secondary::ge(alt, bookmarks, self.cursor);
 
                 if let Some(line_start) = rope
                     .try_char_to_line(self.cursor)
@@ -1668,6 +1667,7 @@ impl BufferContext {
                         .take(indent.len())
                         .eq(indent.chars())
                 {
+                    let mut alt = Secondary::ge(alt, bookmarks, line_start);
                     let to_remove = line_start..line_start + indent.len();
                     rope.remove(alt.remove(to_remove.clone()));
                     if to_remove.contains(&self.cursor) {
