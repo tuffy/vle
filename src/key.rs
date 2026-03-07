@@ -32,7 +32,7 @@ binding!(Open, O, F2);
 binding!(Save, S, F3);
 binding!(GotoLine, T, F4);
 binding!(Find, F, F5);
-binding!(SelectLines, R, F6);
+binding!(UpdateLines, U, F6);
 binding!(GotoPair, P, F7);
 binding!(SelectInside, E, F8);
 binding!(WidenSelection, W, F9);

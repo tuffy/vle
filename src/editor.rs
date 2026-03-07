@@ -946,7 +946,7 @@ impl Editor {
                     self.mode = new_mode;
                 }
             }
-            keybind!(SelectLines) => {
+            keybind!(UpdateLines) | key!(CONTROL, 'r') => {
                 if let Some(matches) = self.on_buffer(|b| b.selection_cursors())
                     && let Some(match_idx) = matches.len().checked_sub(1)
                 {
