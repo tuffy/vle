@@ -597,7 +597,7 @@ impl Editor {
                     let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
                     let cur_idx = cur_buf_list.current_index();
                     if let Some(buf) = cur_buf_list.current_mut()
-                        && let Some(new_mode) = process_replace_matches(
+                        && let Some(new_mode) = process_multi_cursor(
                             buf,
                             &mut self.cut_buffer,
                             matches,
@@ -1524,7 +1524,7 @@ fn process_search(
 
 // Yes, I know this has a lot of arguments
 #[allow(clippy::too_many_arguments)]
-fn process_replace_matches(
+fn process_multi_cursor(
     buffer: &mut BufferContext,
     cut_buffer: &mut Option<EditorCutBuffer>,
     matches: &mut Vec<MultiCursor>,
@@ -1642,17 +1642,20 @@ fn process_replace_matches(
         },
         key!(CONTROL, 'c') => {
             if let cut @ Some(_) = buffer.multi_cursor_copy(matches) {
+                *highlight = false;
                 *cut_buffer = cut;
             }
             None
         }
         key!(CONTROL, 'x') => {
             if let cut @ Some(_) = buffer.multi_cursor_cut(alt, matches) {
+                *highlight = false;
                 *cut_buffer = cut;
             }
             None
         }
         keybind!(WidenSelection) => {
+            *highlight = false;
             buffer.multi_cursor_widen(matches);
             None
         }
