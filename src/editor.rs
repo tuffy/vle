@@ -310,53 +310,31 @@ impl Editor {
         &mut self,
         f: impl FnOnce(&mut crate::buffer::BufferContext, Option<AltCursor<'_>>),
     ) {
-        let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
-        // Both primary and secondary buffer should be at the same index
-        // within the BufferList.
-        let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
-        if let Some(primary) = primary.current_mut() {
-            f(primary, secondary.map(|s| s.alt_cursor()))
-        }
+        self.layout.update_current_at(f);
     }
 
     fn on_buffer<T>(
         &mut self,
         f: impl FnOnce(&mut crate::buffer::BufferContext) -> T,
     ) -> Option<T> {
-        self.layout.selected_buffer_list_mut().on_buf(f)
+        self.layout.on_current(f)
     }
 
     fn on_buffer_at<T>(
         &mut self,
         f: impl FnOnce(&mut crate::buffer::BufferContext, Option<AltCursor<'_>>) -> T,
     ) -> Option<T> {
-        let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
-        // Both primary and secondary buffer should be at the same index
-        // within the BufferList.
-        let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
-        primary
-            .current_mut()
-            .map(|primary| f(primary, secondary.map(|s| s.alt_cursor())))
+        self.layout.on_current_at(f)
     }
 
     fn perform_cut(&mut self) {
-        let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
-        let cur_idx = cur_buf_list.current_index();
-        if let Some(buffer) = cur_buf_list.current_mut()
-            && let Some(selection) = buffer.take_selection(
-                alt_buf_list
-                    .and_then(|l| l.get_mut(cur_idx))
-                    .map(|b| b.alt_cursor()),
-            )
-        {
+        if let Some(Some(selection)) = self.layout.on_current_at(|b, a| b.take_selection(a)) {
             self.cut_buffer = Some(EditorCutBuffer::Single(selection));
         }
     }
 
     fn perform_copy(&mut self) {
-        if let Some(buffer) = self.layout.selected_buffer_list_mut().current_mut()
-            && let Some(selection) = buffer.get_selection()
-        {
+        if let Some(Some(selection)) = self.layout.on_current(|b| b.get_selection()) {
             self.cut_buffer = Some(EditorCutBuffer::Single(selection));
         }
     }
@@ -398,31 +376,17 @@ impl Editor {
                 } => match event {
                     key!(Tab) => {
                         // switch to next candidate
-                        let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
-                        let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
-                        if let Some(primary) = primary.current_mut() {
+                        self.layout.update_current_at(|b, a| {
                             let (current, next) = complete_forward(index, completions);
-                            primary.autocomplete(
-                                secondary.map(|s| s.alt_cursor()),
-                                *offset,
-                                current,
-                                next,
-                            );
-                        }
+                            b.autocomplete(a, *offset, current, next);
+                        });
                     }
                     key!(SHIFT, BackTab) => {
                         // switch to previous candidate
-                        let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
-                        let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
-                        if let Some(primary) = primary.current_mut() {
+                        self.layout.update_current_at(|b, a| {
                             let (current, previous) = complete_backward(index, completions);
-                            primary.autocomplete(
-                                secondary.map(|s| s.alt_cursor()),
-                                *offset,
-                                current,
-                                previous,
-                            );
-                        }
+                            b.autocomplete(a, *offset, current, previous);
+                        })
                     }
                     event => {
                         // end autocomplete
@@ -470,38 +434,16 @@ impl Editor {
                     key!(Tab) => {
                         // switch to next candidate
                         let (current, next) = complete_forward(index, completions);
-                        let (cur_buf_list, alt_buf_list) =
-                            self.layout.selected_buffer_list_pair_mut();
-                        let cur_idx = cur_buf_list.current_index();
-                        if let Some(buffer) = cur_buf_list.current_mut() {
-                            buffer.multi_autocomplete(
-                                alt_buf_list
-                                    .and_then(|l| l.get_mut(cur_idx))
-                                    .map(|b| b.alt_cursor()),
-                                matches,
-                                offsets,
-                                current,
-                                next,
-                            );
-                        }
+                        self.layout.update_current_at(|b, a| {
+                            b.multi_autocomplete(a, matches, offsets, current, next);
+                        });
                     }
                     key!(SHIFT, BackTab) => {
                         // switch to previous candidate
                         let (current, previous) = complete_backward(index, completions);
-                        let (cur_buf_list, alt_buf_list) =
-                            self.layout.selected_buffer_list_pair_mut();
-                        let cur_idx = cur_buf_list.current_index();
-                        if let Some(buffer) = cur_buf_list.current_mut() {
-                            buffer.multi_autocomplete(
-                                alt_buf_list
-                                    .and_then(|l| l.get_mut(cur_idx))
-                                    .map(|b| b.alt_cursor()),
-                                matches,
-                                offsets,
-                                current,
-                                previous,
-                            );
-                        }
+                        self.layout.update_current_at(|b, a| {
+                            b.multi_autocomplete(a, matches, offsets, current, previous);
+                        });
                     }
                     event => {
                         // end autocomplete
@@ -594,11 +536,9 @@ impl Editor {
                     range,
                     highlight,
                 } => {
-                    let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
-                    let cur_idx = cur_buf_list.current_index();
-                    if let Some(buf) = cur_buf_list.current_mut()
-                        && let Some(new_mode) = process_multi_cursor(
-                            buf,
+                    if let Some(Some(new_mode)) = self.layout.on_current_at(|b, a| {
+                        process_multi_cursor(
+                            b,
                             &mut self.cut_buffer,
                             matches,
                             groups,
@@ -606,11 +546,9 @@ impl Editor {
                             match_idx,
                             highlight,
                             event,
-                            alt_buf_list
-                                .and_then(|l| l.get_mut(cur_idx))
-                                .map(|b| b.alt_cursor()),
+                            a,
                         )
-                    {
+                    }) {
                         self.mode = new_mode;
                     }
                 }
@@ -622,20 +560,9 @@ impl Editor {
                     range,
                     highlight,
                 } => {
-                    let (cur_buf_list, alt_buf_list) = self.layout.selected_buffer_list_pair_mut();
-                    let cur_idx = cur_buf_list.current_index();
-                    if let Some(buf) = cur_buf_list.current_mut() {
-                        process_paste_group(
-                            buf,
-                            matches,
-                            self.cut_buffer.as_mut(),
-                            groups,
-                            event,
-                            alt_buf_list
-                                .and_then(|l| l.get_mut(cur_idx))
-                                .map(|b| b.alt_cursor()),
-                        );
-                    }
+                    self.layout.update_current_at(|b, a| {
+                        process_paste_group(b, matches, self.cut_buffer.as_mut(), groups, event, a);
+                    });
 
                     self.mode = EditorMode::MultiCursor {
                         matches: std::mem::take(matches),
@@ -791,19 +718,15 @@ impl Editor {
             key!(CONTROL, 'x') => self.perform_cut(),
             key!(CONTROL, 'c') => self.perform_copy(),
             key!(CONTROL, 'v') => {
-                let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
-                let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
-                if let Some(primary) = primary.current_mut() {
-                    primary.paste(secondary.map(|s| s.alt_cursor()), &mut self.cut_buffer)
-                }
+                self.layout.update_current_at(|b, a| {
+                    b.paste(a, &mut self.cut_buffer);
+                });
             }
             Event::Paste(pasted) => {
                 self.cut_buffer = Some(EditorCutBuffer::Single(pasted.into()));
-                let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
-                let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
-                if let Some(primary) = primary.current_mut() {
-                    primary.paste(secondary.map(|s| s.alt_cursor()), &mut self.cut_buffer)
-                }
+                self.layout.update_current_at(|b, a| {
+                    b.paste(a, &mut self.cut_buffer);
+                });
             }
             key!(CONTROL, 'z') => self.update_buffer(|b| b.perform_undo()),
             key!(CONTROL, 'y') => self.update_buffer(|b| b.perform_redo()),
@@ -1018,11 +941,9 @@ impl Editor {
             }) => {
                 self.layout
                     .set_cursor_focus(area, Position { y: row, x: column });
-                let (primary, secondary) = self.layout.selected_buffer_list_pair_mut();
-                let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
-                if let Some(primary) = primary.current_mut() {
-                    primary.paste(secondary.map(|s| s.alt_cursor()), &mut self.cut_buffer)
-                }
+                self.layout.update_current_at(|b, a| {
+                    b.paste(a, &mut self.cut_buffer);
+                });
             }
             _ => { /* ignore other events */ }
         }
@@ -1981,6 +1902,37 @@ impl Layout {
                 hidden: alt,
             } => (buffer, Some(alt)),
         }
+    }
+
+    fn update_current_at<F>(&mut self, f: F)
+    where
+        F: FnOnce(&mut crate::buffer::BufferContext, Option<AltCursor<'_>>),
+    {
+        let (primary, secondary) = self.selected_buffer_list_pair_mut();
+        let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
+        if let Some(primary) = primary.current_mut() {
+            f(primary, secondary.map(|s| s.alt_cursor()));
+        }
+    }
+
+    fn on_current<T, F>(&mut self, f: F) -> Option<T>
+    where
+        F: FnOnce(&mut crate::buffer::BufferContext) -> T,
+    {
+        self.selected_buffer_list_mut().on_buf(f)
+    }
+
+    fn on_current_at<T, F>(&mut self, f: F) -> Option<T>
+    where
+        F: FnOnce(&mut crate::buffer::BufferContext, Option<AltCursor<'_>>) -> T,
+    {
+        let (primary, secondary) = self.selected_buffer_list_pair_mut();
+        // Both primary and secondary buffer should be at the same index
+        // within the BufferList.
+        let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
+        primary
+            .current_mut()
+            .map(|primary| f(primary, secondary.map(|s| s.alt_cursor())))
     }
 
     fn previous_buffer(&mut self) {
