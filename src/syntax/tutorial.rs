@@ -95,6 +95,11 @@ enum TutorialToken {
     #[token(">>> # ultrices posuere cubilia curae;")]
     #[token(">>> # Phasellus consequat massa lorem, vel cursus enim tristique vel.")]
     #[token(">>> # Nunc dictum imperdiet porttitor.")]
+    #[token(">>> const ONE   = 1; const TWO   = 2;")]
+    #[token(">>> const THREE = 3; const FOUR  = 4;")]
+    #[token(">>> const FIVE  = 5; const SIX   = 6;")]
+    #[token(">>> const SEVEN = 7; const EIGHT = 8;")]
+    #[token(">>> const NINE  = 9; const TEN  = 10;")]
     Correct,
     #[regex(">>> .+", allow_greedy = true)]
     #[token("println!(\"a is {a}\");")]

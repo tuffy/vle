@@ -187,6 +187,7 @@ For example, let's comment out six lines of placeholder text:
     # Nunc dictum imperdiet porttitor.
 
 
+
 ## Surrounded Text
 
 Text surrounded by characters like " or ( are a common
@@ -376,6 +377,34 @@ Finally, Ctrl-V followed by 1 will place the first column last.
 >>> 44,333333
 >>> 66666,555
 >>> 8,7777777
+
+
+## Multi-Item Cut, Copy and Paste
+
+When multiple items are found, they can also be copied to
+separate cut buffers.
+Let's try another regular expression search
+(Ctrl-F followed by Tab) and the following regular expression:
+
+[[:upper:]]{3,}(?=,)
+
+Which translates simply to
+"three or more uppercase letters followed by a comma".
+
+ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT,NINE,TEN,
+
+Then Ctrl-C to copy all ten entries and Enter to finish searching.
+
+We'll then follow with a plaintext search (just Ctrl-F) for double X.
+Using Ctrl-V to paste will populate all results in order.
+
+>>> const XX   = 1; const XX   = 2;
+>>> const XX = 3; const XX  = 4;
+>>> const XX  = 5; const XX   = 6;
+>>> const XX = 7; const XX = 8;
+>>> const XX  = 9; const XX  = 10;
+
+This is a helpful way to copy and paste many things at once.
 
 
 ## Bookmarks
