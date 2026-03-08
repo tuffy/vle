@@ -4139,11 +4139,11 @@ impl StatefulWidget for BufferWidget<'_> {
         // Takes syntaxed-colorized line of text along with
         // highlighted match ranges (in ascending order)
         // and returns text in those ranges highlighted in some style
-        fn highlight_matches<'s, T: Copy>(
+        fn highlight_matches<'s>(
             colorized: Vec<Span<'s>>,
             line_range: RangeInclusive<usize>,
-            matches: &mut VecDeque<(Range<usize>, T)>,
-            apply: impl Fn(Span<'s>, T) -> Span<'s>,
+            matches: &mut VecDeque<Range<usize>>,
+            apply: impl Fn(Span<'s>) -> Span<'s> + Copy,
         ) -> Vec<Span<'s>> {
             // A trivial abstraction to make working
             // simultaneously with both line and match ranges
@@ -4206,7 +4206,7 @@ impl StatefulWidget for BufferWidget<'_> {
             };
 
             while !line_range.is_empty() {
-                let Some((match_range, highlight)) = matches.pop_front() else {
+                let Some(match_range) = matches.pop_front() else {
                     // if there's no remaining matches,
                     // there's nothing left to highlight
                     highlighted.extend(colorized);
@@ -4237,12 +4237,12 @@ impl StatefulWidget for BufferWidget<'_> {
                     &mut colorized,
                     match_range.take_both(&mut line_range, match_range.remaining()),
                     &mut highlighted,
-                    |span| apply(span, highlight),
+                    apply,
                 );
 
                 // push any remaining partial match back into VecDeque
                 if !match_range.is_empty() {
-                    matches.push_front((match_range.into(), highlight));
+                    matches.push_front(match_range.into());
                 }
             }
 
@@ -4693,11 +4693,8 @@ impl StatefulWidget for BufferWidget<'_> {
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::REVERSED);
 
-                fn sub_match_ranges(matches: &[MultiCursor]) -> VecDeque<(Range<usize>, Style)> {
-                    matches
-                        .iter()
-                        .map(|m| (m.range.start..m.range.end, HIGHLIGHTED))
-                        .collect()
+                fn sub_match_ranges(matches: &[MultiCursor]) -> VecDeque<Range<usize>> {
+                    matches.iter().map(|m| m.range.start..m.range.end).collect()
                 }
 
                 let selection_start = matches[*match_idx].range.start;
@@ -4721,7 +4718,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                     ),
                                     range.clone(),
                                     &mut matches,
-                                    |span, hl| span.style(hl),
+                                    |span| span.style(HIGHLIGHTED),
                                 ),
                                 range.clone(),
                                 (selection_start, selection_end),
@@ -4752,22 +4749,18 @@ impl StatefulWidget for BufferWidget<'_> {
                     ..
                 },
             ) => {
-                fn tupled<T>(v: T) -> (T, ()) {
-                    (v, ())
-                }
-
                 let (mut cursors, (mut ranges, selections)): (VecDeque<_>, (_, VecFiltered<_>)) =
                     matches
                         .iter()
                         .map(|m| {
                             (
-                                tupled(m.cursor..m.cursor + 1),
-                                (tupled(m.range.clone()), m.selection_range().map(tupled)),
+                                m.cursor..m.cursor + 1,
+                                (m.range.clone(), m.selection_range()),
                             )
                         })
                         .unzip();
 
-                cursors.retain(|(r, _)| r.start != state.cursor);
+                cursors.retain(|r| r.start != state.cursor);
                 let mut selections = selections.into();
 
                 EditorLine::iter(rope, viewport_line)
@@ -4790,7 +4783,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                         )),
                                         whole_range.clone(),
                                         &mut ranges,
-                                        |span, ()| {
+                                        |span| {
                                             span.patch_style(
                                                 Style::new()
                                                     .underlined()
@@ -4800,11 +4793,11 @@ impl StatefulWidget for BufferWidget<'_> {
                                     ),
                                     whole_range.clone(),
                                     &mut selections,
-                                    |span, ()| span.style(EDITING),
+                                    |span| span.style(EDITING),
                                 ),
                                 whole_range,
                                 &mut cursors,
-                                |span, ()| {
+                                |span| {
                                     span.style(
                                         Style::new()
                                             .fg(Color::Blue)
@@ -4833,22 +4826,17 @@ impl StatefulWidget for BufferWidget<'_> {
 
                 let (mut cursors, mut ranges): (VecDeque<_>, _) = matches
                     .iter()
-                    .map(|m| ((m.cursor..m.cursor + 1, ()), (m.range.clone(), ())))
+                    .map(|m| (m.cursor..m.cursor + 1, m.range.clone()))
                     .unzip();
 
                 let completion_chars = completions[*index].chars().count();
                 let mut replacements = matches
                     .iter()
                     .zip(offsets)
-                    .map(|(m, o)| {
-                        (
-                            m.range.start + *o..m.range.start + *o + completion_chars,
-                            (),
-                        )
-                    })
+                    .map(|(m, o)| m.range.start + *o..m.range.start + *o + completion_chars)
                     .collect();
 
-                cursors.retain(|(r, _)| r.start != state.cursor);
+                cursors.retain(|r| r.start != state.cursor);
 
                 EditorLine::iter(rope, viewport_line)
                     .map(
@@ -4870,7 +4858,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                         )),
                                         whole_range.clone(),
                                         &mut ranges,
-                                        |span, ()| {
+                                        |span| {
                                             span.patch_style(
                                                 Style::new()
                                                     .underlined()
@@ -4880,7 +4868,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                     ),
                                     whole_range.clone(),
                                     &mut replacements,
-                                    |span, ()| {
+                                    |span| {
                                         span.patch_style(
                                             Style::new().underlined().underline_color(Color::Red),
                                         )
@@ -4888,7 +4876,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                 ),
                                 whole_range,
                                 &mut cursors,
-                                |span, ()| {
+                                |span| {
                                     span.style(
                                         Style::new()
                                             .fg(Color::Blue)
