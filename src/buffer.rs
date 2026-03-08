@@ -3279,13 +3279,13 @@ fn line_start_to_cursor(rope: &ropey::Rope, cursor: usize) -> Option<impl Iterat
     let line = rope.try_char_to_line(cursor).ok()?;
     let start = rope.try_line_to_char(line).ok()?;
     rope.get_chars_at(start)
-        .map(|iter| iter.take(cursor - start))
+        .map(|iter| iter.take(cursor.saturating_sub(start)))
 }
 
 /// Returns all characters in cursor's line
 fn line_chars(rope: &ropey::Rope, cursor: usize) -> Option<impl Iterator<Item = char>> {
     line_char_range(rope, rope.try_char_to_line(cursor).ok()?)
-        .and_then(|(start, end)| rope.get_chars_at(start).map(|iter| iter.take(end - start)))
+        .and_then(|(start, end)| rope.get_chars_at(start).map(|iter| iter.take(end.saturating_sub(start))))
 }
 
 // If we move the cursor without performing a selection, clear the selection
