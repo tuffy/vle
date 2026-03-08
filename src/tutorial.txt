@@ -381,22 +381,34 @@ Finally, Ctrl-V followed by 1 will place the first column last.
 
 ## Multi-Item Cut, Copy and Paste
 
-When multiple items are found, they can also be copied to
-separate cut buffers.
-Let's try another regular expression search
-(Ctrl-F followed by Tab) and the following regular expression:
+When multiple items are selected, they can also be cut or copied into
+separate cut buffers.  Let's highlight the following ten lines:
 
-[[:upper:]]{3,}(?=,)
+ONE
+TWO
+THREE
+FOUR
+FIVE
+SIX
+SEVEN
+EIGHT
+NINE
+TEN
 
-Which translates simply to
-"three or more uppercase letters followed by a comma".
+Use Ctrl-U/F6 to edit each of those lines individually,
+then Ctrl-W/F9 to select whole lines,
+then Ctrl-C to copy all ten separately,
+and finally Enter to complete our multi-item selection.
 
-ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT,NINE,TEN,
+We can then paste those items individually using Ctrl-V,
+which cycles through all ten before returning to the first.
 
-Then Ctrl-C to copy all ten entries and Enter to finish searching.
+>>> ZERO
+    ZERO ONE TWO THREE FOUR FIVE SIX SEVEN EIGHT NINE TEN
 
-We'll then follow with a plaintext search (just Ctrl-F) for double X.
-Using Ctrl-V to paste will populate all results in order.
+We'll then follow with a plaintext search (Ctrl-F/F5) for double X.
+Using Ctrl-V to paste will populate all ten matches with the ten items
+we previously copied, in order.
 
 >>> const XX   = 1; const XX   = 2;
 >>> const XX = 3; const XX  = 4;
@@ -404,7 +416,7 @@ Using Ctrl-V to paste will populate all results in order.
 >>> const XX = 7; const XX = 8;
 >>> const XX  = 9; const XX  = 10;
 
-This is a helpful way to copy and paste many things at once.
+These are helpful way to copy and paste many things at once.
 
 
 ## Bookmarks
