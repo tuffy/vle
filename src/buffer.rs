@@ -3284,8 +3284,10 @@ fn line_start_to_cursor(rope: &ropey::Rope, cursor: usize) -> Option<impl Iterat
 
 /// Returns all characters in cursor's line
 fn line_chars(rope: &ropey::Rope, cursor: usize) -> Option<impl Iterator<Item = char>> {
-    line_char_range(rope, rope.try_char_to_line(cursor).ok()?)
-        .and_then(|(start, end)| rope.get_chars_at(start).map(|iter| iter.take(end.saturating_sub(start))))
+    line_char_range(rope, rope.try_char_to_line(cursor).ok()?).and_then(|(start, end)| {
+        rope.get_chars_at(start)
+            .map(|iter| iter.take(end.saturating_sub(start)))
+    })
 }
 
 // If we move the cursor without performing a selection, clear the selection
@@ -4558,18 +4560,23 @@ impl StatefulWidget for BufferWidget<'_> {
             _ => match state.selection {
                 Some(selection) => {
                     let (start, end) = reorder(state.cursor, selection);
-                    let lines = rope.char_to_line(end) - rope.char_to_line(start);
-                    block.title_bottom(
-                        // TODO - use different title style
-                        border_title(
-                            match lines {
-                                0 => "1 Line".to_string(),
-                                n => format!("{} Lines", n + 1),
-                            },
-                            focused,
+                    if let Ok(start_line) = rope.try_char_to_line(start)
+                        && let Ok(end_line) = rope.try_char_to_line(end)
+                        && let Some(lines) = end_line.checked_sub(start_line)
+                    {
+                        block.title_bottom(
+                            border_title(
+                                match lines {
+                                    0 => "1 Line".to_string(),
+                                    n => format!("{} Lines", n + 1),
+                                },
+                                focused,
+                            )
+                            .centered(),
                         )
-                        .centered(),
-                    )
+                    } else {
+                        block
+                    }
                 }
                 None => block,
             },
