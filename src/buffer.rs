@@ -814,6 +814,7 @@ pub struct Help {
     autocomplete: bool,
     has_selection: bool,
     multiple_buffers: bool,
+    multiple_panes: bool,
 }
 
 type MatchAndRange = (Range<usize>, Vec<Option<MatchCapture>>);
@@ -2330,7 +2331,7 @@ impl BufferContext {
         }
     }
 
-    pub fn help_options(&self, multiple_buffers: bool) -> Help {
+    pub fn help_options(&self, multiple_buffers: bool, multiple_panes: bool) -> Help {
         let buffer = &self.buffer.borrow();
         let has_bookmarks = buffer.has_bookmarks();
         let rope = &buffer.rope;
@@ -2349,6 +2350,7 @@ impl BufferContext {
                 autocomplete: false,
                 has_selection: true,
                 multiple_buffers,
+                multiple_panes,
             },
             None => {
                 let current_char = rope.get_char(self.cursor);
@@ -2372,6 +2374,7 @@ impl BufferContext {
                     },
                     has_selection: false,
                     multiple_buffers,
+                    multiple_panes,
                 }
             }
         }
@@ -5022,6 +5025,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     autocomplete,
                     has_selection,
                     multiple_buffers,
+                    multiple_panes,
                 }) = self.show_help
                 {
                     use crate::help::{
@@ -5057,7 +5061,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         },
                     ));
                     help.extend(EDITING_3);
-                    help.push(SWITCH_PANE);
+                    help.extend(multiple_panes.then_some(SWITCH_PANE));
                     help.extend(multiple_buffers.then_some(ctrl(&["PgUp", "PgDn"], "Switch File")));
 
                     crate::help::render_help(text_area, buf, &help, |b| {

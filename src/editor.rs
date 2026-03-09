@@ -1817,7 +1817,7 @@ impl Layout {
 
     /// Returns current buffer index
     /// mutable reference to that BufferContext
-    /// and AltCursors for all other buffers
+    /// and AltCursors for all other BufferContexts sharing the same Buffer
     fn current_buffer_mut(
         &mut self,
     ) -> Option<(usize, &mut crate::buffer::BufferContext, Vec<AltCursor<'_>>)> {
@@ -2329,6 +2329,7 @@ impl StatefulWidget for EditorWidget<'_> {
             show_help,
             show_sub_help,
             focused,
+            multiple_panes: !matches!(layout, Layout::Single(_)),
         }
         .render(area, buf, layout)
     }
@@ -2339,6 +2340,7 @@ struct LayoutWidget<'e> {
     mode: &'e mut EditorMode,
     show_help: bool,
     show_sub_help: bool,
+    multiple_panes: bool,
 }
 
 impl StatefulWidget for LayoutWidget<'_> {
@@ -2357,6 +2359,7 @@ impl StatefulWidget for LayoutWidget<'_> {
             show_help,
             show_sub_help,
             focused,
+            multiple_panes,
         } = self;
 
         match layout {
@@ -2367,7 +2370,8 @@ impl StatefulWidget for LayoutWidget<'_> {
                     BufferWidget {
                         focused,
                         mode: Some(mode).filter(|_| focused),
-                        show_help: show_help.then(|| buffer.help_options(multiple_buffers)),
+                        show_help: show_help
+                            .then(|| buffer.help_options(multiple_buffers, multiple_panes)),
                         show_sub_help,
                     }
                     .render(area, buf, buffer);
@@ -2385,12 +2389,14 @@ impl StatefulWidget for LayoutWidget<'_> {
                         mode,
                         show_help,
                         show_sub_help,
+                        multiple_panes,
                     },
                     HorizontalPos::Bottom => LayoutWidget {
                         focused: false,
                         mode,
                         show_help: false,
                         show_sub_help: false,
+                        multiple_panes: false,
                     },
                 })
                 .render(top_area, buf, top);
@@ -2401,12 +2407,14 @@ impl StatefulWidget for LayoutWidget<'_> {
                         mode,
                         show_help: false,
                         show_sub_help: false,
+                        multiple_panes: false,
                     },
                     HorizontalPos::Bottom => LayoutWidget {
                         focused,
                         mode,
                         show_help,
                         show_sub_help,
+                        multiple_panes,
                     },
                 })
                 .render(bottom_area, buf, bottom);
@@ -2423,12 +2431,14 @@ impl StatefulWidget for LayoutWidget<'_> {
                         mode,
                         show_help,
                         show_sub_help,
+                        multiple_panes,
                     },
                     VerticalPos::Right => LayoutWidget {
                         focused: false,
                         mode,
                         show_help: false,
                         show_sub_help: false,
+                        multiple_panes: false,
                     },
                 })
                 .render(left_area, buf, left);
@@ -2439,12 +2449,14 @@ impl StatefulWidget for LayoutWidget<'_> {
                         mode,
                         show_help: false,
                         show_sub_help: false,
+                        multiple_panes: false,
                     },
                     VerticalPos::Right => LayoutWidget {
                         focused,
                         mode,
                         show_help,
                         show_sub_help,
+                        multiple_panes,
                     },
                 })
                 .render(right_area, buf, right);
