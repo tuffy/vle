@@ -187,8 +187,7 @@ pub static EDITING_1: &[Keybinding] = &[
     keybind::<key::SelectInside>("Select Inside Pair"),
 ];
 
-pub static F10_UNSPLIT: Keybinding = keybind::<key::SplitPane>("Split Pane");
-pub static F10_SPLIT: Keybinding = keybind::<key::SplitPane>("Un-Split Pane");
+pub static F10: Keybinding = keybind::<key::SplitPane>("Manage Panes");
 
 pub static EDITING_2: &[Keybinding] = &[
     keybind::<key::Reload>("Reload File"),
@@ -202,8 +201,7 @@ pub static EDITING_3: &[Keybinding] = &[
     ctrl(&["Z", "Y"], "Undo / Redo"),
 ];
 
-pub static SWITCH_PANE_HORIZONTAL: Keybinding = ctrl(&[DOWN, UP], "Switch Pane");
-pub static SWITCH_PANE_VERTICAL: Keybinding = ctrl(&[LEFT, RIGHT], "Switch Pane");
+pub static SWITCH_PANE: Keybinding = ctrl(&[LEFT, DOWN, UP, RIGHT], "Switch Pane");
 
 pub static VERIFY_SAVE: &[Keybinding] = &[
     none(&["Y"], "Yes, Overwrite Contents"),

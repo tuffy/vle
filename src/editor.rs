@@ -1635,13 +1635,6 @@ enum VerticalPos {
     Right,
 }
 
-#[derive(Copy, Clone)]
-pub enum EditorLayout {
-    Single,
-    Horizontal,
-    Vertical,
-}
-
 enum Layout {
     Single(BufferList),
     Horizontal {
@@ -2228,7 +2221,6 @@ impl StatefulWidget for LayoutWidget<'_> {
                     BufferWidget {
                         focused,
                         mode: Some(mode),
-                        layout: EditorLayout::Single,
                         show_help: show_help.then(|| buffer.help_options(multiple_buffers)),
                         show_sub_help,
                     }
@@ -2250,7 +2242,6 @@ impl StatefulWidget for LayoutWidget<'_> {
                             HorizontalPos::Top => Some(mode),
                             HorizontalPos::Bottom => None,
                         },
-                        layout: EditorLayout::Horizontal,
                         show_help: (show_help && !matches!(which, HorizontalPos::Top))
                             .then(|| bottom.help_options(multiple_buffers))
                             .flatten(),
@@ -2265,7 +2256,6 @@ impl StatefulWidget for LayoutWidget<'_> {
                             HorizontalPos::Top => None,
                             HorizontalPos::Bottom => Some(mode),
                         },
-                        layout: EditorLayout::Horizontal,
                         show_help: (show_help && !matches!(which, HorizontalPos::Bottom))
                             .then(|| top.help_options(multiple_buffers))
                             .flatten(),
@@ -2289,7 +2279,6 @@ impl StatefulWidget for LayoutWidget<'_> {
                             VerticalPos::Left => Some(mode),
                             VerticalPos::Right => None,
                         },
-                        layout: EditorLayout::Vertical,
                         show_help: (show_help && !matches!(which, VerticalPos::Left))
                             .then(|| right.help_options(multiple_buffers))
                             .flatten(),
@@ -2304,7 +2293,6 @@ impl StatefulWidget for LayoutWidget<'_> {
                             VerticalPos::Left => None,
                             VerticalPos::Right => Some(mode),
                         },
-                        layout: EditorLayout::Vertical,
                         show_help: (show_help && !matches!(which, VerticalPos::Right))
                             .then(|| left.help_options(multiple_buffers))
                             .flatten(),

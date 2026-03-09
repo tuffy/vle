@@ -3789,7 +3789,6 @@ impl BufferList {
 pub struct BufferWidget<'e> {
     pub focused: bool,
     pub mode: Option<&'e mut EditorMode>,
-    pub layout: crate::editor::EditorLayout,
     pub show_help: Option<Help>,
     pub show_sub_help: bool,
 }
@@ -5041,10 +5040,9 @@ impl StatefulWidget for BufferWidget<'_> {
                     multiple_buffers,
                 }) = self.show_help
                 {
-                    use crate::editor::EditorLayout;
                     use crate::help::{
-                        EDITING_0, EDITING_1, EDITING_2, EDITING_3, F10_SPLIT, F10_UNSPLIT,
-                        SWITCH_PANE_HORIZONTAL, SWITCH_PANE_VERTICAL, ctrl, keybind, none,
+                        EDITING_0, EDITING_1, EDITING_2, EDITING_3, F10, SWITCH_PANE, ctrl,
+                        keybind, none,
                     };
                     use crate::key::{GotoLine, UpdateLines};
 
@@ -5061,10 +5059,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     );
                     help.extend(EDITING_1);
                     help.push(select.into());
-                    help.push(match self.layout {
-                        EditorLayout::Single => F10_UNSPLIT,
-                        EditorLayout::Horizontal | EditorLayout::Vertical => F10_SPLIT,
-                    });
+                    help.push(F10);
                     help.extend(EDITING_2);
                     help.extend(
                         has_selection.then_some(ctrl(&["Home", "End"], "Start / End of Selection")),
@@ -5078,11 +5073,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         },
                     ));
                     help.extend(EDITING_3);
-                    match self.layout {
-                        EditorLayout::Horizontal => help.push(SWITCH_PANE_HORIZONTAL),
-                        EditorLayout::Vertical => help.push(SWITCH_PANE_VERTICAL),
-                        EditorLayout::Single => { /* do nothing */ }
-                    }
+                    help.push(SWITCH_PANE);
                     help.extend(multiple_buffers.then_some(ctrl(&["PgUp", "PgDn"], "Switch File")));
 
                     crate::help::render_help(text_area, buf, &help, |b| {
