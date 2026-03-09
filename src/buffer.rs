@@ -831,7 +831,6 @@ type MatchAndRange = (Range<usize>, Vec<Option<MatchCapture>>);
 #[derive(Clone)]
 pub struct BufferContext {
     buffer: private::BufferCell,    // the buffer we're wrapping
-    viewport_height: usize,         // viewport's current height in lines
     cursor: usize,                  // cursor's absolute position in rope, in characters
     cursor_column: usize,           // cursor's desired column, as a display column
     selection: Option<usize>,       // cursor's text selection anchor
@@ -951,9 +950,10 @@ impl BufferContext {
         let col = position.x.saturating_sub(text_area.x);
 
         let current_line = rope.try_char_to_line(self.cursor).ok();
+        let viewport_height: usize = text_area.height.into();
 
         let viewport_line: usize = current_line
-            .map(|line| line.saturating_sub(self.viewport_height / 2))
+            .map(|line| line.saturating_sub(viewport_height / 2))
             .unwrap_or(0);
 
         let line = viewport_line + usize::from(row);
@@ -3621,7 +3621,6 @@ impl From<Buffer> for BufferContext {
     fn from(buffer: Buffer) -> Self {
         Self {
             buffer: buffer.into(),
-            viewport_height: 0,
             cursor: 0,
             cursor_column: 0,
             selection: None,
@@ -3713,10 +3712,10 @@ impl BufferList {
     ///
     /// The cursor should be centered in the viewport unless
     /// at the very beginning of the file.
-    pub fn cursor_viewport_position(&self) -> Option<(usize, usize)> {
+    pub fn cursor_viewport_position(&self, viewport_height: usize) -> Option<(usize, usize)> {
         let buf = self.current()?;
         buf.cursor_position()
-            .map(|(row, col)| ((buf.viewport_height / 2).min(row), col))
+            .map(|(row, col)| ((viewport_height / 2).min(row), col))
     }
 
     pub fn set_cursor_focus(&mut self, area: Rect, position: Position) {
@@ -3797,6 +3796,24 @@ pub struct BufferWidget<'e> {
 
 impl BufferWidget<'_> {
     pub const RIGHT_MARGIN: u16 = 5;
+}
+
+impl BufferWidget<'_> {
+    pub fn viewport_height(area: Rect) -> usize {
+        use ratatui::{
+            layout::{
+                Constraint::{Length, Min},
+                Layout,
+            },
+            widgets::Block,
+        };
+
+        let block = Block::bordered();
+
+        let [text_area, _] = Layout::horizontal([Min(0), Length(1)]).areas(block.inner(area));
+
+        text_area.height.into()
+    }
 }
 
 impl StatefulWidget for BufferWidget<'_> {
@@ -4588,11 +4605,10 @@ impl StatefulWidget for BufferWidget<'_> {
         block.render(area, buf);
 
         let current_line = rope.try_char_to_line(state.cursor).ok();
-
-        state.viewport_height = text_area.height.into();
+        let viewport_height: usize = text_area.height.into();
 
         let viewport_line: usize = current_line
-            .map(|line| line.saturating_sub(state.viewport_height / 2))
+            .map(|line| line.saturating_sub(viewport_height / 2))
             .unwrap_or(0);
 
         let viewport_start = rope.try_line_to_char(viewport_line).unwrap_or(0);
@@ -4620,7 +4636,7 @@ impl StatefulWidget for BufferWidget<'_> {
         // we're technically only viewing half of the viewport most of the time
         // but it's okay for the viewport_size to be a bit larger than necessary
         let viewport_size = rope
-            .try_line_to_char(current_line.unwrap_or(0) + state.viewport_height)
+            .try_line_to_char(current_line.unwrap_or(0) + viewport_height)
             .unwrap_or(rope.len_chars())
             .saturating_sub(viewport_start);
 

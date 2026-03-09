@@ -1944,6 +1944,7 @@ impl Layout {
     }
 
     fn cursor_position(&self, area: Rect, mode: &EditorMode) -> Option<Position> {
+        use crate::buffer::BufferWidget;
         use ratatui::layout::Constraint::{Length, Min};
         use ratatui::layout::{Constraint, Layout};
 
@@ -2012,7 +2013,7 @@ impl Layout {
 
         match self {
             Self::Single(buf) | Self::SingleHidden { visible: buf, .. } => buf
-                .cursor_viewport_position()
+                .cursor_viewport_position(BufferWidget::viewport_height(area))
                 .and_then(|pos| apply_position(area, pos, mode)),
             Self::Horizontal { top, bottom, which } => {
                 let [top_area, bottom_area] =
@@ -2020,10 +2021,10 @@ impl Layout {
 
                 match which {
                     HorizontalPos::Top => top
-                        .cursor_viewport_position()
+                        .cursor_viewport_position(BufferWidget::viewport_height(top_area))
                         .and_then(|pos| apply_position(top_area, pos, mode)),
                     HorizontalPos::Bottom => bottom
-                        .cursor_viewport_position()
+                        .cursor_viewport_position(BufferWidget::viewport_height(bottom_area))
                         .and_then(|pos| apply_position(bottom_area, pos, mode)),
                 }
             }
@@ -2033,10 +2034,10 @@ impl Layout {
 
                 match which {
                     VerticalPos::Left => left
-                        .cursor_viewport_position()
+                        .cursor_viewport_position(BufferWidget::viewport_height(left_area))
                         .and_then(|pos| apply_position(left_area, pos, mode)),
                     VerticalPos::Right => right
-                        .cursor_viewport_position()
+                        .cursor_viewport_position(BufferWidget::viewport_height(right_area))
                         .and_then(|pos| apply_position(right_area, pos, mode)),
                 }
             }
