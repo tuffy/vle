@@ -280,7 +280,7 @@ impl Editor {
         term.draw(|frame| {
             let area = frame.area();
             frame.render_stateful_widget(
-                LayoutWidget {
+                EditorWidget {
                     focused: self.focused,
                     show_help: self.show_help
                         && matches!(
@@ -308,7 +308,7 @@ impl Editor {
 
     fn update_buffer_at(
         &mut self,
-        f: impl FnOnce(&mut crate::buffer::BufferContext, Option<AltCursor<'_>>),
+        f: impl FnOnce(&mut crate::buffer::BufferContext, Vec<AltCursor<'_>>),
     ) {
         self.layout.update_current_at(f);
     }
@@ -322,7 +322,7 @@ impl Editor {
 
     fn on_buffer_at<T>(
         &mut self,
-        f: impl FnOnce(&mut crate::buffer::BufferContext, Option<AltCursor<'_>>) -> T,
+        f: impl FnOnce(&mut crate::buffer::BufferContext, Vec<AltCursor<'_>>) -> T,
     ) -> Option<T> {
         self.layout.on_current_at(f)
     }
@@ -600,21 +600,19 @@ impl Editor {
             key!(CONTROL, PageUp) => self.layout.previous_buffer(),
             key!(CONTROL, PageDown) => self.layout.next_buffer(),
             keybind!(SplitPane) => {
-                if !self.layout.retain_visible_pane() {
-                    self.mode = EditorMode::SplitPane;
-                }
+                self.mode = EditorMode::SplitPane;
             }
             key!(CONTROL, Left) => {
-                self.layout.change_pane(Direction::Left);
+                let _ = self.layout.change_pane(Direction::Left);
             }
             key!(CONTROL, Right) => {
-                self.layout.change_pane(Direction::Right);
+                let _ = self.layout.change_pane(Direction::Right);
             }
             key!(CONTROL, Up) => {
-                self.layout.change_pane(Direction::Up);
+                let _ = self.layout.change_pane(Direction::Up);
             }
             key!(CONTROL, Down) => {
-                self.layout.change_pane(Direction::Down);
+                let _ = self.layout.change_pane(Direction::Down);
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Up,
@@ -985,6 +983,10 @@ impl Editor {
             }
             key!(Right) => {
                 self.layout.split_pane(Direction::Right);
+                self.mode = EditorMode::default();
+            }
+            key!(Delete) => {
+                self.layout.delete_current_pane();
                 self.mode = EditorMode::default();
             }
             _ => { /* ignore other events */ }
@@ -1361,7 +1363,7 @@ fn process_multi_cursor(
     match_idx: &mut usize,
     highlight: &mut bool,
     event: Event,
-    alt: Option<AltCursor<'_>>,
+    alt: Vec<AltCursor<'_>>,
 ) -> Option<EditorMode> {
     use crossterm::event::{
         Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
@@ -1578,7 +1580,7 @@ fn process_paste_group(
     cut_buffer: Option<&mut EditorCutBuffer>,
     groups: &mut [Vec<Option<MatchCapture>>],
     event: Event,
-    alt: Option<AltCursor<'_>>,
+    alt: Vec<AltCursor<'_>>,
 ) {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
@@ -1638,60 +1640,109 @@ enum VerticalPos {
 enum Layout {
     Single(BufferList),
     Horizontal {
-        top: BufferList,
-        bottom: BufferList,
+        top: Box<Layout>,
+        bottom: Box<Layout>,
         which: HorizontalPos,
     },
     Vertical {
-        left: BufferList,
-        right: BufferList,
+        left: Box<Layout>,
+        right: Box<Layout>,
         which: VerticalPos,
     },
-    SingleHidden {
-        visible: BufferList,
-        hidden: BufferList,
-    },
+}
+
+impl Default for Layout {
+    fn default() -> Self {
+        Self::Single(BufferList::default())
+    }
 }
 
 impl Layout {
     fn has_open_buffers(&self) -> bool {
         match self {
-            Self::Single(b)
-            | Self::Horizontal { top: b, .. }
-            | Self::Vertical { left: b, .. }
-            | Self::SingleHidden { visible: b, .. } => !b.is_empty(),
+            Self::Single(b) => !b.is_empty(),
+            Self::Horizontal { top: b, .. } | Self::Vertical { left: b, .. } => {
+                b.has_open_buffers()
+            }
         }
     }
 
     fn add(&mut self, path: Source) -> Result<(), ()> {
+        fn add(layout: &mut Layout, ctx: BufferContext, active: bool) {
+            match layout {
+                Layout::Single(b) => {
+                    b.push(ctx, active);
+                }
+                Layout::Horizontal {
+                    which: HorizontalPos::Top,
+                    top: current,
+                    bottom: inactive,
+                }
+                | Layout::Horizontal {
+                    which: HorizontalPos::Bottom,
+                    bottom: current,
+                    top: inactive,
+                }
+                | Layout::Vertical {
+                    which: VerticalPos::Left,
+                    left: current,
+                    right: inactive,
+                }
+                | Layout::Vertical {
+                    which: VerticalPos::Right,
+                    right: current,
+                    left: inactive,
+                } => {
+                    add(current, ctx.clone(), active);
+                    add(inactive, ctx, false);
+                }
+            }
+        }
+
+        fn add_err(mut layout: &mut Layout, error: String) {
+            loop {
+                match layout {
+                    Layout::Single(b) => {
+                        if let Some(ctx) = b.current_mut() {
+                            ctx.set_error(error);
+                        }
+                        break;
+                    }
+                    Layout::Horizontal {
+                        which: HorizontalPos::Top,
+                        top: current,
+                        ..
+                    }
+                    | Layout::Horizontal {
+                        which: HorizontalPos::Bottom,
+                        bottom: current,
+                        ..
+                    }
+                    | Layout::Vertical {
+                        which: VerticalPos::Left,
+                        left: current,
+                        ..
+                    }
+                    | Layout::Vertical {
+                        which: VerticalPos::Right,
+                        right: current,
+                        ..
+                    } => {
+                        layout = current;
+                    }
+                }
+            }
+        }
+
         self.selected_buffer_list_mut()
             .select_by_source(&path)
             .or_else(|()| match BufferContext::open(path) {
-                Ok(buffer) => match self {
-                    Self::Single(b) => {
-                        b.push(buffer, true);
-                        Ok(())
-                    }
-                    Self::Horizontal { top, bottom, which } => {
-                        top.push(buffer.clone(), matches!(which, HorizontalPos::Top));
-                        bottom.push(buffer, matches!(which, HorizontalPos::Bottom));
-                        Ok(())
-                    }
-                    Self::Vertical { left, right, which } => {
-                        left.push(buffer.clone(), matches!(which, VerticalPos::Left));
-                        right.push(buffer, matches!(which, VerticalPos::Right));
-                        Ok(())
-                    }
-                    Self::SingleHidden { visible, hidden } => {
-                        visible.push(buffer.clone(), true);
-                        hidden.push(buffer, false);
-                        Ok(())
-                    }
-                },
+                Ok(ctx) => {
+                    add(self, ctx, true);
+                    Ok(())
+                }
                 Err(err) => {
-                    if let Some(buf) = self.selected_buffer_list_mut().current_mut() {
-                        buf.set_error(err.to_string());
-                    }
+                    add_err(self, err.to_string());
                     Err(())
                 }
             })
@@ -1705,24 +1756,17 @@ impl Layout {
             }
             | Self::Vertical {
                 left: x, right: y, ..
-            }
-            | Self::SingleHidden {
-                visible: x,
-                hidden: y,
             } => {
-                x.remove(&buffer);
-                y.remove(&buffer);
+                x.remove(buffer.clone());
+                y.remove(buffer);
             }
         }
     }
 
     fn selected_buffer_list(&self) -> &BufferList {
         match self {
-            Self::Single(buffer)
-            | Self::SingleHidden {
-                visible: buffer, ..
-            }
-            | Self::Horizontal {
+            Self::Single(buffer) => buffer,
+            Self::Horizontal {
                 top: buffer,
                 which: HorizontalPos::Top,
                 ..
@@ -1741,17 +1785,14 @@ impl Layout {
                 right: buffer,
                 which: VerticalPos::Right,
                 ..
-            } => buffer,
+            } => buffer.selected_buffer_list(),
         }
     }
 
     fn selected_buffer_list_mut(&mut self) -> &mut BufferList {
         match self {
-            Self::Single(buffer)
-            | Self::SingleHidden {
-                visible: buffer, ..
-            }
-            | Self::Horizontal {
+            Self::Single(buffer) => buffer,
+            Self::Horizontal {
                 top: buffer,
                 which: HorizontalPos::Top,
                 ..
@@ -1770,48 +1811,74 @@ impl Layout {
                 right: buffer,
                 which: VerticalPos::Right,
                 ..
-            } => buffer,
+            } => buffer.selected_buffer_list_mut(),
         }
     }
 
-    fn selected_buffer_list_pair_mut(&mut self) -> (&mut BufferList, Option<&mut BufferList>) {
+    /// Returns current buffer index
+    /// mutable reference to that BufferContext
+    /// and AltCursors for all other buffers
+    fn current_buffer_mut(
+        &mut self,
+    ) -> Option<(usize, &mut crate::buffer::BufferContext, Vec<AltCursor<'_>>)> {
         match self {
-            Self::Single(buffer) => (buffer, None),
+            Self::Single(buffer) => Some((buffer.current_index(), buffer.current_mut()?, vec![])),
             Self::Horizontal {
-                top: buffer,
-                bottom: alt,
                 which: HorizontalPos::Top,
+                top: active,
+                bottom: inactive,
             }
             | Self::Horizontal {
-                top: alt,
-                bottom: buffer,
                 which: HorizontalPos::Bottom,
+                bottom: active,
+                top: inactive,
             }
             | Self::Vertical {
-                left: buffer,
-                right: alt,
                 which: VerticalPos::Left,
+                left: active,
+                right: inactive,
             }
             | Self::Vertical {
-                left: alt,
-                right: buffer,
                 which: VerticalPos::Right,
+                right: active,
+                left: inactive,
+            } => {
+                let (buffer_idx, buf, mut alts) = active.current_buffer_mut()?;
+                alts.extend(inactive.alt_cursors(buffer_idx));
+                Some((buffer_idx, buf, alts))
             }
-            | Self::SingleHidden {
-                visible: buffer,
-                hidden: alt,
-            } => (buffer, Some(alt)),
+        }
+    }
+
+    fn alt_cursors(&mut self, buffer_idx: usize) -> Vec<AltCursor<'_>> {
+        match self {
+            Self::Single(buffer) => match buffer.get_mut(buffer_idx) {
+                Some(buf) => vec![buf.alt_cursor()],
+                None => vec![],
+            },
+            Self::Horizontal {
+                top: first,
+                bottom: second,
+                ..
+            }
+            | Self::Vertical {
+                left: first,
+                right: second,
+                ..
+            } => {
+                let mut cursors = first.alt_cursors(buffer_idx);
+                cursors.extend(second.alt_cursors(buffer_idx));
+                cursors
+            }
         }
     }
 
     fn update_current_at<F>(&mut self, f: F)
     where
-        F: FnOnce(&mut crate::buffer::BufferContext, Option<AltCursor<'_>>),
+        F: FnOnce(&mut crate::buffer::BufferContext, Vec<AltCursor<'_>>),
     {
-        let (primary, secondary) = self.selected_buffer_list_pair_mut();
-        let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
-        if let Some(primary) = primary.current_mut() {
-            f(primary, secondary.map(|s| s.alt_cursor()));
+        if let Some((_, buf, alts)) = self.current_buffer_mut() {
+            f(buf, alts);
         }
     }
 
@@ -1824,15 +1891,9 @@ impl Layout {
 
     fn on_current_at<T, F>(&mut self, f: F) -> Option<T>
     where
-        F: FnOnce(&mut crate::buffer::BufferContext, Option<AltCursor<'_>>) -> T,
+        F: FnOnce(&mut crate::buffer::BufferContext, Vec<AltCursor<'_>>) -> T,
     {
-        let (primary, secondary) = self.selected_buffer_list_pair_mut();
-        // Both primary and secondary buffer should be at the same index
-        // within the BufferList.
-        let secondary = secondary.and_then(|s| s.get_mut(primary.current_index()));
-        primary
-            .current_mut()
-            .map(|primary| f(primary, secondary.map(|s| s.alt_cursor())))
+        self.current_buffer_mut().map(|(_, buf, alts)| f(buf, alts))
     }
 
     fn previous_buffer(&mut self) {
@@ -1843,146 +1904,195 @@ impl Layout {
         self.selected_buffer_list_mut().next_buffer()
     }
 
-    fn change_pane(&mut self, direction: Direction) {
-        match direction {
-            Direction::Up => {
-                if let Self::Horizontal { which, .. } = self {
-                    *which = HorizontalPos::Top;
+    /// Ok(()) => move performed successfully in ourself or a child
+    /// Err(()) => unable to perform a move
+    fn change_pane(&mut self, direction: Direction) -> Result<(), ()> {
+        match (self, direction) {
+            (Self::Single(_), _) => Err(()),
+            (
+                Self::Horizontal {
+                    which: which @ HorizontalPos::Bottom,
+                    bottom,
+                    ..
+                },
+                direction @ Direction::Up,
+            ) => bottom.change_pane(direction).or_else(|()| {
+                *which = HorizontalPos::Top;
+                Ok(())
+            }),
+            (
+                Self::Horizontal {
+                    which: which @ HorizontalPos::Top,
+                    top,
+                    ..
+                },
+                direction @ Direction::Down,
+            ) => top.change_pane(direction).or_else(|()| {
+                *which = HorizontalPos::Bottom;
+                Ok(())
+            }),
+            (
+                Self::Vertical {
+                    which: which @ VerticalPos::Left,
+                    left,
+                    ..
+                },
+                direction @ Direction::Right,
+            ) => left.change_pane(direction).or_else(|()| {
+                *which = VerticalPos::Right;
+                Ok(())
+            }),
+            (
+                Self::Vertical {
+                    which: which @ VerticalPos::Right,
+                    right,
+                    ..
+                },
+                direction @ Direction::Left,
+            ) => right.change_pane(direction).or_else(|()| {
+                *which = VerticalPos::Left;
+                Ok(())
+            }),
+            (
+                Self::Horizontal {
+                    which: HorizontalPos::Bottom,
+                    bottom: active,
+                    ..
                 }
-            }
-            Direction::Down => {
-                if let Self::Horizontal { which, .. } = self {
-                    *which = HorizontalPos::Bottom;
+                | Self::Horizontal {
+                    which: HorizontalPos::Top,
+                    top: active,
+                    ..
                 }
-            }
-            Direction::Left => {
-                if let Self::Vertical { which, .. } = self {
-                    *which = VerticalPos::Left;
+                | Self::Vertical {
+                    which: VerticalPos::Left,
+                    left: active,
+                    ..
                 }
-            }
-            Direction::Right => {
-                if let Self::Vertical { which, .. } = self {
-                    *which = VerticalPos::Right;
-                }
-            }
+                | Self::Vertical {
+                    which: VerticalPos::Right,
+                    right: active,
+                    ..
+                },
+                direction,
+            ) => active.change_pane(direction),
         }
     }
 
     fn split_pane(&mut self, direction: Direction) {
-        match direction {
-            Direction::Up => {
-                match self {
-                    Self::Single(buffer) => {
-                        *self = Self::Horizontal {
-                            bottom: buffer.clone(),
-                            top: std::mem::take(buffer),
+        let mut current = self;
+
+        loop {
+            match current {
+                Self::Single(buffer) => match direction {
+                    Direction::Up => {
+                        *current = Self::Horizontal {
+                            top: Box::new(Self::Single(buffer.clone())),
+                            bottom: Box::new(Self::Single(std::mem::take(buffer))),
                             which: HorizontalPos::Top,
                         };
+                        break;
                     }
-                    Self::SingleHidden { visible, hidden } => {
-                        *self = Self::Horizontal {
-                            top: std::mem::take(visible),
-                            bottom: std::mem::take(hidden),
-                            which: HorizontalPos::Top,
-                        };
-                    }
-                    _ => { /* ignore other events */ }
-                }
-            }
-            Direction::Down => {
-                match self {
-                    Self::Single(buffer) => {
-                        *self = Self::Horizontal {
-                            top: buffer.clone(),
-                            bottom: std::mem::take(buffer),
+                    Direction::Down => {
+                        *current = Self::Horizontal {
+                            top: Box::new(Self::Single(buffer.clone())),
+                            bottom: Box::new(Self::Single(std::mem::take(buffer))),
                             which: HorizontalPos::Bottom,
                         };
+                        break;
                     }
-                    Self::SingleHidden { visible, hidden } => {
-                        *self = Self::Horizontal {
-                            top: std::mem::take(hidden),
-                            bottom: std::mem::take(visible),
-                            which: HorizontalPos::Bottom,
-                        };
-                    }
-                    _ => { /* ignore other events */ }
-                }
-            }
-            Direction::Left => {
-                match self {
-                    Self::Single(buffer) => {
-                        *self = Self::Vertical {
-                            right: buffer.clone(),
-                            left: std::mem::take(buffer),
+                    Direction::Left => {
+                        *current = Self::Vertical {
+                            left: Box::new(Self::Single(buffer.clone())),
+                            right: Box::new(Self::Single(std::mem::take(buffer))),
                             which: VerticalPos::Left,
                         };
+                        break;
                     }
-                    Self::SingleHidden { visible, hidden } => {
-                        *self = Self::Vertical {
-                            left: std::mem::take(visible),
-                            right: std::mem::take(hidden),
-                            which: VerticalPos::Left,
+                    Direction::Right => {
+                        *current = Self::Vertical {
+                            left: Box::new(Self::Single(buffer.clone())),
+                            right: Box::new(Self::Single(std::mem::take(buffer))),
+                            which: VerticalPos::Right,
                         };
+                        break;
                     }
-                    _ => { /* ignore other events */ }
+                },
+                Self::Horizontal {
+                    which: HorizontalPos::Top,
+                    top: active,
+                    ..
                 }
-            }
-            Direction::Right => {
-                match self {
-                    Self::Single(buffer) => {
-                        *self = Self::Vertical {
-                            right: buffer.clone(),
-                            left: std::mem::take(buffer),
-                            which: VerticalPos::Right,
-                        };
-                    }
-                    Self::SingleHidden { visible, hidden } => {
-                        *self = Self::Vertical {
-                            right: std::mem::take(visible),
-                            left: std::mem::take(hidden),
-                            which: VerticalPos::Right,
-                        };
-                    }
-                    _ => { /* ignore other events */ }
+                | Self::Horizontal {
+                    which: HorizontalPos::Bottom,
+                    bottom: active,
+                    ..
+                }
+                | Self::Vertical {
+                    which: VerticalPos::Left,
+                    left: active,
+                    ..
+                }
+                | Self::Vertical {
+                    which: VerticalPos::Right,
+                    right: active,
+                    ..
+                } => {
+                    current = active;
                 }
             }
         }
     }
 
-    /// Hide alternate pane, leaving only selected pane
-    fn retain_visible_pane(&mut self) -> bool {
+    fn delete_current_pane(&mut self) {
         match self {
-            Layout::Vertical {
-                left: buf,
-                right: alt,
-                which: VerticalPos::Left,
+            Self::Single(_) => { /* don't delete last pane */ }
+            Self::Horizontal {
+                which: HorizontalPos::Top,
+                top: active,
+                bottom: remaining,
+            }
+            | Self::Horizontal {
+                which: HorizontalPos::Bottom,
+                bottom: active,
+                top: remaining,
             }
             | Self::Vertical {
-                left: alt,
-                right: buf,
+                which: VerticalPos::Left,
+                left: active,
+                right: remaining,
+            }
+            | Self::Vertical {
                 which: VerticalPos::Right,
-            }
-            | Self::Horizontal {
-                top: buf,
-                bottom: alt,
-                which: HorizontalPos::Top,
-            }
-            | Self::Horizontal {
-                top: alt,
-                bottom: buf,
-                which: HorizontalPos::Bottom,
+                right: active,
+                left: remaining,
             } => {
-                *self = Self::SingleHidden {
-                    visible: std::mem::take(buf),
-                    hidden: std::mem::take(alt),
-                };
-                true
+                if matches!(&**active, Layout::Single(_)) {
+                    *self = std::mem::take(remaining);
+                } else {
+                    active.delete_current_pane();
+                }
             }
-            Self::Single(_) | Self::SingleHidden { .. } => false,
         }
     }
 
     fn cursor_position(&self, area: Rect, mode: &EditorMode) -> Option<Position> {
+        use ratatui::layout::Constraint::{Length, Min};
+        use ratatui::layout::Layout;
+
+        // apply tabs exactly once
+        let area = match self.selected_buffer_list().has_tabs() {
+            true => {
+                let [_, widget_area] = Layout::vertical([Length(1), Min(0)]).areas(area);
+                widget_area
+            }
+            false => area,
+        };
+
+        self.cursor_position_inner(area, mode)
+    }
+
+    fn cursor_position_inner(&self, area: Rect, mode: &EditorMode) -> Option<Position> {
         use crate::buffer::BufferWidget;
         use ratatui::layout::Constraint::{Length, Min};
         use ratatui::layout::{Constraint, Layout};
@@ -2042,43 +2152,46 @@ impl Layout {
             }
         }
 
-        let area = match self.selected_buffer_list().has_tabs() {
-            true => {
-                let [_, widget_area] = Layout::vertical([Length(1), Min(0)]).areas(area);
-                widget_area
-            }
-            false => area,
-        };
-
         match self {
-            Self::Single(buf) | Self::SingleHidden { visible: buf, .. } => buf
+            Self::Single(buf) => buf
                 .cursor_viewport_position(BufferWidget::viewport_height(area))
                 .and_then(|pos| apply_position(area, pos, mode)),
-            Self::Horizontal { top, bottom, which } => {
-                let [top_area, bottom_area] =
-                    Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
+            Self::Horizontal {
+                top,
+                which: HorizontalPos::Top,
+                ..
+            } => {
+                let [top_area, _] = Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
 
-                match which {
-                    HorizontalPos::Top => top
-                        .cursor_viewport_position(BufferWidget::viewport_height(top_area))
-                        .and_then(|pos| apply_position(top_area, pos, mode)),
-                    HorizontalPos::Bottom => bottom
-                        .cursor_viewport_position(BufferWidget::viewport_height(bottom_area))
-                        .and_then(|pos| apply_position(bottom_area, pos, mode)),
-                }
+                top.cursor_position_inner(top_area, mode)
             }
-            Self::Vertical { left, right, which } => {
-                let [left_area, right_area] =
+            Self::Horizontal {
+                bottom,
+                which: HorizontalPos::Bottom,
+                ..
+            } => {
+                let [_, bottom_area] = Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
+
+                bottom.cursor_position_inner(bottom_area, mode)
+            }
+            Self::Vertical {
+                left,
+                which: VerticalPos::Left,
+                ..
+            } => {
+                let [left_area, _] = Layout::horizontal(Constraint::from_fills([1, 1])).areas(area);
+
+                left.cursor_position_inner(left_area, mode)
+            }
+            Self::Vertical {
+                right,
+                which: VerticalPos::Right,
+                ..
+            } => {
+                let [_, right_area] =
                     Layout::horizontal(Constraint::from_fills([1, 1])).areas(area);
 
-                match which {
-                    VerticalPos::Left => left
-                        .cursor_viewport_position(BufferWidget::viewport_height(left_area))
-                        .and_then(|pos| apply_position(left_area, pos, mode)),
-                    VerticalPos::Right => right
-                        .cursor_viewport_position(BufferWidget::viewport_height(right_area))
-                        .and_then(|pos| apply_position(right_area, pos, mode)),
-                }
+                right.cursor_position_inner(right_area, mode)
             }
         }
     }
@@ -2088,7 +2201,6 @@ impl Layout {
     /// Given an onscreen row and column, sets focus somewhere
     /// in the editor if possible.
     fn set_cursor_focus(&mut self, mut area: Rect, position: Position) {
-        use ratatui::layout::Constraint;
         use ratatui::layout::{
             Constraint::{Length, Min},
             Layout,
@@ -2118,11 +2230,15 @@ impl Layout {
             area = layout_area;
         }
 
+        self.set_cursor_focus_inner(area, position);
+    }
+
+    /// set_cursor_focus, but with tabs already accounted for
+    fn set_cursor_focus_inner(&mut self, area: Rect, position: Position) {
+        use ratatui::layout::{Constraint, Layout};
+
         match self {
-            Self::Single(buffer)
-            | Self::SingleHidden {
-                visible: buffer, ..
-            } => {
+            Self::Single(buffer) => {
                 buffer.set_cursor_focus(area, position);
             }
             Self::Horizontal { top, bottom, which } => {
@@ -2131,10 +2247,10 @@ impl Layout {
 
                 if top_area.contains(position) {
                     *which = HorizontalPos::Top;
-                    top.set_cursor_focus(top_area, position);
+                    top.set_cursor_focus_inner(top_area, position);
                 } else if bottom_area.contains(position) {
                     *which = HorizontalPos::Bottom;
-                    bottom.set_cursor_focus(bottom_area, position);
+                    bottom.set_cursor_focus_inner(bottom_area, position);
                 }
             }
             Self::Vertical { left, right, which } => {
@@ -2143,10 +2259,10 @@ impl Layout {
 
                 if left_area.contains(position) {
                     *which = VerticalPos::Left;
-                    left.set_cursor_focus(left_area, position);
+                    left.set_cursor_focus_inner(left_area, position);
                 } else if right_area.contains(position) {
                     *which = VerticalPos::Right;
-                    right.set_cursor_focus(right_area, position);
+                    right.set_cursor_focus_inner(right_area, position);
                 }
             }
         }
@@ -2161,14 +2277,14 @@ enum Direction {
     Right,
 }
 
-struct LayoutWidget<'e> {
+struct EditorWidget<'e> {
     focused: bool,
     mode: &'e mut EditorMode,
     show_help: bool,
     show_sub_help: bool,
 }
 
-impl StatefulWidget for LayoutWidget<'_> {
+impl StatefulWidget for EditorWidget<'_> {
     type State = Layout;
 
     fn render(
@@ -2177,8 +2293,6 @@ impl StatefulWidget for LayoutWidget<'_> {
         buf: &mut ratatui::buffer::Buffer,
         layout: &mut Layout,
     ) {
-        use crate::buffer::BufferWidget;
-
         let Self {
             mode,
             show_help,
@@ -2210,96 +2324,130 @@ impl StatefulWidget for LayoutWidget<'_> {
             area = layout_area;
         }
 
+        LayoutWidget {
+            mode,
+            show_help,
+            show_sub_help,
+            focused,
+        }
+        .render(area, buf, layout)
+    }
+}
+
+struct LayoutWidget<'e> {
+    focused: bool,
+    mode: &'e mut EditorMode,
+    show_help: bool,
+    show_sub_help: bool,
+}
+
+impl StatefulWidget for LayoutWidget<'_> {
+    type State = Layout;
+
+    fn render(
+        self,
+        area: ratatui::layout::Rect,
+        buf: &mut ratatui::buffer::Buffer,
+        layout: &mut Layout,
+    ) {
+        use crate::buffer::BufferWidget;
+
+        let Self {
+            mode,
+            show_help,
+            show_sub_help,
+            focused,
+        } = self;
+
         match layout {
-            Layout::Single(single)
-            | Layout::SingleHidden {
-                visible: single, ..
-            } => {
+            Layout::Single(single) => {
                 let multiple_buffers = single.multiple_buffers();
 
                 if let Some(buffer) = single.current_mut() {
                     BufferWidget {
                         focused,
-                        mode: Some(mode),
+                        mode: Some(mode).filter(|_| focused),
                         show_help: show_help.then(|| buffer.help_options(multiple_buffers)),
                         show_sub_help,
                     }
                     .render(area, buf, buffer);
                 }
             }
-            Layout::Horizontal { top, bottom, which } => {
+            Layout::Horizontal { which, top, bottom } => {
                 use ratatui::layout::{Constraint, Layout};
-
-                let multiple_buffers = top.multiple_buffers();
 
                 let [top_area, bottom_area] =
                     Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
 
-                if let Some(buffer) = top.current_mut() {
-                    BufferWidget {
+                (match which {
+                    HorizontalPos::Top => LayoutWidget {
                         focused,
-                        mode: match which {
-                            HorizontalPos::Top => Some(mode),
-                            HorizontalPos::Bottom => None,
-                        },
-                        show_help: (show_help && !matches!(which, HorizontalPos::Top))
-                            .then(|| bottom.help_options(multiple_buffers))
-                            .flatten(),
+                        mode,
+                        show_help,
                         show_sub_help,
-                    }
-                    .render(top_area, buf, buffer);
-                }
-                if let Some(buffer) = bottom.current_mut() {
-                    BufferWidget {
-                        focused,
-                        mode: match which {
-                            HorizontalPos::Top => None,
-                            HorizontalPos::Bottom => Some(mode),
-                        },
-                        show_help: (show_help && !matches!(which, HorizontalPos::Bottom))
-                            .then(|| top.help_options(multiple_buffers))
-                            .flatten(),
-                        show_sub_help,
-                    }
-                    .render(bottom_area, buf, buffer);
-                }
-            }
-            Layout::Vertical { left, right, which } => {
-                use ratatui::layout::{Constraint, Layout};
+                    },
+                    HorizontalPos::Bottom => LayoutWidget {
+                        focused: false,
+                        mode,
+                        show_help: false,
+                        show_sub_help: false,
+                    },
+                })
+                .render(top_area, buf, top);
 
-                let multiple_buffers = left.multiple_buffers();
+                (match which {
+                    HorizontalPos::Top => LayoutWidget {
+                        focused: false,
+                        mode,
+                        show_help: false,
+                        show_sub_help: false,
+                    },
+                    HorizontalPos::Bottom => LayoutWidget {
+                        focused,
+                        mode,
+                        show_help,
+                        show_sub_help,
+                    },
+                })
+                .render(bottom_area, buf, bottom);
+            }
+            Layout::Vertical { which, left, right } => {
+                use ratatui::layout::{Constraint, Layout};
 
                 let [left_area, right_area] =
                     Layout::horizontal(Constraint::from_fills([1, 1])).areas(area);
 
-                if let Some(buffer) = left.current_mut() {
-                    BufferWidget {
+                (match which {
+                    VerticalPos::Left => LayoutWidget {
                         focused,
-                        mode: match which {
-                            VerticalPos::Left => Some(mode),
-                            VerticalPos::Right => None,
-                        },
-                        show_help: (show_help && !matches!(which, VerticalPos::Left))
-                            .then(|| right.help_options(multiple_buffers))
-                            .flatten(),
+                        mode,
+                        show_help,
                         show_sub_help,
-                    }
-                    .render(left_area, buf, buffer);
-                }
-                if let Some(buffer) = right.current_mut() {
-                    BufferWidget {
+                    },
+                    VerticalPos::Right => LayoutWidget {
+                        focused: false,
+                        mode,
+                        show_help: false,
+                        show_sub_help: false,
+                    },
+                })
+                .render(left_area, buf, left);
+
+                (match which {
+                    VerticalPos::Left => LayoutWidget {
+                        focused: false,
+                        mode,
+                        show_help: false,
+                        show_sub_help: false,
+                    },
+                    VerticalPos::Right => LayoutWidget {
                         focused,
-                        mode: match which {
-                            VerticalPos::Left => None,
-                            VerticalPos::Right => Some(mode),
-                        },
-                        show_help: (show_help && !matches!(which, VerticalPos::Right))
-                            .then(|| left.help_options(multiple_buffers))
-                            .flatten(),
+                        mode,
+                        show_help,
                         show_sub_help,
-                    }
-                    .render(right_area, buf, buffer);
-                }
+                    },
+                })
+                .render(right_area, buf, right);
             }
         }
     }

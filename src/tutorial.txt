@@ -461,13 +461,19 @@ simultaneously - or even two different places in the same buffer.
 This is where the panes feature comes in handy.
 
 Ctrl-N/F10 prompts for how one wishes to split a single pane in two.
-← or → divides a single window into two tall
-side-by-side sections which we can navigate between using
-Ctrl-← and Ctrl-→. Ctrl-N/F10 again restores single window mode.
+← or → divides a single window into two tall side-by-side sections
+which we can navigate between using Ctrl-← and Ctrl-→.
 
 Alternatively, Ctrl-N/F10 and then ↑ or ↓ divides a single window
 into two wide top-and-bottom sections which we can navigate between using
-Ctrl-↑ or Ctrl-↓. Ctrl-N/F10 again restores single window mode.
+Ctrl-↑ or Ctrl-↓.
+
+Ctrl-N/F10 followed by Del deletes the current pane,
+but does not affect the pane's open buffers which remain
+available on the remaining panes.
+
+Panes can be subdivided recursively as needed,
+each getting a 50/50 split of the remaining space.
 
 
 # Closing Thoughts

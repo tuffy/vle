@@ -219,8 +219,11 @@ pub static CONFIRM_CLOSE: &[Keybinding] = &[
 ];
 
 pub static SPLIT_PANE: &[Keybinding] = &[
-    none(&[LEFT, RIGHT], "Split Window Into Vertical Panes"),
-    none(&[UP, DOWN], "Split Window Into Horizontal Panes"),
+    none(&[LEFT], "Split Vertically \u{25e7}"),
+    none(&[RIGHT], "Split Vertically \u{25e8}"),
+    none(&[UP], "Split Horizontally \u{2b12}"),
+    none(&[DOWN], "Split Horizontally \u{2b13}"),
+    none(&["Del"], "Delete Current Pane"),
     none(&["Esc"], "Cancel"),
 ];
 
