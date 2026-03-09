@@ -599,55 +599,22 @@ impl Editor {
             }
             key!(CONTROL, PageUp) => self.layout.previous_buffer(),
             key!(CONTROL, PageDown) => self.layout.next_buffer(),
-            keybind!(SplitPane) => match &mut self.layout {
-                Layout::Vertical {
-                    left: buf,
-                    right: alt,
-                    which: VerticalPos::Left,
-                }
-                | Layout::Vertical {
-                    left: alt,
-                    right: buf,
-                    which: VerticalPos::Right,
-                }
-                | Layout::Horizontal {
-                    top: buf,
-                    bottom: alt,
-                    which: HorizontalPos::Top,
-                }
-                | Layout::Horizontal {
-                    top: alt,
-                    bottom: buf,
-                    which: HorizontalPos::Bottom,
-                } => {
-                    self.layout = Layout::SingleHidden {
-                        visible: std::mem::take(buf),
-                        hidden: std::mem::take(alt),
-                    };
-                }
-                _ => {
+            keybind!(SplitPane) => {
+                if !self.layout.retain_visible_pane() {
                     self.mode = EditorMode::SplitPane;
                 }
-            },
+            }
             key!(CONTROL, Left) => {
-                if let Layout::Vertical { which, .. } = &mut self.layout {
-                    *which = VerticalPos::Left;
-                }
+                self.layout.change_pane(Direction::Left);
             }
             key!(CONTROL, Right) => {
-                if let Layout::Vertical { which, .. } = &mut self.layout {
-                    *which = VerticalPos::Right;
-                }
+                self.layout.change_pane(Direction::Right);
             }
             key!(CONTROL, Up) => {
-                if let Layout::Horizontal { which, .. } = &mut self.layout {
-                    *which = HorizontalPos::Top;
-                }
+                self.layout.change_pane(Direction::Up);
             }
             key!(CONTROL, Down) => {
-                if let Layout::Horizontal { which, .. } = &mut self.layout {
-                    *which = HorizontalPos::Bottom;
-                }
+                self.layout.change_pane(Direction::Down);
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Up,
@@ -1004,82 +971,22 @@ impl Editor {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
         match event {
-            key!(Up) => match &mut self.layout {
-                Layout::Single(buffer) => {
-                    self.layout = Layout::Horizontal {
-                        bottom: buffer.clone(),
-                        top: std::mem::take(buffer),
-                        which: HorizontalPos::Top,
-                    };
-                    self.mode = EditorMode::default();
-                }
-                Layout::SingleHidden { visible, hidden } => {
-                    self.layout = Layout::Horizontal {
-                        top: std::mem::take(visible),
-                        bottom: std::mem::take(hidden),
-                        which: HorizontalPos::Top,
-                    };
-                    self.mode = EditorMode::default();
-                }
-                _ => { /* ignore other events */ }
-            },
-            key!(Down) => match &mut self.layout {
-                Layout::Single(buffer) => {
-                    self.layout = Layout::Horizontal {
-                        top: buffer.clone(),
-                        bottom: std::mem::take(buffer),
-                        which: HorizontalPos::Bottom,
-                    };
-                    self.mode = EditorMode::default();
-                }
-                Layout::SingleHidden { visible, hidden } => {
-                    self.layout = Layout::Horizontal {
-                        top: std::mem::take(hidden),
-                        bottom: std::mem::take(visible),
-                        which: HorizontalPos::Bottom,
-                    };
-                    self.mode = EditorMode::default();
-                }
-                _ => { /* ignore other events */ }
-            },
-            key!(Left) => match &mut self.layout {
-                Layout::Single(buffer) => {
-                    self.layout = Layout::Vertical {
-                        right: buffer.clone(),
-                        left: std::mem::take(buffer),
-                        which: VerticalPos::Left,
-                    };
-                    self.mode = EditorMode::default();
-                }
-                Layout::SingleHidden { visible, hidden } => {
-                    self.layout = Layout::Vertical {
-                        left: std::mem::take(visible),
-                        right: std::mem::take(hidden),
-                        which: VerticalPos::Left,
-                    };
-                    self.mode = EditorMode::default();
-                }
-                _ => { /* ignore other events */ }
-            },
-            key!(Right) => match &mut self.layout {
-                Layout::Single(buffer) => {
-                    self.layout = Layout::Vertical {
-                        right: buffer.clone(),
-                        left: std::mem::take(buffer),
-                        which: VerticalPos::Right,
-                    };
-                    self.mode = EditorMode::default();
-                }
-                Layout::SingleHidden { visible, hidden } => {
-                    self.layout = Layout::Vertical {
-                        right: std::mem::take(visible),
-                        left: std::mem::take(hidden),
-                        which: VerticalPos::Right,
-                    };
-                    self.mode = EditorMode::default();
-                }
-                _ => { /* ignore other events */ }
-            },
+            key!(Up) => {
+                self.layout.split_pane(Direction::Up);
+                self.mode = EditorMode::default();
+            }
+            key!(Down) => {
+                self.layout.split_pane(Direction::Down);
+                self.mode = EditorMode::default();
+            }
+            key!(Left) => {
+                self.layout.split_pane(Direction::Left);
+                self.mode = EditorMode::default();
+            }
+            key!(Right) => {
+                self.layout.split_pane(Direction::Right);
+                self.mode = EditorMode::default();
+            }
             _ => { /* ignore other events */ }
         }
     }
@@ -1943,6 +1850,145 @@ impl Layout {
         self.selected_buffer_list_mut().next_buffer()
     }
 
+    fn change_pane(&mut self, direction: Direction) {
+        match direction {
+            Direction::Up => {
+                if let Self::Horizontal { which, .. } = self {
+                    *which = HorizontalPos::Top;
+                }
+            }
+            Direction::Down => {
+                if let Self::Horizontal { which, .. } = self {
+                    *which = HorizontalPos::Bottom;
+                }
+            }
+            Direction::Left => {
+                if let Self::Vertical { which, .. } = self {
+                    *which = VerticalPos::Left;
+                }
+            }
+            Direction::Right => {
+                if let Self::Vertical { which, .. } = self {
+                    *which = VerticalPos::Right;
+                }
+            }
+        }
+    }
+
+    fn split_pane(&mut self, direction: Direction) {
+        match direction {
+            Direction::Up => {
+                match self {
+                    Self::Single(buffer) => {
+                        *self = Self::Horizontal {
+                            bottom: buffer.clone(),
+                            top: std::mem::take(buffer),
+                            which: HorizontalPos::Top,
+                        };
+                    }
+                    Self::SingleHidden { visible, hidden } => {
+                        *self = Self::Horizontal {
+                            top: std::mem::take(visible),
+                            bottom: std::mem::take(hidden),
+                            which: HorizontalPos::Top,
+                        };
+                    }
+                    _ => { /* ignore other events */ }
+                }
+            }
+            Direction::Down => {
+                match self {
+                    Self::Single(buffer) => {
+                        *self = Self::Horizontal {
+                            top: buffer.clone(),
+                            bottom: std::mem::take(buffer),
+                            which: HorizontalPos::Bottom,
+                        };
+                    }
+                    Self::SingleHidden { visible, hidden } => {
+                        *self = Self::Horizontal {
+                            top: std::mem::take(hidden),
+                            bottom: std::mem::take(visible),
+                            which: HorizontalPos::Bottom,
+                        };
+                    }
+                    _ => { /* ignore other events */ }
+                }
+            }
+            Direction::Left => {
+                match self {
+                    Self::Single(buffer) => {
+                        *self = Self::Vertical {
+                            right: buffer.clone(),
+                            left: std::mem::take(buffer),
+                            which: VerticalPos::Left,
+                        };
+                    }
+                    Self::SingleHidden { visible, hidden } => {
+                        *self = Self::Vertical {
+                            left: std::mem::take(visible),
+                            right: std::mem::take(hidden),
+                            which: VerticalPos::Left,
+                        };
+                    }
+                    _ => { /* ignore other events */ }
+                }
+            }
+            Direction::Right => {
+                match self {
+                    Self::Single(buffer) => {
+                        *self = Self::Vertical {
+                            right: buffer.clone(),
+                            left: std::mem::take(buffer),
+                            which: VerticalPos::Right,
+                        };
+                    }
+                    Self::SingleHidden { visible, hidden } => {
+                        *self = Self::Vertical {
+                            right: std::mem::take(visible),
+                            left: std::mem::take(hidden),
+                            which: VerticalPos::Right,
+                        };
+                    }
+                    _ => { /* ignore other events */ }
+                }
+            }
+        }
+    }
+
+    /// Hide alternate pane, leaving only selected pane
+    fn retain_visible_pane(&mut self) -> bool {
+        match self {
+            Layout::Vertical {
+                left: buf,
+                right: alt,
+                which: VerticalPos::Left,
+            }
+            | Self::Vertical {
+                left: alt,
+                right: buf,
+                which: VerticalPos::Right,
+            }
+            | Self::Horizontal {
+                top: buf,
+                bottom: alt,
+                which: HorizontalPos::Top,
+            }
+            | Self::Horizontal {
+                top: alt,
+                bottom: buf,
+                which: HorizontalPos::Bottom,
+            } => {
+                *self = Self::SingleHidden {
+                    visible: std::mem::take(buf),
+                    hidden: std::mem::take(alt),
+                };
+                true
+            }
+            Self::Single(_) | Self::SingleHidden { .. } => false,
+        }
+    }
+
     fn cursor_position(&self, area: Rect, mode: &EditorMode) -> Option<Position> {
         use crate::buffer::BufferWidget;
         use ratatui::layout::Constraint::{Length, Min};
@@ -2112,6 +2158,14 @@ impl Layout {
             }
         }
     }
+}
+
+/// Directions for moving or splitting panes
+enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
 }
 
 struct LayoutWidget<'e> {
