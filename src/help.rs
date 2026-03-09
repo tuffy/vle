@@ -223,6 +223,8 @@ pub static SPLIT_PANE: &[Keybinding] = &[
     none(&[RIGHT], "Split Vertically \u{25e8}"),
     none(&[UP], "Split Horizontally \u{2b12}"),
     none(&[DOWN], "Split Horizontally \u{2b13}"),
+    none(&["+"], "Increase Size Ratio"),
+    none(&["-"], "Decrease Size Ratio"),
     none(&["Del"], "Delete Current Pane"),
     none(&["Esc"], "Cancel"),
 ];

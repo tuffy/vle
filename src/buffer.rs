@@ -2324,6 +2324,10 @@ impl BufferContext {
         self.message = Some(BufferMessage::Error(err.into()))
     }
 
+    pub fn set_message<S: Into<Cow<'static, str>>>(&mut self, msg: S) {
+        self.message = Some(BufferMessage::Notice(msg.into()))
+    }
+
     pub fn alt_cursor(&mut self) -> AltCursor<'_> {
         AltCursor {
             cursor: &mut self.cursor,

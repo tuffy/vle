@@ -989,6 +989,18 @@ impl Editor {
                 self.layout.delete_current_pane();
                 self.mode = EditorMode::default();
             }
+            key!('+') => {
+                self.layout.update_ratio(|ours, theirs, buf| {
+                    *ours = (*ours + 1).clamp(1, 10);
+                    buf.set_message(format!("Ratio {ours}:{theirs}"));
+                });
+            }
+            key!('-') => {
+                self.layout.update_ratio(|ours, theirs, buf| {
+                    *ours = ours.saturating_sub(1).clamp(1, 10);
+                    buf.set_message(format!("Ratio {ours}:{theirs}"));
+                });
+            }
             _ => { /* ignore other events */ }
         }
     }
@@ -1641,12 +1653,16 @@ enum Layout {
     Single(BufferList),
     Horizontal {
         top: Box<Layout>,
+        top_fill: u16,
         bottom: Box<Layout>,
+        bottom_fill: u16,
         which: HorizontalPos,
     },
     Vertical {
         left: Box<Layout>,
+        left_fill: u16,
         right: Box<Layout>,
+        right_fill: u16,
         which: VerticalPos,
     },
 }
@@ -1677,21 +1693,25 @@ impl Layout {
                     which: HorizontalPos::Top,
                     top: current,
                     bottom: inactive,
+                    ..
                 }
                 | Layout::Horizontal {
                     which: HorizontalPos::Bottom,
                     bottom: current,
                     top: inactive,
+                    ..
                 }
                 | Layout::Vertical {
                     which: VerticalPos::Left,
                     left: current,
                     right: inactive,
+                    ..
                 }
                 | Layout::Vertical {
                     which: VerticalPos::Right,
                     right: current,
                     left: inactive,
+                    ..
                 } => {
                     add(current, ctx.clone(), active);
                     add(inactive, ctx, false);
@@ -1827,21 +1847,25 @@ impl Layout {
                 which: HorizontalPos::Top,
                 top: active,
                 bottom: inactive,
+                ..
             }
             | Self::Horizontal {
                 which: HorizontalPos::Bottom,
                 bottom: active,
                 top: inactive,
+                ..
             }
             | Self::Vertical {
                 which: VerticalPos::Left,
                 left: active,
                 right: inactive,
+                ..
             }
             | Self::Vertical {
                 which: VerticalPos::Right,
                 right: active,
                 left: inactive,
+                ..
             } => {
                 let (buffer_idx, buf, mut alts) = active.current_buffer_mut()?;
                 alts.extend(inactive.alt_cursors(buffer_idx));
@@ -1990,6 +2014,8 @@ impl Layout {
                             top: Box::new(Self::Single(buffer.clone())),
                             bottom: Box::new(Self::Single(std::mem::take(buffer))),
                             which: HorizontalPos::Top,
+                            top_fill: 1,
+                            bottom_fill: 1,
                         };
                         break;
                     }
@@ -1998,6 +2024,8 @@ impl Layout {
                             top: Box::new(Self::Single(buffer.clone())),
                             bottom: Box::new(Self::Single(std::mem::take(buffer))),
                             which: HorizontalPos::Bottom,
+                            top_fill: 1,
+                            bottom_fill: 1,
                         };
                         break;
                     }
@@ -2006,6 +2034,8 @@ impl Layout {
                             left: Box::new(Self::Single(buffer.clone())),
                             right: Box::new(Self::Single(std::mem::take(buffer))),
                             which: VerticalPos::Left,
+                            left_fill: 1,
+                            right_fill: 1,
                         };
                         break;
                     }
@@ -2014,6 +2044,8 @@ impl Layout {
                             left: Box::new(Self::Single(buffer.clone())),
                             right: Box::new(Self::Single(std::mem::take(buffer))),
                             which: VerticalPos::Right,
+                            left_fill: 1,
+                            right_fill: 1,
                         };
                         break;
                     }
@@ -2051,21 +2083,25 @@ impl Layout {
                 which: HorizontalPos::Top,
                 top: active,
                 bottom: remaining,
+                ..
             }
             | Self::Horizontal {
                 which: HorizontalPos::Bottom,
                 bottom: active,
                 top: remaining,
+                ..
             }
             | Self::Vertical {
                 which: VerticalPos::Left,
                 left: active,
                 right: remaining,
+                ..
             }
             | Self::Vertical {
                 which: VerticalPos::Right,
                 right: active,
                 left: remaining,
+                ..
             } => {
                 if matches!(&**active, Layout::Single(_)) {
                     *self = std::mem::take(remaining);
@@ -2159,37 +2195,50 @@ impl Layout {
             Self::Horizontal {
                 top,
                 which: HorizontalPos::Top,
+                top_fill,
+                bottom_fill,
                 ..
             } => {
-                let [top_area, _] = Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
+                let [top_area, _] =
+                    Layout::vertical(Constraint::from_fills([*top_fill, *bottom_fill])).areas(area);
 
                 top.cursor_position_inner(top_area, mode)
             }
             Self::Horizontal {
                 bottom,
                 which: HorizontalPos::Bottom,
+                top_fill,
+                bottom_fill,
                 ..
             } => {
-                let [_, bottom_area] = Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
+                let [_, bottom_area] =
+                    Layout::vertical(Constraint::from_fills([*top_fill, *bottom_fill])).areas(area);
 
                 bottom.cursor_position_inner(bottom_area, mode)
             }
             Self::Vertical {
                 left,
                 which: VerticalPos::Left,
+                left_fill,
+                right_fill,
                 ..
             } => {
-                let [left_area, _] = Layout::horizontal(Constraint::from_fills([1, 1])).areas(area);
+                let [left_area, _] =
+                    Layout::horizontal(Constraint::from_fills([*left_fill, *right_fill]))
+                        .areas(area);
 
                 left.cursor_position_inner(left_area, mode)
             }
             Self::Vertical {
                 right,
                 which: VerticalPos::Right,
+                left_fill,
+                right_fill,
                 ..
             } => {
                 let [_, right_area] =
-                    Layout::horizontal(Constraint::from_fills([1, 1])).areas(area);
+                    Layout::horizontal(Constraint::from_fills([*left_fill, *right_fill]))
+                        .areas(area);
 
                 right.cursor_position_inner(right_area, mode)
             }
@@ -2241,9 +2290,15 @@ impl Layout {
             Self::Single(buffer) => {
                 buffer.set_cursor_focus(area, position);
             }
-            Self::Horizontal { top, bottom, which } => {
+            Self::Horizontal {
+                top,
+                bottom,
+                which,
+                top_fill,
+                bottom_fill,
+            } => {
                 let [top_area, bottom_area] =
-                    Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
+                    Layout::vertical(Constraint::from_fills([*top_fill, *bottom_fill])).areas(area);
 
                 if top_area.contains(position) {
                     *which = HorizontalPos::Top;
@@ -2253,9 +2308,16 @@ impl Layout {
                     bottom.set_cursor_focus_inner(bottom_area, position);
                 }
             }
-            Self::Vertical { left, right, which } => {
+            Self::Vertical {
+                left,
+                right,
+                which,
+                left_fill,
+                right_fill,
+            } => {
                 let [left_area, right_area] =
-                    Layout::horizontal(Constraint::from_fills([1, 1])).areas(area);
+                    Layout::horizontal(Constraint::from_fills([*left_fill, *right_fill]))
+                        .areas(area);
 
                 if left_area.contains(position) {
                     *which = VerticalPos::Left;
@@ -2263,6 +2325,56 @@ impl Layout {
                 } else if right_area.contains(position) {
                     *which = VerticalPos::Right;
                     right.set_cursor_focus_inner(right_area, position);
+                }
+            }
+        }
+    }
+
+    fn update_ratio<F>(&mut self, f: F)
+    where
+        F: FnOnce(&mut u16, u16, &mut BufferContext),
+    {
+        let mut current = self;
+
+        loop {
+            match current {
+                Self::Single(_) => break,
+                Self::Horizontal {
+                    which: HorizontalPos::Top,
+                    top: selected,
+                    top_fill: selected_fill,
+                    bottom_fill: other_fill,
+                    ..
+                }
+                | Self::Horizontal {
+                    which: HorizontalPos::Bottom,
+                    bottom: selected,
+                    bottom_fill: selected_fill,
+                    top_fill: other_fill,
+                    ..
+                }
+                | Self::Vertical {
+                    which: VerticalPos::Left,
+                    left: selected,
+                    left_fill: selected_fill,
+                    right_fill: other_fill,
+                    ..
+                }
+                | Self::Vertical {
+                    which: VerticalPos::Right,
+                    right: selected,
+                    right_fill: selected_fill,
+                    left_fill: other_fill,
+                    ..
+                } => {
+                    if let Self::Single(buflist) = &mut **selected {
+                        if let Some(ctx) = buflist.current_mut() {
+                            f(selected_fill, *other_fill, ctx);
+                        }
+                        break;
+                    } else {
+                        current = selected;
+                    }
                 }
             }
         }
@@ -2377,11 +2489,17 @@ impl StatefulWidget for LayoutWidget<'_> {
                     .render(area, buf, buffer);
                 }
             }
-            Layout::Horizontal { which, top, bottom } => {
+            Layout::Horizontal {
+                which,
+                top,
+                bottom,
+                top_fill,
+                bottom_fill,
+            } => {
                 use ratatui::layout::{Constraint, Layout};
 
                 let [top_area, bottom_area] =
-                    Layout::vertical(Constraint::from_fills([1, 1])).areas(area);
+                    Layout::vertical(Constraint::from_fills([*top_fill, *bottom_fill])).areas(area);
 
                 (match which {
                     HorizontalPos::Top => LayoutWidget {
@@ -2419,11 +2537,18 @@ impl StatefulWidget for LayoutWidget<'_> {
                 })
                 .render(bottom_area, buf, bottom);
             }
-            Layout::Vertical { which, left, right } => {
+            Layout::Vertical {
+                which,
+                left,
+                right,
+                left_fill,
+                right_fill,
+            } => {
                 use ratatui::layout::{Constraint, Layout};
 
                 let [left_area, right_area] =
-                    Layout::horizontal(Constraint::from_fills([1, 1])).areas(area);
+                    Layout::horizontal(Constraint::from_fills([*left_fill, *right_fill]))
+                        .areas(area);
 
                 (match which {
                     VerticalPos::Left => LayoutWidget {
