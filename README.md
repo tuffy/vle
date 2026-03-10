@@ -89,7 +89,7 @@ captured groups can be pasted to all matches simultaneously.
 ## Multi Cursor-Style Line Editing
 
 Similar to find-and-replace, you can simply highlight a selection of
-lines and use <kbd>Ctrl</kbd>-<kbd>R</kbd> / <kbd>F6</kbd> to edit
+lines and use <kbd>Ctrl</kbd>-<kbd>U</kbd> / <kbd>F6</kbd> to edit
 each of them simultaneously as a unit.
 
 ![Multi-Line Edit Demonstration](./images/multi-line-edit.gif)
@@ -125,6 +125,8 @@ Switch between them using <kbd>Ctrl</kbd>-<kbd>Arrows</kbd>.
 <kbd>Ctrl</kbd>-<kbd>N</kbd> / <kbd>F10</kbd> can split panes
 recursively into more sub-panes, delete existing panes, or adjust
 the pane size ratios.
+
+![Multiple Panes Demonstration](./images/multi-panes.gif)
 
 # Configuration
 
