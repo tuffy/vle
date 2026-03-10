@@ -75,22 +75,32 @@ Matches can be cycled between using the up and down arrow keys.
 This much is unremarkable.
 
 However, you may also *edit* found matches simply by
-repositioning the cursor with the left and right arrow keys
-and typing in new text. New text is inserted simultaneously
-at all matches interactively as if you'd typed it in at each one.
+typing in new text, which overwrites the located matches,
+or by using the left and right arrow keys to reposition cursors
+within all matches to make partial edits.
 
-Text can also be replaced at all matches with
-<kbd>Ctrl</kbd>-<kbd>R</kbd> / <kbd>F6</kbd>,
-which removes the contents of all matches and allows you to enter new text.
+![Multi-Item Replace Demonstration](./images/multi-item-replace.gif)
 
 Additionally, for regular-expression based searches,
 captured groups can be pasted to all matches simultaneously.
+
+![Regular Expression Replacement Demonstration](./images/regex-replace.gif)
 
 ## Multi Cursor-Style Line Editing
 
 Similar to find-and-replace, you can simply highlight a selection of
 lines and use <kbd>Ctrl</kbd>-<kbd>R</kbd> / <kbd>F6</kbd> to edit
 each of them simultaneously as a unit.
+
+![Multi-Line Edit Demonstration](./images/multi-line-edit.gif)
+
+## Multi Cursor-Style Copy and Paste
+
+When multiple items are selected, they can also be cut/copied as a unit.
+They can then be pasted individually, in order, or pasted as a unit
+to another multi-item selection.
+
+![Multi-Item Copy and Paste Demonstration](./images/multi-item-paste.gif)
 
 ## Bookmarks
 
