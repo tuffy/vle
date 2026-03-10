@@ -497,17 +497,17 @@ mod private {
     }
 
     /// A secondary cursor which implements various math operations
-    pub struct Secondary<'b, 'm> {
+    pub struct Secondary<'a, 'b> {
         // secondary cursor's position and selection, if any
-        alt_cursor_selections: Vec<(&'b mut usize, Option<&'b mut usize>)>,
+        alt_cursor_selections: Vec<(&'a mut usize, Option<&'a mut usize>)>,
         // a handle to the current buffer's bookmarks
-        bookmarks: BookmarksHandle<'m>,
+        bookmarks: BookmarksHandle<'b>,
         // minimum primary cursor position we're concerned with
         cursor: usize,
     }
 
-    impl<'b, 'm> Secondary<'b, 'm> {
-        pub fn new(alt: Vec<AltCursor<'b>>, bookmarks: BookmarksHandle<'m>) -> Self {
+    impl<'a, 'b> Secondary<'a, 'b> {
+        pub fn new(alt: Vec<AltCursor<'a>>, bookmarks: BookmarksHandle<'b>) -> Self {
             Self {
                 alt_cursor_selections: alt
                     .into_iter()
@@ -519,18 +519,18 @@ mod private {
         }
 
         /// Constrained to values greater than or equal to the cursor
-        pub fn ge(alt: Vec<AltCursor<'b>>, bookmarks: BookmarksHandle<'m>, cursor: usize) -> Self {
+        pub fn ge(alt: Vec<AltCursor<'a>>, bookmarks: BookmarksHandle<'b>, cursor: usize) -> Self {
             Self::filtered(alt, bookmarks, cursor, |a| a >= cursor)
         }
 
         /// Constrained to values greater than or equal to the cursor
-        pub fn gt(alt: Vec<AltCursor<'b>>, bookmarks: BookmarksHandle<'m>, cursor: usize) -> Self {
+        pub fn gt(alt: Vec<AltCursor<'a>>, bookmarks: BookmarksHandle<'b>, cursor: usize) -> Self {
             Self::filtered(alt, bookmarks, cursor, |a| a > cursor)
         }
 
         fn filtered(
-            alt: Vec<AltCursor<'b>>,
-            bookmarks: BookmarksHandle<'m>,
+            alt: Vec<AltCursor<'a>>,
+            bookmarks: BookmarksHandle<'b>,
             cursor: usize,
             mut f: impl FnMut(usize) -> bool,
         ) -> Self {
@@ -2469,9 +2469,9 @@ impl BufferContext {
     }
 }
 
-pub struct AltCursor<'b> {
-    cursor: &'b mut usize,
-    selection: &'b mut Option<usize>,
+pub struct AltCursor<'a> {
+    cursor: &'a mut usize,
+    selection: &'a mut Option<usize>,
 }
 
 pub struct MultiCursor {
