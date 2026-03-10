@@ -15,7 +15,7 @@ By restricting our feature set to less than twenty powerful features,
 we can devote more mental effort to our projects and less mental
 effort to our tools.
 
-![VLE Screen Capture](./images/vle.svg)
+![VLE Screen Capture](./images/vle.png)
 
 # Installation
 
