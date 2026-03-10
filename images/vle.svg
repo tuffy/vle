@@ -9,7 +9,7 @@
 <rect height="24" width="624"/>
 </clipPath>
 <rect clip-path="url(#header)" fill="#e0e0e0" height="48" rx="6" ry="6" width="624"/>
-<line stroke="#40404040" stroke-width="0.5" x1="0" x2="624" y1="24" y2="24"/><text dominant-baseline="central" fill="#586068" font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif" font-size="13" font-weight="bold" text-anchor="middle" x="312" y="12">./target/release/vle</text>
+<line stroke="#40404040" stroke-width="0.5" x1="0" x2="624" y1="24" y2="24"/><text dominant-baseline="central" fill="#586068" font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif" font-size="13" font-weight="bold" text-anchor="middle" x="312" y="12">vle</text>
 <g>
 <path d="M604,8 612,16 M604,16 612,8" fill="none" stroke="#586068" stroke-linecap="round" stroke-width="1.5"/>
 <path d="M588,8 L592,8 Q594,8,594,10 L594,14 Q594,16,592,16 L588,16 Q586,16,586,14 L586,10 Q586,8,588,8" fill="none" stroke="#586068" stroke-linecap="round" stroke-width="1.5"/>
