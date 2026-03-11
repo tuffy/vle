@@ -181,12 +181,6 @@ pub static EDITING_0: &[Keybinding] = &[
     keybind::<key::Save>("Save File"),
 ];
 
-pub static EDITING_1: &[Keybinding] = &[
-    // F6 is for replace text
-    keybind::<key::GotoPair>("Goto Matching Pair"),
-    keybind::<key::SelectInside>("Select Inside Pair"),
-];
-
 pub static F10: Keybinding = keybind::<key::SplitPane>("Manage Panes");
 
 pub static EDITING_2: &[Keybinding] = &[

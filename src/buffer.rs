@@ -807,11 +807,20 @@ impl From<FindMode> for crate::help::Keybinding {
     }
 }
 
+/// Where the cursor is located, for help message purposes
+#[derive(Copy, Clone, Default)]
+pub enum CursorPos {
+    #[default]
+    Other, // cursor is somewhere else
+    AfterWord, // cursor is after a word
+    AtParen,   // cursor is at a parenthesis
+}
+
 pub struct Help {
     select: WholeSelect,
     find: FindMode,
+    cursor_pos: CursorPos,
     has_bookmarks: bool,
-    autocomplete: bool,
     has_selection: bool,
     multiple_buffers: bool,
     multiple_panes: bool,
@@ -2351,7 +2360,7 @@ impl BufferContext {
                     FindMode::InSelection
                 },
                 has_bookmarks,
-                autocomplete: false,
+                cursor_pos: CursorPos::default(),
                 has_selection: true,
                 multiple_buffers,
                 multiple_panes,
@@ -2365,15 +2374,22 @@ impl BufferContext {
                     },
                     find: FindMode::WholeFile,
                     has_bookmarks,
-                    autocomplete: match current_char {
-                        Some(c) if is_word(c) => false,
+                    cursor_pos: match current_char {
+                        Some('(' | ')' | '{' | '}' | '[' | ']' | '<' | '>') => CursorPos::AtParen,
+                        Some(c) if is_word(c) => CursorPos::default(),
                         _ => match self
                             .cursor
                             .checked_sub(1)
                             .and_then(|prev| rope.get_char(prev))
                         {
-                            Some(c) => is_word(c),
-                            None => false,
+                            Some(c) => {
+                                if is_word(c) {
+                                    CursorPos::AfterWord
+                                } else {
+                                    CursorPos::default()
+                                }
+                            }
+                            None => CursorPos::default(),
                         },
                     },
                     has_selection: false,
@@ -5026,17 +5042,16 @@ impl StatefulWidget for BufferWidget<'_> {
                     select,
                     find,
                     has_bookmarks,
-                    autocomplete,
+                    cursor_pos,
                     has_selection,
                     multiple_buffers,
                     multiple_panes,
                 }) = self.show_help
                 {
                     use crate::help::{
-                        EDITING_0, EDITING_1, EDITING_2, EDITING_3, F10, SWITCH_PANE, ctrl,
-                        keybind, none,
+                        EDITING_0, EDITING_2, EDITING_3, F10, SWITCH_PANE, ctrl, keybind, none,
                     };
-                    use crate::key::{GotoLine, UpdateLines};
+                    use crate::key::{GotoLine, GotoPair, SelectInside, UpdateLines};
 
                     let mut help = Vec::with_capacity(16);
                     help.extend(EDITING_0);
@@ -5049,7 +5064,11 @@ impl StatefulWidget for BufferWidget<'_> {
                     help.extend(
                         has_selection.then_some(keybind::<UpdateLines>("Update Selected Lines")),
                     );
-                    help.extend(EDITING_1);
+                    help.extend(
+                        matches!(cursor_pos, CursorPos::AtParen)
+                            .then_some(keybind::<GotoPair>("Goto Matching Pair")),
+                    );
+                    help.push(keybind::<SelectInside>("Select Inside Pair"));
                     help.push(select.into());
                     help.push(F10);
                     help.extend(EDITING_2);
@@ -5058,7 +5077,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     );
                     help.push(none(
                         &["Tab"],
-                        if autocomplete {
+                        if matches!(cursor_pos, CursorPos::AfterWord) {
                             "Autocomplete Word"
                         } else {
                             "Indent Text"
