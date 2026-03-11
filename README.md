@@ -131,7 +131,7 @@ the pane size ratios.
 # Configuration
 
 With very little to configure, VLE doesn't use a config file at all.
-Any configuration is performed with three environmental variables:
+Any configuration is performed with a modest number of environmental variables:
 
 | Variable             | Default | Meaning                                  |
 |----------------------|---------|------------------------------------------|
