@@ -597,31 +597,37 @@ impl Editor {
             Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent,
             MouseEventKind,
         };
+        use std::collections::HashMap;
         use std::process::Command;
 
-        static LEFT: LazyLock<Option<Vec<String>>> = LazyLock::new(|| {
-            std::env::var("VLE_LEFT")
-                .ok()
-                .map(|s| s.split_whitespace().map(|s| s.to_string()).collect())
-        });
-
-        static RIGHT: LazyLock<Option<Vec<String>>> = LazyLock::new(|| {
-            std::env::var("VLE_RIGHT")
-                .ok()
-                .map(|s| s.split_whitespace().map(|s| s.to_string()).collect())
-        });
-
-        static UP: LazyLock<Option<Vec<String>>> = LazyLock::new(|| {
-            std::env::var("VLE_UP")
-                .ok()
-                .map(|s| s.split_whitespace().map(|s| s.to_string()).collect())
-        });
-
-        static DOWN: LazyLock<Option<Vec<String>>> = LazyLock::new(|| {
-            std::env::var("VLE_DOWN")
-                .ok()
-                .map(|s| s.split_whitespace().map(|s| s.to_string()).collect())
-        });
+        // External terminal multiplexer integration
+        static EXTERN: LazyLock<HashMap<Direction, &'static [&'static str]>> =
+            LazyLock::new(|| {
+                if std::env::var("ZELLIJ").is_ok() {
+                    [
+                        (
+                            Direction::Up,
+                            ["zellij", "action", "move-focus", "up"].as_slice(),
+                        ),
+                        (
+                            Direction::Down,
+                            ["zellij", "action", "move-focus", "down"].as_slice(),
+                        ),
+                        (
+                            Direction::Left,
+                            ["zellij", "action", "move-focus", "left"].as_slice(),
+                        ),
+                        (
+                            Direction::Right,
+                            ["zellij", "action", "move-focus", "right"].as_slice(),
+                        ),
+                    ]
+                    .into_iter()
+                    .collect()
+                } else {
+                    HashMap::default()
+                }
+            });
 
         match event {
             keybind!(Quit) => {
@@ -639,8 +645,8 @@ impl Editor {
                 self.mode = EditorMode::SplitPane;
             }
             key!(CONTROL, Left) => {
-                if self.layout.change_pane(Direction::Left).is_err()
-                    && let Some([cmd, args @ ..]) = LEFT.as_ref().map(|v| v.as_slice())
+                if let Err(dir) = self.layout.change_pane(Direction::Left)
+                    && let Some([cmd, args @ ..]) = EXTERN.get(&dir)
                     && let Err(err) = Command::new(cmd).args(args).output()
                 {
                     self.layout
@@ -648,8 +654,8 @@ impl Editor {
                 }
             }
             key!(CONTROL, Right) => {
-                if self.layout.change_pane(Direction::Right).is_err()
-                    && let Some([cmd, args @ ..]) = RIGHT.as_ref().map(|v| v.as_slice())
+                if let Err(dir) = self.layout.change_pane(Direction::Right)
+                    && let Some([cmd, args @ ..]) = EXTERN.get(&dir)
                     && let Err(err) = Command::new(cmd).args(args).output()
                 {
                     self.layout
@@ -657,8 +663,8 @@ impl Editor {
                 }
             }
             key!(CONTROL, Up) => {
-                if self.layout.change_pane(Direction::Up).is_err()
-                    && let Some([cmd, args @ ..]) = UP.as_ref().map(|v| v.as_slice())
+                if let Err(dir) = self.layout.change_pane(Direction::Up)
+                    && let Some([cmd, args @ ..]) = EXTERN.get(&dir)
                     && let Err(err) = Command::new(cmd).args(args).output()
                 {
                     self.layout
@@ -666,8 +672,8 @@ impl Editor {
                 }
             }
             key!(CONTROL, Down) => {
-                if self.layout.change_pane(Direction::Down).is_err()
-                    && let Some([cmd, args @ ..]) = DOWN.as_ref().map(|v| v.as_slice())
+                if let Err(dir) = self.layout.change_pane(Direction::Down)
+                    && let Some([cmd, args @ ..]) = EXTERN.get(&dir)
                     && let Err(err) = Command::new(cmd).args(args).output()
                 {
                     self.layout
@@ -2442,6 +2448,7 @@ impl Layout {
 }
 
 /// Directions for moving or splitting panes
+#[derive(Eq, PartialEq, Hash)]
 enum Direction {
     Up,
     Down,

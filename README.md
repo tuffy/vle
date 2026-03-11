@@ -139,10 +139,6 @@ Any configuration is performed with a modest number of environmental variables:
 | `VLE_ALWAYS_TAB`     | 0       | whether to always insert literal tabs    |
 | `VLE_PAGE_SIZE`      | 25      | number of lines PgUp and PgDn move       |
 | `VLE_EXT_MAP`        | empty   | syntax highlighting extension mapping    |
-| `VLE_UP`             | empty   | command when moving up outside editor    |
-| `VLE_DOWN`           | empty   | command when moving down outside editor  |
-| `VLE_LEFT`           | empty   | command when moving left outside editor  |
-| `VLE_RIGHT`          | empty   | command when moving right outside editor |
 
 No config file means there's one less thing to install,
 learn the format of, modify or break.
@@ -164,23 +160,9 @@ VLE_EXT_MAP=tpl=html vle file.tpl
 
 When <kbd>Ctrl</kbd>-<kbd>Arrows</kbd> are used to navigate panes,
 VLE normally stops when it cannot proceed further in any direction.
-But when the `VLE_UP`, `VLE_DOWN`, `VLE_LEFT`, and `VLE_RIGHT`
-environment variables are set, VLE will execute the corresponding
-command when it cannot proceed further in that direction.
-
-Thus, when running inside a terminal multiplexer like
-[ZelliJ](https://zellij.dev/), VLE can issue a ZelliJ command
-to move focus outside of the editor in the given direction
-once the edge of the editor is reached.
-
-To set that up persistently using the [fish-shell](https://fishshell.com/):
-
-```bash
-set -Ux VLE_UP "zellij action move-focus up"
-set -Ux VLE_DOWN "zellij action move-focus down"
-set -Ux VLE_LEFT "zellij action move-focus left"
-set -Ux VLE_RIGHT "zellij action move-focus right"
-```
+When running under [ZelliJ](https://zellij.dev/), the editor will
+issue a `zellij` command to change focus out of the VLE's pane in
+the given direction.
 
 Furthermore, the Fish's keybindings can be updated to also
 use <kbd>Ctrl</kbd>-<kbd>Arrows</kbd> to navigate ZelliJ.
