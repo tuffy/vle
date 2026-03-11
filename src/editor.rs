@@ -15,7 +15,7 @@ use crate::{
         SelectionRange, Source,
     },
     files::{ChooserSource, FileChooserState, LocalSource},
-    key::Binding,
+    key::{Binding, CtrlBinding},
     prompt::{LinePrompt, TextField},
 };
 use crossterm::event::Event;
@@ -167,6 +167,17 @@ macro_rules! keybind {
                 ..
             },
         )
+    };
+}
+
+macro_rules! ctrl_keybind {
+    ($bind:ident) => {
+        Event::Key(KeyEvent {
+            code: key::$bind::KEY,
+            modifiers: KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press,
+            ..
+        })
     };
 }
 
@@ -729,9 +740,9 @@ impl Editor {
             key!(Delete) => self.update_buffer_at(|b, a| b.delete(a)),
             key!(Enter) => self.update_buffer_at(|b, a| b.newline(a)),
             keybind!(WidenSelection) => self.update_buffer(|b| b.select_word_or_lines()),
-            key!(CONTROL, 'x') => self.perform_cut(),
-            key!(CONTROL, 'c') => self.perform_copy(),
-            key!(CONTROL, 'v') => {
+            ctrl_keybind!(Cut) => self.perform_cut(),
+            ctrl_keybind!(Copy) => self.perform_copy(),
+            ctrl_keybind!(Paste) => {
                 self.layout.update_current_at(|b, a| {
                     b.paste(a, &mut self.cut_buffer);
                 });
@@ -742,8 +753,8 @@ impl Editor {
                     b.paste(a, &mut self.cut_buffer);
                 });
             }
-            key!(CONTROL, 'z') => self.update_buffer(|b| b.perform_undo()),
-            key!(CONTROL, 'y') => self.update_buffer(|b| b.perform_redo()),
+            ctrl_keybind!(Undo) => self.update_buffer(|b| b.perform_undo()),
+            ctrl_keybind!(Redo) => self.update_buffer(|b| b.perform_redo()),
             keybind!(Save) => {
                 if let Some(Err(crate::buffer::Modified)) = self.on_buffer(|b| b.verified_save()) {
                     self.mode = EditorMode::VerifySave;
@@ -1307,7 +1318,7 @@ fn process_search(
     }
 
     match event {
-        key!(CONTROL, 'v') => {
+        ctrl_keybind!(Paste) => {
             if let Some(s) = cut_buffer.and_then(|b| b.cut_str()) {
                 prompt.paste(s);
             }
@@ -1515,7 +1526,7 @@ fn process_multi_cursor(
             buffer.multi_cursor_end(matches, modifiers.contains(KeyModifiers::SHIFT));
             None
         }
-        key!(CONTROL, 'v') => match groups {
+        ctrl_keybind!(Paste) => match groups {
             CaptureGroups::Some { total, groups } => Some(EditorMode::PasteGroup {
                 matches: std::mem::take(matches),
                 match_idx: std::mem::take(match_idx),
@@ -1531,14 +1542,14 @@ fn process_multi_cursor(
                 None
             }
         },
-        key!(CONTROL, 'c') => {
+        ctrl_keybind!(Copy) => {
             if let cut @ Some(_) = buffer.multi_cursor_copy(matches) {
                 *highlight = false;
                 *cut_buffer = cut;
             }
             None
         }
-        key!(CONTROL, 'x') => {
+        ctrl_keybind!(Cut) => {
             if let cut @ Some(_) = buffer.multi_cursor_cut(alt, matches) {
                 *highlight = false;
                 *cut_buffer = cut;
@@ -1675,7 +1686,7 @@ fn process_paste_group(
                 }),
             );
         }
-        key!(CONTROL, 'v') => {
+        ctrl_keybind!(Paste) => {
             if let Some(cut) = cut_buffer {
                 buf.multi_paste(alt, matches, cut);
             }

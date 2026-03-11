@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::key;
+use crate::key::CtrlBinding;
 use ratatui::widgets::Block;
 
 #[derive(Copy, Clone)]
@@ -191,8 +192,11 @@ pub static EDITING_2: &[Keybinding] = &[
 ];
 
 pub static EDITING_3: &[Keybinding] = &[
-    ctrl(&["X", "C", "V"], "Cut / Copy / Paste"),
-    ctrl(&["Z", "Y"], "Undo / Redo"),
+    ctrl(
+        &[key::Cut::LABEL, key::Copy::LABEL, key::Paste::LABEL],
+        "Cut / Copy / Paste",
+    ),
+    ctrl(&[key::Undo::LABEL, key::Redo::LABEL], "Undo / Redo"),
 ];
 
 pub static SWITCH_PANE: Keybinding = ctrl(&[LEFT, DOWN, UP, RIGHT], "Switch Pane");
@@ -274,12 +278,15 @@ pub static REPLACE_MATCHES: &[Keybinding] = &[
     keybind::<key::Bookmark>("Bookmark Positions"),
     none(&[LEFT, RIGHT], "Move Cursors"),
     shift(&[LEFT, RIGHT], "Highlight Text"),
-    ctrl(&["X", "C", "V"], "Cut / Copy / Paste"),
+    ctrl(
+        &[key::Cut::LABEL, key::Copy::LABEL, key::Paste::LABEL],
+        "Cut / Copy / Paste",
+    ),
     none(&["Enter"], "Finish"),
 ];
 
 pub static PASTE_GROUP: &[Keybinding] = &[
-    ctrl(&["V"], "Paste From Cut Buffer"),
+    ctrl(&[key::Paste::LABEL], "Paste From Cut Buffer"),
     none(&["0"], "Paste From Capture Group 0"),
     none(&["1"], "Paste From Capture Group 1"),
     none(&["2"], "Paste From Capture Group 2"),

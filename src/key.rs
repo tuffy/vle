@@ -41,6 +41,28 @@ binding!(Reload, L, F11);
 binding!(Quit, Q, F12);
 binding!(Bookmark, B, Insert);
 
+pub trait CtrlBinding {
+    const KEY: KeyCode;
+    const LABEL: &'static str;
+}
+
+macro_rules! ctrl_binding {
+    ($name:ident, $key:ident) => {
+        pub struct $name;
+
+        impl CtrlBinding for $name {
+            const KEY: KeyCode = Key::$key.to_char();
+            const LABEL: &'static str = Key::$key.to_str();
+        }
+    };
+}
+
+ctrl_binding!(Cut, X);
+ctrl_binding!(Copy, C);
+ctrl_binding!(Paste, V);
+ctrl_binding!(Undo, Z);
+ctrl_binding!(Redo, Y);
+
 #[derive(Copy, Clone)]
 #[allow(unused)]
 enum Key {
