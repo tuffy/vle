@@ -586,6 +586,31 @@ impl Editor {
             Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent,
             MouseEventKind,
         };
+        use std::process::Command;
+
+        static LEFT: LazyLock<Option<Vec<String>>> = LazyLock::new(|| {
+            std::env::var("VLE_LEFT")
+                .ok()
+                .map(|s| s.split_whitespace().map(|s| s.to_string()).collect())
+        });
+
+        static RIGHT: LazyLock<Option<Vec<String>>> = LazyLock::new(|| {
+            std::env::var("VLE_RIGHT")
+                .ok()
+                .map(|s| s.split_whitespace().map(|s| s.to_string()).collect())
+        });
+
+        static UP: LazyLock<Option<Vec<String>>> = LazyLock::new(|| {
+            std::env::var("VLE_UP")
+                .ok()
+                .map(|s| s.split_whitespace().map(|s| s.to_string()).collect())
+        });
+
+        static DOWN: LazyLock<Option<Vec<String>>> = LazyLock::new(|| {
+            std::env::var("VLE_DOWN")
+                .ok()
+                .map(|s| s.split_whitespace().map(|s| s.to_string()).collect())
+        });
 
         match event {
             keybind!(Quit) => {
@@ -603,16 +628,40 @@ impl Editor {
                 self.mode = EditorMode::SplitPane;
             }
             key!(CONTROL, Left) => {
-                let _ = self.layout.change_pane(Direction::Left);
+                if self.layout.change_pane(Direction::Left).is_err()
+                    && let Some([cmd, args @ ..]) = LEFT.as_ref().map(|v| v.as_slice())
+                    && let Err(err) = Command::new(cmd).args(args).output()
+                {
+                    self.layout
+                        .update_current_at(|buf, _| buf.set_error(err.to_string()));
+                }
             }
             key!(CONTROL, Right) => {
-                let _ = self.layout.change_pane(Direction::Right);
+                if self.layout.change_pane(Direction::Right).is_err()
+                    && let Some([cmd, args @ ..]) = RIGHT.as_ref().map(|v| v.as_slice())
+                    && let Err(err) = Command::new(cmd).args(args).output()
+                {
+                    self.layout
+                        .update_current_at(|buf, _| buf.set_error(err.to_string()));
+                }
             }
             key!(CONTROL, Up) => {
-                let _ = self.layout.change_pane(Direction::Up);
+                if self.layout.change_pane(Direction::Up).is_err()
+                    && let Some([cmd, args @ ..]) = UP.as_ref().map(|v| v.as_slice())
+                    && let Err(err) = Command::new(cmd).args(args).output()
+                {
+                    self.layout
+                        .update_current_at(|buf, _| buf.set_error(err.to_string()));
+                }
             }
             key!(CONTROL, Down) => {
-                let _ = self.layout.change_pane(Direction::Down);
+                if self.layout.change_pane(Direction::Down).is_err()
+                    && let Some([cmd, args @ ..]) = DOWN.as_ref().map(|v| v.as_slice())
+                    && let Err(err) = Command::new(cmd).args(args).output()
+                {
+                    self.layout
+                        .update_current_at(|buf, _| buf.set_error(err.to_string()));
+                }
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Up,
@@ -1928,11 +1977,11 @@ impl Layout {
         self.selected_buffer_list_mut().next_buffer()
     }
 
-    /// Ok(()) => move performed successfully in ourself or a child
+    /// Ok(direction) => move performed successfully in ourself or a child
     /// Err(()) => unable to perform a move
-    fn change_pane(&mut self, direction: Direction) -> Result<(), ()> {
+    fn change_pane(&mut self, direction: Direction) -> Result<(), Direction> {
         match (self, direction) {
-            (Self::Single(_), _) => Err(()),
+            (Self::Single(_), direction) => Err(direction),
             (
                 Self::Horizontal {
                     which: which @ HorizontalPos::Bottom,
@@ -1940,7 +1989,7 @@ impl Layout {
                     ..
                 },
                 direction @ Direction::Up,
-            ) => bottom.change_pane(direction).or_else(|()| {
+            ) => bottom.change_pane(direction).or_else(|_| {
                 *which = HorizontalPos::Top;
                 Ok(())
             }),
@@ -1951,7 +2000,7 @@ impl Layout {
                     ..
                 },
                 direction @ Direction::Down,
-            ) => top.change_pane(direction).or_else(|()| {
+            ) => top.change_pane(direction).or_else(|_| {
                 *which = HorizontalPos::Bottom;
                 Ok(())
             }),
@@ -1962,7 +2011,7 @@ impl Layout {
                     ..
                 },
                 direction @ Direction::Right,
-            ) => left.change_pane(direction).or_else(|()| {
+            ) => left.change_pane(direction).or_else(|_| {
                 *which = VerticalPos::Right;
                 Ok(())
             }),
@@ -1973,7 +2022,7 @@ impl Layout {
                     ..
                 },
                 direction @ Direction::Left,
-            ) => right.change_pane(direction).or_else(|()| {
+            ) => right.change_pane(direction).or_else(|_| {
                 *which = VerticalPos::Left;
                 Ok(())
             }),
