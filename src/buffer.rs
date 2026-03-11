@@ -777,20 +777,6 @@ impl PartialEq for BufferId {
     }
 }
 
-pub enum WholeSelect {
-    Word,
-    Lines,
-}
-
-impl From<WholeSelect> for crate::help::Keybinding {
-    fn from(mode: WholeSelect) -> Self {
-        crate::help::keybind::<crate::key::WidenSelection>(match mode {
-            WholeSelect::Word => "Select Word",
-            WholeSelect::Lines => "Widen Selection",
-        })
-    }
-}
-
 pub enum FindMode {
     WholeFile,
     Selected,
@@ -812,12 +798,12 @@ impl From<FindMode> for crate::help::Keybinding {
 pub enum CursorPos {
     #[default]
     Other, // cursor is somewhere else
+    InWord,    // cursor is inside a word
     AfterWord, // cursor is after a word
     AtParen,   // cursor is at a parenthesis
 }
 
 pub struct Help {
-    select: WholeSelect,
     find: FindMode,
     cursor_pos: CursorPos,
     has_bookmarks: bool,
@@ -2351,7 +2337,6 @@ impl BufferContext {
 
         match self.selection {
             Some(selection) => Help {
-                select: WholeSelect::Lines,
                 find: if rope.try_char_to_line(self.cursor).ok()
                     == rope.try_char_to_line(selection).ok()
                 {
@@ -2368,15 +2353,11 @@ impl BufferContext {
             None => {
                 let current_char = rope.get_char(self.cursor);
                 Help {
-                    select: match current_char {
-                        Some(c) if is_word(c) => WholeSelect::Word,
-                        _ => WholeSelect::Lines,
-                    },
                     find: FindMode::WholeFile,
                     has_bookmarks,
                     cursor_pos: match current_char {
                         Some('(' | ')' | '{' | '}' | '[' | ']' | '<' | '>') => CursorPos::AtParen,
-                        Some(c) if is_word(c) => CursorPos::default(),
+                        Some(c) if is_word(c) => CursorPos::InWord,
                         _ => match self
                             .cursor
                             .checked_sub(1)
@@ -5039,7 +5020,6 @@ impl StatefulWidget for BufferWidget<'_> {
         match self.mode {
             None | Some(EditorMode::Editing) | Some(EditorMode::Autocomplete { .. }) => {
                 if let Some(Help {
-                    select,
                     find,
                     has_bookmarks,
                     cursor_pos,
@@ -5051,7 +5031,9 @@ impl StatefulWidget for BufferWidget<'_> {
                     use crate::help::{
                         EDITING_0, EDITING_2, EDITING_3, F10, SWITCH_PANE, ctrl, keybind, none,
                     };
-                    use crate::key::{GotoLine, GotoPair, SelectInside, UpdateLines};
+                    use crate::key::{
+                        GotoLine, GotoPair, SelectInside, UpdateLines, WidenSelection,
+                    };
 
                     let mut help = Vec::with_capacity(16);
                     help.extend(EDITING_0);
@@ -5069,7 +5051,13 @@ impl StatefulWidget for BufferWidget<'_> {
                             .then_some(keybind::<GotoPair>("Goto Matching Pair")),
                     );
                     help.push(keybind::<SelectInside>("Select Inside Pair"));
-                    help.push(select.into());
+                    help.push(keybind::<WidenSelection>(
+                        if matches!(cursor_pos, CursorPos::InWord) {
+                            "Select Word"
+                        } else {
+                            "Widen Selection"
+                        },
+                    ));
                     help.push(F10);
                     help.extend(EDITING_2);
                     help.extend(
