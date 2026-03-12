@@ -11,7 +11,7 @@ use crate::files::{EitherSource, SshSource};
 use crate::key;
 use crate::{
     buffer::{
-        AltCursor, BufferContext, BufferId, BufferList, EditorCutBuffer, MatchCapture, MultiCursor,
+        AltCursor, BufferContext, BufferId, BufferList, EditorCutBuffer, MultiCursor,
         SelectionRange, Source,
     },
     files::{ChooserSource, FileChooserState, LocalSource},
@@ -61,7 +61,6 @@ pub enum EditorMode {
     MultiCursor {
         matches: Vec<MultiCursor>,
         match_idx: usize,
-        groups: CaptureGroups,
         range: Option<SelectionRange>,
         highlight: bool,
     },
@@ -70,7 +69,6 @@ pub enum EditorMode {
         matches: Vec<MultiCursor>,
         match_idx: usize,
         total: usize,
-        groups: Vec<Vec<Option<MatchCapture>>>,
         range: Option<SelectionRange>,
         highlight: bool,
     },
@@ -100,7 +98,6 @@ pub enum EditorMode {
     AutocompleteMulti {
         matches: Vec<MultiCursor>,
         match_idx: usize,
-        groups: CaptureGroups,
         range: Option<SelectionRange>,
         offsets: Vec<usize>,      // autocompletion offsets
         completions: Vec<String>, // autocompletion candidates
@@ -120,36 +117,6 @@ impl std::fmt::Display for SearchType {
         match self {
             Self::Plain => "Find".fmt(f),
             Self::Regex => "Find Regex".fmt(f),
-        }
-    }
-}
-
-/// The regex groups captured during a find/replace
-#[derive(Default)]
-pub enum CaptureGroups {
-    #[default]
-    None,
-    Some {
-        // total number of capture groups
-        total: usize,
-        // groups[match][group]
-        groups: Vec<Vec<Option<MatchCapture>>>,
-    },
-}
-
-impl CaptureGroups {
-    fn remove(&mut self, match_idx: usize) {
-        if let Self::Some { groups, .. } = self {
-            groups.remove(match_idx);
-        }
-    }
-}
-
-impl From<Vec<Vec<Option<MatchCapture>>>> for CaptureGroups {
-    fn from(groups: Vec<Vec<Option<MatchCapture>>>) -> Self {
-        match groups.first().map(|g| g.len()) {
-            None | Some(0) => CaptureGroups::None,
-            Some(total) => CaptureGroups::Some { total, groups },
         }
     }
 }
@@ -438,7 +405,6 @@ impl Editor {
                 EditorMode::AutocompleteMulti {
                     matches,
                     match_idx,
-                    groups,
                     range,
                     offsets,
                     completions,
@@ -463,7 +429,6 @@ impl Editor {
                         self.mode = EditorMode::MultiCursor {
                             matches: std::mem::take(matches),
                             match_idx: std::mem::take(match_idx),
-                            groups: std::mem::take(groups),
                             range: std::mem::take(range),
                             highlight: false,
                         };
@@ -513,13 +478,11 @@ impl Editor {
                                 buf.set_cursor(matches[match_idx].0.end);
                                 buf.clear_selection();
 
-                                let (matches, groups): (_, Vec<Vec<_>>) =
-                                    matches.into_iter().map(|(r, c)| (r.into(), c)).unzip();
+                                let matches = matches.into_iter().map(|r| r.into()).collect();
 
                                 EditorMode::MultiCursor {
                                     matches,
                                     match_idx,
-                                    groups: groups.into(),
                                     range: range.take(),
                                     highlight: true,
                                 }
@@ -545,7 +508,6 @@ impl Editor {
                 EditorMode::MultiCursor {
                     matches,
                     match_idx,
-                    groups,
                     range,
                     highlight,
                 } => {
@@ -554,7 +516,6 @@ impl Editor {
                             b,
                             &mut self.cut_buffer,
                             matches,
-                            groups,
                             range,
                             match_idx,
                             highlight,
@@ -568,22 +529,17 @@ impl Editor {
                 EditorMode::PasteGroup {
                     matches,
                     match_idx,
-                    total,
-                    groups,
                     range,
                     highlight,
+                    ..
                 } => {
                     self.layout.update_current_at(|b, a| {
-                        process_paste_group(b, matches, self.cut_buffer.as_mut(), groups, event, a);
+                        process_paste_group(b, matches, self.cut_buffer.as_mut(), event, a);
                     });
 
                     self.mode = EditorMode::MultiCursor {
                         matches: std::mem::take(matches),
                         match_idx: std::mem::take(match_idx),
-                        groups: CaptureGroups::Some {
-                            total: std::mem::take(total),
-                            groups: std::mem::take(groups),
-                        },
                         range: range.take(),
                         highlight: std::mem::take(highlight),
                     };
@@ -813,13 +769,13 @@ impl Editor {
                             b.set_cursor(matches[match_idx].0.end);
                             b.clear_selection();
 
-                            let (matches, groups): (_, Vec<Vec<_>>) =
-                                matches.into_iter().map(|(r, c)| (r.into(), c)).unzip();
+                            // let (matches, groups): (_, Vec<Vec<_>>) =
+                            //    matches.into_iter().map(|(r, c)| (r.into(), c)).unzip();
+                            let matches = matches.into_iter().map(|r| r.into()).collect();
 
                             EditorMode::MultiCursor {
                                 matches,
                                 match_idx,
-                                groups: groups.into(),
                                 range: None,
                                 highlight: true,
                             }
@@ -897,7 +853,6 @@ impl Editor {
                     self.mode = EditorMode::MultiCursor {
                         matches,
                         match_idx,
-                        groups: CaptureGroups::default(),
                         range: None,
                         highlight: false,
                     };
@@ -1284,7 +1239,7 @@ fn process_open_file<S: ChooserSource>(
 enum NextModeIncremental {
     Browse {
         match_idx: usize,
-        matches: Vec<(Range<usize>, Vec<Option<MatchCapture>>)>,
+        matches: Vec<(Range<usize>, Vec<String>)>,
     },
     SelectLine,
     Autocomplete {
@@ -1422,7 +1377,6 @@ fn process_multi_cursor(
     buffer: &mut BufferContext,
     cut_buffer: &mut Option<EditorCutBuffer>,
     matches: &mut Vec<MultiCursor>,
-    groups: &mut CaptureGroups,
     range: &mut Option<SelectionRange>,
     match_idx: &mut usize,
     highlight: &mut bool,
@@ -1462,7 +1416,6 @@ fn process_multi_cursor(
         key!(CONTROL, Delete) => {
             *highlight = true;
             matches.remove(*match_idx);
-            groups.remove(*match_idx);
             match matches.len().checked_sub(1) {
                 Some(max) => {
                     *match_idx = (*match_idx).min(max);
@@ -1518,12 +1471,11 @@ fn process_multi_cursor(
             buffer.multi_cursor_end(matches, modifiers.contains(KeyModifiers::SHIFT));
             None
         }
-        ctrl_keybind!(Paste) => match groups {
-            CaptureGroups::Some { total, groups } => Some(EditorMode::PasteGroup {
+        ctrl_keybind!(Paste) => match matches.iter().map(|m| m.paste_group_count()).max() {
+            Some(Some(total)) => Some(EditorMode::PasteGroup {
+                total: total.get(),
                 matches: std::mem::take(matches),
                 match_idx: std::mem::take(match_idx),
-                total: std::mem::take(total),
-                groups: std::mem::take(groups),
                 range: range.take(),
                 highlight: std::mem::take(highlight),
             }),
@@ -1566,7 +1518,6 @@ fn process_multi_cursor(
                     Some(EditorMode::AutocompleteMulti {
                         matches: std::mem::take(matches),
                         match_idx: std::mem::take(match_idx),
-                        groups: std::mem::take(groups),
                         range: std::mem::take(range),
                         offsets,
                         completions,
@@ -1587,7 +1538,6 @@ fn process_multi_cursor(
                     Some(EditorMode::AutocompleteMulti {
                         matches: std::mem::take(matches),
                         match_idx: std::mem::take(match_idx),
-                        groups: std::mem::take(groups),
                         range: std::mem::take(range),
                         offsets,
                         completions,
@@ -1642,7 +1592,6 @@ fn process_paste_group(
     buf: &mut BufferContext,
     matches: &mut [MultiCursor],
     cut_buffer: Option<&mut EditorCutBuffer>,
-    groups: &mut [Vec<Option<MatchCapture>>],
     event: Event,
     alt: Vec<AltCursor<'_>>,
 ) {
@@ -1669,14 +1618,7 @@ fn process_paste_group(
                 _ => unreachable!(),
             };
 
-            buf.multi_insert_strings(
-                alt,
-                matches,
-                groups.iter().map(|g| match g.get(group) {
-                    Some(Some(MatchCapture { string: s, .. })) => (s.chars().count(), s.as_str()),
-                    Some(None) | None => (0, ""),
-                }),
-            );
+            buf.multi_insert_group(alt, matches, group);
         }
         ctrl_keybind!(Paste) => {
             if let Some(cut) = cut_buffer {

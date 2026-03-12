@@ -812,7 +812,7 @@ pub struct Help {
     multiple_panes: bool,
 }
 
-type MatchAndRange = (Range<usize>, Vec<Option<MatchCapture>>);
+type MatchAndCaptures = (Range<usize>, Vec<String>);
 
 /// A buffer with additional context on a per-view basis
 #[derive(Clone)]
@@ -1473,7 +1473,7 @@ impl BufferContext {
         &mut self,
         range: Option<&SelectionRange>,
         term: S,
-    ) -> Result<(usize, Vec<MatchAndRange>), S> {
+    ) -> Result<(usize, Vec<MatchAndCaptures>), S> {
         let buf = self.buffer.borrow_move();
         let rope = &buf.rope;
 
@@ -1493,23 +1493,7 @@ impl BufferContext {
                     // to ranges in characters (for Ropey)
                     Some((
                         rope.try_byte_to_char(s).ok()?..rope.try_byte_to_char(e).ok()?,
-                        c.into_iter()
-                            // if None, keep it None,
-                            // otherwise filter out any bad conversions
-                            // (which shouldn't happen, really)
-                            .filter_map(|m| match m {
-                                Some(MatchCapture { start, end, string }) => {
-                                    let start_chars = rope.try_byte_to_char(start).ok()?;
-                                    let end_chars = rope.try_byte_to_char(end).ok()?;
-                                    Some(Some(MatchCapture {
-                                        start: start_chars,
-                                        end: end_chars,
-                                        string,
-                                    }))
-                                }
-                                None => Some(None),
-                            })
-                            .collect(),
+                        c,
                     ))
                 },
             )
@@ -1717,6 +1701,7 @@ impl BufferContext {
                     range: start..end,
                     cursor: start,
                     selection: None,
+                    groups: vec![],
                 })
             })
             .collect::<Vec<_>>();
@@ -2088,6 +2073,29 @@ impl BufferContext {
         multicursor_update(
             matches,
             |m| Ok::<_, Infallible>(m.insert_char(&mut rope, &mut self.cursor, &mut alt, c)),
+            |r, (zapped, inserted)| {
+                *r -= zapped;
+                *r += inserted;
+            },
+        );
+    }
+
+    pub fn multi_insert_group(
+        &mut self,
+        alt: Vec<AltCursor<'_>>,
+        matches: &mut [MultiCursor],
+        group_num: usize,
+    ) {
+        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+        let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
+        let mut alt = Secondary::new(alt, bookmarks);
+
+        multicursor_update(
+            matches,
+            |m| {
+                m.insert_group(&mut rope, &mut self.cursor, &mut alt, group_num)
+                    .ok_or(())
+            },
             |r, (zapped, inserted)| {
                 *r -= zapped;
                 *r += inserted;
@@ -2478,6 +2486,8 @@ pub struct MultiCursor {
     cursor: usize,
     /// cursor's selection anchor in rope, in characters, if any
     selection: Option<usize>,
+    /// regular expression capture groups
+    groups: Vec<String>,
 }
 
 impl MultiCursor {
@@ -2930,6 +2940,27 @@ impl MultiCursor {
 
         Some(cut)
     }
+
+    /// If this contains at least 1 capture group, returns the total
+    pub fn paste_group_count(&self) -> Option<NonZero<usize>> {
+        NonZero::new(self.groups.len())
+    }
+
+    /// Inserts the given capture group at the current position
+    /// Returns number of zapped characters
+    /// and number of inserted characters, if any.
+    pub fn insert_group(
+        &mut self,
+        rope: &mut ropey::Rope,
+        cursor: &mut usize,
+        secondary: &mut Secondary,
+        group_num: usize,
+    ) -> Option<(usize, usize)> {
+        let s = self.groups.get(group_num).cloned()?;
+        let s_chars = s.chars().count();
+        let zapped = self.insert_str(rope, cursor, secondary, &s, s_chars);
+        Some((zapped, s_chars))
+    }
 }
 
 impl From<usize> for MultiCursor {
@@ -2938,6 +2969,7 @@ impl From<usize> for MultiCursor {
             range: cursor..cursor,
             cursor,
             selection: None,
+            groups: vec![],
         }
     }
 }
@@ -2948,6 +2980,18 @@ impl From<Range<usize>> for MultiCursor {
             cursor: range.end,
             selection: Some(range.start),
             range,
+            groups: vec![],
+        }
+    }
+}
+
+impl From<(Range<usize>, Vec<String>)> for MultiCursor {
+    fn from((range, groups): (Range<usize>, Vec<String>)) -> Self {
+        Self {
+            cursor: range.end,
+            selection: Some(range.start),
+            range,
+            groups,
         }
     }
 }
@@ -2958,6 +3002,7 @@ impl From<SelectedLine> for MultiCursor {
             cursor: line.start,
             range: line.start..line.end,
             selection: None,
+            groups: vec![],
         }
     }
 }
@@ -3093,34 +3138,16 @@ pub trait SearchTerm<'s>: std::fmt::Display {
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = SearchMatch>;
 }
 
-pub struct MatchCapture {
-    pub string: String,
-    start: usize,
-    end: usize,
-}
-
-impl std::ops::AddAssign<usize> for MatchCapture {
-    fn add_assign(&mut self, rhs: usize) {
-        self.start += rhs;
-        self.end += rhs;
-    }
-}
-
 pub struct SearchMatch {
     start: usize,
     end: usize,
-    groups: Vec<Option<MatchCapture>>,
+    groups: Vec<String>,
 }
 
 impl std::ops::Add<usize> for SearchMatch {
     type Output = Self;
 
-    fn add(mut self, rhs: usize) -> Self {
-        self.groups.iter_mut().for_each(|m| {
-            if let Some(m) = m {
-                *m += rhs;
-            }
-        });
+    fn add(self, rhs: usize) -> Self {
         Self {
             start: self.start + rhs,
             end: self.end + rhs,
@@ -3139,13 +3166,7 @@ impl SearchTerm<'static> for fancy_regex::Regex {
                 end: first.end(),
                 groups: c
                     .iter()
-                    .map(|m| {
-                        m.map(|m| MatchCapture {
-                            string: m.as_str().to_string(),
-                            start: m.start(),
-                            end: m.end(),
-                        })
-                    })
+                    .map(|m| m.map(|m| m.as_str().to_string()).unwrap_or_default())
                     .collect(),
             }
         })
