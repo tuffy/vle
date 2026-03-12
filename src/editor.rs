@@ -87,14 +87,16 @@ pub enum EditorMode {
         completions: Vec<String>, // autocompletion candidates
         index: usize,             // the current candidate
     },
+    /// Performing autocomplete during a search
     AutocompleteSearch {
         prompt: TextField,
         type_: SearchType,
         range: Option<SelectionRange>,
-        offset: usize,            // our character offset in rope
+        offset: usize,            // our character offset in prompt
         completions: Vec<String>, // autocompletion candidates
         index: usize,             // the current candidate
     },
+    /// Performing autocomplete in a multi-cursor context
     AutocompleteMulti {
         matches: Vec<MultiCursor>,
         match_idx: usize,
