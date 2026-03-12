@@ -597,35 +597,24 @@ impl Editor {
             Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent,
             MouseEventKind,
         };
-        use std::collections::HashMap;
         use std::process::Command;
 
+        type DirMap = fn(Direction) -> Option<&'static [&'static str]>;
+
         // External terminal multiplexer integration
-        static EXTERN: LazyLock<HashMap<Direction, &'static [&'static str]>> =
+        static EXTERN: LazyLock<DirMap> =
             LazyLock::new(|| {
                 if std::env::var("ZELLIJ").is_ok() {
-                    [
-                        (
-                            Direction::Up,
-                            ["zellij", "action", "move-focus", "up"].as_slice(),
-                        ),
-                        (
-                            Direction::Down,
-                            ["zellij", "action", "move-focus", "down"].as_slice(),
-                        ),
-                        (
-                            Direction::Left,
-                            ["zellij", "action", "move-focus", "left"].as_slice(),
-                        ),
-                        (
-                            Direction::Right,
-                            ["zellij", "action", "move-focus", "right"].as_slice(),
-                        ),
-                    ]
-                    .into_iter()
-                    .collect()
+                    |direction| {
+                        Some(match direction {
+                            Direction::Up => &["zellij", "action", "move-focus", "up"],
+                            Direction::Down => &["zellij", "action", "move-focus", "down"],
+                            Direction::Left => &["zellij", "action", "move-focus", "left"],
+                            Direction::Right => &["zellij", "action", "move-focus", "right"],
+                        })
+                    }
                 } else {
-                    HashMap::default()
+                    |_| None
                 }
             });
 
@@ -646,7 +635,7 @@ impl Editor {
             }
             key!(CONTROL, Left) => {
                 if let Err(dir) = self.layout.change_pane(Direction::Left)
-                    && let Some([cmd, args @ ..]) = EXTERN.get(&dir)
+                    && let Some([cmd, args @ ..]) = EXTERN(dir)
                     && let Err(err) = Command::new(cmd).args(args).output()
                 {
                     self.layout
@@ -655,7 +644,7 @@ impl Editor {
             }
             key!(CONTROL, Right) => {
                 if let Err(dir) = self.layout.change_pane(Direction::Right)
-                    && let Some([cmd, args @ ..]) = EXTERN.get(&dir)
+                    && let Some([cmd, args @ ..]) = EXTERN(dir)
                     && let Err(err) = Command::new(cmd).args(args).output()
                 {
                     self.layout
@@ -664,7 +653,7 @@ impl Editor {
             }
             key!(CONTROL, Up) => {
                 if let Err(dir) = self.layout.change_pane(Direction::Up)
-                    && let Some([cmd, args @ ..]) = EXTERN.get(&dir)
+                    && let Some([cmd, args @ ..]) = EXTERN(dir)
                     && let Err(err) = Command::new(cmd).args(args).output()
                 {
                     self.layout
@@ -673,7 +662,7 @@ impl Editor {
             }
             key!(CONTROL, Down) => {
                 if let Err(dir) = self.layout.change_pane(Direction::Down)
-                    && let Some([cmd, args @ ..]) = EXTERN.get(&dir)
+                    && let Some([cmd, args @ ..]) = EXTERN(dir)
                     && let Err(err) = Command::new(cmd).args(args).output()
                 {
                     self.layout
