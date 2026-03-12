@@ -602,7 +602,7 @@ impl Editor {
         type DirMap = fn(Direction) -> Option<&'static [&'static str]>;
 
         // External terminal multiplexer integration
-        static EXTERN: LazyLock<DirMap> =
+        static MULTIPLEXER: LazyLock<DirMap> =
             LazyLock::new(|| {
                 if std::env::var("ZELLIJ").is_ok() {
                     |direction| {
@@ -611,6 +611,15 @@ impl Editor {
                             Direction::Down => &["zellij", "action", "move-focus", "down"],
                             Direction::Left => &["zellij", "action", "move-focus", "left"],
                             Direction::Right => &["zellij", "action", "move-focus", "right"],
+                        })
+                    }
+                } else if std::env::var("TMUX").is_ok() {
+                    |direction| {
+                        Some(match direction {
+                            Direction::Up => &["tmux", "select-pane", "-U"],
+                            Direction::Down => &["tmux", "select-pane", "-D"],
+                            Direction::Left => &["tmux", "select-pane", "-L"],
+                            Direction::Right => &["tmux", "select-pane", "-R"],
                         })
                     }
                 } else {
@@ -635,7 +644,7 @@ impl Editor {
             }
             key!(CONTROL, Left) => {
                 if let Err(dir) = self.layout.change_pane(Direction::Left)
-                    && let Some([cmd, args @ ..]) = EXTERN(dir)
+                    && let Some([cmd, args @ ..]) = MULTIPLEXER(dir)
                     && let Err(err) = Command::new(cmd).args(args).output()
                 {
                     self.layout
@@ -644,7 +653,7 @@ impl Editor {
             }
             key!(CONTROL, Right) => {
                 if let Err(dir) = self.layout.change_pane(Direction::Right)
-                    && let Some([cmd, args @ ..]) = EXTERN(dir)
+                    && let Some([cmd, args @ ..]) = MULTIPLEXER(dir)
                     && let Err(err) = Command::new(cmd).args(args).output()
                 {
                     self.layout
@@ -653,7 +662,7 @@ impl Editor {
             }
             key!(CONTROL, Up) => {
                 if let Err(dir) = self.layout.change_pane(Direction::Up)
-                    && let Some([cmd, args @ ..]) = EXTERN(dir)
+                    && let Some([cmd, args @ ..]) = MULTIPLEXER(dir)
                     && let Err(err) = Command::new(cmd).args(args).output()
                 {
                     self.layout
@@ -662,7 +671,7 @@ impl Editor {
             }
             key!(CONTROL, Down) => {
                 if let Err(dir) = self.layout.change_pane(Direction::Down)
-                    && let Some([cmd, args @ ..]) = EXTERN(dir)
+                    && let Some([cmd, args @ ..]) = MULTIPLEXER(dir)
                     && let Err(err) = Command::new(cmd).args(args).output()
                 {
                     self.layout

@@ -156,16 +156,17 @@ a `file.tpl` that's should be highlighted as HTML, try:
 VLE_EXT_MAP=tpl=html vle file.tpl
 ```
 
-## ZelliJ Integration
+## ZelliJ and tmux Integration
 
 When <kbd>Ctrl</kbd>-<kbd>Arrows</kbd> are used to navigate panes,
 VLE normally stops when it cannot proceed further in any direction.
-When running under [ZelliJ](https://zellij.dev/), the editor will
-issue a `zellij` command to change focus out of the VLE's pane in
-the given direction.
+When running under [ZelliJ](https://zellij.dev/) or
+[tmux](https://github.com/tmux/tmux), the editor will
+issue a `zellij` or `tmux` command to change focus out of the
+VLE's pane in the given direction.
 
 Furthermore, the Fish's keybindings can be updated to also
-use <kbd>Ctrl</kbd>-<kbd>Arrows</kbd> to navigate ZelliJ.
+use <kbd>Ctrl</kbd>-<kbd>Arrows</kbd> to navigate ZelliJ or tmux.
 Simply add the corresponding bindings to your `~/.config/fish/config.fish`
 file:
 
@@ -175,6 +176,11 @@ if set -q ZELLIJ
     bind ctrl-right "zellij action move-focus right"
     bind ctrl-up "zellij action move-focus up"
     bind ctrl-down "zellij action move-focus down"
+else if set -q TMUX
+    bind ctrl-left "tmux select-pane -L"
+    bind ctrl-right "tmux select-pane -R"
+    bind ctrl-up "tmux select-pane -U"
+    bind ctrl-down "tmux select-pane -D"
 end
 ```
 
