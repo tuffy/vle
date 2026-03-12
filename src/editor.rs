@@ -602,30 +602,29 @@ impl Editor {
         type DirMap = fn(Direction) -> Option<&'static [&'static str]>;
 
         // External terminal multiplexer integration
-        static MULTIPLEXER: LazyLock<DirMap> =
-            LazyLock::new(|| {
-                if std::env::var("ZELLIJ").is_ok() {
-                    |direction| {
-                        Some(match direction {
-                            Direction::Up => &["zellij", "action", "move-focus", "up"],
-                            Direction::Down => &["zellij", "action", "move-focus", "down"],
-                            Direction::Left => &["zellij", "action", "move-focus", "left"],
-                            Direction::Right => &["zellij", "action", "move-focus", "right"],
-                        })
-                    }
-                } else if std::env::var("TMUX").is_ok() {
-                    |direction| {
-                        Some(match direction {
-                            Direction::Up => &["tmux", "select-pane", "-U"],
-                            Direction::Down => &["tmux", "select-pane", "-D"],
-                            Direction::Left => &["tmux", "select-pane", "-L"],
-                            Direction::Right => &["tmux", "select-pane", "-R"],
-                        })
-                    }
-                } else {
-                    |_| None
+        static MULTIPLEXER: LazyLock<DirMap> = LazyLock::new(|| {
+            if std::env::var("ZELLIJ").is_ok() {
+                |direction| {
+                    Some(match direction {
+                        Direction::Up => &["zellij", "action", "move-focus", "up"],
+                        Direction::Down => &["zellij", "action", "move-focus", "down"],
+                        Direction::Left => &["zellij", "action", "move-focus", "left"],
+                        Direction::Right => &["zellij", "action", "move-focus", "right"],
+                    })
                 }
-            });
+            } else if std::env::var("TMUX").is_ok() {
+                |direction| {
+                    Some(match direction {
+                        Direction::Up => &["tmux", "select-pane", "-U"],
+                        Direction::Down => &["tmux", "select-pane", "-D"],
+                        Direction::Left => &["tmux", "select-pane", "-L"],
+                        Direction::Right => &["tmux", "select-pane", "-R"],
+                    })
+                }
+            } else {
+                |_| None
+            }
+        });
 
         match event {
             keybind!(Quit) => {
@@ -642,36 +641,23 @@ impl Editor {
             keybind!(SplitPane) => {
                 self.mode = EditorMode::SplitPane;
             }
-            key!(CONTROL, Left) => {
-                if let Err(dir) = self.layout.change_pane(Direction::Left)
-                    && let Some([cmd, args @ ..]) = MULTIPLEXER(dir)
-                    && let Err(err) = Command::new(cmd).args(args).output()
-                {
-                    self.layout
-                        .update_current_at(|buf, _| buf.set_error(err.to_string()));
-                }
-            }
-            key!(CONTROL, Right) => {
-                if let Err(dir) = self.layout.change_pane(Direction::Right)
-                    && let Some([cmd, args @ ..]) = MULTIPLEXER(dir)
-                    && let Err(err) = Command::new(cmd).args(args).output()
-                {
-                    self.layout
-                        .update_current_at(|buf, _| buf.set_error(err.to_string()));
-                }
-            }
-            key!(CONTROL, Up) => {
-                if let Err(dir) = self.layout.change_pane(Direction::Up)
-                    && let Some([cmd, args @ ..]) = MULTIPLEXER(dir)
-                    && let Err(err) = Command::new(cmd).args(args).output()
-                {
-                    self.layout
-                        .update_current_at(|buf, _| buf.set_error(err.to_string()));
-                }
-            }
-            key!(CONTROL, Down) => {
-                if let Err(dir) = self.layout.change_pane(Direction::Down)
-                    && let Some([cmd, args @ ..]) = MULTIPLEXER(dir)
+            Event::Key(KeyEvent {
+                code:
+                    code @ KeyCode::Left
+                    | code @ KeyCode::Right
+                    | code @ KeyCode::Up
+                    | code @ KeyCode::Down,
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                if let Err(dir) = self.layout.change_pane(match code {
+                    KeyCode::Left => Direction::Left,
+                    KeyCode::Right => Direction::Right,
+                    KeyCode::Up => Direction::Up,
+                    KeyCode::Down => Direction::Down,
+                    _ => unreachable!(),
+                }) && let Some([cmd, args @ ..]) = MULTIPLEXER(dir)
                     && let Err(err) = Command::new(cmd).args(args).output()
                 {
                     self.layout
