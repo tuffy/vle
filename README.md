@@ -170,10 +170,12 @@ Simply add the corresponding bindings to your `~/.config/fish/config.fish`
 file:
 
 ```
-bind ctrl-left "zellij action move-focus left"
-bind ctrl-right "zellij action move-focus right"
-bind ctrl-up "zellij action move-focus up"
-bind ctrl-down "zellij action move-focus down"
+if set -q ZELLIJ
+    bind ctrl-left "zellij action move-focus left"
+    bind ctrl-right "zellij action move-focus right"
+    bind ctrl-up "zellij action move-focus up"
+    bind ctrl-down "zellij action move-focus down"
+end
 ```
 
 This allows one to navigate from the editor to a nearby shell,
