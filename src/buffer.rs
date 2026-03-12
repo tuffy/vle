@@ -401,7 +401,7 @@ mod private {
             self.0.keys().copied()
         }
 
-        pub fn range<R>(&self, range: R) -> impl Iterator<Item = usize>
+        pub fn range<R>(&self, range: R) -> impl DoubleEndedIterator<Item = usize>
         where
             R: std::ops::RangeBounds<usize>,
         {
@@ -4530,6 +4530,26 @@ impl StatefulWidget for BufferWidget<'_> {
                 )
                 .centered(),
             ),
+            Some(EditorMode::SelectLine { .. }) => {
+                let mut bookmarks = buffer.bookmarks.range(..=state.cursor).rev().peekable();
+                if let Some(b) = bookmarks.peek()
+                    && *b == state.cursor
+                {
+                    block.title_bottom(
+                        border_title(
+                            format!(
+                                "Bookmark {} / {}",
+                                bookmarks.count(),
+                                buffer.bookmarks.len()
+                            ),
+                            focused,
+                        )
+                        .centered(),
+                    )
+                } else {
+                    block
+                }
+            }
             Some(EditorMode::Open { .. }) => block,
             _ => match state.selection {
                 Some(selection) => {
