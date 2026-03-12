@@ -3827,10 +3827,13 @@ impl StatefulWidget for BufferWidget<'_> {
             },
         };
         use std::borrow::Cow;
-        use std::collections::VecDeque;
+        use std::collections::{BTreeMap, VecDeque};
         use std::ops::RangeInclusive;
 
         const EDITING: Style = Style::new().add_modifier(Modifier::REVERSED);
+        const MATCHING: Color = Color::Green;
+        const MISMATCH: Color = Color::Red;
+        const BOOKMARK: Color = Color::Cyan;
 
         struct EditorLine<'s> {
             line: Cow<'s, str>,
@@ -4292,56 +4295,23 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
-        #[derive(Copy, Clone)]
-        struct Paren {
-            position: usize,
-            color: Color,
-        }
-
-        impl Paren {
-            fn opener(position: usize) -> Self {
-                Self {
-                    position,
-                    color: Color::Green,
-                }
-            }
-
-            fn matching(position: usize) -> Self {
-                Self {
-                    position,
-                    color: Color::Green,
-                }
-            }
-
-            fn mismatch(position: usize) -> Self {
-                Self {
-                    position,
-                    color: Color::Red,
-                }
-            }
-
-            fn bookmark(position: usize) -> Self {
-                Self {
-                    position,
-                    color: Color::Cyan,
-                }
-            }
-        }
-
         fn highlight_parens<'s>(
             colorized: Vec<Span<'s>>,
             line_range: RangeInclusive<usize>,
-            parens: &mut VecDeque<Paren>,
+            parens: &mut VecDeque<(usize, Color)>,
         ) -> Vec<Span<'s>> {
             let (line_start, line_end) = line_range.into_inner();
             let mut colorized: VecDeque<_> = colorized.into();
             let mut highlighted = Vec::with_capacity(colorized.len());
             let mut offset = line_start;
-            while parens.pop_front_if(|p| p.position < offset).is_some() {
+            while parens
+                .pop_front_if(|(position, _)| *position < offset)
+                .is_some()
+            {
                 // drain unwanted preceding elements
             }
-            while let Some(Paren { position, color }) =
-                parens.pop_front_if(|p| p.position >= offset && p.position <= line_end)
+            while let Some((position, color)) =
+                parens.pop_front_if(|(position, _)| *position >= offset && *position <= line_end)
             {
                 extract(&mut colorized, position - offset, &mut highlighted, |s| s);
                 extract(&mut colorized, 1, &mut highlighted, |s| {
@@ -4627,54 +4597,47 @@ impl StatefulWidget for BufferWidget<'_> {
             .unwrap_or(rope.len_chars())
             .saturating_sub(viewport_start);
 
-        let mut marks: Vec<Paren> = match prev_opening_char(rope, state.cursor, viewport_size) {
-            Some((opener, start)) => match next_closing_char(rope, state.cursor, viewport_size) {
-                Some((closer, end)) => {
-                    if opener == closer {
-                        vec![
-                            Paren::matching(start.saturating_sub(1)),
-                            Paren::matching(end),
-                        ]
-                    } else {
-                        vec![
-                            Paren::mismatch(start.saturating_sub(1)),
-                            Paren::mismatch(end),
-                        ]
+        let mut marks: BTreeMap<usize, Color> =
+            match prev_opening_char(rope, state.cursor, viewport_size) {
+                Some((opener, start)) => match next_closing_char(rope, state.cursor, viewport_size)
+                {
+                    Some((closer, end)) => {
+                        if opener == closer {
+                            [(start.saturating_sub(1), MATCHING), (end, MATCHING)].into()
+                        } else {
+                            [(start.saturating_sub(1), MISMATCH), (end, MISMATCH)].into()
+                        }
                     }
-                }
-                None => vec![Paren::opener(start.saturating_sub(1))],
-            },
-            None => vec![],
-        };
+                    None => [(start.saturating_sub(1), MATCHING)].into(),
+                },
+                None => BTreeMap::default(),
+            };
 
-        for bookmark in buffer
-            .bookmarks
-            .iter()
-            .filter(|p| *p >= viewport_start)
-            .map(Paren::bookmark)
-        {
-            match marks.binary_search_by_key(&bookmark.position, |b| b.position) {
-                Ok(pos) => {
-                    marks[pos].color = bookmark.color;
+        for bookmark in buffer.bookmarks.iter().filter(|p| *p >= viewport_start) {
+            use std::collections::btree_map::Entry;
+
+            match marks.entry(bookmark) {
+                Entry::Occupied(o) => {
+                    *o.into_mut() = BOOKMARK;
                 }
-                Err(pos) => {
-                    marks.insert(pos, bookmark);
+                Entry::Vacant(v) => {
+                    v.insert(BOOKMARK);
                 }
             }
         }
 
         match self.mode {
             Some(EditorMode::SelectLine { .. }) => {
-                if let Ok(pos) = marks.binary_search_by_key(&state.cursor, |b| b.position) {
-                    marks[pos].color = Color::Yellow;
+                if let Some(mark) = marks.get_mut(&state.cursor) {
+                    *mark = Color::Yellow;
                 }
             }
             _ => {
-                marks.retain(|p| p.position != state.cursor);
+                marks.remove(&state.cursor);
             }
         }
 
-        let mut marks = marks.into();
+        let mut marks = marks.into_iter().collect();
 
         Clear.render(text_area, buf);
         Paragraph::new(match self.mode {
