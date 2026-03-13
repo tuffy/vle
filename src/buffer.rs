@@ -5545,34 +5545,10 @@ impl<T> From<VecFiltered<T>> for std::collections::VecDeque<T> {
 }
 
 fn probe_indent(rope: &ropey::Rope, indent_char: char) -> Option<usize> {
-    // implementation pulled from Wikipedia:
-    // https://en.wikipedia.org/wiki/Binary_GCD_algorithm
-    fn gcd(mut u: usize, mut v: usize) -> usize {
-        if u == 0 {
-            return v;
-        } else if v == 0 {
-            return u;
-        }
-
-        let i = u.trailing_zeros();
-        u >>= i;
-        let j = v.trailing_zeros();
-        v >>= j;
-        let k = i.min(j);
-
-        loop {
-            (u, v) = reorder(u, v);
-            v -= u;
-            if v == 0 {
-                return u << k;
-            }
-            v >>= v.trailing_zeros();
-        }
-    }
-
     rope.lines()
         .map(|l| l.chars().take_while(|c| *c == indent_char).count())
-        .reduce(gcd)
+        .filter(|c| *c != 0)
+        .reduce(std::cmp::min)
 }
 
 #[inline]
