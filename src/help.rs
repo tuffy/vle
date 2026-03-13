@@ -217,13 +217,10 @@ pub static CONFIRM_CLOSE: &[Keybinding] = &[
 ];
 
 pub static SPLIT_PANE: &[Keybinding] = &[
-    none(&[LEFT], "Split Vertically \u{25e7}"),
-    none(&[RIGHT], "Split Vertically \u{25e8}"),
-    none(&[UP], "Split Horizontally \u{2b12}"),
-    none(&[DOWN], "Split Horizontally \u{2b13}"),
+    none(&[LEFT, RIGHT], "Split Vertically \u{25e7} / \u{25e8}"),
+    none(&[UP, DOWN], "Split Horizontally \u{2b12} / \u{2b13}"),
     ctrl(&[LEFT, DOWN, UP, RIGHT], "Swap Panes in Direction"),
-    none(&["+"], "Increase Size Ratio"),
-    none(&["-"], "Decrease Size Ratio"),
+    none(&["+", "-"], "Change Size Ratio"),
     none(&["Del"], "Delete Current Pane"),
     none(&["Esc"], "Cancel"),
 ];
