@@ -997,20 +997,16 @@ impl Editor {
                 self.mode = EditorMode::default();
             }
             key!(CONTROL, Left) => {
-                self.layout.swap_pane(Direction::Left);
-                self.mode = EditorMode::default();
+                let _ = self.layout.swap_pane(Direction::Left);
             }
             key!(CONTROL, Right) => {
-                self.layout.swap_pane(Direction::Right);
-                self.mode = EditorMode::default();
+                let _ = self.layout.swap_pane(Direction::Right);
             }
             key!(CONTROL, Up) => {
-                self.layout.swap_pane(Direction::Up);
-                self.mode = EditorMode::default();
+                let _ = self.layout.swap_pane(Direction::Up);
             }
             key!(CONTROL, Down) => {
-                self.layout.swap_pane(Direction::Down);
-                self.mode = EditorMode::default();
+                let _ = self.layout.swap_pane(Direction::Down);
             }
             key!('+') => {
                 self.layout.update_ratio(|ours, theirs, buf| {
@@ -1820,28 +1816,34 @@ impl Layout {
     }
 
     fn selected_buffer_list_mut(&mut self) -> &mut BufferList {
-        match self {
-            Self::Single(buffer) => buffer,
-            Self::Horizontal {
-                top: buffer,
-                which: HorizontalPos::Top,
-                ..
+        let mut current = self;
+
+        loop {
+            match current {
+                Self::Single(buffer) => break buffer,
+                Self::Horizontal {
+                    top: buffer,
+                    which: HorizontalPos::Top,
+                    ..
+                }
+                | Self::Horizontal {
+                    bottom: buffer,
+                    which: HorizontalPos::Bottom,
+                    ..
+                }
+                | Self::Vertical {
+                    left: buffer,
+                    which: VerticalPos::Left,
+                    ..
+                }
+                | Self::Vertical {
+                    right: buffer,
+                    which: VerticalPos::Right,
+                    ..
+                } => {
+                    current = buffer;
+                },
             }
-            | Self::Horizontal {
-                bottom: buffer,
-                which: HorizontalPos::Bottom,
-                ..
-            }
-            | Self::Vertical {
-                left: buffer,
-                which: VerticalPos::Left,
-                ..
-            }
-            | Self::Vertical {
-                right: buffer,
-                which: VerticalPos::Right,
-                ..
-            } => buffer.selected_buffer_list_mut(),
         }
     }
 
@@ -2010,6 +2012,87 @@ impl Layout {
                 },
                 direction,
             ) => active.change_pane(direction),
+        }
+    }
+
+    fn swap_pane(&mut self, direction: Direction) -> Result<(), &mut BufferList> {
+        match (self, direction) {
+            (Self::Single(buflist), _) => Err(buflist),
+            (
+                Self::Horizontal {
+                    which: which @ HorizontalPos::Bottom,
+                    bottom,
+                    top,
+                    ..
+                },
+                direction @ Direction::Up,
+            ) => bottom.swap_pane(direction).or_else(|buflist| {
+                *which = HorizontalPos::Top;
+                std::mem::swap(top.selected_buffer_list_mut(), buflist);
+                Ok(())
+            }),
+            (
+                Self::Horizontal {
+                    which: which @ HorizontalPos::Top,
+                    top,
+                    bottom,
+                    ..
+                },
+                direction @ Direction::Down,
+            ) => top.swap_pane(direction).or_else(|buflist| {
+                *which = HorizontalPos::Bottom;
+                std::mem::swap(bottom.selected_buffer_list_mut(), buflist);
+                Ok(())
+            }),
+            (
+                Self::Vertical {
+                    which: which @ VerticalPos::Left,
+                    left,
+                    right,
+                    ..
+                },
+                direction @ Direction::Right,
+            ) => left.swap_pane(direction).or_else(|buflist| {
+                *which = VerticalPos::Right;
+                std::mem::swap(right.selected_buffer_list_mut(), buflist);
+                Ok(())
+            }),
+            (
+                Self::Vertical {
+                    which: which @ VerticalPos::Right,
+                    right,
+                    left,
+                    ..
+                },
+                direction @ Direction::Left,
+            ) => right.swap_pane(direction).or_else(|buflist| {
+                *which = VerticalPos::Left;
+                std::mem::swap(left.selected_buffer_list_mut(), buflist);
+                Ok(())
+            }),
+            (
+                Self::Horizontal {
+                    which: HorizontalPos::Bottom,
+                    bottom: active,
+                    ..
+                }
+                | Self::Horizontal {
+                    which: HorizontalPos::Top,
+                    top: active,
+                    ..
+                }
+                | Self::Vertical {
+                    which: VerticalPos::Left,
+                    left: active,
+                    ..
+                }
+                | Self::Vertical {
+                    which: VerticalPos::Right,
+                    right: active,
+                    ..
+                },
+                direction,
+            ) => active.swap_pane(direction),
         }
     }
 
@@ -2389,165 +2472,6 @@ impl Layout {
             }
         }
     }
-
-    fn swap_pane(&mut self, direction: Direction) {
-        let mut current = self;
-        let mut candidate = None;
-
-        loop {
-            match (current, &direction) {
-                (Self::Single(buf), _) => {
-                    if let Some(candidate) = candidate {
-                        std::mem::swap(buf, candidate);
-                    }
-                    break;
-                }
-                (
-                    Self::Horizontal {
-                        which: HorizontalPos::Top,
-                        top: active,
-                        bottom: alt,
-                        ..
-                    },
-                    direction @ Direction::Down,
-                )
-                | (
-                    Self::Horizontal {
-                        which: HorizontalPos::Bottom,
-                        bottom: active,
-                        top: alt,
-                        ..
-                    },
-                    direction @ Direction::Up,
-                )
-                | (
-                    Self::Vertical {
-                        which: VerticalPos::Left,
-                        left: active,
-                        right: alt,
-                        ..
-                    },
-                    direction @ Direction::Right,
-                )
-                | (
-                    Self::Vertical {
-                        which: VerticalPos::Right,
-                        right: active,
-                        left: alt,
-                        ..
-                    },
-                    direction @ Direction::Left,
-                ) => {
-                    candidate = Some(alt.furthest(direction.opposite()));
-                    current = active;
-                }
-                (
-                    Self::Horizontal {
-                        which: HorizontalPos::Top,
-                        top: active,
-                        ..
-                    }
-                    | Self::Horizontal {
-                        which: HorizontalPos::Bottom,
-                        bottom: active,
-                        ..
-                    }
-                    | Self::Vertical {
-                        which: VerticalPos::Left,
-                        left: active,
-                        ..
-                    }
-                    | Self::Vertical {
-                        which: VerticalPos::Right,
-                        right: active,
-                        ..
-                    },
-                    _,
-                ) => {
-                    current = active;
-                }
-            }
-        }
-    }
-
-    fn furthest(&mut self, direction: Direction) -> &mut BufferList {
-        let mut current = self;
-
-        match direction {
-            Direction::Left => loop {
-                match current {
-                    Self::Single(buf) => break buf,
-                    Self::Horizontal {
-                        which: HorizontalPos::Top,
-                        top: next,
-                        ..
-                    }
-                    | Self::Horizontal {
-                        which: HorizontalPos::Bottom,
-                        bottom: next,
-                        ..
-                    }
-                    | Self::Vertical { left: next, .. } => {
-                        current = next;
-                    }
-                }
-            },
-            Direction::Right => loop {
-                match current {
-                    Self::Single(buf) => break buf,
-                    Self::Horizontal {
-                        which: HorizontalPos::Top,
-                        top: next,
-                        ..
-                    }
-                    | Self::Horizontal {
-                        which: HorizontalPos::Bottom,
-                        bottom: next,
-                        ..
-                    }
-                    | Self::Vertical { right: next, .. } => {
-                        current = next;
-                    }
-                }
-            },
-            Direction::Up => loop {
-                match current {
-                    Self::Single(buf) => break buf,
-                    Self::Vertical {
-                        which: VerticalPos::Left,
-                        left: next,
-                        ..
-                    }
-                    | Self::Vertical {
-                        which: VerticalPos::Right,
-                        right: next,
-                        ..
-                    }
-                    | Self::Horizontal { top: next, .. } => {
-                        current = next;
-                    }
-                }
-            },
-            Direction::Down => loop {
-                match current {
-                    Self::Single(buf) => break buf,
-                    Self::Vertical {
-                        which: VerticalPos::Left,
-                        left: next,
-                        ..
-                    }
-                    | Self::Vertical {
-                        which: VerticalPos::Right,
-                        right: next,
-                        ..
-                    }
-                    | Self::Horizontal { bottom: next, .. } => {
-                        current = next;
-                    }
-                }
-            },
-        }
-    }
 }
 
 /// Directions for moving or splitting panes
@@ -2557,17 +2481,6 @@ enum Direction {
     Down,
     Left,
     Right,
-}
-
-impl Direction {
-    fn opposite(&self) -> Self {
-        match self {
-            Self::Up => Self::Down,
-            Self::Down => Self::Up,
-            Self::Left => Self::Right,
-            Self::Right => Self::Left,
-        }
-    }
 }
 
 struct EditorWidget<'e> {
