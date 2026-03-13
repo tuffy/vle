@@ -4571,6 +4571,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     block
                 }
             }
+            Some(EditorMode::SplitPane) => block.border_style(Style::default().blue()),
             Some(EditorMode::Open { .. }) => block,
             _ => match state.selection {
                 Some(selection) => {

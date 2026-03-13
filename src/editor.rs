@@ -1845,7 +1845,7 @@ impl Layout {
                     ..
                 } => {
                     current = buffer;
-                },
+                }
             }
         }
     }
