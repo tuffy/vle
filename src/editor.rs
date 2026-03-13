@@ -976,19 +976,19 @@ impl Editor {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
         match event {
-            key!(CONTROL, Up) => {
+            key!(Up) => {
                 self.layout.split_pane(Direction::Up);
                 self.mode = EditorMode::default();
             }
-            key!(CONTROL, Down) => {
+            key!(Down) => {
                 self.layout.split_pane(Direction::Down);
                 self.mode = EditorMode::default();
             }
-            key!(CONTROL, Left) => {
+            key!(Left) => {
                 self.layout.split_pane(Direction::Left);
                 self.mode = EditorMode::default();
             }
-            key!(CONTROL, Right) => {
+            key!(Right) => {
                 self.layout.split_pane(Direction::Right);
                 self.mode = EditorMode::default();
             }
@@ -996,19 +996,19 @@ impl Editor {
                 self.layout.delete_current_pane();
                 self.mode = EditorMode::default();
             }
-            key!(Left) => {
+            key!(CONTROL, Left) => {
                 self.layout.swap_pane(Direction::Left);
                 self.mode = EditorMode::default();
             }
-            key!(Right) => {
+            key!(CONTROL, Right) => {
                 self.layout.swap_pane(Direction::Right);
                 self.mode = EditorMode::default();
             }
-            key!(Up) => {
+            key!(CONTROL, Up) => {
                 self.layout.swap_pane(Direction::Up);
                 self.mode = EditorMode::default();
             }
-            key!(Down) => {
+            key!(CONTROL, Down) => {
                 self.layout.swap_pane(Direction::Down);
                 self.mode = EditorMode::default();
             }
