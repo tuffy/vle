@@ -30,6 +30,10 @@ pub static SPACES_PER_TAB: LazyLock<usize> = LazyLock::new(|| {
         .unwrap_or(4)
 });
 
+pub static TAB_SUBSTITUTION: LazyLock<String> = LazyLock::new(|| {
+    std::iter::repeat_n(' ', *SPACES_PER_TAB).collect()
+});
+
 static ALWAYS_TAB: LazyLock<bool> = LazyLock::new(|| std::env::var("VLE_ALWAYS_TAB").is_ok());
 
 /// A buffer's source file
@@ -3893,17 +3897,17 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
-        fn widen_tabs<'l>(mut input: Line<'l>, tab_substitution: &str) -> Line<'l> {
-            fn tabs_to_spaces(s: &mut Cow<'_, str>, tab_substitution: &str) {
+        fn widen_tabs<'l>(mut input: Line<'l>) -> Line<'l> {
+            fn tabs_to_spaces(s: &mut Cow<'_, str>) {
                 if s.as_ref().contains('\t') {
-                    *s = Cow::Owned(s.as_ref().replace('\t', tab_substitution));
+                    *s = Cow::Owned(s.as_ref().replace('\t', &TAB_SUBSTITUTION));
                 }
             }
 
             input
                 .spans
                 .iter_mut()
-                .for_each(|s| tabs_to_spaces(&mut s.content, tab_substitution));
+                .for_each(|s| tabs_to_spaces(&mut s.content));
             input
         }
 
@@ -4746,7 +4750,7 @@ impl StatefulWidget for BufferWidget<'_> {
                             .into()
                         },
                     )
-                    .map(|line| widen_tabs(line, &buffer.tab_substitution))
+                    .map(|line| widen_tabs(line))
                     .take(area.height.into())
                     .collect::<Vec<_>>()
             }
@@ -4821,7 +4825,7 @@ impl StatefulWidget for BufferWidget<'_> {
                             .into()
                         },
                     )
-                    .map(|line| widen_tabs(line, &buffer.tab_substitution))
+                    .map(|line| widen_tabs(line))
                     .take(area.height.into())
                     .collect::<Vec<_>>()
             }
@@ -4900,7 +4904,7 @@ impl StatefulWidget for BufferWidget<'_> {
                             .into()
                         },
                     )
-                    .map(|line| widen_tabs(line, &buffer.tab_substitution))
+                    .map(|line| widen_tabs(line))
                     .take(area.height.into())
                     .collect::<Vec<_>>()
             }
@@ -4941,7 +4945,7 @@ impl StatefulWidget for BufferWidget<'_> {
                             .into()
                         },
                     )
-                    .map(|line| widen_tabs(line, &buffer.tab_substitution))
+                    .map(|line| widen_tabs(line))
                     .take(area.height.into())
                     .collect::<Vec<_>>()
             }
@@ -4968,7 +4972,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                 .into()
                             },
                         )
-                        .map(|line| widen_tabs(line, &buffer.tab_substitution))
+                        .map(|line| widen_tabs(line))
                         .take(area.height.into())
                         .collect::<Vec<_>>(),
                     // highlight whole line, no line, or part of the line
@@ -5000,7 +5004,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                     .into()
                                 },
                             )
-                            .map(|line| widen_tabs(line, &buffer.tab_substitution))
+                            .map(|line| widen_tabs(line))
                             .take(area.height.into())
                             .collect::<Vec<_>>()
                     }
