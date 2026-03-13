@@ -222,7 +222,7 @@ pub static SPLIT_PANE: &[Keybinding] = &[
     ctrl(&[LEFT, DOWN, UP, RIGHT], "Swap Panes in Direction"),
     none(&["+", "-"], "Change Size Ratio"),
     none(&["Del"], "Delete Current Pane"),
-    none(&["Esc"], "Cancel"),
+    none(&["Enter"], "Finish"),
 ];
 
 pub static SELECT_INSIDE: &[Keybinding] = &[

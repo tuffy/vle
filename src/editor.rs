@@ -1020,6 +1020,9 @@ impl Editor {
                     buf.set_message(format!("Ratio {ours}:{theirs}"));
                 });
             }
+            key!(Enter) => {
+                self.mode = EditorMode::default();
+            }
             _ => { /* ignore other events */ }
         }
     }
