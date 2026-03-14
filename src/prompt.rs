@@ -25,25 +25,53 @@ impl TextField {
     }
 
     pub fn backspace(&mut self) {
-        if let Some(cursor) = self.cursor.checked_sub(1) {
+        while let Some(cursor) = self.cursor.checked_sub(1) {
+            use unicode_width::UnicodeWidthChar;
+
+            let width = self.chars[cursor].width();
             self.chars.remove(cursor);
             self.cursor = cursor;
+            if width != Some(0) {
+                break;
+            }
         }
     }
 
     pub fn delete(&mut self) {
-        if self.cursor < self.chars.len() {
+        while self.cursor < self.chars.len() {
+            use unicode_width::UnicodeWidthChar;
+
+            let width = self.chars[self.cursor].width();
             self.chars.remove(self.cursor);
+            if width != Some(0) {
+                break;
+            }
         }
     }
 
     pub fn cursor_back(&mut self) {
-        self.cursor = self.cursor.saturating_sub(1);
+        use unicode_width::UnicodeWidthChar;
+
+        self.cursor = self.cursor.saturating_sub(
+            self.chars[..self.cursor]
+                .iter()
+                .rev()
+                .take_while(|c| c.width() == Some(0))
+                .count()
+                + 1,
+        );
     }
 
     pub fn cursor_forward(&mut self) {
         if self.cursor < self.chars.len() {
-            self.cursor += 1;
+            use unicode_width::UnicodeWidthChar;
+
+            self.cursor = self.cursor
+                + self.chars[self.cursor + 1..]
+                    .iter()
+                    .take_while(|c| c.width() == Some(0))
+                    .count()
+                + 1
         }
     }
 
