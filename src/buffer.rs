@@ -1134,7 +1134,15 @@ impl BufferContext {
         if let Ok(line_start) = buf.rope.try_line_to_char(line)
             && let Ok(next_line_start) = buf.rope.try_line_to_char(line + 1)
         {
-            self.cursor = (line_start + column).min(next_line_start.saturating_sub(1));
+            use unicode_width::UnicodeWidthChar;
+
+            let start = (line_start + column).min(next_line_start.saturating_sub(1));
+            self.cursor = start
+                + buf
+                    .rope
+                    .chars_at(start)
+                    .take_while(|c| c.width() == Some(0))
+                    .count();
             self.cursor_column = cursor_column(&buf.rope, self.cursor);
             self.selection = None;
         } else {
