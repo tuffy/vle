@@ -3376,6 +3376,12 @@ fn apply_cursor_column(
         }
     }
 
+    while let Some(c) = chars.next()
+        && c.width() == Some(0)
+    {
+        line_start += 1;
+    }
+
     line_start
 }
 
