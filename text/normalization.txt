@@ -1,0 +1,7 @@
+ NFC      │ NFD
+──────────┼──────────
+ thé      │ thé
+ Phở      │ Phở
+ usèrname │ usèrname
+ pãssword │ pãssword
+ àéîõū    │ àéîõū

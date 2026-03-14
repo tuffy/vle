@@ -30,9 +30,8 @@ pub static SPACES_PER_TAB: LazyLock<usize> = LazyLock::new(|| {
         .unwrap_or(4)
 });
 
-pub static TAB_SUBSTITUTION: LazyLock<String> = LazyLock::new(|| {
-    std::iter::repeat_n(' ', *SPACES_PER_TAB).collect()
-});
+pub static TAB_SUBSTITUTION: LazyLock<String> =
+    LazyLock::new(|| std::iter::repeat_n(' ', *SPACES_PER_TAB).collect());
 
 static ALWAYS_TAB: LazyLock<bool> = LazyLock::new(|| std::env::var("VLE_ALWAYS_TAB").is_ok());
 
@@ -1025,16 +1024,35 @@ impl BufferContext {
     }
 
     pub fn cursor_back(&mut self, selecting: bool) {
+        use unicode_width::UnicodeWidthChar;
+
         let buf = self.buffer.borrow_move();
         update_selection(&mut self.selection, self.cursor, selecting);
-        self.cursor = self.cursor.saturating_sub(1);
+        self.cursor = self.cursor.saturating_sub(
+            buf.rope
+                .chars_at(self.cursor)
+                .reversed()
+                .take_while(|c| c.width() == Some(0))
+                .count()
+                + 1,
+        );
         self.cursor_column = cursor_column(&buf.rope, self.cursor);
     }
 
     pub fn cursor_forward(&mut self, selecting: bool) {
+        use unicode_width::UnicodeWidthChar;
+
         let buf = self.buffer.borrow_move();
         update_selection(&mut self.selection, self.cursor, selecting);
-        self.cursor = (self.cursor + 1).min(buf.rope.len_chars());
+        if self.cursor < buf.rope.len_chars() {
+            self.cursor = self.cursor
+                + buf
+                    .rope
+                    .chars_at(self.cursor + 1)
+                    .take_while(|c| c.width() == Some(0))
+                    .count()
+                + 1;
+        }
         self.cursor_column = cursor_column(&buf.rope, self.cursor);
     }
 
@@ -1353,10 +1371,12 @@ impl BufferContext {
 
         match self.selection.take() {
             None => {
-                if backspace_or_un_pair(&mut rope, self.cursor, &mut Secondary::new(alt, bookmarks))
-                    .is_ok()
-                {
-                    self.cursor -= 1;
+                if let Ok((removed, _)) = backspace_or_un_pair(
+                    &mut rope,
+                    self.cursor,
+                    &mut Secondary::new(alt, bookmarks),
+                ) {
+                    self.cursor -= removed;
                     self.cursor_column = cursor_column(&rope, self.cursor);
                 }
             }
@@ -1379,12 +1399,22 @@ impl BufferContext {
 
         match &mut self.selection {
             None => {
+                use unicode_width::UnicodeWidthChar;
+
                 let mut alt = Secondary::gt(alt, bookmarks, self.cursor);
+
+                let to_delete = rope
+                    .chars_at(self.cursor)
+                    .skip(1)
+                    .take_while(|c| c.width() == Some(0))
+                    .count()
+                    + 1;
+
                 if rope
-                    .try_remove(alt.remove(self.cursor..(self.cursor + 1)))
+                    .try_remove(alt.remove(self.cursor..(self.cursor + to_delete)))
                     .is_ok()
                 {
-                    alt -= 1;
+                    alt -= to_delete;
                 }
                 // leave our cursor position and current column unchanged
             }
@@ -2708,15 +2738,16 @@ impl MultiCursor {
         }
         match self.zap_selection(rope, cursor, secondary) {
             None => {
-                let removed = backspace_or_un_pair(rope, self.cursor, secondary)?;
+                let (before, after) = backspace_or_un_pair(rope, self.cursor, secondary)?;
+                let total = before + after;
                 *cursor -= match self.cursor.cmp(cursor) {
-                    Ordering::Less => removed,
-                    Ordering::Equal => 1,
+                    Ordering::Less => total,
+                    Ordering::Equal => before,
                     Ordering::Greater => 0,
                 };
-                self.cursor -= 1;
-                self.range.end -= removed;
-                Ok(removed)
+                self.cursor -= before;
+                self.range.end -= total;
+                Ok(total)
             }
             Some(removed) => Ok(removed),
         }
@@ -2732,17 +2763,26 @@ impl MultiCursor {
         if self.cursor < self.range.end {
             match self.zap_selection(rope, cursor, secondary) {
                 None => {
+                    use unicode_width::UnicodeWidthChar;
+
+                    let to_delete = rope
+                        .chars_at(self.cursor)
+                        .skip(1)
+                        .take_while(|c| c.width() == Some(0))
+                        .count()
+                        + 1;
+
                     if self.cursor < *cursor {
-                        *cursor = cursor.saturating_sub(1);
+                        *cursor = cursor.saturating_sub(to_delete);
                     }
                     secondary.update(|a| {
                         if self.cursor < *a {
-                            *a = a.saturating_sub(1);
+                            *a = a.saturating_sub(to_delete);
                         }
                     });
-                    let _ = rope.try_remove(secondary.remove(self.cursor..self.cursor + 1));
-                    self.range.end -= 1;
-                    Ok(1)
+                    let _ = rope.try_remove(secondary.remove(self.cursor..self.cursor + to_delete));
+                    self.range.end -= to_delete;
+                    Ok(to_delete)
                 }
                 Some(zapped) => Ok(zapped),
             }
@@ -2758,13 +2798,22 @@ impl MultiCursor {
         rope: &ropey::Rope,
         selecting: bool,
     ) {
+        use unicode_width::UnicodeWidthChar;
+
+        let to_retreat = rope
+            .chars_at(self.cursor)
+            .reversed()
+            .take_while(|c| c.width() == Some(0))
+            .count()
+            + 1;
+
         if self.cursor > self.range.start {
             if self.cursor == *cursor {
-                *cursor = cursor.saturating_sub(1);
+                *cursor = cursor.saturating_sub(to_retreat);
                 *cursor_col = cursor_column(rope, *cursor);
             }
             update_selection(&mut self.selection, self.cursor, selecting);
-            self.cursor -= 1;
+            self.cursor -= to_retreat;
         } else if !selecting {
             self.selection = None;
         }
@@ -2777,13 +2826,21 @@ impl MultiCursor {
         rope: &ropey::Rope,
         selecting: bool,
     ) {
+        use unicode_width::UnicodeWidthChar;
+
         if self.cursor < self.range.end {
+            let to_advance = rope
+                .chars_at(self.cursor + 1)
+                .take_while(|c| c.width() == Some(0))
+                .count()
+                + 1;
+
             if self.cursor == *cursor {
-                *cursor += 1;
+                *cursor += to_advance;
                 *cursor_col = cursor_column(rope, *cursor);
             }
             update_selection(&mut self.selection, self.cursor, selecting);
-            self.cursor += 1;
+            self.cursor += to_advance;
         } else if !selecting {
             self.selection = None;
         }
@@ -3098,19 +3155,20 @@ fn insert_char_or_pair(
     }
 }
 
-/// On success, returns number of characters removed (1 or 2)
+/// On success, returns number of characters removed before and after cursor
 fn backspace_or_un_pair(
     rope: &mut ropey::Rope,
     cursor: usize,
     alt: &mut Secondary,
-) -> Result<usize, ()> {
-    let prev = cursor.checked_sub(1).ok_or(())?;
-    if match rope.get_char(prev) {
-        Some('(') => matches!(rope.get_char(cursor), Some(')')),
-        Some('[') => matches!(rope.get_char(cursor), Some(']')),
-        Some('{') => matches!(rope.get_char(cursor), Some('}')),
-        _ => false,
-    } {
+) -> Result<(usize, usize), ()> {
+    use unicode_width::UnicodeWidthChar;
+
+    fn remove_pair(
+        rope: &mut ropey::Rope,
+        alt: &mut Secondary,
+        prev: usize,
+        cursor: usize,
+    ) -> Result<(usize, usize), ()> {
         rope.try_remove(alt.remove(prev..cursor + 1))
             .map_err(|_| ())?;
         alt.update(|a| {
@@ -3120,15 +3178,41 @@ fn backspace_or_un_pair(
                 std::cmp::Ordering::Less => 0,
             };
         });
-        Ok(2)
-    } else {
-        rope.try_remove(alt.remove(prev..cursor)).map_err(|_| ())?;
-        alt.update(|a| {
-            if *a >= cursor {
-                *a -= 1;
-            }
-        });
-        Ok(1)
+        Ok((1, 1))
+    }
+
+    let prev = cursor.checked_sub(1).ok_or(())?;
+    match rope.get_char(prev).ok_or(())? {
+        '(' if rope.get_char(cursor) == Some(')') => remove_pair(rope, alt, prev, cursor),
+        '[' if rope.get_char(cursor) == Some(']') => remove_pair(rope, alt, prev, cursor),
+        '{' if rope.get_char(cursor) == Some('}') => remove_pair(rope, alt, prev, cursor),
+        c if c.width() == Some(0) => {
+            let removed = rope
+                .chars_at(cursor)
+                .reversed()
+                .take_while(|c| c.width() == Some(0))
+                .count()
+                + 1;
+
+            rope.try_remove(alt.remove(cursor.saturating_sub(removed)..cursor))
+                .map_err(|_| ())?;
+            alt.update(|a| {
+                if *a >= cursor {
+                    *a -= removed;
+                }
+            });
+            Ok((removed, 0))
+        }
+        _ => {
+            // the common case
+            rope.try_remove(alt.remove(prev..cursor)).map_err(|_| ())?;
+            alt.update(|a| {
+                if *a >= cursor {
+                    *a -= 1;
+                }
+            });
+            Ok((1, 0))
+        }
     }
 }
 
