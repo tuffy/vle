@@ -30,3 +30,4 @@ rpassword = { version = "7.4", optional = true }
 fancy-regex = "0.17"
 lazy-regex = "3.6"
 radix_trie = "0.3"
+unicode-normalization = "0.1"

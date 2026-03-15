@@ -3284,6 +3284,48 @@ impl SearchTerm for String {
     }
 }
 
+pub struct Normalizations {
+    base: String,
+    options: std::collections::HashSet<String>,
+}
+
+impl TryFrom<String> for Normalizations {
+    type Error = String;
+
+    fn try_from(base: String) -> Result<Self, Self::Error> {
+        use unicode_normalization::UnicodeNormalization;
+
+        let mut options = std::collections::HashSet::default();
+        options.insert(base.nfc().collect());
+        options.insert(base.nfkd().collect());
+        options.insert(base.nfd().collect());
+        options.insert(base.nfkc().collect());
+        if options.len() > 1 {
+            Ok(Self { base, options })
+        } else {
+            Err(base)
+        }
+    }
+}
+
+impl std::fmt::Display for Normalizations {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.base.fmt(f)
+    }
+}
+
+impl SearchTerm for Normalizations {
+    fn match_ranges(&self, s: &str) -> impl Iterator<Item = SearchMatch> {
+        let mut ranges = self
+            .options
+            .iter()
+            .flat_map(|string| string.match_ranges(s))
+            .collect::<Vec<_>>();
+        ranges.sort_unstable_by_key(|r| r.start);
+        ranges.into_iter()
+    }
+}
+
 /// Buffer has been modified since last save
 pub struct Modified;
 

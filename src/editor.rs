@@ -765,12 +765,18 @@ impl Editor {
             keybind!(Find) => {
                 if let Some(Ok(find)) = self.on_buffer(|b| match b.selection_range() {
                     Some(SelectionType::Term(selection)) => {
-                        b.all_matches(None, selection).map(|(match_idx, matches)| {
+                        use crate::buffer::Normalizations;
+
+                        (match Normalizations::try_from(selection) {
+                            Ok(normalizations) => {
+                                b.all_matches(None, normalizations).map_err(|_| ())
+                            }
+                            Err(selection) => b.all_matches(None, selection).map_err(|_| ()),
+                        })
+                        .map(|(match_idx, matches)| {
                             b.set_cursor(matches[match_idx].0.end);
                             b.clear_selection();
 
-                            // let (matches, groups): (_, Vec<Vec<_>>) =
-                            //    matches.into_iter().map(|(r, c)| (r.into(), c)).unzip();
                             let matches = matches.into_iter().map(|r| r.into()).collect();
 
                             EditorMode::MultiCursor {
@@ -1273,6 +1279,7 @@ fn process_search(
     range: Option<&SelectionRange>,
     event: Event,
 ) -> Option<NextModeIncremental> {
+    use crate::buffer::Normalizations;
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
     fn not_found<Q: std::fmt::Display>(query: Q) -> String {
@@ -1341,15 +1348,27 @@ fn process_search(
             }
         }
         key!(Enter) => match type_ {
-            SearchType::Plain => match buffer.all_matches(range, prompt.value()?) {
-                Ok((match_idx, matches)) => {
-                    *last_search = Some(std::mem::take(prompt));
-                    Some(NextModeIncremental::Browse { match_idx, matches })
-                }
-                Err(err) => {
-                    buffer.set_error(not_found(err));
-                    None
-                }
+            SearchType::Plain => match Normalizations::try_from(prompt.value()?) {
+                Err(term) => match buffer.all_matches(range, term) {
+                    Ok((match_idx, matches)) => {
+                        *last_search = Some(std::mem::take(prompt));
+                        Some(NextModeIncremental::Browse { match_idx, matches })
+                    }
+                    Err(err) => {
+                        buffer.set_error(not_found(err));
+                        None
+                    }
+                },
+                Ok(normalizations) => match buffer.all_matches(range, normalizations) {
+                    Ok((match_idx, matches)) => {
+                        *last_search = Some(std::mem::take(prompt));
+                        Some(NextModeIncremental::Browse { match_idx, matches })
+                    }
+                    Err(err) => {
+                        buffer.set_error(not_found(err));
+                        None
+                    }
+                },
             },
             SearchType::Regex => match prompt.value()?.parse::<fancy_regex::Regex>() {
                 Ok(regex) => match buffer.all_matches(range, regex) {
