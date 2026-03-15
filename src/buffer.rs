@@ -1516,7 +1516,7 @@ impl BufferContext {
 
     /// Returns Ok((current_idx, matches)) on success
     /// Returns Err(term) if no matches found
-    pub fn all_matches<'s, S: SearchTerm<'s>>(
+    pub fn all_matches<S: SearchTerm>(
         &mut self,
         range: Option<&SelectionRange>,
         term: S,
@@ -3234,7 +3234,7 @@ pub struct SelectionRange {
     lines: NonZero<usize>,
 }
 
-pub trait SearchTerm<'s>: std::fmt::Display {
+pub trait SearchTerm: std::fmt::Display {
     /// Returns iterator of match ranges in bytes and any captured groups
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = SearchMatch>;
 }
@@ -3257,7 +3257,7 @@ impl std::ops::Add<usize> for SearchMatch {
     }
 }
 
-impl SearchTerm<'static> for fancy_regex::Regex {
+impl SearchTerm for fancy_regex::Regex {
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = SearchMatch> {
         self.captures_iter(s).filter_map(|c| c.ok()).map(|c| {
             // guaranteed to have at least one capture
@@ -3274,7 +3274,7 @@ impl SearchTerm<'static> for fancy_regex::Regex {
     }
 }
 
-impl SearchTerm<'static> for String {
+impl SearchTerm for String {
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = SearchMatch> {
         s.match_indices(self.as_str()).map(|(idx, s)| SearchMatch {
             start: idx,
