@@ -3295,16 +3295,29 @@ impl TryFrom<String> for Normalizations {
     fn try_from(base: String) -> Result<Self, Self::Error> {
         use unicode_normalization::UnicodeNormalization;
 
-        let mut options = std::collections::HashSet::default();
-        options.insert(base.nfc().collect());
-        options.insert(base.nfkd().collect());
-        options.insert(base.nfd().collect());
-        options.insert(base.nfkc().collect());
-        if options.len() > 1 {
-            Ok(Self { base, options })
-        } else {
-            Err(base)
-        }
+        [
+            base.nfc().collect(),
+            base.nfkd().collect(),
+            base.nfd().collect(),
+            base.nfkc().collect(),
+        ]
+        .into_iter()
+        .fold(Err(base), |acc, s| match acc {
+            Ok(mut map) => {
+                map.options.insert(s);
+                Ok(map)
+            }
+            Err(mut current) => {
+                if current == s {
+                    Err(current)
+                } else {
+                    Ok(Self {
+                        base: current.clone(),
+                        options: [std::mem::take(&mut current), s].into(),
+                    })
+                }
+            }
+        })
     }
 }
 
