@@ -1907,17 +1907,19 @@ impl BufferContext {
                 // no selection
                 match rope.get_char(self.cursor) {
                     Some(c) if is_word(c) => {
+                        use unicode_width::UnicodeWidthChar;
+
                         // widen selection to current word
                         let word_start = rope
                             .chars_at(self.cursor)
                             .reversed()
-                            .position(|c| !is_word(c))
+                            .position(|c| !is_word(c) && c.width() != Some(0))
                             .and_then(|pos| self.cursor.checked_sub(pos))
                             .unwrap_or(0);
 
                         let word_end = rope
                             .chars_at(self.cursor)
-                            .position(|c| !is_word(c))
+                            .position(|c| !is_word(c) && c.width() != Some(0))
                             .map(|pos| self.cursor + pos)
                             .unwrap_or(rope.len_chars());
 
