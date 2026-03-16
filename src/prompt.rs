@@ -26,12 +26,11 @@ impl TextField {
 
     pub fn backspace(&mut self) {
         while let Some(cursor) = self.cursor.checked_sub(1) {
-            use unicode_width::UnicodeWidthChar;
+            use crate::buffer::is_grapheme_part;
 
-            let width = self.chars[cursor].width();
-            self.chars.remove(cursor);
+            let c = self.chars.remove(cursor);
             self.cursor = cursor;
-            if width != Some(0) {
+            if !is_grapheme_part(c) {
                 break;
             }
         }
@@ -39,24 +38,23 @@ impl TextField {
 
     pub fn delete(&mut self) {
         while self.cursor < self.chars.len() {
-            use unicode_width::UnicodeWidthChar;
+            use crate::buffer::is_grapheme_part;
 
-            let width = self.chars[self.cursor].width();
-            self.chars.remove(self.cursor);
-            if width != Some(0) {
+            let c = self.chars.remove(self.cursor);
+            if !is_grapheme_part(c) {
                 break;
             }
         }
     }
 
     pub fn cursor_back(&mut self) {
-        use unicode_width::UnicodeWidthChar;
+        use crate::buffer::is_grapheme_part;
 
         self.cursor = self.cursor.saturating_sub(
             self.chars[..self.cursor]
                 .iter()
                 .rev()
-                .take_while(|c| c.width() == Some(0))
+                .take_while(|c| is_grapheme_part(**c))
                 .count()
                 + 1,
         );
@@ -64,12 +62,12 @@ impl TextField {
 
     pub fn cursor_forward(&mut self) {
         if self.cursor < self.chars.len() {
-            use unicode_width::UnicodeWidthChar;
+            use crate::buffer::is_grapheme_part;
 
             self.cursor = self.cursor
                 + self.chars[self.cursor + 1..]
                     .iter()
-                    .take_while(|c| c.width() == Some(0))
+                    .take_while(|c| is_grapheme_part(**c))
                     .count()
                 + 1
         }

@@ -1024,15 +1024,13 @@ impl BufferContext {
     }
 
     pub fn cursor_back(&mut self, selecting: bool) {
-        use unicode_width::UnicodeWidthChar;
-
         let buf = self.buffer.borrow_move();
         update_selection(&mut self.selection, self.cursor, selecting);
         self.cursor = self.cursor.saturating_sub(
             buf.rope
                 .chars_at(self.cursor)
                 .reversed()
-                .take_while(|c| c.width() == Some(0))
+                .take_while(|c| is_grapheme_part(*c))
                 .count()
                 + 1,
         );
@@ -1040,8 +1038,6 @@ impl BufferContext {
     }
 
     pub fn cursor_forward(&mut self, selecting: bool) {
-        use unicode_width::UnicodeWidthChar;
-
         let buf = self.buffer.borrow_move();
         update_selection(&mut self.selection, self.cursor, selecting);
         if self.cursor < buf.rope.len_chars() {
@@ -1049,7 +1045,7 @@ impl BufferContext {
                 + buf
                     .rope
                     .chars_at(self.cursor + 1)
-                    .take_while(|c| c.width() == Some(0))
+                    .take_while(|c| is_grapheme_part(*c))
                     .count()
                 + 1;
         }
@@ -1134,14 +1130,12 @@ impl BufferContext {
         if let Ok(line_start) = buf.rope.try_line_to_char(line)
             && let Ok(next_line_start) = buf.rope.try_line_to_char(line + 1)
         {
-            use unicode_width::UnicodeWidthChar;
-
             let start = (line_start + column).min(next_line_start.saturating_sub(1));
             self.cursor = start
                 + buf
                     .rope
                     .chars_at(start)
-                    .take_while(|c| c.width() == Some(0))
+                    .take_while(|c| is_grapheme_part(*c))
                     .count();
             self.cursor_column = cursor_column(&buf.rope, self.cursor);
             self.selection = None;
@@ -1407,14 +1401,12 @@ impl BufferContext {
 
         match &mut self.selection {
             None => {
-                use unicode_width::UnicodeWidthChar;
-
                 let mut alt = Secondary::gt(alt, bookmarks, self.cursor);
 
                 let to_delete = rope
                     .chars_at(self.cursor)
                     .skip(1)
-                    .take_while(|c| c.width() == Some(0))
+                    .take_while(|c| is_grapheme_part(*c))
                     .count()
                     + 1;
 
@@ -1907,19 +1899,17 @@ impl BufferContext {
                 // no selection
                 match rope.get_char(self.cursor) {
                     Some(c) if is_word(c) => {
-                        use unicode_width::UnicodeWidthChar;
-
                         // widen selection to current word
                         let word_start = rope
                             .chars_at(self.cursor)
                             .reversed()
-                            .position(|c| !is_word(c) && c.width() != Some(0))
+                            .position(|c| !is_word_part(c))
                             .and_then(|pos| self.cursor.checked_sub(pos))
                             .unwrap_or(0);
 
                         let word_end = rope
                             .chars_at(self.cursor)
-                            .position(|c| !is_word(c) && c.width() != Some(0))
+                            .position(|c| !is_word_part(c))
                             .map(|pos| self.cursor + pos)
                             .unwrap_or(rope.len_chars());
 
@@ -1982,8 +1972,6 @@ impl BufferContext {
     /// in characters.
     /// The partial word being autocompleted will be first in the Vec.
     fn autocomplete_matches(&self) -> Option<(usize, Vec<String>)> {
-        use unicode_width::UnicodeWidthChar;
-
         let buf = &mut self.buffer.borrow();
         let rope = &buf.rope;
 
@@ -1996,7 +1984,7 @@ impl BufferContext {
         let prefix_chars = rope
             .chars_at(self.cursor)
             .reversed()
-            .take_while(|c| is_word(*c) || c.width() == Some(0))
+            .take_while(|c| is_word_part(*c))
             .collect::<Vec<_>>();
 
         if prefix_chars.is_empty() {
@@ -2423,7 +2411,7 @@ impl BufferContext {
                             .and_then(|prev| rope.get_char(prev))
                         {
                             Some(c) => {
-                                if is_word(c) {
+                                if is_word_part(c) {
                                     CursorPos::AfterWord
                                 } else {
                                     CursorPos::default()
@@ -2775,12 +2763,10 @@ impl MultiCursor {
         if self.cursor < self.range.end {
             match self.zap_selection(rope, cursor, secondary) {
                 None => {
-                    use unicode_width::UnicodeWidthChar;
-
                     let to_delete = rope
                         .chars_at(self.cursor)
                         .skip(1)
-                        .take_while(|c| c.width() == Some(0))
+                        .take_while(|c| is_grapheme_part(*c))
                         .count()
                         + 1;
 
@@ -2810,12 +2796,10 @@ impl MultiCursor {
         rope: &ropey::Rope,
         selecting: bool,
     ) {
-        use unicode_width::UnicodeWidthChar;
-
         let to_retreat = rope
             .chars_at(self.cursor)
             .reversed()
-            .take_while(|c| c.width() == Some(0))
+            .take_while(|c| is_grapheme_part(*c))
             .count()
             + 1;
 
@@ -2838,12 +2822,10 @@ impl MultiCursor {
         rope: &ropey::Rope,
         selecting: bool,
     ) {
-        use unicode_width::UnicodeWidthChar;
-
         if self.cursor < self.range.end {
             let to_advance = rope
                 .chars_at(self.cursor + 1)
-                .take_while(|c| c.width() == Some(0))
+                .take_while(|c| is_grapheme_part(*c))
                 .count()
                 + 1;
 
@@ -2892,8 +2874,6 @@ impl MultiCursor {
     /// where offset is relative to start of this cursor's range
     /// (*not* start of entire rope)
     fn autocomplete_prefix(&self, rope: &ropey::Rope) -> Option<(usize, String)> {
-        use unicode_width::UnicodeWidthChar;
-
         if let Some(c) = rope.get_char(self.cursor)
             && is_word(c)
         {
@@ -2905,7 +2885,7 @@ impl MultiCursor {
             .reversed()
             // don't walk past start of cursor's range
             .take(self.cursor - self.range.start)
-            .take_while(|c| is_word(*c) || c.width() == Some(0))
+            .take_while(|c| is_word_part(*c))
             .collect::<Vec<_>>();
 
         if prefix_chars.is_empty() {
@@ -3175,8 +3155,6 @@ fn backspace_or_un_pair(
     cursor: usize,
     alt: &mut Secondary,
 ) -> Result<(usize, usize), ()> {
-    use unicode_width::UnicodeWidthChar;
-
     fn remove_pair(
         rope: &mut ropey::Rope,
         alt: &mut Secondary,
@@ -3200,11 +3178,11 @@ fn backspace_or_un_pair(
         '(' if rope.get_char(cursor) == Some(')') => remove_pair(rope, alt, prev, cursor),
         '[' if rope.get_char(cursor) == Some(']') => remove_pair(rope, alt, prev, cursor),
         '{' if rope.get_char(cursor) == Some('}') => remove_pair(rope, alt, prev, cursor),
-        c if c.width() == Some(0) => {
+        c if is_grapheme_part(c) => {
             let removed = rope
                 .chars_at(cursor)
                 .reversed()
-                .take_while(|c| c.width() == Some(0))
+                .take_while(|c| is_grapheme_part(*c))
                 .count()
                 + 1;
 
@@ -3443,7 +3421,7 @@ fn apply_cursor_column(
     }
 
     while let Some(c) = chars.next()
-        && c.width() == Some(0)
+        && is_grapheme_part(c)
     {
         line_start += 1;
     }
@@ -5634,16 +5612,12 @@ fn patch_rope(
 
 fn autocomplete_matches(rope: &ropey::Rope, prefix: String) -> Vec<String> {
     use radix_trie::{Trie, TrieCommon};
-    use unicode_width::UnicodeWidthChar;
 
     let mut counts: Trie<String, u64> = Trie::default();
 
     for line in rope.lines() {
         let line = Cow::from(line);
-        for word in line
-            .split(|c| !is_word(c) && c.width() != Some(0))
-            .filter(|s| !s.is_empty())
-        {
+        for word in line.split(|c| !is_word_part(c)).filter(|s| !s.is_empty()) {
             if word.starts_with(&prefix) && word != prefix {
                 counts.map_with_default(word.to_string(), |c| *c += 1, 1);
             }
@@ -5713,9 +5687,26 @@ fn probe_indent(rope: &ropey::Rope, indent_char: char) -> Option<usize> {
         .reduce(std::cmp::min)
 }
 
+/// Either alphanumeric, or '_'
 #[inline]
 pub fn is_word(c: char) -> bool {
     c == '_' || c.is_alphanumeric()
+}
+
+/// Either a word, or part of some grapheme cluster
+#[inline]
+fn is_word_part(c: char) -> bool {
+    is_word(c) || is_grapheme_part(c)
+}
+
+/// Characters is part of some grapheme cluster
+#[inline]
+pub fn is_grapheme_part(c: char) -> bool {
+    // TODO - update this to something more precise
+
+    use unicode_width::UnicodeWidthChar;
+
+    c.width() == Some(0)
 }
 
 fn reorder<T: Ord>(x: T, y: T) -> (T, T) {
