@@ -1747,38 +1747,9 @@ impl Layout {
             }
         }
 
-        fn add_err(mut layout: &mut Layout, error: String) {
-            loop {
-                match layout {
-                    Layout::Single(b) => {
-                        if let Some(ctx) = b.current_mut() {
-                            ctx.set_error(error);
-                        }
-                        break;
-                    }
-                    Layout::Horizontal {
-                        which: HorizontalPos::Top,
-                        top: current,
-                        ..
-                    }
-                    | Layout::Horizontal {
-                        which: HorizontalPos::Bottom,
-                        bottom: current,
-                        ..
-                    }
-                    | Layout::Vertical {
-                        which: VerticalPos::Left,
-                        left: current,
-                        ..
-                    }
-                    | Layout::Vertical {
-                        which: VerticalPos::Right,
-                        right: current,
-                        ..
-                    } => {
-                        layout = current;
-                    }
-                }
+        fn add_err(layout: &mut Layout, error: String) {
+            if let Some(ctx) = layout.selected_buffer_list_mut().current_mut() {
+                ctx.set_error(error);
             }
         }
 
