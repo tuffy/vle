@@ -3290,10 +3290,7 @@ impl SearchTerm for String {
     }
 }
 
-pub struct Normalizations {
-    base: String,
-    options: std::collections::HashSet<String>,
-}
+pub struct Normalizations(std::collections::HashSet<String>);
 
 impl TryFrom<String> for Normalizations {
     type Error = String;
@@ -3310,17 +3307,14 @@ impl TryFrom<String> for Normalizations {
         .into_iter()
         .fold(Err(base), |acc, s| match acc {
             Ok(mut map) => {
-                map.options.insert(s);
+                map.0.insert(s);
                 Ok(map)
             }
             Err(mut current) => {
                 if current == s {
                     Err(current)
                 } else {
-                    Ok(Self {
-                        base: current.clone(),
-                        options: [std::mem::take(&mut current), s].into(),
-                    })
+                    Ok(Self([std::mem::take(&mut current), s].into()))
                 }
             }
         })
@@ -3329,14 +3323,17 @@ impl TryFrom<String> for Normalizations {
 
 impl std::fmt::Display for Normalizations {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.base.fmt(f)
+        match self.0.iter().min_by_key(|s| s.len()) {
+            Some(s) => s.fmt(f),
+            None => "".fmt(f), // this shouldn't happen
+        }
     }
 }
 
 impl SearchTerm for Normalizations {
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = SearchMatch> {
         let mut ranges = self
-            .options
+            .0
             .iter()
             .flat_map(|string| string.match_ranges(s))
             .collect::<Vec<_>>();
