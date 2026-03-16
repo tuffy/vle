@@ -1982,6 +1982,8 @@ impl BufferContext {
     /// in characters.
     /// The partial word being autocompleted will be first in the Vec.
     fn autocomplete_matches(&self) -> Option<(usize, Vec<String>)> {
+        use unicode_width::UnicodeWidthChar;
+
         let buf = &mut self.buffer.borrow();
         let rope = &buf.rope;
 
@@ -1994,7 +1996,7 @@ impl BufferContext {
         let prefix_chars = rope
             .chars_at(self.cursor)
             .reversed()
-            .take_while(|c| is_word(*c))
+            .take_while(|c| is_word(*c) || c.width() == Some(0))
             .collect::<Vec<_>>();
 
         if prefix_chars.is_empty() {
@@ -2890,6 +2892,8 @@ impl MultiCursor {
     /// where offset is relative to start of this cursor's range
     /// (*not* start of entire rope)
     fn autocomplete_prefix(&self, rope: &ropey::Rope) -> Option<(usize, String)> {
+        use unicode_width::UnicodeWidthChar;
+
         if let Some(c) = rope.get_char(self.cursor)
             && is_word(c)
         {
@@ -2901,7 +2905,7 @@ impl MultiCursor {
             .reversed()
             // don't walk past start of cursor's range
             .take(self.cursor - self.range.start)
-            .take_while(|c| is_word(*c))
+            .take_while(|c| is_word(*c) || c.width() == Some(0))
             .collect::<Vec<_>>();
 
         if prefix_chars.is_empty() {
@@ -5633,13 +5637,15 @@ fn patch_rope(
 
 fn autocomplete_matches(rope: &ropey::Rope, prefix: String) -> Vec<String> {
     use radix_trie::{Trie, TrieCommon};
+    use unicode_width::UnicodeWidthChar;
 
     let mut counts: Trie<String, u64> = Trie::default();
 
     for line in rope.lines() {
         let line = Cow::from(line);
-        for (word, []) in
-            lazy_regex::regex_captures_iter!("[[:word:]]+", &line).map(|c| c.extract())
+        for word in line
+            .split(|c| !is_word(c) && c.width() != Some(0))
+            .filter(|s| !s.is_empty())
         {
             if word.starts_with(&prefix) && word != prefix {
                 counts.map_with_default(word.to_string(), |c| *c += 1, 1);
