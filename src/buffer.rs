@@ -645,12 +645,7 @@ impl Buffer {
         let syntax = crate::syntax::syntax(&source);
 
         Ok(Self {
-            tab_substitution: std::iter::repeat_n(
-                ' ',
-                probe_indent(&rope, if syntax.tabs_required() { '\t' } else { ' ' })
-                    .unwrap_or(*SPACES_PER_TAB),
-            )
-            .collect(),
+            tab_substitution: std::iter::repeat_n(' ', *SPACES_PER_TAB).collect(),
             rope: rope.into(),
             endings,
             saved,
@@ -5675,13 +5670,6 @@ impl<T> From<VecFiltered<T>> for std::collections::VecDeque<T> {
     fn from(v: VecFiltered<T>) -> Self {
         v.0.into()
     }
-}
-
-fn probe_indent(rope: &ropey::Rope, indent_char: char) -> Option<usize> {
-    rope.lines()
-        .map(|l| l.chars().take_while(|c| *c == indent_char).count())
-        .filter(|c| *c != 0)
-        .reduce(std::cmp::min)
 }
 
 /// Either alphanumeric, or '_'
