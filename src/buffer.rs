@@ -630,7 +630,7 @@ pub struct Buffer {
     syntax: Box<dyn Highlighter>,  // the syntax highlighting to use
     tabs_required: bool,           // whether the format demands actual tabs
     tab_substitution: String,      // spaces to substitute for tabs
-    bookmarks: private::Bookmarks, // saved bookmark positions (sorted)
+    bookmarks: private::Bookmarks, // saved bookmark positions
 }
 
 impl Buffer {
@@ -3091,9 +3091,7 @@ fn multicursor_update<T: Copy, E>(
             }
             [m, rest @ ..] => {
                 if let Ok(t) = on_cursor(m) {
-                    for r in rest.iter_mut() {
-                        on_next(r, t);
-                    }
+                    rest.iter_mut().for_each(|r| on_next(r, t));
                 }
                 cursors = rest;
             }
