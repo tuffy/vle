@@ -2501,6 +2501,12 @@ impl BufferContext {
     }
 }
 
+impl std::fmt::Display for BufferContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.buffer.borrow().source().name().fmt(f)
+    }
+}
+
 pub struct AltCursor<'a> {
     cursor: &'a mut usize,
     selection: &'a mut Option<usize>,

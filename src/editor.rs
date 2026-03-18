@@ -591,11 +591,22 @@ impl Editor {
                         self.mode = EditorMode::ConfirmClose { buffer: buf.id() };
                     } else {
                         self.layout.remove(buf.id());
+                        if let Some(buf) = self.layout.selected_buffer_list().current() {
+                            set_title(buf);
+                        }
                     }
                 }
             }
-            key!(CONTROL, PageUp) => self.layout.previous_buffer(),
-            key!(CONTROL, PageDown) => self.layout.next_buffer(),
+            key!(CONTROL, PageUp) => {
+                if let Some(buf) = self.layout.previous_buffer() {
+                    set_title(buf);
+                }
+            },
+            key!(CONTROL, PageDown) => {
+                if let Some(buf) = self.layout.next_buffer() {
+                    set_title(buf);
+                }
+            },
             keybind!(SplitPane) => {
                 self.mode = EditorMode::SplitPane;
             }
@@ -609,17 +620,25 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                if let Err(dir) = self.layout.change_pane(match code {
+                match self.layout.change_pane(match code {
                     KeyCode::Left => Direction::Left,
                     KeyCode::Right => Direction::Right,
                     KeyCode::Up => Direction::Up,
                     KeyCode::Down => Direction::Down,
                     _ => unreachable!(),
-                }) && let Some([cmd, args @ ..]) = MULTIPLEXER(dir)
-                    && let Err(err) = Command::new(cmd).args(args).output()
-                {
-                    self.layout
-                        .update_current_at(|buf, _| buf.set_error(err.to_string()));
+                }) {
+                    Ok(Some(buf)) => {
+                        set_title(buf);
+                    }
+                    Ok(None) => { /* do nothing */ }
+                    Err(dir) => {
+                        if let Some([cmd, args @ ..]) = MULTIPLEXER(dir)
+                            && let Err(err) = Command::new(cmd).args(args).output()
+                        {
+                            self.layout
+                                .update_current_at(|buf, _| buf.set_error(err.to_string()));
+                        }
+                    }
                 }
             }
             Event::Key(KeyEvent {
@@ -1000,6 +1019,9 @@ impl Editor {
             }
             key!(Delete) => {
                 self.layout.delete_current_pane();
+                if let Some(buf) = self.layout.selected_buffer_list().current() {
+                    set_title(buf);
+                }
                 self.mode = EditorMode::default();
             }
             key!(CONTROL, Left) => {
@@ -1249,6 +1271,9 @@ fn process_open_file<S: ChooserSource>(
                 if let Err(()) = layout.add(selected) {
                     return Some(EditorMode::default());
                 }
+            }
+            if let Some(buf) = layout.selected_buffer_list().current() {
+                set_title(buf);
             }
             Some(EditorMode::default())
         }
@@ -1925,62 +1950,72 @@ impl Layout {
         self.current_buffer_mut().map(|(_, buf, alts)| f(buf, alts))
     }
 
-    fn previous_buffer(&mut self) {
-        self.selected_buffer_list_mut().previous_buffer()
+    /// Returns newly selected buffer
+    fn previous_buffer(&mut self) -> Option<&BufferContext> {
+        let buf_list = self.selected_buffer_list_mut();
+        buf_list.previous_buffer();
+        buf_list.current()
     }
 
-    fn next_buffer(&mut self) {
-        self.selected_buffer_list_mut().next_buffer()
+    /// Returns newly selected buffer
+    fn next_buffer(&mut self) -> Option<&BufferContext> {
+        let buf_list = self.selected_buffer_list_mut();
+        buf_list.next_buffer();
+        buf_list.current()
     }
 
-    /// Ok(direction) => move performed successfully in ourself or a child
-    /// Err(()) => unable to perform a move
-    fn change_pane(&mut self, direction: Direction) -> Result<(), Direction> {
+    /// Ok(BufferContext) => move performed successfully in ourself or a child
+    /// Err(direction) => unable to perform a move
+    fn change_pane(&mut self, direction: Direction) -> Result<Option<&BufferContext>, Direction> {
         match (self, direction) {
             (Self::Single(_), direction) => Err(direction),
             (
                 Self::Horizontal {
                     which: which @ HorizontalPos::Bottom,
                     bottom,
+                    top,
                     ..
                 },
                 direction @ Direction::Up,
             ) => bottom.change_pane(direction).or_else(|_| {
                 *which = HorizontalPos::Top;
-                Ok(())
+                Ok(top.selected_buffer_list().current())
             }),
             (
                 Self::Horizontal {
                     which: which @ HorizontalPos::Top,
                     top,
+                    bottom,
                     ..
                 },
                 direction @ Direction::Down,
             ) => top.change_pane(direction).or_else(|_| {
                 *which = HorizontalPos::Bottom;
-                Ok(())
+                Ok(bottom.selected_buffer_list().current())
             }),
             (
                 Self::Vertical {
                     which: which @ VerticalPos::Left,
                     left,
+                    right,
                     ..
                 },
                 direction @ Direction::Right,
             ) => left.change_pane(direction).or_else(|_| {
                 *which = VerticalPos::Right;
-                Ok(())
+                Ok(right.selected_buffer_list().current())
             }),
             (
                 Self::Vertical {
                     which: which @ VerticalPos::Right,
                     right,
+                    left,
                     ..
                 },
                 direction @ Direction::Left,
             ) => right.change_pane(direction).or_else(|_| {
                 *which = VerticalPos::Left;
-                Ok(())
+                Ok(left.selected_buffer_list().current())
             }),
             (
                 Self::Horizontal {
@@ -2779,4 +2814,10 @@ where
         completions[std::mem::replace(index, previous_index)].as_ref(),
         completions[previous_index].as_ref(),
     )
+}
+
+fn set_title<D: std::fmt::Display>(d: D) {
+    use crossterm::{execute, terminal::SetTitle};
+
+    let _ = execute!(std::io::stdout(), SetTitle(format!("vle {d}")),);
 }
