@@ -2773,7 +2773,7 @@ where
 
 /// Returns current and next autocompletion, and increments index
 /// completions.len() must be > 0
-fn complete_forward<'c, T, R>(index: &mut usize, completions: &'c mut [T]) -> (&'c R, &'c R)
+fn complete_forward<'c, T, R>(index: &mut usize, completions: &'c [T]) -> (&'c R, &'c R)
 where
     T: AsRef<R>,
     R: ?Sized,
@@ -2804,7 +2804,7 @@ where
 
 /// Returns current and next autocompletion, and increments index
 /// completions.len() must be > 0
-fn complete_backward<'c, T, R>(index: &mut usize, completions: &'c mut [T]) -> (&'c R, &'c R)
+fn complete_backward<'c, T, R>(index: &mut usize, completions: &'c [T]) -> (&'c R, &'c R)
 where
     T: AsRef<R>,
     R: ?Sized,
