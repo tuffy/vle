@@ -14,6 +14,12 @@ homepage = "https://github.com/tuffy/vle"
 name = "vle"
 path = "src/main.rs"
 
+[profile.release]
+codegen-units = 1 # Allows compiler to perform better optimization.
+lto = true # Enables Link-time Optimization.
+opt-level = "s" # Prioritizes small binary size. Use `3` if you prefer speed.
+strip = true # Ensures debug symbols are removed.
+
 [features]
 ssh = ["dep:ssh2", "dep:rpassword"]
 
