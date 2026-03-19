@@ -275,7 +275,7 @@ impl Editor {
             );
             frame.set_cursor_position(
                 self.layout
-                    .cursor_position(area, &self.mode)
+                    .cursor_position(area, self.focused.then_some(&self.mode))
                     .unwrap_or_default(),
             );
         })
@@ -601,12 +601,12 @@ impl Editor {
                 if let Some(buf) = self.layout.previous_buffer() {
                     set_title(buf);
                 }
-            },
+            }
             key!(CONTROL, PageDown) => {
                 if let Some(buf) = self.layout.next_buffer() {
                     set_title(buf);
                 }
-            },
+            }
             keybind!(SplitPane) => {
                 self.mode = EditorMode::SplitPane;
             }
@@ -2236,7 +2236,7 @@ impl Layout {
         }
     }
 
-    fn cursor_position(&self, area: Rect, mode: &EditorMode) -> Option<Position> {
+    fn cursor_position(&self, area: Rect, mode: Option<&EditorMode>) -> Option<Position> {
         use ratatui::layout::Constraint::{Length, Min};
         use ratatui::layout::Layout;
 
@@ -2252,7 +2252,7 @@ impl Layout {
         self.cursor_position_inner(area, mode)
     }
 
-    fn cursor_position_inner(&self, area: Rect, mode: &EditorMode) -> Option<Position> {
+    fn cursor_position_inner(&self, area: Rect, mode: Option<&EditorMode>) -> Option<Position> {
         use crate::buffer::BufferWidget;
         use ratatui::layout::Constraint::{Length, Min};
         use ratatui::layout::{Constraint, Layout};
@@ -2262,7 +2262,7 @@ impl Layout {
         fn apply_position(
             area: Rect,
             (row, col): (usize, usize),
-            mode: &EditorMode,
+            mode: Option<&EditorMode>,
         ) -> Option<Position> {
             use ratatui::widgets::Block;
 
@@ -2271,12 +2271,12 @@ impl Layout {
             match mode {
                 // SelectLine pushes the cursor up into the title bar,
                 // which is why its Y coordinate subtracts one
-                EditorMode::SelectLine { .. } => Some(Position {
+                Some(EditorMode::SelectLine { .. }) => Some(Position {
                     x: text_area.x + text_area.width.saturating_sub(1),
                     y: text_area.y.saturating_sub(1),
                 }),
-                EditorMode::Search { prompt, .. }
-                | EditorMode::AutocompleteSearch { prompt, .. } => {
+                Some(EditorMode::Search { prompt, .. })
+                | Some(EditorMode::AutocompleteSearch { prompt, .. }) => {
                     let [_, dialog_area, _] =
                         Layout::vertical([Min(0), Length(3), Min(0)]).areas(text_area);
                     let dialog_area = Block::bordered().inner(dialog_area);
@@ -2285,7 +2285,7 @@ impl Layout {
                         y: dialog_area.y,
                     })
                 }
-                EditorMode::Open { chooser } => {
+                Some(EditorMode::Open { chooser }) => {
                     let (x, y) = chooser.cursor_position();
                     Some(Position {
                         x: text_area.x + x,
