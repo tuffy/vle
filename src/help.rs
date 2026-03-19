@@ -144,6 +144,7 @@ pub fn field_widths(keybindings: &[Keybinding]) -> [usize; 5] {
 
 pub fn render_help(
     area: ratatui::layout::Rect,
+    bottom: bool,
     buf: &mut ratatui::buffer::Buffer,
     keybindings: &[Keybinding],
     block: impl FnOnce(Block) -> Block,
@@ -162,7 +163,15 @@ pub fn render_help(
     ])
     .areas(area);
 
-    let [_, help] = Layout::vertical([Min(0), Length(keybindings.len() as u16 + 2)]).areas(help);
+    let help = if bottom {
+        let [_, help] =
+            Layout::vertical([Min(0), Length(keybindings.len() as u16 + 2)]).areas(help);
+        help
+    } else {
+        let [help, _] =
+            Layout::vertical([Length(keybindings.len() as u16 + 2), Min(0)]).areas(help);
+        help
+    };
 
     let block = block(Block::bordered().border_type(BorderType::Rounded));
 

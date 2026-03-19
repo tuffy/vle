@@ -288,6 +288,7 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
 
         render_help(
             list_area,
+            true,
             buf,
             match &state.chosen {
                 Chosen::Default | Chosen::Selected(_) => OPEN_FILE,
