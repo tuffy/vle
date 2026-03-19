@@ -936,7 +936,10 @@ impl BufferContext {
         let viewport_height: usize = text_area.height.into();
 
         let viewport_line: usize = current_line
-            .map(|line| line.saturating_sub(viewport_height / 2))
+            .map(|line| {
+                line.saturating_sub(viewport_height / 2)
+                    .min(rope.len_lines().saturating_sub(viewport_height))
+            })
             .unwrap_or(0);
 
         let line = viewport_line + usize::from(row);
@@ -3865,8 +3868,13 @@ impl BufferList {
     /// at the very beginning of the file.
     pub fn cursor_viewport_position(&self, viewport_height: usize) -> Option<(usize, usize)> {
         let buf = self.current()?;
-        buf.cursor_position()
-            .map(|(row, col)| ((viewport_height / 2).min(row), col))
+        let len_lines = buf.buffer.borrow().rope.len_lines();
+        let (row, col) = buf.cursor_position()?;
+        let viewport_line = row
+            .saturating_sub(viewport_height / 2)
+            .min(len_lines.saturating_sub(viewport_height));
+
+        Some((row.saturating_sub(viewport_line), col))
     }
 
     pub fn set_cursor_focus(&mut self, area: Rect, position: Position) {
@@ -4746,7 +4754,10 @@ impl StatefulWidget for BufferWidget<'_> {
         let viewport_height: usize = text_area.height.into();
 
         let viewport_line: usize = current_line
-            .map(|line| line.saturating_sub(viewport_height / 2))
+            .map(|line| {
+                line.saturating_sub(viewport_height / 2)
+                    .min(rope.len_lines().saturating_sub(viewport_height))
+            })
             .unwrap_or(0);
 
         let viewport_start = rope.try_line_to_char(viewport_line).unwrap_or(0);
