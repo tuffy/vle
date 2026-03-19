@@ -3868,8 +3868,8 @@ impl BufferList {
     /// at the very beginning of the file.
     pub fn cursor_viewport_position(&self, viewport_height: usize) -> Option<(usize, usize)> {
         let buf = self.current()?;
-        let len_lines = buf.buffer.borrow().rope.len_lines();
         let (row, col) = buf.cursor_position()?;
+        let len_lines = buf.buffer.borrow().rope.len_lines();
         let viewport_line = row
             .saturating_sub(viewport_height / 2)
             .min(len_lines.saturating_sub(viewport_height));
