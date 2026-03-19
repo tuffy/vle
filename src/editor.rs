@@ -953,6 +953,9 @@ impl Editor {
             key!('y') => {
                 // close buffer anyway
                 self.layout.remove(buffer_id);
+                if let Some(buf) = self.layout.selected_buffer_list().current() {
+                    set_title(buf);
+                }
                 self.mode = EditorMode::default();
             }
             key!('n') => {
