@@ -4762,7 +4762,7 @@ impl StatefulWidget for BufferWidget<'_> {
             .unwrap_or(0);
 
         let bottom_help = current_line
-            .map(|line| line <= rope.len_lines().saturating_sub(viewport_height / 2))
+            .map(|line| line.saturating_sub(viewport_line) <= viewport_height / 2)
             .unwrap_or(true);
 
         let viewport_start = rope.try_line_to_char(viewport_line).unwrap_or(0);
