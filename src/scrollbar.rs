@@ -3,10 +3,37 @@ use ratatui::{
     widgets::StatefulWidget,
 };
 
+pub struct ScrollbarState {
+    content_length: usize,
+    position: usize,
+    viewport_content_length: usize,
+}
+
+impl ScrollbarState {
+    pub fn new(content_length: usize) -> Self {
+        Self {
+            content_length,
+            position: 0,
+            viewport_content_length: 0,
+        }
+    }
+
+    pub fn viewport_content_length(self, viewport_content_length: usize) -> Self {
+        Self {
+            viewport_content_length,
+            ..self
+        }
+    }
+
+    pub fn position(self, position: usize) -> Self {
+        Self { position, ..self }
+    }
+}
+
 pub struct Scrollbar;
 
 impl StatefulWidget for Scrollbar {
-    type State = ratatui::widgets::ScrollbarState;
+    type State = ScrollbarState;
 
     fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer, state: &mut Self::State) {
         use ratatui::layout::{

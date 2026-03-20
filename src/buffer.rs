@@ -3980,7 +3980,7 @@ impl StatefulWidget for BufferWidget<'_> {
             SELECT_LINE_BOOKMARKED, SPLIT_PANE, VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
         use crate::prompt::TextField;
-        use crate::scrollbar::Scrollbar;
+        use crate::scrollbar::{Scrollbar, ScrollbarState};
         use crate::syntax::{HighlightState, Highlighter, MultiComment, MultiCommentType};
         use ratatui::{
             layout::{
@@ -3989,7 +3989,7 @@ impl StatefulWidget for BufferWidget<'_> {
             },
             style::{Color, Modifier, Style},
             text::{Line, Span},
-            widgets::{Block, BorderType, Clear, Paragraph, ScrollbarState, Widget},
+            widgets::{Block, BorderType, Clear, Paragraph, Widget},
         };
         use std::borrow::Cow;
         use std::collections::{BTreeMap, VecDeque};
