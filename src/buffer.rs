@@ -3988,14 +3988,12 @@ impl StatefulWidget for BufferWidget<'_> {
             },
             style::{Color, Modifier, Style},
             text::{Line, Span},
-            widgets::{
-                Block, BorderType, Clear, Paragraph, Scrollbar, ScrollbarOrientation,
-                ScrollbarState, Widget,
-            },
+            widgets::{Block, BorderType, Clear, Paragraph, Widget},
         };
         use std::borrow::Cow;
         use std::collections::{BTreeMap, VecDeque};
         use std::ops::RangeInclusive;
+        use tui_scrollbar::{ScrollBar, ScrollBarArrows, ScrollLengths};
 
         const EDITING: Style = Style::new().add_modifier(Modifier::REVERSED);
         const MATCHING: Color = Color::Green;
@@ -5176,13 +5174,16 @@ impl StatefulWidget for BufferWidget<'_> {
         ))
         .render(text_area, buf);
 
-        Scrollbar::new(ScrollbarOrientation::VerticalRight).render(
-            scrollbar_area,
-            buf,
-            &mut ScrollbarState::new(buffer.total_lines())
-                .viewport_content_length(text_area.height.into())
-                .position(rope.try_char_to_line(state.cursor).unwrap_or(viewport_line)),
-        );
+        ScrollBar::vertical(ScrollLengths {
+            viewport_len: text_area.height.into(),
+            content_len: buffer.total_lines(),
+        })
+        .track_style(Style::default())
+        .arrow_style(Style::default())
+        .thumb_style(Style::default())
+        .arrows(ScrollBarArrows::Both)
+        .offset(rope.try_char_to_line(state.cursor).unwrap_or(viewport_line))
+        .render(scrollbar_area, buf);
 
         match self.mode {
             None | Some(EditorMode::Editing) | Some(EditorMode::Autocomplete { .. }) => {
