@@ -204,8 +204,7 @@ pub fn render_main_help(
         widgets::{BorderType, Widget},
     };
 
-    let (f_keys, non_f_keys): (Vec<_>, Vec<_>) =
-        keybindings.iter().partition(|k| !k.f.is_empty());
+    let (f_keys, non_f_keys): (Vec<_>, Vec<_>) = keybindings.iter().partition(|k| !k.f.is_empty());
 
     let [_, non_f_area, f_area] = Layout::horizontal([
         Min(0),

@@ -919,6 +919,9 @@ impl Editor {
             }) => {
                 self.layout
                     .set_cursor_focus(area, Position { y: row, x: column });
+                if let Some(buf) = self.layout.selected_buffer_list().current() {
+                    set_title(buf);
+                }
             }
             Event::Mouse(MouseEvent {
                 kind: MouseEventKind::Down(MouseButton::Right),
@@ -928,6 +931,9 @@ impl Editor {
             }) => {
                 self.layout
                     .set_cursor_focus(area, Position { y: row, x: column });
+                if let Some(buf) = self.layout.selected_buffer_list().current() {
+                    set_title(buf);
+                }
                 self.update_buffer(|b| b.select_word_or_lines());
             }
             Event::Mouse(MouseEvent {
@@ -938,6 +944,9 @@ impl Editor {
             }) => {
                 self.layout
                     .set_cursor_focus(area, Position { y: row, x: column });
+                if let Some(buf) = self.layout.selected_buffer_list().current() {
+                    set_title(buf);
+                }
                 self.layout.update_current_at(|b, a| {
                     b.paste(a, &mut self.cut_buffer);
                 });
