@@ -5242,7 +5242,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     help.extend(multiple_panes.then_some(SWITCH_PANE));
                     help.extend(multiple_buffers.then_some(ctrl(&["PgUp", "PgDn"], "Switch File")));
 
-                    crate::help::render_help(text_area, help_pos, buf, &help, |b| {
+                    crate::help::render_main_help(text_area, help_pos, buf, &help, |b| {
                         b.title_top("Keybindings").title_bottom(
                             Line::from(vec![
                                 Span::styled(

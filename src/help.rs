@@ -189,6 +189,66 @@ pub fn render_help(
     help_message(keybindings).render(help_table, buf);
 }
 
+pub fn render_main_help(
+    area: ratatui::layout::Rect,
+    pos: HelpPos,
+    buf: &mut ratatui::buffer::Buffer,
+    keybindings: &[Keybinding],
+    mut block: impl FnMut(Block) -> Block,
+) {
+    use ratatui::{
+        layout::{
+            Constraint::{Length, Min},
+            Layout,
+        },
+        widgets::{BorderType, Widget},
+    };
+
+    let (f_keys, non_f_keys): (Vec<_>, Vec<_>) =
+        keybindings.iter().partition(|k| k.f.starts_with('F'));
+
+    let [_, non_f_area, f_area] = Layout::horizontal([
+        Min(0),
+        Length((field_widths(&non_f_keys).into_iter().sum::<usize>() + 2) as u16),
+        Length((field_widths(&f_keys).into_iter().sum::<usize>() + 2) as u16),
+    ])
+    .areas(area);
+
+    let non_f_area = match pos {
+        HelpPos::Bottom => {
+            let [_, help] =
+                Layout::vertical([Min(0), Length(non_f_keys.len() as u16 + 2)]).areas(non_f_area);
+            help
+        }
+        HelpPos::Top => {
+            let [help, _] =
+                Layout::vertical([Length(non_f_keys.len() as u16 + 2), Min(0)]).areas(non_f_area);
+            help
+        }
+    };
+
+    let f_area = match pos {
+        HelpPos::Bottom => {
+            let [_, help] =
+                Layout::vertical([Min(0), Length(f_keys.len() as u16 + 2)]).areas(f_area);
+            help
+        }
+        HelpPos::Top => {
+            let [help, _] =
+                Layout::vertical([Length(f_keys.len() as u16 + 2), Min(0)]).areas(f_area);
+            help
+        }
+    };
+
+    for (bindings, area) in [(f_keys, f_area), (non_f_keys, non_f_area)] {
+        let bindings_block = block(Block::bordered().border_type(BorderType::Rounded));
+        let help_table = bindings_block.inner(area);
+        ratatui::widgets::Clear.render(area, buf);
+        bindings_block.render(area, buf);
+        help_message(&bindings).render(help_table, buf);
+    }
+}
+
 static UP: &str = "\u{2191}";
 static DOWN: &str = "\u{2193}";
 static LEFT: &str = "\u{2190}";
