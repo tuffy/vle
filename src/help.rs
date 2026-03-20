@@ -205,7 +205,7 @@ pub fn render_main_help(
     };
 
     let (f_keys, non_f_keys): (Vec<_>, Vec<_>) =
-        keybindings.iter().partition(|k| k.f.starts_with('F'));
+        keybindings.iter().partition(|k| !k.f.is_empty());
 
     let [_, non_f_area, f_area] = Layout::horizontal([
         Min(0),
