@@ -17,6 +17,7 @@ mod files;
 mod help;
 mod key;
 mod prompt;
+mod scrollbar;
 mod syntax;
 
 use editor::{Editor, LineNumber};
