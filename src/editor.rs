@@ -2314,7 +2314,7 @@ impl Layout {
                 // SelectLine pushes the cursor up into the title bar,
                 // which is why its Y coordinate subtracts one
                 Some(EditorMode::SelectLine { .. }) => Some(Position {
-                    x: text_area.x + text_area.width.saturating_sub(1),
+                    x: text_area.x + text_area.width,
                     y: text_area.y.saturating_sub(1),
                 }),
                 Some(EditorMode::Search { prompt, .. })
