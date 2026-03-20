@@ -34,6 +34,33 @@ static PAGE_SIZE: LazyLock<usize> = LazyLock::new(|| {
         .unwrap_or(25)
 });
 
+type DirMap = fn(Direction) -> Option<&'static [&'static str]>;
+
+// External terminal multiplexer integration
+static MULTIPLEXER: LazyLock<DirMap> = LazyLock::new(|| {
+    if std::env::var("ZELLIJ").is_ok() {
+        |direction| {
+            Some(match direction {
+                Direction::Up => &["zellij", "action", "move-focus", "up"],
+                Direction::Down => &["zellij", "action", "move-focus", "down"],
+                Direction::Left => &["zellij", "action", "move-focus", "left"],
+                Direction::Right => &["zellij", "action", "move-focus", "right"],
+            })
+        }
+    } else if std::env::var("TMUX").is_ok() {
+        |direction| {
+            Some(match direction {
+                Direction::Up => &["tmux", "select-pane", "-U"],
+                Direction::Down => &["tmux", "select-pane", "-D"],
+                Direction::Left => &["tmux", "select-pane", "-L"],
+                Direction::Right => &["tmux", "select-pane", "-R"],
+            })
+        }
+    } else {
+        |_| None
+    }
+});
+
 #[derive(Default)]
 pub enum EditorMode {
     /// Regular editing mode
@@ -557,33 +584,6 @@ impl Editor {
         };
         use std::process::Command;
 
-        type DirMap = fn(Direction) -> Option<&'static [&'static str]>;
-
-        // External terminal multiplexer integration
-        static MULTIPLEXER: LazyLock<DirMap> = LazyLock::new(|| {
-            if std::env::var("ZELLIJ").is_ok() {
-                |direction| {
-                    Some(match direction {
-                        Direction::Up => &["zellij", "action", "move-focus", "up"],
-                        Direction::Down => &["zellij", "action", "move-focus", "down"],
-                        Direction::Left => &["zellij", "action", "move-focus", "left"],
-                        Direction::Right => &["zellij", "action", "move-focus", "right"],
-                    })
-                }
-            } else if std::env::var("TMUX").is_ok() {
-                |direction| {
-                    Some(match direction {
-                        Direction::Up => &["tmux", "select-pane", "-U"],
-                        Direction::Down => &["tmux", "select-pane", "-D"],
-                        Direction::Left => &["tmux", "select-pane", "-L"],
-                        Direction::Right => &["tmux", "select-pane", "-R"],
-                    })
-                }
-            } else {
-                |_| None
-            }
-        });
-
         match event {
             keybind!(Quit) => {
                 if let Some(buf) = self.layout.selected_buffer_list().current() {
@@ -1002,6 +1002,7 @@ impl Editor {
 
     fn process_split_pane(&mut self, event: Event) {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+        use std::process::Command;
 
         match event {
             key!(Up) => {
@@ -1027,17 +1028,48 @@ impl Editor {
                 }
                 self.mode = EditorMode::default();
             }
-            key!(CONTROL, Left) => {
+            key!(SHIFT, Left) => {
                 let _ = self.layout.swap_pane(Direction::Left);
             }
-            key!(CONTROL, Right) => {
+            key!(SHIFT, Right) => {
                 let _ = self.layout.swap_pane(Direction::Right);
             }
-            key!(CONTROL, Up) => {
+            key!(SHIFT, Up) => {
                 let _ = self.layout.swap_pane(Direction::Up);
             }
-            key!(CONTROL, Down) => {
+            key!(SHIFT, Down) => {
                 let _ = self.layout.swap_pane(Direction::Down);
+            }
+            Event::Key(KeyEvent {
+                code:
+                    code @ KeyCode::Left
+                    | code @ KeyCode::Right
+                    | code @ KeyCode::Up
+                    | code @ KeyCode::Down,
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                match self.layout.change_pane(match code {
+                    KeyCode::Left => Direction::Left,
+                    KeyCode::Right => Direction::Right,
+                    KeyCode::Up => Direction::Up,
+                    KeyCode::Down => Direction::Down,
+                    _ => unreachable!(),
+                }) {
+                    Ok(Some(buf)) => {
+                        set_title(buf);
+                    }
+                    Ok(None) => { /* do nothing */ }
+                    Err(dir) => {
+                        if let Some([cmd, args @ ..]) = MULTIPLEXER(dir)
+                            && let Err(err) = Command::new(cmd).args(args).output()
+                        {
+                            self.layout
+                                .update_current_at(|buf, _| buf.set_error(err.to_string()));
+                        }
+                    }
+                }
             }
             key!('+') => {
                 self.layout.update_ratio(|ours, theirs, buf| {

@@ -296,7 +296,8 @@ pub static CONFIRM_CLOSE: &[Keybinding] = &[
 pub static SPLIT_PANE: &[Keybinding] = &[
     none(&[LEFT, RIGHT], "Split Vertically \u{25e7} / \u{25e8}"),
     none(&[UP, DOWN], "Split Horizontally \u{2b12} / \u{2b13}"),
-    ctrl(&[LEFT, DOWN, UP, RIGHT], "Swap Panes in Direction"),
+    ctrl(&[LEFT, DOWN, UP, RIGHT], "Switch Pane in Direction"),
+    shift(&[LEFT, DOWN, UP, RIGHT], "Swap Panes in Direction"),
     none(&["+", "-"], "Change Size Ratio"),
     none(&["Del"], "Delete Current Pane"),
     none(&["Enter"], "Finish"),
