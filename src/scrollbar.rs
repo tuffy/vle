@@ -1,7 +1,4 @@
-use ratatui::{
-    layout::Rect,
-    widgets::StatefulWidget,
-};
+use ratatui::{layout::Rect, widgets::StatefulWidget};
 use std::ops::Range;
 
 pub struct ScrollbarState {
