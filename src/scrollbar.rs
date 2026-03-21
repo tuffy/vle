@@ -89,7 +89,7 @@ impl StatefulWidget for Scrollbar {
 
         // paint end of thumb in inverted subpixels
         if thumb.end.subpixel > 0 {
-            buf[(track.x, track.y + thumb.end.pixel)].set_char(subpixels_char(thumb.end.subpixel));
+            buf[(track.x, track.y + thumb.end.pixel)].set_char(subpixels_char_bottom(thumb.end.subpixel));
             buf[(track.x, track.y + thumb.end.pixel)].set_style(Style::default().reversed());
         }
 
@@ -176,7 +176,7 @@ fn subpixels_char_top(subpixels: u16) -> char {
     }
 }
 
-fn subpixels_char(subpixels: u16) -> char {
+fn subpixels_char_bottom(subpixels: u16) -> char {
     match subpixels {
         0 => '\u{2588}',
         1 => '\u{2587}',
