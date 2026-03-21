@@ -2,6 +2,7 @@ use ratatui::{
     layout::{Position, Rect},
     widgets::StatefulWidget,
 };
+use std::ops::Range;
 
 pub struct ScrollbarState {
     content_length: usize,
@@ -28,6 +29,18 @@ impl ScrollbarState {
     pub fn position(self, position: usize) -> Self {
         Self { position, ..self }
     }
+
+    /// Returns range of scrollbar's thumb area
+    fn thumb(&self) -> Range<usize> {
+        // ensure start point of thumb doesn't push the thumb itself
+        // outside of the scrollbar area
+        let start = self.position.min(
+            self.content_length
+                .saturating_sub(self.viewport_content_length),
+        );
+        let end = (start + self.viewport_content_length).min(self.content_length);
+        Range { start, end }
+    }
 }
 
 pub struct Scrollbar;
@@ -46,10 +59,20 @@ impl StatefulWidget for Scrollbar {
 
         buf[(top_arrow.x, top_arrow.y)].set_char('\u{25B2}');
         buf[(bottom_arrow.x, bottom_arrow.y)].set_char('\u{25BC}');
-        // TODO - determine start of thumb in track
-        // TODO - determine middle of thumb in track
-        // TODO - determine end of thumb in track
-        // TODO - render start and middle of thumb as block characters
-        // TODO - render end of thumb as inverted block characters
+        for i in range_end_map(state.thumb(), |u| {
+            (((u as f64) / (state.content_length as f64)) * (track.height as f64)) as u16
+        }) {
+            // TODO - update this
+            buf[(track.x, track.y + i)].set_char('#');
+        }
+        // TODO - render top in block characters
+        // TODO - render bottom in inverted block characters
+    }
+}
+
+fn range_end_map<T, U>(r: Range<T>, mut f: impl FnMut(T) -> U) -> Range<U> {
+    Range {
+        start: f(r.start),
+        end: f(r.end),
     }
 }
