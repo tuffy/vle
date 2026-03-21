@@ -918,10 +918,17 @@ impl BufferContext {
     /// Given some mouse-selected position, attempt to place focus
     /// in the document where the cursor should be.
     fn set_cursor_focus(&mut self, area: Rect, position: Position) {
-        use ratatui::widgets::Block;
+        use ratatui::{
+            layout::{
+                Constraint::{Length, Min},
+                Layout,
+            },
+            widgets::Block,
+        };
 
         // rebuild layout from BufferWidget
-        let text_area = Block::bordered().inner(area);
+        let [text_area, _] =
+            Layout::horizontal([Min(0), Length(1)]).areas(Block::bordered().inner(area));
 
         if !text_area.contains(position) {
             return;
@@ -3268,9 +3275,6 @@ pub struct Normalizations(std::collections::HashSet<String>);
 impl TryFrom<String> for Normalizations {
     type Error = String;
 
-    // We're not performing an early return in the fold,
-    // so using try_fold here is not appropriate.
-    #[allow(clippy::manual_try_fold)]
     fn try_from(base: String) -> Result<Self, Self::Error> {
         use unicode_normalization::UnicodeNormalization;
 
@@ -4743,9 +4747,8 @@ impl StatefulWidget for BufferWidget<'_> {
             },
         };
 
-        let text_area = block.inner(area);
-        let [_, mut scrollbar_area] = Layout::horizontal([Min(0), Length(1)]).areas(text_area);
-        scrollbar_area.x += 1;
+        let [text_area, scrollbar_area] =
+            Layout::horizontal([Min(0), Length(1)]).areas(block.inner(area));
 
         block.render(area, buf);
 
