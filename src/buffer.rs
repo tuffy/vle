@@ -3275,6 +3275,9 @@ pub struct Normalizations(std::collections::HashSet<String>);
 impl TryFrom<String> for Normalizations {
     type Error = String;
 
+    // In this instance, we don't want to fail early on Err
+    // so a try_fold is not appropriate.
+    #[allow(clippy::manual_try_fold)]
     fn try_from(base: String) -> Result<Self, Self::Error> {
         use unicode_normalization::UnicodeNormalization;
 
@@ -4630,7 +4633,7 @@ impl StatefulWidget for BufferWidget<'_> {
         let block = if focused {
             block
         } else {
-            block.style(Style::default().dim())
+            block.border_style(Style::default().dim())
         };
 
         let block = match buffer.endings.name() {
