@@ -53,20 +53,41 @@ impl StatefulWidget for Scrollbar {
             Constraint::{Length, Min},
             Layout,
         };
+        use ratatui::style::Style;
 
         let [top_arrow, track, bottom_arrow] =
             Layout::vertical([Length(1), Min(0), Length(1)]).areas(area);
 
         buf[(top_arrow.x, top_arrow.y)].set_char('\u{25B2}');
         buf[(bottom_arrow.x, bottom_arrow.y)].set_char('\u{25BC}');
-        for i in range_end_map(state.thumb(), |u| {
-            (((u as f64) / (state.content_length as f64)) * (track.height as f64)) as u16
-        }) {
-            // TODO - update this
-            buf[(track.x, track.y + i)].set_char('#');
+
+        // convert thumb from ScrollBar units to a proportion of the track's height
+        // but in multiples of 8 subpixels
+        let mut thumb = range_end_map(state.thumb(), |u| {
+            (((u as f64) / (state.content_length as f64)) * ((track.height * 8) as f64)).round() as u32
+        });
+
+        // ensure the thumb is at least 8 subpixels high and doesn't slide out of the track
+        thumb.start = thumb.start.min((track.height.saturating_sub(1) * 8).into());
+        thumb.end = thumb.end.max(thumb.start + 8);
+
+        // convert the thumb back to rows/subpixels
+        let (start, start_subpixels) = ((thumb.start / 8) as u16, thumb.start % 8);
+        let (end, end_subpixels) = ((thumb.end / 8) as u16, thumb.end % 8);
+
+        // paint start of the thumb in subpixels
+        buf[(track.x, track.y + start)].set_char(subpixels_char_top(start_subpixels));
+
+        // paint whole blocks between start and end of thumb
+        for i in (start + 1)..end {
+            buf[(track.x, track.y + i)].set_char('\u{2588}');
         }
-        // TODO - render top in block characters
-        // TODO - render bottom in inverted block characters
+
+        // paint end of thumb in inverted subpixels
+        if end_subpixels > 0 {
+            buf[(track.x, track.y + end)].set_char(subpixels_char(end_subpixels));
+            buf[(track.x, track.y + end)].set_style(Style::default().reversed());
+        }
     }
 }
 
@@ -74,5 +95,33 @@ fn range_end_map<T, U>(r: Range<T>, mut f: impl FnMut(T) -> U) -> Range<U> {
     Range {
         start: f(r.start),
         end: f(r.end),
+    }
+}
+
+fn subpixels_char_top(subpixels: u32) -> char {
+    match subpixels {
+        0 => '\u{2588}',
+        1 => '\u{2587}',
+        2 => '\u{2586}',
+        3 => '\u{2585}',
+        4 => '\u{2584}',
+        5 => '\u{2583}',
+        6 => '\u{2582}',
+        7 => '\u{2581}',
+        _ => '?',
+    }
+}
+
+fn subpixels_char(subpixels: u32) -> char {
+    match subpixels {
+        0 => '\u{2588}',
+        1 => '\u{2587}',
+        2 => '\u{2586}',
+        3 => '\u{2585}',
+        4 => '\u{2584}',
+        5 => '\u{2583}',
+        6 => '\u{2582}',
+        7 => '\u{2581}',
+        _ => '?',
     }
 }
