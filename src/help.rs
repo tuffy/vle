@@ -45,6 +45,15 @@ pub const fn keybind<B: key::Binding>(action: &'static str) -> Keybinding {
     }
 }
 
+pub const fn ctrl_keybind<B: key::CtrlBinding>(action: &'static str) -> Keybinding {
+    Keybinding {
+        modifier: Some("Ctrl"),
+        keys: &[B::LABEL],
+        action,
+        f: "",
+    }
+}
+
 pub const fn none(keys: &'static [&'static str], action: &'static str) -> Keybinding {
     Keybinding {
         modifier: None,
@@ -265,7 +274,7 @@ pub static EDITING_2: &[Keybinding] = &[
     keybind::<key::Quit>("Quit File"),
     keybind::<key::Bookmark>("Toggle Bookmark"),
     shift(&[LEFT, DOWN, UP, RIGHT], "Highlight Text"),
-    ctrl(&["Space"], "Set Mark"),
+    ctrl_keybind::<key::Mark>("Set Mark"),
 ];
 
 pub static EDITING_3: &[Keybinding] = &[
@@ -276,10 +285,13 @@ pub static EDITING_3: &[Keybinding] = &[
     ctrl(&[key::Undo::LABEL, key::Redo::LABEL], "Undo / Redo"),
 ];
 
-pub static MARK_SET: &[Keybinding] = &[none(
-    &[LEFT, DOWN, UP, RIGHT, "PgUp", "PgDn", "Home", "End"],
-    "Highlight Text",
-)];
+pub static MARK_SET: &[Keybinding] = &[
+    none(
+        &[LEFT, DOWN, UP, RIGHT, "PgUp", "PgDn", "Home", "End"],
+        "Highlight Text",
+    ),
+    ctrl_keybind::<key::Mark>("Finish"),
+];
 
 pub static SWITCH_PANE: Keybinding = ctrl(&[LEFT, DOWN, UP, RIGHT], "Switch Pane");
 

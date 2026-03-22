@@ -892,7 +892,7 @@ impl Editor {
                     };
                 }
             }
-            key!(CONTROL, ' ') => {
+            ctrl_keybind!(Mark) => {
                 self.mode = EditorMode::MarkSet;
             }
             Event::Mouse(MouseEvent {
@@ -1045,6 +1045,10 @@ impl Editor {
                 ..
             }) => {
                 self.update_buffer(|b| b.cursor_end(true));
+                None
+            }
+            ctrl_keybind!(Mark) => {
+                self.mode = EditorMode::default();
                 None
             }
             event => Some(event),

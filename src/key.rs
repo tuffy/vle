@@ -62,6 +62,7 @@ ctrl_binding!(Copy, C);
 ctrl_binding!(Paste, V);
 ctrl_binding!(Undo, Z);
 ctrl_binding!(Redo, Y);
+ctrl_binding!(Mark, Space);
 
 #[derive(Copy, Clone)]
 #[allow(unused)]
@@ -196,7 +197,7 @@ impl Key {
             Self::F11 => "F11",
             Self::F12 => "F12",
             Self::Insert => "Ins",
-            Self::Space => "Spc",
+            Self::Space => "Space",
             Self::Tab => "Tab",
         }
     }
