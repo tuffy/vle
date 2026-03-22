@@ -63,14 +63,32 @@ impl StatefulWidget for Scrollbar {
         };
         use ratatui::style::Style;
 
+        // ensure we're at least one pixel wide
+        if area.width == 0 {
+            return;
+        }
+
         let [top_arrow, track, bottom_arrow] =
             Layout::vertical([Length(1), Min(0), Length(1)]).areas(area);
 
+        // paint top arrow, if possible
+        if top_arrow.height > 0 {
+            buf[(top_arrow.x, top_arrow.y)].set_char('\u{25B2}');
+        }
+
+        // paint bottom arrow, if possible
+        if bottom_arrow.height > 0 {
+            buf[(bottom_arrow.x, bottom_arrow.y)].set_char('\u{25BC}');
+        }
+
+        // determining max thumb position also checks whether
+        // the track area is at least 1 pixel high
         let Some(max_thumb) = track.height.checked_sub(1).map(Subpixel::from) else {
             return;
         };
 
         let thumb = state.thumb().map(state.to_subpixels(track.height));
+
         // constrain thumb to be at least 1 full pixel from the track's end
         // and to be at least 1 full pixel tall
         let thumb = Range::from(Thumb {
@@ -89,13 +107,10 @@ impl StatefulWidget for Scrollbar {
 
         // paint end of thumb in inverted subpixels
         if thumb.end.subpixel > 0 {
-            buf[(track.x, track.y + thumb.end.pixel)].set_char(subpixels_char_bottom(thumb.end.subpixel));
+            buf[(track.x, track.y + thumb.end.pixel)]
+                .set_char(subpixels_char_bottom(thumb.end.subpixel));
             buf[(track.x, track.y + thumb.end.pixel)].set_style(Style::default().reversed());
         }
-
-        // paint top and bottom arrows
-        buf[(top_arrow.x, top_arrow.y)].set_char('\u{25B2}');
-        buf[(bottom_arrow.x, bottom_arrow.y)].set_char('\u{25BC}');
     }
 }
 
