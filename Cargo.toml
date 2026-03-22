@@ -22,6 +22,8 @@ strip = true # Ensures debug symbols are removed.
 
 [features]
 ssh = ["dep:ssh2", "dep:rpassword"]
+# underlines that are compatible with xterm
+compat-underlines = []
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }

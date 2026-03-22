@@ -4147,11 +4147,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         &mut input,
                         underline.end - underline.start,
                         &mut output,
-                        |span| {
-                            span.patch_style(
-                                Style::new().underlined().underline_color(Color::DarkGray),
-                            )
-                        },
+                        |span| span.patch_style(underline_color(Style::new(), Color::DarkGray)),
                     );
                     idx = underline.end;
                 }
@@ -4958,11 +4954,10 @@ impl StatefulWidget for BufferWidget<'_> {
                                         whole_range.clone(),
                                         &mut ranges,
                                         |span| {
-                                            span.patch_style(
-                                                Style::new()
-                                                    .underlined()
-                                                    .underline_color(Color::Blue),
-                                            )
+                                            span.patch_style(underline_color(
+                                                Style::new(),
+                                                Color::Blue,
+                                            ))
                                         },
                                     ),
                                     whole_range.clone(),
@@ -5033,19 +5028,16 @@ impl StatefulWidget for BufferWidget<'_> {
                                         whole_range.clone(),
                                         &mut ranges,
                                         |span| {
-                                            span.patch_style(
-                                                Style::new()
-                                                    .underlined()
-                                                    .underline_color(Color::Blue),
-                                            )
+                                            span.patch_style(underline_color(
+                                                Style::new(),
+                                                Color::Blue,
+                                            ))
                                         },
                                     ),
                                     whole_range.clone(),
                                     &mut replacements,
                                     |span| {
-                                        span.patch_style(
-                                            Style::new().underlined().underline_color(Color::Red),
-                                        )
+                                        span.patch_style(underline_color(Style::new(), Color::Red))
                                     },
                                 ),
                                 whole_range,
@@ -5091,9 +5083,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                     range.clone(),
                                     (completion_start, completion_end),
                                     |span| {
-                                        span.patch_style(
-                                            Style::new().underlined().underline_color(Color::Red),
-                                        )
+                                        span.patch_style(underline_color(Style::new(), Color::Red))
                                     },
                                 )),
                                 range,
@@ -5354,11 +5344,7 @@ impl StatefulWidget for BufferWidget<'_> {
                             &mut colorized,
                             completions[*index].chars().count(),
                             &mut highlighted,
-                            |span| {
-                                span.patch_style(
-                                    Style::new().underlined().underline_color(Color::Red),
-                                )
-                            },
+                            |span| span.patch_style(underline_color(Style::new(), Color::Red)),
                         );
 
                         // output the rest verbatim
@@ -5703,6 +5689,22 @@ impl<T> From<VecFiltered<T>> for std::collections::VecDeque<T> {
     fn from(v: VecFiltered<T>) -> Self {
         v.0.into()
     }
+}
+
+#[cfg(not(feature = "compat-underlines"))]
+fn underline_color(
+    style: ratatui::style::Style,
+    color: ratatui::style::Color,
+) -> ratatui::style::Style {
+    style.underlined().underline_color(color)
+}
+
+#[cfg(feature = "compat-underlines")]
+fn underline_color(
+    style: ratatui::style::Style,
+    _color: ratatui::style::Color,
+) -> ratatui::style::Style {
+    style.underlined()
 }
 
 /// Either alphanumeric, or '_'
