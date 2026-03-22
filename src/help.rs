@@ -265,6 +265,7 @@ pub static EDITING_2: &[Keybinding] = &[
     keybind::<key::Quit>("Quit File"),
     keybind::<key::Bookmark>("Toggle Bookmark"),
     shift(&[LEFT, DOWN, UP, RIGHT], "Highlight Text"),
+    ctrl(&["Space"], "Set Mark"),
 ];
 
 pub static EDITING_3: &[Keybinding] = &[
@@ -274,6 +275,11 @@ pub static EDITING_3: &[Keybinding] = &[
     ),
     ctrl(&[key::Undo::LABEL, key::Redo::LABEL], "Undo / Redo"),
 ];
+
+pub static MARK_SET: &[Keybinding] = &[none(
+    &[LEFT, DOWN, UP, RIGHT, "PgUp", "PgDn", "Home", "End"],
+    "Highlight Text",
+)];
 
 pub static SWITCH_PANE: Keybinding = ctrl(&[LEFT, DOWN, UP, RIGHT], "Switch Pane");
 

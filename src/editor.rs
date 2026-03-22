@@ -66,6 +66,8 @@ pub enum EditorMode {
     /// Regular editing mode
     #[default]
     Editing,
+    /// Making a selection
+    MarkSet,
     /// Verifying a file overwrite
     VerifySave,
     /// Verifying a reload over a dirty buffer
@@ -376,6 +378,13 @@ impl Editor {
             }
             event => match &mut self.mode {
                 EditorMode::Editing => self.process_normal_event(area, event),
+                EditorMode::MarkSet => {
+                    if let Some(event) = self.process_mark_set_event(event) {
+                        // end mark set
+                        self.mode = EditorMode::default();
+                        self.process_normal_event(area, event);
+                    }
+                }
                 EditorMode::Autocomplete {
                     offset,
                     completions,
@@ -883,6 +892,9 @@ impl Editor {
                     };
                 }
             }
+            key!(CONTROL, ' ') => {
+                self.mode = EditorMode::MarkSet;
+            }
             Event::Mouse(MouseEvent {
                 kind: MouseEventKind::ScrollDown,
                 modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
@@ -952,6 +964,90 @@ impl Editor {
                 });
             }
             _ => { /* ignore other events */ }
+        }
+    }
+
+    pub fn process_mark_set_event(&mut self, event: Event) -> Option<Event> {
+        use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+        match event {
+            Event::Key(KeyEvent {
+                code: KeyCode::Up,
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.update_buffer(|b| b.cursor_up(1, true));
+                None
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Down,
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.update_buffer(|b| b.cursor_down(1, true));
+                None
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::PageUp,
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.update_buffer(|b| {
+                    b.cursor_up(*PAGE_SIZE, true);
+                });
+                None
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::PageDown,
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.update_buffer(|b| {
+                    b.cursor_down(*PAGE_SIZE, true);
+                });
+                None
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Left,
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.update_buffer(|b| b.cursor_back(true));
+                None
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Right,
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.update_buffer(|b| b.cursor_forward(true));
+                None
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Home,
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.update_buffer(|b| b.cursor_home(true));
+                None
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::End,
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                self.update_buffer(|b| b.cursor_end(true));
+                None
+            }
+            event => Some(event),
         }
     }
 
