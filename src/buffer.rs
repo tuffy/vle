@@ -3983,9 +3983,9 @@ impl StatefulWidget for BufferWidget<'_> {
     fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer, state: &mut BufferContext) {
         use crate::editor::SearchType;
         use crate::help::{
-            CONFIRM_CLOSE, HelpPos, MARK_SET, PASTE_GROUP, REPLACE_MATCHES, SELECT_INSIDE,
-            SELECT_LINE, SELECT_LINE_BOOKMARKED, SPLIT_PANE, VERIFY_RELOAD, VERIFY_SAVE,
-            render_help,
+            CONFIRM_CLOSE, HelpPos, MARK_SET, MULTICURSOR_MARK_SET, PASTE_GROUP, REPLACE_MATCHES,
+            SELECT_INSIDE, SELECT_LINE, SELECT_LINE_BOOKMARKED, SPLIT_PANE, VERIFY_RELOAD,
+            VERIFY_SAVE, render_help,
         };
         use crate::prompt::TextField;
         use crate::scrollbar::{Scrollbar, ScrollbarState};
@@ -4690,6 +4690,9 @@ impl StatefulWidget for BufferWidget<'_> {
                 EditorMode::MultiCursor {
                     match_idx, matches, ..
                 }
+                | EditorMode::MultiCursorMarkSet {
+                    match_idx, matches, ..
+                }
                 | EditorMode::AutocompleteMulti {
                     match_idx, matches, ..
                 },
@@ -4853,6 +4856,12 @@ impl StatefulWidget for BufferWidget<'_> {
                     highlight: true,
                     ..
                 }
+                | EditorMode::MultiCursorMarkSet {
+                    matches,
+                    match_idx,
+                    highlight: true,
+                    ..
+                }
                 | EditorMode::PasteGroup {
                     matches,
                     match_idx,
@@ -4910,6 +4919,11 @@ impl StatefulWidget for BufferWidget<'_> {
             }
             Some(
                 EditorMode::MultiCursor {
+                    matches,
+                    highlight: false,
+                    ..
+                }
+                | EditorMode::MultiCursorMarkSet {
                     matches,
                     highlight: false,
                     ..
@@ -5370,6 +5384,9 @@ impl StatefulWidget for BufferWidget<'_> {
             }
             Some(EditorMode::MultiCursor { .. } | EditorMode::AutocompleteMulti { .. }) => {
                 show_sub_help(text_area, help_pos, buf, REPLACE_MATCHES);
+            }
+            Some(EditorMode::MultiCursorMarkSet { .. }) => {
+                show_sub_help(text_area, help_pos, buf, MULTICURSOR_MARK_SET);
             }
             Some(EditorMode::PasteGroup { total, .. }) => {
                 show_sub_help(

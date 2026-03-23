@@ -93,6 +93,13 @@ pub enum EditorMode {
         range: Option<SelectionRange>,
         highlight: bool,
     },
+    /// Multi-cursor operation with mark set
+    MultiCursorMarkSet {
+        matches: Vec<MultiCursor>,
+        match_idx: usize,
+        range: Option<SelectionRange>,
+        highlight: bool,
+    },
     /// Querying for what regex group to paste
     PasteGroup {
         matches: Vec<MultiCursor>,
@@ -560,6 +567,38 @@ impl Editor {
                         )
                     }) {
                         self.mode = new_mode;
+                    }
+                }
+                EditorMode::MultiCursorMarkSet {
+                    matches,
+                    match_idx,
+                    range,
+                    highlight,
+                } => {
+                    match self
+                        .layout
+                        .on_current(|b| process_multi_cursor_mark_set(b, matches, highlight, event))
+                    {
+                        Some(Ok(Some(event))) => {
+                            // end mark set
+                            self.mode = EditorMode::MultiCursor {
+                                matches: std::mem::take(matches),
+                                match_idx: std::mem::take(match_idx),
+                                range: std::mem::take(range),
+                                highlight: std::mem::take(highlight),
+                            };
+                            self.process_event(area, event);
+                        }
+                        Some(Err(())) => {
+                            // end mark set
+                            self.mode = EditorMode::MultiCursor {
+                                matches: std::mem::take(matches),
+                                match_idx: std::mem::take(match_idx),
+                                range: std::mem::take(range),
+                                highlight: std::mem::take(highlight),
+                            };
+                        }
+                        _ => { /* do nothing */ }
                     }
                 }
                 EditorMode::PasteGroup {
@@ -1787,7 +1826,67 @@ fn process_multi_cursor(
             }
             None
         }
+        ctrl_keybind!(Mark) => Some(EditorMode::MultiCursorMarkSet {
+            matches: std::mem::take(matches),
+            match_idx: std::mem::take(match_idx),
+            range: std::mem::take(range),
+            highlight: std::mem::take(highlight),
+        }),
         _ => None,
+    }
+}
+
+fn process_multi_cursor_mark_set(
+    buffer: &mut BufferContext,
+    matches: &mut Vec<MultiCursor>,
+    highlight: &mut bool,
+    event: Event,
+) -> Result<Option<Event>, ()> {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+    match event {
+        Event::Key(KeyEvent {
+            code: KeyCode::Left,
+            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            *highlight = false;
+            buffer.multi_cursor_back(matches, true);
+            Ok(None)
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Right,
+            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            *highlight = false;
+            buffer.multi_cursor_forward(matches, true);
+            Ok(None)
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Home,
+            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            *highlight = false;
+            buffer.multi_cursor_home(matches, true);
+            Ok(None)
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::End,
+            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            *highlight = false;
+            buffer.multi_cursor_end(matches, true);
+            Ok(None)
+        }
+        ctrl_keybind!(Mark) => Err(()),
+        event => Ok(Some(event)),
     }
 }
 

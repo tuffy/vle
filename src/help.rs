@@ -371,11 +371,17 @@ pub static REPLACE_MATCHES: &[Keybinding] = &[
     keybind::<key::Bookmark>("Bookmark Positions"),
     none(&[LEFT, RIGHT], "Move Cursors"),
     shift(&[LEFT, RIGHT], "Highlight Text"),
+    ctrl_keybind::<key::Mark>("Set Mark"),
     ctrl(
         &[key::Cut::LABEL, key::Copy::LABEL, key::Paste::LABEL],
         "Cut / Copy / Paste",
     ),
     none(&["Enter"], "Finish"),
+];
+
+pub static MULTICURSOR_MARK_SET: &[Keybinding] = &[
+    none(&[LEFT, RIGHT, "Home", "End"], "Highlight Text"),
+    ctrl_keybind::<key::Mark>("Finish"),
 ];
 
 pub static PASTE_GROUP: &[Keybinding] = &[
