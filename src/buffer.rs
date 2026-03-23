@@ -1562,6 +1562,7 @@ impl BufferContext {
                 std::mem::swap(&mut self.cursor, &mut state.cursor);
                 std::mem::swap(&mut self.cursor_column, &mut state.cursor_column);
                 buf.redo.push(state);
+                buf.undo_finished = true;
                 self.selection = None;
             }
             None => {
