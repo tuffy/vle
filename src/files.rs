@@ -197,6 +197,7 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
     ) {
         use crate::buffer::{BufferMessage, render_message};
         use crate::help::{CREATE_FILE, HelpPos, OPEN_FILE, render_help};
+        use crate::scrollbar::{Scrollbar, ScrollbarState};
         use ratatui::{
             layout::{
                 Constraint::{Length, Min},
@@ -204,10 +205,7 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
             },
             style::{Modifier, Style},
             text::{Line, Span},
-            widgets::{
-                Block, BorderType, List, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
-                ScrollbarState, Widget,
-            },
+            widgets::{Block, BorderType, List, ListState, Paragraph, Widget},
         };
         use std::borrow::Cow;
 
@@ -278,12 +276,17 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
             &mut ListState::default().with_selected(state.selected_entry()),
         );
 
-        Scrollbar::new(ScrollbarOrientation::VerticalRight).render(
+        Scrollbar.render(
             scrollbar_area,
             buf,
             &mut ScrollbarState::new(state.contents.len())
                 .viewport_content_length(list_area.height.into())
-                .position(state.selected_entry().unwrap_or_default()),
+                .position(
+                    state
+                        .selected_entry()
+                        .unwrap_or_default()
+                        .saturating_sub(list_area.height.into()),
+                ),
         );
 
         render_help(
