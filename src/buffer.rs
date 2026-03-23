@@ -4579,6 +4579,38 @@ impl StatefulWidget for BufferWidget<'_> {
             help
         }
 
+        fn line_count<'b>(
+            rope: &ropey::Rope,
+            block: Block<'b>,
+            cursor: usize,
+            selection: Option<usize>,
+            focused: bool,
+        ) -> Block<'b> {
+            match selection {
+                Some(selection) => {
+                    let (start, end) = reorder(cursor, selection);
+                    if let Ok(start_line) = rope.try_char_to_line(start)
+                        && let Ok(end_line) = rope.try_char_to_line(end)
+                        && let Some(lines) = end_line.checked_sub(start_line)
+                    {
+                        block.title_bottom(
+                            border_title(
+                                match lines {
+                                    0 => "1 Line".to_string(),
+                                    n => format!("{} Lines", n + 1),
+                                },
+                                focused,
+                            )
+                            .centered(),
+                        )
+                    } else {
+                        block
+                    }
+                }
+                None => block,
+            }
+        }
+
         if let Some(EditorMode::Open { chooser }) = self.mode {
             // file selection mode overrides main editing mode
             use crate::files::FileChooser;
@@ -4690,13 +4722,19 @@ impl StatefulWidget for BufferWidget<'_> {
                 EditorMode::MultiCursor {
                     match_idx, matches, ..
                 }
-                | EditorMode::MultiCursorMarkSet {
-                    match_idx, matches, ..
-                }
                 | EditorMode::AutocompleteMulti {
                     match_idx, matches, ..
                 },
             ) => block.title_bottom(
+                border_title(
+                    format!("Match {} / {}", *match_idx + 1, matches.len()),
+                    focused,
+                )
+                .centered(),
+            ),
+            Some(EditorMode::MultiCursorMarkSet {
+                match_idx, matches, ..
+            }) => block.border_style(Style::default().magenta()).title_bottom(
                 border_title(
                     format!("Match {} / {}", *match_idx + 1, matches.len()),
                     focused,
@@ -4724,30 +4762,15 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
             Some(EditorMode::SplitPane) => block.border_style(Style::default().blue()),
+            Some(EditorMode::MarkSet) => line_count(
+                rope,
+                block.border_style(Style::default().magenta()),
+                state.cursor,
+                state.selection,
+                focused,
+            ),
             Some(EditorMode::Open { .. }) => block,
-            _ => match state.selection {
-                Some(selection) => {
-                    let (start, end) = reorder(state.cursor, selection);
-                    if let Ok(start_line) = rope.try_char_to_line(start)
-                        && let Ok(end_line) = rope.try_char_to_line(end)
-                        && let Some(lines) = end_line.checked_sub(start_line)
-                    {
-                        block.title_bottom(
-                            border_title(
-                                match lines {
-                                    0 => "1 Line".to_string(),
-                                    n => format!("{} Lines", n + 1),
-                                },
-                                focused,
-                            )
-                            .centered(),
-                        )
-                    } else {
-                        block
-                    }
-                }
-                None => block,
-            },
+            _ => line_count(rope, block, state.cursor, state.selection, focused),
         };
 
         let [text_area, scrollbar_area] =
