@@ -140,8 +140,8 @@ pub enum EditorMode {
         index: usize,             // current autocompletion candidate
     },
     SelectBuffer {
-        buffer_list: Vec<String>, // buffer names
-        index: usize,             // the selected buffer
+        buffer_list: Vec<BufferId>, // buffers
+        index: usize,               // buffer index to select
     },
 }
 
@@ -624,11 +624,20 @@ impl Editor {
                     };
                 }
                 EditorMode::SplitPane => self.process_split_pane(event),
-                EditorMode::SelectBuffer { index, .. } => {
-                    if let Some(mode) =
-                        process_select_buffer(self.layout.selected_buffer_list_mut(), index, event)
-                    {
-                        self.mode = mode;
+                EditorMode::SelectBuffer { buffer_list, index } => {
+                    match process_select_buffer(
+                        self.layout.selected_buffer_list_mut(),
+                        index,
+                        event,
+                    ) {
+                        Some(Ok(mode)) => {
+                            self.mode = mode;
+                        }
+                        Some(Err((idx_a, idx_b))) => {
+                            buffer_list.swap(idx_a, idx_b);
+                            self.layout.swap_buffers(idx_a, idx_b);
+                        }
+                        None => { /* do nothing */ }
                     }
                 }
             },
@@ -948,7 +957,7 @@ impl Editor {
             key!(CONTROL, '5') => {
                 let buffer_list = self.layout.selected_buffer_list();
                 let index = buffer_list.current_index();
-                let buffer_list = buffer_list.buffers().map(|b| b.to_string()).collect();
+                let buffer_list = buffer_list.buffers().map(|b| b.id()).collect();
                 self.mode = EditorMode::SelectBuffer { buffer_list, index };
             }
             Event::Mouse(MouseEvent {
@@ -1948,11 +1957,14 @@ fn process_paste_group(
     }
 }
 
+// None                  - index moved from one buffer to another or no-op
+// Some(Ok(mode))        - buffer in buffer list set to index, selection complete
+// Some(Err((idx, idx))) - swap buffers with the given indexes, continue selection
 fn process_select_buffer(
     buffer_list: &mut BufferList,
     index: &mut usize,
     event: Event,
-) -> Option<EditorMode> {
+) -> Option<Result<EditorMode, (usize, usize)>> {
     use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
     const PAGE_SIZE: usize = 5;
@@ -1984,6 +1996,17 @@ fn process_select_buffer(
             *index = (*index + 1) % buffer_list.len();
             None
         }
+        key!(CONTROL, Up) => match index.checked_sub(1) {
+            Some(new_index) => Some(Err((std::mem::replace(index, new_index), new_index))),
+            None => {
+                let new_index = buffer_list.len().checked_sub(1)?;
+                Some(Err((std::mem::replace(index, new_index), new_index)))
+            }
+        },
+        key!(CONTROL, Down) => {
+            let new_index = (*index + 1) % buffer_list.len();
+            Some(Err((std::mem::replace(index, new_index), new_index)))
+        }
         key!(PageDown) => {
             *index = (*index + PAGE_SIZE).min(buffer_list.len().saturating_sub(1));
             None
@@ -2005,7 +2028,7 @@ fn process_select_buffer(
         key!(Enter) => buffer_list
             .select_buffer(*index)
             .ok()
-            .map(|()| EditorMode::default()),
+            .map(|()| Ok(EditorMode::default())),
         Event::Key(KeyEvent {
             code: KeyCode::Char(c),
             modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
@@ -2014,7 +2037,7 @@ fn process_select_buffer(
         }) => buffer_list
             .select_buffer(char_to_index(c)?)
             .ok()
-            .map(|()| EditorMode::default()),
+            .map(|()| Ok(EditorMode::default())),
         _ => None, // ignore other events
     }
 }
@@ -2134,6 +2157,28 @@ impl Layout {
             } => {
                 x.remove(buffer.clone());
                 y.remove(buffer);
+            }
+        }
+    }
+
+    /// Swaps buffers at the given indexes across all BufferLists
+    fn swap_buffers(&mut self, a: usize, b: usize) {
+        match self {
+            Self::Single(buffer) => {
+                buffer.swap_buffers(a, b);
+            }
+            Self::Horizontal {
+                top: buf_a,
+                bottom: buf_b,
+                ..
+            }
+            | Self::Vertical {
+                left: buf_a,
+                right: buf_b,
+                ..
+            } => {
+                buf_a.swap_buffers(a, b);
+                buf_b.swap_buffers(a, b);
             }
         }
     }

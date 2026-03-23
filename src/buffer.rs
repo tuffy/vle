@@ -780,6 +780,12 @@ impl PartialEq for BufferId {
     }
 }
 
+impl std::fmt::Display for BufferId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.0.borrow().source().name().fmt(f)
+    }
+}
+
 pub enum FindMode {
     WholeFile,
     Selected,
@@ -3949,6 +3955,10 @@ impl BufferList {
         self.buffers.get_mut(idx)
     }
 
+    pub fn swap_buffers(&mut self, a: usize, b: usize) {
+        self.buffers.swap(a, b);
+    }
+
     /// If more than one buffer open, returns selected index and Vec of tab names
     pub fn tabs(&self) -> Option<(usize, Vec<String>)> {
         (self.buffers.len() > 1).then(|| {
@@ -5454,12 +5464,13 @@ impl StatefulWidget for BufferWidget<'_> {
                         .chain(std::iter::repeat(' '))
                 }
 
+                let selected_buf = state.id();
                 let mut width = 0;
                 let list = ratatui::widgets::List::new(
                     buffer_list
                         .iter()
-                        .map(|s| s.as_str())
-                        .inspect(|s| {
+                        .map(|bid| (bid.to_string(), *bid == selected_buf))
+                        .inspect(|(s, _)| {
                             use unicode_width::UnicodeWidthStr;
 
                             width = width.max(match u16::try_from(s.width()) {
@@ -5468,11 +5479,15 @@ impl StatefulWidget for BufferWidget<'_> {
                             });
                         })
                         .zip(shortcut_letters())
-                        .map(|(s, c)| {
+                        .map(|((s, selected), c)| {
                             Line::from_iter([
                                 Span::styled(c.to_string(), Style::new().reversed()),
                                 Span::raw(" : "),
-                                Span::raw(s),
+                                if selected {
+                                    Span::styled(s, Style::new().underlined())
+                                } else {
+                                    Span::raw(s)
+                                },
                             ])
                         }),
                 );
