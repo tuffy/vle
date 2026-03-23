@@ -397,3 +397,9 @@ pub static PASTE_GROUP: &[Keybinding] = &[
     none(&["8"], "Paste From Capture Group 8"),
     none(&["9"], "Paste From Capture Group 9"),
 ];
+
+pub static SELECT_BUFFER: &[Keybinding] = &[
+    none(&["0\u{2026}9", "A\u{2026}Z"], "Select Buffer by Letter"),
+    none(&[UP, DOWN], "Choose Buffer"),
+    none(&["Enter"], "Select Chosen Buffer"),
+];

@@ -139,6 +139,10 @@ pub enum EditorMode {
         completions: Vec<String>, // autocompletion candidates
         index: usize,             // current autocompletion candidate
     },
+    SelectBuffer {
+        buffer_list: Vec<String>, // buffer names
+        index: usize,             // the selected buffer
+    },
 }
 
 #[derive(Copy, Clone, Default)]
@@ -620,6 +624,13 @@ impl Editor {
                     };
                 }
                 EditorMode::SplitPane => self.process_split_pane(event),
+                EditorMode::SelectBuffer { index, .. } => {
+                    if let Some(mode) =
+                        process_select_buffer(self.layout.selected_buffer_list_mut(), index, event)
+                    {
+                        self.mode = mode;
+                    }
+                }
             },
         }
     }
@@ -933,6 +944,12 @@ impl Editor {
             }
             ctrl_keybind!(Mark) => {
                 self.mode = EditorMode::MarkSet;
+            }
+            key!(CONTROL, '5') => {
+                let buffer_list = self.layout.selected_buffer_list();
+                let index = buffer_list.current_index();
+                let buffer_list = buffer_list.buffers().map(|b| b.to_string()).collect();
+                self.mode = EditorMode::SelectBuffer { buffer_list, index };
             }
             Event::Mouse(MouseEvent {
                 kind: MouseEventKind::ScrollDown,
@@ -1838,7 +1855,7 @@ fn process_multi_cursor(
 
 fn process_multi_cursor_mark_set(
     buffer: &mut BufferContext,
-    matches: &mut Vec<MultiCursor>,
+    matches: &mut [MultiCursor],
     highlight: &mut bool,
     event: Event,
 ) -> Result<Option<Event>, ()> {
@@ -1928,6 +1945,77 @@ fn process_paste_group(
             }
         }
         _ => { /* ignore other events */ }
+    }
+}
+
+fn process_select_buffer(
+    buffer_list: &mut BufferList,
+    index: &mut usize,
+    event: Event,
+) -> Option<EditorMode> {
+    use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+    const PAGE_SIZE: usize = 5;
+
+    fn char_to_index(c: char) -> Option<usize> {
+        match c {
+            c @ '1'..='9' => Some((u32::from(c) - u32::from('1')) as usize),
+            '0' => Some(9),
+            c @ 'a'..='z' => Some((u32::from(c) - u32::from('a')) as usize + 10),
+            c @ 'A'..='Z' => Some((u32::from(c) - u32::from('A')) as usize + 10),
+            _ => None,
+        }
+    }
+
+    match event {
+        key!(Up) => match index.checked_sub(1) {
+            Some(new_index) => {
+                *index = new_index;
+                None
+            }
+            None => {
+                if let Some(new_index) = buffer_list.len().checked_sub(1) {
+                    *index = new_index;
+                }
+                None
+            }
+        },
+        key!(Down) => {
+            *index = (*index + 1) % buffer_list.len();
+            None
+        }
+        key!(PageDown) => {
+            *index = (*index + PAGE_SIZE).min(buffer_list.len().saturating_sub(1));
+            None
+        }
+        key!(PageUp) => {
+            *index = index.saturating_sub(PAGE_SIZE);
+            None
+        }
+        key!(Home) => {
+            *index = 0;
+            None
+        }
+        key!(End) => {
+            if let Some(max) = buffer_list.len().checked_sub(1) {
+                *index = max;
+            }
+            None
+        }
+        key!(Enter) => buffer_list
+            .select_buffer(*index)
+            .ok()
+            .map(|()| EditorMode::default()),
+        Event::Key(KeyEvent {
+            code: KeyCode::Char(c),
+            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => buffer_list
+            .select_buffer(char_to_index(c)?)
+            .ok()
+            .map(|()| EditorMode::default()),
+        _ => None, // ignore other events
     }
 }
 
@@ -2051,28 +2139,33 @@ impl Layout {
     }
 
     fn selected_buffer_list(&self) -> &BufferList {
-        match self {
-            Self::Single(buffer) => buffer,
-            Self::Horizontal {
-                top: buffer,
-                which: HorizontalPos::Top,
-                ..
+        let mut current = self;
+        loop {
+            match current {
+                Self::Single(buffer) => break buffer,
+                Self::Horizontal {
+                    top: buffer,
+                    which: HorizontalPos::Top,
+                    ..
+                }
+                | Self::Horizontal {
+                    bottom: buffer,
+                    which: HorizontalPos::Bottom,
+                    ..
+                }
+                | Self::Vertical {
+                    left: buffer,
+                    which: VerticalPos::Left,
+                    ..
+                }
+                | Self::Vertical {
+                    right: buffer,
+                    which: VerticalPos::Right,
+                    ..
+                } => {
+                    current = buffer;
+                }
             }
-            | Self::Horizontal {
-                bottom: buffer,
-                which: HorizontalPos::Bottom,
-                ..
-            }
-            | Self::Vertical {
-                left: buffer,
-                which: VerticalPos::Left,
-                ..
-            }
-            | Self::Vertical {
-                right: buffer,
-                which: VerticalPos::Right,
-                ..
-            } => buffer.selected_buffer_list(),
         }
     }
 

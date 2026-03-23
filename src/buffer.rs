@@ -3819,6 +3819,10 @@ impl BufferList {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.buffers.len()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.buffers.is_empty()
     }
@@ -3866,6 +3870,16 @@ impl BufferList {
                 .current
                 .checked_sub(1)
                 .unwrap_or(self.buffers.len() - 1);
+        }
+    }
+
+    /// Returns Ok(()) if index is valid
+    pub fn select_buffer(&mut self, index: usize) -> Result<(), ()> {
+        if index < self.buffers.len() {
+            self.current = index;
+            Ok(())
+        } else {
+            Err(())
         }
     }
 
@@ -3918,6 +3932,10 @@ impl BufferList {
 
     pub fn current_index(&self) -> usize {
         self.current
+    }
+
+    pub fn buffers(&self) -> impl Iterator<Item = &BufferContext> {
+        self.buffers.iter()
     }
 
     pub fn set_index(&mut self, index: usize) {
@@ -3984,8 +4002,8 @@ impl StatefulWidget for BufferWidget<'_> {
         use crate::editor::SearchType;
         use crate::help::{
             CONFIRM_CLOSE, HelpPos, MARK_SET, MULTICURSOR_MARK_SET, PASTE_GROUP, REPLACE_MATCHES,
-            SELECT_INSIDE, SELECT_LINE, SELECT_LINE_BOOKMARKED, SPLIT_PANE, VERIFY_RELOAD,
-            VERIFY_SAVE, render_help,
+            SELECT_BUFFER, SELECT_INSIDE, SELECT_LINE, SELECT_LINE_BOOKMARKED, SPLIT_PANE,
+            VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
         use crate::prompt::TextField;
         use crate::scrollbar::{Scrollbar, ScrollbarState};
@@ -5272,7 +5290,9 @@ impl StatefulWidget for BufferWidget<'_> {
                     ));
                     help.extend(EDITING_3);
                     help.extend(multiple_panes.then_some(SWITCH_PANE));
-                    help.extend(multiple_buffers.then_some(ctrl(&["PgUp", "PgDn"], "Switch File")));
+                    help.extend(
+                        multiple_buffers.then_some(ctrl(&["]", "PgUp", "PgDn"], "Switch Buffer")),
+                    );
 
                     crate::help::render_main_help(text_area, help_pos, buf, &help, |b| {
                         b.title_top("Keybindings").title_bottom(
@@ -5425,6 +5445,40 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(EditorMode::Open { .. }) => { /* already handled, above */ }
+            Some(EditorMode::SelectBuffer { buffer_list, index }) => {
+                fn shortcut_letters() -> impl Iterator<Item = char> {
+                    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
+                        .into_iter()
+                        .chain('A'..='Z')
+                        .chain(std::iter::repeat(' '))
+                }
+
+                let mut width = 0;
+                let list = ratatui::widgets::List::new(
+                    buffer_list
+                        .iter()
+                        .map(|s| s.as_str())
+                        .inspect(|s| {
+                            use unicode_width::UnicodeWidthStr;
+
+                            width = width.max(match u16::try_from(s.width()) {
+                                Ok(w) => w.saturating_add(4),
+                                Err(_) => u16::MAX,
+                            });
+                        })
+                        .zip(shortcut_letters())
+                        .map(|(s, c)| {
+                            Line::from_iter([
+                                Span::styled(c.to_string(), Style::new().reversed()),
+                                Span::raw(" : "),
+                                Span::raw(s),
+                            ])
+                        }),
+                );
+                let mut state = ratatui::widgets::ListState::default().with_selected(Some(*index));
+                render_list(text_area, buf, list, &mut state, width);
+                show_sub_help(text_area, help_pos, buf, SELECT_BUFFER);
+            }
         }
 
         if let Some(message) = state.message.take() {
@@ -5456,6 +5510,40 @@ pub fn render_message(area: Rect, buf: &mut ratatui::buffer::Buffer, message: Bu
         })
         .block(Block::bordered().border_type(BorderType::Rounded))
         .render(dialog_area, buf);
+}
+
+pub fn render_list(
+    area: Rect,
+    buf: &mut ratatui::buffer::Buffer,
+    list: ratatui::widgets::List,
+    state: &mut ratatui::widgets::ListState,
+    width: u16,
+) {
+    use ratatui::{
+        layout::{
+            Constraint::{Length, Min},
+            Layout,
+        },
+        style::Style,
+        text::Line,
+        widgets::{Block, BorderType, Clear, Widget},
+    };
+
+    let [_, dialog_area, _] = Layout::horizontal([Min(0), Length(width + 2), Min(0)]).areas(area);
+    let [_, dialog_area, _] =
+        Layout::vertical([Min(0), Length(list.len() as u16 + 2), Min(0)]).areas(dialog_area);
+
+    Clear.render(dialog_area, buf);
+    StatefulWidget::render(
+        list.highlight_style(Style::new().reversed()).block(
+            Block::bordered()
+                .border_type(BorderType::Rounded)
+                .title_top(Line::from("Buffer").centered()),
+        ),
+        dialog_area,
+        buf,
+        state,
+    );
 }
 
 pub enum EditorCutBuffer {
