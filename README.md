@@ -118,6 +118,8 @@ Bookmarks can be removed either by
 or simply by erasing the text containing the bookmark.
 Hando for TODO items which are no longer needed.
 
+![Bookmarks](./images/bookmarks.gif)
+
 ## Split Pane Views
 
 The editor's viewport can be split into vertical or horizontal panes
