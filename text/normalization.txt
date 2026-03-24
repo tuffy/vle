@@ -5,3 +5,6 @@
  usèrname │ usèrname
  pãssword │ pãssword
  àéîõū    │ àéîõū
+
+NFC : Iñtërnâtiônàlizætiøn☃💩
+NFD : Iñtërnâtiônàlizætiøn☃💩
