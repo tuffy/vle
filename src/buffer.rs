@@ -4513,7 +4513,7 @@ impl StatefulWidget for BufferWidget<'_> {
             {
                 extract(&mut colorized, position - offset, &mut highlighted, |s| s);
                 extract(&mut colorized, 1, &mut highlighted, |s| {
-                    s.style(Style::new().bg(color))
+                    s.style(Style::new().bg(color).fg(Color::Black))
                 });
                 offset = position + 1;
             }
@@ -4708,7 +4708,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     Span::raw("\u{252b}"),
                     Span::styled(
                         bookmarks.to_string(),
-                        Style::default().bold().bg(Color::Cyan),
+                        Style::default().bold().bg(BOOKMARK).fg(Color::Black),
                     ),
                     Span::raw("\u{2523}"),
                 ])

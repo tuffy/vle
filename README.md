@@ -48,6 +48,7 @@ are done via simple environment variables.
 | Quit File                      | <kbd>F12</kbd> | <kbd>Ctrl</kbd>-<kbd>Q</kbd>       |
 | Toggle Bookmark                | <kbd>Ins</kbd> | <kbd>Ctrl</kbd>-<kbd>B</kbd>       |
 | Highlight Text                 |                | <kbd>Shift</kbd>-<kbd>Arrows</kbd> |
+| Set Mark                       |                | <kbd>Ctrl</kbd>-<kbd>Space</kbd>   |
 | Start of Selection             |                | <kbd>Ctrl</kbd>-<kbd>Home</kbd>    |
 | End of Selection               |                | <kbd>Ctrl</kbd>-<kbd>End</kbd>     |
 | Indent or Autocomplete         |                | <kbd>Tab</kbd>                     |
@@ -59,6 +60,7 @@ are done via simple environment variables.
 | Switch Pane                    |                | <kbd>Ctrl</kbd>-<kbd>Arrows</kbd>  |
 | Previous Buffer                |                | <kbd>Ctrl</kbd>-<kbd>PgUp</kbd>    |
 | Next Buffer                    |                | <kbd>Ctrl</kbd>-<kbd>PgDn</kbd>    |
+| Manage Buffers                 |                | <kbd>Ctrl</kbd>-<kbd>]</kbd>       |
 
 Because we have so few features, non-navigational features
 have alternative <kbd>Ctrl</kbd>-based and <kbd>F</kbd>-based keybindings.

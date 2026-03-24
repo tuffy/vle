@@ -64,6 +64,8 @@ enum TutorialToken {
     #[token("Esc")]
     #[token("Tab")]
     #[token("Shift-Tab")]
+    #[token("Ctrl-Space")]
+    #[token("Ctrl-]")]
     Keybinding,
     #[token("VLE_SPACES_PER_TAB")]
     #[token("VLE_ALWAYS_TAB")]
