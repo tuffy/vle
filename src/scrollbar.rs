@@ -52,7 +52,7 @@ impl ScrollbarState {
             // u as a percentage of content length
             let mut u = (u as f64) / (self.content_length as f64);
             // convert u to subpixels (8 subpixels per pixel)
-            u *= (track_height * 8) as f64;
+            u *= (track_height as f64) * 8.0;
             // convert to a subpixels struct
             (u.round() as u32).into()
         }
