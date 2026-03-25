@@ -3964,6 +3964,11 @@ impl BufferList {
 
     pub fn swap_buffers(&mut self, a: usize, b: usize) {
         self.buffers.swap(a, b);
+        if self.current == a {
+            self.current = b;
+        } else if self.current == b {
+            self.current = a;
+        }
     }
 
     /// If more than one buffer open, returns selected index and Vec of tab names
