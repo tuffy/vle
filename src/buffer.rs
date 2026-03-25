@@ -366,6 +366,28 @@ mod private {
         }
     }
 
+    impl Eq for BufferCell { }
+
+    /// Compares by Rc's pointer rather than by buffer's contents
+    impl PartialEq for BufferCell {
+        fn eq(&self, rhs: &Self) -> bool {
+            Rc::ptr_eq(&self.0, &rhs.0)
+        }
+    }
+
+    /// Hashes by Rc's pointer rather than by buffer's contents
+    impl std::hash::Hash for BufferCell {
+        fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+            std::ptr::hash(Rc::as_ptr(&self.0), h);
+        }
+    }
+
+    impl std::fmt::Display for BufferCell {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            self.0.borrow().source().name().fmt(f)
+        }
+    }
+
     pub struct MoveHandle<'b>(RefMut<'b, Buffer>);
 
     impl Deref for MoveHandle<'_> {
