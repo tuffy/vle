@@ -630,10 +630,10 @@ impl Editor {
                         index,
                         event,
                     ) {
-                        Some(Ok(mode)) => {
-                            self.mode = mode;
+                        Some(SelectBuffer::Finish) => {
+                            self.mode = EditorMode::default();
                         }
-                        Some(Err((idx_a, idx_b))) => {
+                        Some(SelectBuffer::SwapPanes(idx_a, idx_b)) => {
                             buffer_list.swap(idx_a, idx_b);
                             self.layout.swap_buffers(idx_a, idx_b);
                         }
@@ -1957,6 +1957,11 @@ fn process_paste_group(
     }
 }
 
+enum SelectBuffer {
+    Finish,
+    SwapPanes(usize, usize),
+}
+
 // None                  - index moved from one buffer to another or no-op
 // Some(Ok(mode))        - buffer in buffer list set to index, selection complete
 // Some(Err((idx, idx))) - swap buffers with the given indexes, continue selection
@@ -1964,7 +1969,7 @@ fn process_select_buffer(
     buffer_list: &mut BufferList,
     index: &mut usize,
     event: Event,
-) -> Option<Result<EditorMode, (usize, usize)>> {
+) -> Option<SelectBuffer> {
     use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
     const PAGE_SIZE: usize = 5;
@@ -1997,15 +2002,24 @@ fn process_select_buffer(
             None
         }
         key!(CONTROL, Up) => match index.checked_sub(1) {
-            Some(new_index) => Some(Err((std::mem::replace(index, new_index), new_index))),
+            Some(new_index) => Some(SelectBuffer::SwapPanes(
+                std::mem::replace(index, new_index),
+                new_index,
+            )),
             None => {
                 let new_index = buffer_list.len().checked_sub(1)?;
-                Some(Err((std::mem::replace(index, new_index), new_index)))
+                Some(SelectBuffer::SwapPanes(
+                    std::mem::replace(index, new_index),
+                    new_index,
+                ))
             }
         },
         key!(CONTROL, Down) => {
             let new_index = (*index + 1) % buffer_list.len();
-            Some(Err((std::mem::replace(index, new_index), new_index)))
+            Some(SelectBuffer::SwapPanes(
+                std::mem::replace(index, new_index),
+                new_index,
+            ))
         }
         key!(PageDown) => {
             *index = (*index + PAGE_SIZE).min(buffer_list.len().saturating_sub(1));
@@ -2028,7 +2042,7 @@ fn process_select_buffer(
         key!(Enter) => buffer_list
             .select_buffer(*index)
             .ok()
-            .map(|()| Ok(EditorMode::default())),
+            .map(|()| SelectBuffer::Finish),
         Event::Key(KeyEvent {
             code: KeyCode::Char(c),
             modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
@@ -2037,7 +2051,7 @@ fn process_select_buffer(
         }) => buffer_list
             .select_buffer(char_to_index(c)?)
             .ok()
-            .map(|()| Ok(EditorMode::default())),
+            .map(|()| SelectBuffer::Finish),
         _ => None, // ignore other events
     }
 }
