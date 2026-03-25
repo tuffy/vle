@@ -1202,6 +1202,13 @@ impl Editor {
                 }
                 self.mode = EditorMode::default();
             }
+            key!(CONTROL, Delete) => {
+                self.layout.delete_other_panes();
+                if let Some(buf) = self.layout.selected_buffer_list().current() {
+                    set_title(buf);
+                }
+                self.mode = EditorMode::default();
+            }
             key!(SHIFT, Left) => {
                 let _ = self.layout.swap_pane(Direction::Left);
             }
@@ -2625,6 +2632,37 @@ impl Layout {
                     active.delete_current_pane();
                 }
             }
+        }
+    }
+
+    fn delete_other_panes(&mut self) {
+        let current = std::mem::take(self).into_selected_buffer_list();
+        *self = Layout::Single(current);
+    }
+
+    fn into_selected_buffer_list(self) -> BufferList {
+        match self {
+            Self::Single(buffer) => buffer,
+            Self::Horizontal {
+                top: buffer,
+                which: HorizontalPos::Top,
+                ..
+            }
+            | Self::Horizontal {
+                bottom: buffer,
+                which: HorizontalPos::Bottom,
+                ..
+            }
+            | Self::Vertical {
+                left: buffer,
+                which: VerticalPos::Left,
+                ..
+            }
+            | Self::Vertical {
+                right: buffer,
+                which: VerticalPos::Right,
+                ..
+            } => buffer.into_selected_buffer_list(),
         }
     }
 

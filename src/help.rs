@@ -317,6 +317,7 @@ pub static SPLIT_PANE: &[Keybinding] = &[
     shift(&[LEFT, DOWN, UP, RIGHT], "Swap Panes in Direction"),
     none(&["+", "-"], "Change Size Ratio"),
     none(&["Del"], "Delete Current Pane"),
+    ctrl(&["Del"], "Delete All Other Panes"),
     none(&["Enter"], "Finish"),
 ];
 
