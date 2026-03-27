@@ -4652,8 +4652,14 @@ impl StatefulWidget for BufferWidget<'_> {
             top_margin: usize,
             bottom_margin: usize,
         ) -> Vec<Line<'_>> {
-            lines.splice(0..0, std::iter::repeat_n(Line::from("~"), top_margin));
-            lines.extend(std::iter::repeat_n(Line::from("~"), bottom_margin));
+            lines.splice(
+                0..0,
+                std::iter::repeat_n(Line::styled("~", Style::new().blue()), top_margin),
+            );
+            lines.extend(std::iter::repeat_n(
+                Line::styled("~", Style::new().blue()),
+                bottom_margin,
+            ));
             lines
         }
 
