@@ -5271,7 +5271,7 @@ impl StatefulWidget for BufferWidget<'_> {
         Scrollbar.render(
             scrollbar_area,
             buf,
-            &mut ScrollbarState::new(buffer.total_lines())
+            &mut ScrollbarState::new(buffer.total_lines() + viewport_height)
                 .viewport_content_length(viewport_height)
                 .position(current_line.unwrap_or(0)),
         );
