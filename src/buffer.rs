@@ -955,11 +955,14 @@ impl BufferContext {
         let current_line = rope.try_char_to_line(self.cursor).ok();
         let viewport_height: usize = text_area.height.into();
 
-        let viewport_line: usize = current_line
-            .map(|line| line.saturating_sub(viewport_height / 2))
-            .unwrap_or(0);
+        let (viewport_line, top_margin): (usize, usize) = current_line
+            .map(|line| match line.checked_sub(viewport_height / 2) {
+                Some(start) => (start, 0),
+                None => (0, viewport_height / 2 - line),
+            })
+            .unwrap_or_default();
 
-        let line = viewport_line + usize::from(row);
+        let line = viewport_line + usize::from(row).saturating_sub(top_margin);
 
         let starting_col = self
             .cursor_position()
