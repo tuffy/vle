@@ -4981,7 +4981,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         )
                         .map(|line| widen_tabs(line))
                         .take(area.height.into())
-                        .collect::<Vec<_>>()
+                        .collect()
                 }
                 Some(
                     EditorMode::MultiCursor {
@@ -5062,7 +5062,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         )
                         .map(|line| widen_tabs(line))
                         .take(area.height.into())
-                        .collect::<Vec<_>>()
+                        .collect()
                 }
                 Some(EditorMode::AutocompleteMulti {
                     matches,
@@ -5141,7 +5141,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         )
                         .map(|line| widen_tabs(line))
                         .take(area.height.into())
-                        .collect::<Vec<_>>()
+                        .collect()
                 }
                 Some(EditorMode::Autocomplete {
                     offset,
@@ -5183,7 +5183,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         )
                         .map(|line| widen_tabs(line))
                         .take(area.height.into())
-                        .collect::<Vec<_>>()
+                        .collect()
                 }
                 _ => {
                     match state.selection {
@@ -5210,7 +5210,7 @@ impl StatefulWidget for BufferWidget<'_> {
                             )
                             .map(|line| widen_tabs(line))
                             .take(area.height.into())
-                            .collect::<Vec<_>>(),
+                            .collect(),
                         // highlight whole line, no line, or part of the line
                         Some(selection) => {
                             let (selection_start, selection_end) = reorder(state.cursor, selection);
@@ -5242,7 +5242,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                 )
                                 .map(|line| widen_tabs(line))
                                 .take(area.height.into())
-                                .collect::<Vec<_>>()
+                                .collect()
                         }
                     }
                 }
