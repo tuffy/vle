@@ -3901,7 +3901,7 @@ impl BufferList {
     pub fn cursor_viewport_position(&self, viewport_height: usize) -> Option<(usize, usize)> {
         let buf = self.current()?;
         buf.cursor_position()
-            .map(|(row, col)| ((viewport_height / 2).min(row), col))
+            .map(|(_, col)| (viewport_height / 2, col))
     }
 
     pub fn set_cursor_focus(&mut self, area: Rect, position: Position) {
@@ -4644,7 +4644,12 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
-        fn apply_margins(mut lines: Vec<Line<'_>>, bottom_margin: usize) -> Vec<Line<'_>> {
+        fn apply_margins(
+            mut lines: Vec<Line<'_>>,
+            top_margin: usize,
+            bottom_margin: usize,
+        ) -> Vec<Line<'_>> {
+            lines.splice(0..0, std::iter::repeat_n(Line::from("~"), top_margin));
             lines.extend(std::iter::repeat_n(Line::from("~"), bottom_margin));
             lines
         }
@@ -4819,9 +4824,14 @@ impl StatefulWidget for BufferWidget<'_> {
         let current_line = rope.try_char_to_line(state.cursor).ok();
         let viewport_height: usize = text_area.height.into();
 
-        let viewport_line: usize = current_line
-            .map(|line| line.saturating_sub(viewport_height / 2))
-            .unwrap_or(0);
+        let (viewport_line, top_margin): (usize, usize) = current_line
+            .map(|line| match line.checked_sub(viewport_height / 2) {
+                Some(start) => (start, 0),
+                None => (0, viewport_height / 2 - line),
+            })
+            .unwrap_or_default();
+
+        let bottom_margin = (viewport_line + viewport_height).saturating_sub(rope.len_lines());
 
         let help_pos = match current_line {
             Some(line) => {
@@ -5240,7 +5250,8 @@ impl StatefulWidget for BufferWidget<'_> {
                     }
                 }
             },
-            (viewport_line + viewport_height).saturating_sub(rope.len_lines()),
+            top_margin,
+            bottom_margin,
         ))
         .scroll((
             0,
@@ -5258,8 +5269,8 @@ impl StatefulWidget for BufferWidget<'_> {
             scrollbar_area,
             buf,
             &mut ScrollbarState::new(buffer.total_lines())
-                .viewport_content_length(text_area.height.into())
-                .position(viewport_line),
+                .viewport_content_length(viewport_height)
+                .position(current_line.unwrap_or(0)),
         );
 
         match self.mode {
