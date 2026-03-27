@@ -4019,7 +4019,7 @@ impl StatefulWidget for BufferWidget<'_> {
     fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer, state: &mut BufferContext) {
         use crate::editor::SearchType;
         use crate::help::{
-            CONFIRM_CLOSE, HelpPos, MARK_SET, MULTICURSOR_MARK_SET, PASTE_GROUP, REPLACE_MATCHES,
+            CONFIRM_CLOSE, MARK_SET, MULTICURSOR_MARK_SET, PASTE_GROUP, REPLACE_MATCHES,
             SELECT_BUFFER, SELECT_INSIDE, SELECT_LINE, SELECT_LINE_BOOKMARKED, SPLIT_PANE,
             VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
@@ -4671,12 +4671,11 @@ impl StatefulWidget for BufferWidget<'_> {
         let focused = self.focused && self.mode.is_some();
         let show_sub_help: fn(
             ratatui::layout::Rect,
-            HelpPos,
             &mut ratatui::buffer::Buffer,
             &[crate::help::Keybinding],
         ) = if self.show_sub_help {
-            |text_area, bottom, buf, keybindings| {
-                render_help(text_area, bottom, buf, keybindings, |b| {
+            |text_area, buf, keybindings| {
+                render_help(text_area, buf, keybindings, |b| {
                     b.title_bottom(
                         Line::from(vec![
                             Span::styled("F1", Style::default().add_modifier(Modifier::REVERSED)),
@@ -4687,7 +4686,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 })
             }
         } else {
-            |_, _, _, _| { /* do nothing */ }
+            |_, _, _| { /* do nothing */ }
         };
 
         let block = Block::bordered()
@@ -4835,17 +4834,6 @@ impl StatefulWidget for BufferWidget<'_> {
             .unwrap_or_default();
 
         let bottom_margin = (viewport_line + viewport_height).saturating_sub(rope.len_lines());
-
-        let help_pos = match current_line {
-            Some(line) => {
-                if line.saturating_sub(viewport_line) <= viewport_height / 2 {
-                    HelpPos::Bottom
-                } else {
-                    HelpPos::Top
-                }
-            }
-            None => HelpPos::Bottom,
-        };
 
         let viewport_start = rope.try_line_to_char(viewport_line).unwrap_or(0);
 
@@ -5336,7 +5324,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         multiple_buffers.then_some(ctrl(&["]", "PgUp", "PgDn"], "Switch Buffer")),
                     );
 
-                    crate::help::render_main_help(text_area, help_pos, buf, &help, |b| {
+                    crate::help::render_main_help(text_area, buf, &help, |b| {
                         b.title_top("Keybindings").title_bottom(
                             Line::from(vec![
                                 Span::styled(
@@ -5351,10 +5339,10 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
             Some(EditorMode::MarkSet) => {
-                show_sub_help(text_area, help_pos, buf, MARK_SET);
+                show_sub_help(text_area, buf, MARK_SET);
             }
             Some(EditorMode::ConfirmClose { .. }) => {
-                show_sub_help(text_area, help_pos, buf, CONFIRM_CLOSE);
+                show_sub_help(text_area, buf, CONFIRM_CLOSE);
                 render_message(
                     text_area,
                     buf,
@@ -5362,7 +5350,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(EditorMode::VerifySave) => {
-                show_sub_help(text_area, help_pos, buf, VERIFY_SAVE);
+                show_sub_help(text_area, buf, VERIFY_SAVE);
                 render_message(
                     text_area,
                     buf,
@@ -5370,10 +5358,10 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(EditorMode::SplitPane) => {
-                show_sub_help(text_area, help_pos, buf, SPLIT_PANE);
+                show_sub_help(text_area, buf, SPLIT_PANE);
             }
             Some(EditorMode::VerifyReload) => {
-                show_sub_help(text_area, help_pos, buf, VERIFY_RELOAD);
+                show_sub_help(text_area, buf, VERIFY_RELOAD);
                 render_message(
                     text_area,
                     buf,
@@ -5381,12 +5369,11 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(EditorMode::SelectInside) => {
-                show_sub_help(text_area, help_pos, buf, SELECT_INSIDE);
+                show_sub_help(text_area, buf, SELECT_INSIDE);
             }
             Some(EditorMode::SelectLine { .. }) => {
                 show_sub_help(
                     text_area,
-                    help_pos,
                     buf,
                     if buffer.has_bookmarks() {
                         SELECT_LINE_BOOKMARKED
@@ -5396,7 +5383,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(EditorMode::Search { prompt, type_, .. }) => {
-                show_sub_help(text_area, help_pos, buf, &find_mode_help(prompt, *type_));
+                show_sub_help(text_area, buf, &find_mode_help(prompt, *type_));
                 render_find_prompt(
                     match type_ {
                         SearchType::Plain => FindSyntax::Plain(syntax),
@@ -5426,7 +5413,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 index,
                 ..
             }) => {
-                show_sub_help(text_area, help_pos, buf, &find_mode_help(prompt, *type_));
+                show_sub_help(text_area, buf, &find_mode_help(prompt, *type_));
                 render_find_prompt(
                     match type_ {
                         SearchType::Plain => FindSyntax::Plain(syntax),
@@ -5468,15 +5455,14 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(EditorMode::MultiCursor { .. } | EditorMode::AutocompleteMulti { .. }) => {
-                show_sub_help(text_area, help_pos, buf, REPLACE_MATCHES);
+                show_sub_help(text_area, buf, REPLACE_MATCHES);
             }
             Some(EditorMode::MultiCursorMarkSet { .. }) => {
-                show_sub_help(text_area, help_pos, buf, MULTICURSOR_MARK_SET);
+                show_sub_help(text_area, buf, MULTICURSOR_MARK_SET);
             }
             Some(EditorMode::PasteGroup { total, .. }) => {
                 show_sub_help(
                     text_area,
-                    help_pos,
                     buf,
                     PASTE_GROUP
                         .iter()
@@ -5524,7 +5510,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
                 let mut state = ratatui::widgets::ListState::default().with_selected(Some(*index));
                 render_list(text_area, buf, list, &mut state, width);
-                show_sub_help(text_area, help_pos, buf, SELECT_BUFFER);
+                show_sub_help(text_area, buf, SELECT_BUFFER);
             }
         }
 

@@ -151,14 +151,8 @@ pub fn field_widths(keybindings: &[Keybinding]) -> [usize; 5] {
     )
 }
 
-pub enum HelpPos {
-    Top,
-    Bottom,
-}
-
 pub fn render_help(
     area: ratatui::layout::Rect,
-    pos: HelpPos,
     buf: &mut ratatui::buffer::Buffer,
     keybindings: &[Keybinding],
     block: impl FnOnce(Block) -> Block,
@@ -177,18 +171,7 @@ pub fn render_help(
     ])
     .areas(area);
 
-    let help = match pos {
-        HelpPos::Bottom => {
-            let [_, help] =
-                Layout::vertical([Min(0), Length(keybindings.len() as u16 + 2)]).areas(help);
-            help
-        }
-        HelpPos::Top => {
-            let [help, _] =
-                Layout::vertical([Length(keybindings.len() as u16 + 2), Min(0)]).areas(help);
-            help
-        }
-    };
+    let [_, help] = Layout::vertical([Min(0), Length(keybindings.len() as u16 + 2)]).areas(help);
 
     let block = block(Block::bordered().border_type(BorderType::Rounded));
 
@@ -200,7 +183,6 @@ pub fn render_help(
 
 pub fn render_main_help(
     area: ratatui::layout::Rect,
-    pos: HelpPos,
     buf: &mut ratatui::buffer::Buffer,
     keybindings: &[Keybinding],
     mut block: impl FnMut(Block) -> Block,
@@ -222,31 +204,9 @@ pub fn render_main_help(
     ])
     .areas(area);
 
-    let non_f_area = match pos {
-        HelpPos::Bottom => {
-            let [_, help] =
-                Layout::vertical([Min(0), Length(non_f_keys.len() as u16 + 2)]).areas(non_f_area);
-            help
-        }
-        HelpPos::Top => {
-            let [help, _] =
-                Layout::vertical([Length(non_f_keys.len() as u16 + 2), Min(0)]).areas(non_f_area);
-            help
-        }
-    };
-
-    let f_area = match pos {
-        HelpPos::Bottom => {
-            let [_, help] =
-                Layout::vertical([Min(0), Length(f_keys.len() as u16 + 2)]).areas(f_area);
-            help
-        }
-        HelpPos::Top => {
-            let [help, _] =
-                Layout::vertical([Length(f_keys.len() as u16 + 2), Min(0)]).areas(f_area);
-            help
-        }
-    };
+    let [_, non_f_area] =
+        Layout::vertical([Min(0), Length(non_f_keys.len() as u16 + 2)]).areas(non_f_area);
+    let [_, f_area] = Layout::vertical([Min(0), Length(f_keys.len() as u16 + 2)]).areas(f_area);
 
     for (bindings, area) in [(f_keys, f_area), (non_f_keys, non_f_area)] {
         let bindings_block = block(Block::bordered().border_type(BorderType::Rounded));

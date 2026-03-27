@@ -196,7 +196,7 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
         state: &mut FileChooserState<S>,
     ) {
         use crate::buffer::{BufferMessage, render_message};
-        use crate::help::{CREATE_FILE, HelpPos, OPEN_FILE, render_help};
+        use crate::help::{CREATE_FILE, OPEN_FILE, render_help};
         use crate::scrollbar::{Scrollbar, ScrollbarState};
         use ratatui::{
             layout::{
@@ -291,7 +291,6 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
 
         render_help(
             list_area,
-            HelpPos::Bottom,
             buf,
             match &state.chosen {
                 Chosen::Default | Chosen::Selected(_) => OPEN_FILE,
