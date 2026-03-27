@@ -269,7 +269,6 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
                     }
                 })),
             })
-            .scroll_padding(10)
             .highlight_style(Style::default().add_modifier(Modifier::REVERSED)),
             list_area,
             buf,
@@ -565,7 +564,7 @@ impl<S: ChooserSource> FileChooserState<S> {
         match &self.chosen {
             Chosen::Default => (1, 1),
             Chosen::New(filename) => (filename.cursor_column() as u16 + 1, 1),
-            Chosen::Selected(_) => (0, self.index.map(|idx| 3u16 + idx as u16).unwrap_or(1)),
+            Chosen::Selected(_) => (1, 1),
         }
     }
 }
