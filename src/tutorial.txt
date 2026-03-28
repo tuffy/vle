@@ -34,11 +34,10 @@ Home and End move the cursor to the beginning and end of the
 line, respectively.
 
 As you move the cursor downward, you'll notice the viewport
-shifts text as needed so as to always keep it centered
-vertically on your screen once you're no longer at the
-beginning of the file. This makes it easy for your eyes
-to locate it, and eliminates the need for separate keys
-to adjust the viewport's position around your cursor.
+shifts text as needed so as to always keep it centered vertically.
+This makes it easy for your eyes to locate it,
+and eliminates the need for separate keys to adjust the
+viewport's position around your cursor.
 
 
 ## Inserting Text
