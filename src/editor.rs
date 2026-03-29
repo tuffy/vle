@@ -139,6 +139,7 @@ pub enum EditorMode {
         completions: Vec<String>, // autocompletion candidates
         index: usize,             // current autocompletion candidate
     },
+    /// Determining what buffer to select from menu
     SelectBuffer {
         buffer_list: Vec<BufferId>, // buffers
         index: usize,               // buffer index to select
