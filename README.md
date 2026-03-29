@@ -69,6 +69,16 @@ which have many of their own dedicated <kbd>Ctrl</kbd> bindings.
 
 # Key Features
 
+## Persistent Vertical Centering
+
+In an effort to improve ergonomics and to make the cursor easy to locate,
+it is always somewhere in the middle of the screen at all times.
+Like typewriters of old, content in a given pane scrolls around it as needed.
+This occurs not only at the end of files, but also at the beginning.
+
+Why strain our necks looking down at a cursor or looking up at a cursor
+when the line we're editing can be right in the middle where it's most convenient?
+
 ## Multi Cursor-Style Find and Replace
 
 <kbd>Ctrl</kbd>-<kbd>F</kbd> / <kbd>F5</kbd> to find text will highlight
