@@ -4738,7 +4738,10 @@ impl StatefulWidget for BufferWidget<'_> {
             } else {
                 Line::from(vec![
                     Span::raw("\u{2524}"),
-                    Span::styled(bookmarks.to_string(), Style::default().bg(Color::Cyan)),
+                    Span::styled(
+                        bookmarks.to_string(),
+                        Style::default().fg(Color::Black).bg(Color::Cyan),
+                    ),
                     Span::raw("\u{251c}"),
                 ])
                 .right_aligned()
@@ -4935,9 +4938,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         ..
                     },
                 ) => {
-                    const HIGHLIGHTED: Style = Style::new()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::REVERSED);
+                    const HIGHLIGHTED: Style = Style::new().bg(Color::Yellow).fg(Color::Black);
 
                     fn sub_match_ranges(matches: &[MultiCursor]) -> VecDeque<Range<usize>> {
                         matches.iter().map(|m| m.range.start..m.range.end).collect()
@@ -4968,13 +4969,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                     ),
                                     range.clone(),
                                     (selection_start, selection_end),
-                                    |span| {
-                                        span.style(
-                                            Style::new()
-                                                .fg(Color::Red)
-                                                .add_modifier(Modifier::REVERSED),
-                                        )
-                                    },
+                                    |span| span.style(Style::new().bg(Color::Red).fg(Color::White)),
                                 )
                                 .into()
                             },
