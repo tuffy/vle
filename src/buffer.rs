@@ -860,25 +860,42 @@ impl BufferContext {
         Buffer::open(source).map(|b| b.into())
     }
 
-    pub fn reload(&mut self, alt: Vec<AltCursor<'_>>) {
-        let mut buf = self.buffer.borrow_mut();
-        match buf.reload(&mut self.cursor, &mut self.selection, alt) {
-            Ok(()) => {
+    pub fn reload(&mut self, alt: Vec<AltCursor<'_>>) -> std::io::Result<()> {
+        self.buffer
+            .borrow_mut()
+            .reload(&mut self.cursor, &mut self.selection, alt)
+            .inspect(|()| {
                 self.message = Some(BufferMessage::Notice("Reloaded".into()));
-            }
-            Err(err) => {
+            })
+            .inspect_err(|err| {
                 self.message = Some(BufferMessage::Error(err.to_string().into()));
-            }
+            })
+    }
+
+    // Ok(Ok(()))    - buffer not modified, reload successful
+    // Ok(Err(err))  - buffer not modified, reload from disk failed
+    // Err(Modified) - buffer modified in buffer
+    pub fn verified_reload(
+        &mut self,
+        alt: Vec<AltCursor<'_>>,
+    ) -> Result<std::io::Result<()>, Modified> {
+        if self.buffer.borrow().modified() {
+            Err(Modified)
+        } else {
+            Ok(self.reload(alt))
         }
     }
 
-    pub fn save(&mut self) {
-        if let Err(err) = self.buffer.borrow_mut().save() {
+    pub fn save(&mut self) -> std::io::Result<()> {
+        self.buffer.borrow_mut().save().inspect_err(|err| {
             self.message = Some(BufferMessage::Error(err.to_string().into()));
-        }
+        })
     }
 
-    pub fn verified_save(&mut self) -> Result<(), Modified> {
+    // Ok(Ok(()))    - buffer not modified, save successful
+    // Ok(Err(err))  - buffer not modified, save to disk failed
+    // Err(Modified) - buffer modified on disk since last save
+    pub fn verified_save(&mut self) -> Result<std::io::Result<()>, Modified> {
         let mut buf = self.buffer.borrow_mut();
         if let Some(saved) = buf.last_saved()
             && let Some(modified) = buf.last_modified()
@@ -886,10 +903,9 @@ impl BufferContext {
         {
             Err(Modified)
         } else {
-            if let Err(err) = buf.save() {
+            Ok(buf.save().inspect_err(|err| {
                 self.message = Some(BufferMessage::Error(err.to_string().into()));
-            }
-            Ok(())
+            }))
         }
     }
 
@@ -3981,6 +3997,63 @@ impl BufferList {
 
     pub fn has_tabs(&self) -> bool {
         self.buffers.len() > 1
+    }
+
+    /// Ok(Ok(count))  - number of buffers saved on disk
+    /// Ok(Err(err))   - error saving buffer to disk
+    /// Err(Modified)  - any buffer modified on disk since last save
+    pub fn save_all(&mut self) -> Result<std::io::Result<usize>, Modified> {
+        let mut count = 0;
+
+        for (idx, buf) in self.buffers.iter_mut().enumerate() {
+            match buf.verified_save() {
+                Ok(Ok(())) => {
+                    count += 1;
+                }
+                Ok(Err(err)) => {
+                    self.current = idx;
+                    return Ok(Err(err));
+                }
+                Err(Modified) => {
+                    self.current = idx;
+                    return Err(Modified);
+                }
+            }
+        }
+
+        Ok(Ok(count))
+    }
+
+    /// Ok(Ok(count))  - number of buffers reloaded from disk
+    /// Ok(Err(err))   - error reloading buffer from disk
+    /// Err(Modified)  - any buffer modified in buffer
+    pub fn reload_all(
+        &mut self,
+        alts: &mut [&mut Self],
+    ) -> Result<std::io::Result<usize>, Modified> {
+        let mut count = 0;
+
+        for (idx, buf) in self.buffers.iter_mut().enumerate() {
+            match buf.verified_reload(
+                alts.iter_mut()
+                    .filter_map(|a| a.get_mut(idx).map(|a| a.alt_cursor()))
+                    .collect(),
+            ) {
+                Ok(Ok(())) => {
+                    count += 1;
+                }
+                Ok(Err(err)) => {
+                    self.current = idx;
+                    return Ok(Err(err));
+                }
+                Err(Modified) => {
+                    self.current = idx;
+                    return Err(Modified);
+                }
+            }
+        }
+
+        Ok(Ok(count))
     }
 }
 

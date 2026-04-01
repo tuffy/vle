@@ -666,6 +666,22 @@ impl Editor {
                     }
                 }
             }
+            Event::Key(KeyEvent {
+                code: key::Quit::SECONDARY_KEY,
+                modifiers: KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                while let Some(buf) = self.layout.selected_buffer_list().current() {
+                    if buf.modified() {
+                        set_title(buf);
+                        self.mode = EditorMode::ConfirmClose { buffer: buf.id() };
+                        break;
+                    } else {
+                        self.layout.remove(buf.id());
+                    }
+                }
+            }
             key!(CONTROL, PageUp) => {
                 if let Some(buf) = self.layout.previous_buffer() {
                     set_title(buf);
@@ -792,9 +808,24 @@ impl Editor {
             ctrl_keybind!(Undo) => self.update_buffer(|b| b.perform_undo()),
             ctrl_keybind!(Redo) => self.update_buffer(|b| b.perform_redo()),
             keybind!(Save) => {
+                // if save fails, we'll already be in normal mode
+                // to display the save failure message
                 if let Some(Err(crate::buffer::Modified)) = self.on_buffer(|b| b.verified_save()) {
                     self.mode = EditorMode::VerifySave;
                 }
+            }
+            Event::Key(KeyEvent {
+                code: key::Save::SECONDARY_KEY,
+                modifiers: KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                if let Err(crate::buffer::Modified) =
+                    self.layout.selected_buffer_list_mut().save_all()
+                {
+                    self.mode = EditorMode::VerifySave;
+                }
+                self.layout.on_current(|b| set_title(b));
             }
             key!(Tab) => {
                 if let Some(Some((offset, completions))) =
@@ -929,16 +960,23 @@ impl Editor {
                 },
             },
             keybind!(Reload) => {
-                if let Some(new_mode) = self.on_buffer_at(|b, a| {
-                    if b.modified() {
-                        EditorMode::VerifyReload
-                    } else {
-                        b.reload(a);
-                        EditorMode::default()
-                    }
-                }) {
-                    self.mode = new_mode;
+                if let Some(Err(crate::buffer::Modified)) =
+                    self.on_buffer_at(|b, a| b.verified_reload(a))
+                {
+                    self.mode = EditorMode::VerifyReload;
                 }
+            }
+            Event::Key(KeyEvent {
+                code: key::Reload::SECONDARY_KEY,
+                modifiers: KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                let (list, mut alts) = self.layout.current_buffer_list_mut();
+                if let Err(crate::buffer::Modified) = list.reload_all(&mut alts) {
+                    self.mode = EditorMode::VerifyReload
+                }
+                self.layout.on_current(|b| set_title(b));
             }
             keybind!(UpdateLines) | key!(CONTROL, 'r') => {
                 if let Some(matches) = self.on_buffer(|b| b.selection_cursors())
@@ -1147,7 +1185,11 @@ impl Editor {
         match event {
             key!('y') => {
                 // save buffer anyway
-                self.update_buffer(|b| b.save());
+                self.update_buffer(|b| {
+                    // buffer already updated with error message
+                    // in case save doesn't succeed
+                    let _ = b.save();
+                });
                 self.mode = EditorMode::default();
             }
             key!('n') => {
@@ -1164,7 +1206,10 @@ impl Editor {
         match event {
             key!('y') => {
                 // reload buffer anyway
-                self.update_buffer_at(|b, a| b.reload(a));
+                self.update_buffer_at(|b, a| {
+                    // on failure, buffer already populated with error
+                    let _ = b.reload(a);
+                });
                 self.mode = EditorMode::default();
             }
             key!('n') => {
@@ -2351,6 +2396,66 @@ impl Layout {
         F: FnOnce(&mut crate::buffer::BufferContext, Vec<AltCursor<'_>>) -> T,
     {
         self.current_buffer_mut().map(|(_, buf, alts)| f(buf, alts))
+    }
+
+    /// Returns currently active buffer_list and all alt buffer_lists
+    fn current_buffer_list_mut(
+        &mut self,
+    ) -> (
+        &mut crate::buffer::BufferList,
+        Vec<&mut crate::buffer::BufferList>,
+    ) {
+        match self {
+            Self::Single(buffer_list) => (buffer_list, vec![]),
+            Self::Horizontal {
+                which: HorizontalPos::Top,
+                top: active,
+                bottom: inactive,
+                ..
+            }
+            | Self::Horizontal {
+                which: HorizontalPos::Bottom,
+                bottom: active,
+                top: inactive,
+                ..
+            }
+            | Self::Vertical {
+                which: VerticalPos::Left,
+                left: active,
+                right: inactive,
+                ..
+            }
+            | Self::Vertical {
+                which: VerticalPos::Right,
+                right: active,
+                left: inactive,
+                ..
+            } => {
+                let (buffer_list, mut alts) = active.current_buffer_list_mut();
+                alts.extend(inactive.alt_buffer_lists());
+                (buffer_list, alts)
+            }
+        }
+    }
+
+    fn alt_buffer_lists(&mut self) -> Vec<&mut crate::buffer::BufferList> {
+        match self {
+            Self::Single(buffer_list) => vec![buffer_list],
+            Self::Horizontal {
+                top: first,
+                bottom: second,
+                ..
+            }
+            | Self::Vertical {
+                left: first,
+                right: second,
+                ..
+            } => {
+                let mut buffer_lists = first.alt_buffer_lists();
+                buffer_lists.extend(second.alt_buffer_lists());
+                buffer_lists
+            }
+        }
     }
 
     /// Returns newly selected buffer
