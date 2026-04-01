@@ -638,6 +638,35 @@ impl Editor {
                             buffer_list.swap(idx_a, idx_b);
                             self.layout.swap_buffers(idx_a, idx_b);
                         }
+                        Some(SelectBuffer::SaveAll) => {
+                            if let Err(crate::buffer::Modified) =
+                                self.layout.selected_buffer_list_mut().save_all()
+                            {
+                                self.mode = EditorMode::VerifySave;
+                            }
+                            self.layout.on_current(|b| set_title(b));
+                            self.mode = EditorMode::default();
+                        }
+                        Some(SelectBuffer::ReloadAll) => {
+                            let (list, mut alts) = self.layout.current_buffer_list_mut();
+                            if let Err(crate::buffer::Modified) = list.reload_all(&mut alts) {
+                                self.mode = EditorMode::VerifyReload
+                            }
+                            self.layout.on_current(|b| set_title(b));
+                            self.mode = EditorMode::default();
+                        }
+                        Some(SelectBuffer::QuitAll) => {
+                            while let Some(buf) = self.layout.selected_buffer_list().current() {
+                                if buf.modified() {
+                                    set_title(buf);
+                                    self.mode = EditorMode::ConfirmClose { buffer: buf.id() };
+                                    break;
+                                } else {
+                                    self.layout.remove(buf.id());
+                                }
+                            }
+                            self.mode = EditorMode::default();
+                        }
                         None => { /* do nothing */ }
                     }
                 }
@@ -663,22 +692,6 @@ impl Editor {
                         if let Some(buf) = self.layout.selected_buffer_list().current() {
                             set_title(buf);
                         }
-                    }
-                }
-            }
-            Event::Key(KeyEvent {
-                code: key::Quit::SECONDARY_KEY,
-                modifiers: KeyModifiers::SHIFT,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
-                while let Some(buf) = self.layout.selected_buffer_list().current() {
-                    if buf.modified() {
-                        set_title(buf);
-                        self.mode = EditorMode::ConfirmClose { buffer: buf.id() };
-                        break;
-                    } else {
-                        self.layout.remove(buf.id());
                     }
                 }
             }
@@ -813,19 +826,6 @@ impl Editor {
                 if let Some(Err(crate::buffer::Modified)) = self.on_buffer(|b| b.verified_save()) {
                     self.mode = EditorMode::VerifySave;
                 }
-            }
-            Event::Key(KeyEvent {
-                code: key::Save::SECONDARY_KEY,
-                modifiers: KeyModifiers::SHIFT,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
-                if let Err(crate::buffer::Modified) =
-                    self.layout.selected_buffer_list_mut().save_all()
-                {
-                    self.mode = EditorMode::VerifySave;
-                }
-                self.layout.on_current(|b| set_title(b));
             }
             key!(Tab) => {
                 if let Some(Some((offset, completions))) =
@@ -965,18 +965,6 @@ impl Editor {
                 {
                     self.mode = EditorMode::VerifyReload;
                 }
-            }
-            Event::Key(KeyEvent {
-                code: key::Reload::SECONDARY_KEY,
-                modifiers: KeyModifiers::SHIFT,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
-                let (list, mut alts) = self.layout.current_buffer_list_mut();
-                if let Err(crate::buffer::Modified) = list.reload_all(&mut alts) {
-                    self.mode = EditorMode::VerifyReload
-                }
-                self.layout.on_current(|b| set_title(b));
             }
             keybind!(UpdateLines) | key!(CONTROL, 'r') => {
                 if let Some(matches) = self.on_buffer(|b| b.selection_cursors())
@@ -2013,6 +2001,9 @@ fn process_paste_group(
 enum SelectBuffer {
     Finish,
     SwapPanes(usize, usize),
+    SaveAll,
+    ReloadAll,
+    QuitAll,
 }
 
 // None                  - index moved from one buffer to another or no-op
@@ -2105,6 +2096,9 @@ fn process_select_buffer(
             .select_buffer(char_to_index(c)?)
             .ok()
             .map(|()| SelectBuffer::Finish),
+        keybind!(Save) => Some(SelectBuffer::SaveAll),
+        keybind!(Reload) => Some(SelectBuffer::ReloadAll),
+        keybind!(Quit) => Some(SelectBuffer::QuitAll),
         _ => None, // ignore other events
     }
 }
