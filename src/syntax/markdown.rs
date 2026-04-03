@@ -6,8 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::highlighter;
-use crate::syntax::Highlight;
+// use crate::highlighter;
+use crate::syntax::{Highlight, Highlighter};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -18,7 +18,6 @@ enum MarkdownToken {
     Code,
     #[regex(r"\*[^*]+\*")]
     Emphasis,
-    #[regex("#.*", allow_greedy = true)]
     Heading,
     #[regex(r"\[[^]]+\]\([^)]+\)")]
     Url,
@@ -60,4 +59,32 @@ impl std::fmt::Display for Markdown {
     }
 }
 
-highlighter!(Markdown, MarkdownToken);
+impl Highlighter for Markdown {
+    fn highlight<'s>(
+        &self,
+        s: &'s str,
+        _state: &'s mut crate::syntax::HighlightState,
+    ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
+        if s.starts_with('#') {
+            Box::new(
+                Highlight::try_from(MarkdownToken::Heading)
+                    .ok()
+                    .map(|h| (h, 0..s.len()))
+                    .into_iter(),
+            )
+        } else if s.starts_with("    ") || s.starts_with('\t') {
+            Box::new(
+                Highlight::try_from(MarkdownToken::Code)
+                    .ok()
+                    .map(|h| (h, 0..s.len()))
+                    .into_iter(),
+            )
+        } else {
+            Box::new(MarkdownToken::lexer(s).spanned().filter_map(|(t, r)| {
+                t.ok()
+                    .and_then(|t| Highlight::try_from(t).ok())
+                    .map(|c| (c, r))
+            }))
+        }
+    }
+}
