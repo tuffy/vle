@@ -154,7 +154,9 @@ highlighter!(
     Some(|s| {
         Box::new(RustDef::lexer(s).spanned().filter_map(|(t, r)| match t {
             Ok(RustDef::Definition) => Some(r),
-            Ok(RustDef::Type) => (r.start == 0).then_some(r),
+            Ok(RustDef::Type) => {
+                (r.start == 0 || (r.start == 4 && s.starts_with("pub "))).then_some(r)
+            }
             Err(_) => None,
         }))
     })
