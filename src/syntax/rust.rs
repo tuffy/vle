@@ -6,8 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use crate::highlighter;
 use crate::syntax::{Commenting, Highlight, Plain, color};
-use crate::{highlighter, underliner};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -130,6 +130,8 @@ enum RustDef {
     #[regex("enum [[:upper:]][[:alnum:]]+")]
     #[regex("trait [[:upper:]][[:alnum:]]+")]
     Definition,
+    #[regex("type [[:upper:]][[:alnum:]]+")]
+    Type,
 }
 
 #[derive(Debug)]
@@ -149,5 +151,11 @@ highlighter!(
     "/*",
     "*/",
     color::COMMENT,
-    underliner!(s, RustDef)
+    Some(|s| {
+        Box::new(RustDef::lexer(s).spanned().filter_map(|(t, r)| match t {
+            Ok(RustDef::Definition) => Some(r),
+            Ok(RustDef::Type) => (r.start == 0).then_some(r),
+            Err(_) => None,
+        }))
+    })
 );
