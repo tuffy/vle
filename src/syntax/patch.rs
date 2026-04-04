@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::highlighter;
-use crate::syntax::Highlight;
+use crate::syntax::{Highlight, Modifier};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -31,11 +31,14 @@ impl TryFrom<PatchToken> for Highlight {
 
     fn try_from(t: PatchToken) -> Result<Highlight, ()> {
         match t {
-            PatchToken::Header => Ok(Color::Magenta.into()),
+            PatchToken::Header => Ok(Highlight {
+                color: None,
+                modifier: Modifier::Bold,
+            }),
             PatchToken::Added => Ok(Color::LightGreen.into()),
             PatchToken::Context => Err(()),
             PatchToken::Deleted => Ok(Color::LightRed.into()),
-            PatchToken::Linenumber => Ok(Color::LightYellow.into()),
+            PatchToken::Linenumber => Ok(Color::Cyan.into()),
         }
     }
 }
@@ -49,4 +52,8 @@ impl std::fmt::Display for Patch {
     }
 }
 
-highlighter!(Patch, PatchToken);
+highlighter!(
+    Patch,
+    PatchToken,
+    Some(|s| { Box::new(s.starts_with("diff ").then_some(0..s.len()).into_iter()) })
+);

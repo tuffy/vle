@@ -44,4 +44,14 @@ impl std::fmt::Display for Ini {
     }
 }
 
-highlighter!(Ini, IniToken);
+highlighter!(
+    Ini,
+    IniToken,
+    Some(|s| {
+        Box::new(
+            (s.starts_with('[') && s.ends_with(']'))
+                .then_some(0..s.len())
+                .into_iter(),
+        )
+    })
+);
