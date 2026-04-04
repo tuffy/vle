@@ -52,4 +52,14 @@ impl std::fmt::Display for Toml {
     }
 }
 
-highlighter!(Toml, TomlToken);
+highlighter!(
+    Toml,
+    TomlToken,
+    Some(|s| {
+        Box::new(
+            (s.starts_with('[') && s.ends_with(']'))
+                .then_some(0..s.len())
+                .into_iter(),
+        )
+    })
+);
