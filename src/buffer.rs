@@ -5005,7 +5005,6 @@ impl StatefulWidget for BufferWidget<'_> {
 
         let mut marks = marks.into_iter().collect();
 
-        Clear.render(text_area, buf);
         Paragraph::new(apply_margins(
             match self.mode {
                 Some(
