@@ -4186,7 +4186,7 @@ impl StatefulWidget for BufferWidget<'_> {
             state: &mut HighlightState,
             text: Cow<'s, str>,
             current_line: bool,
-        ) -> Vec<Span<'s>> {
+        ) -> VecDeque<Span<'s>> {
             // Replace with String::remove_last(), if that ever stabilizes
             fn trim_string_matches(mut s: String, to_trim: char) -> String {
                 loop {
@@ -4232,14 +4232,14 @@ impl StatefulWidget for BufferWidget<'_> {
                 syntax: &S,
                 state: &mut HighlightState,
                 text: R,
-            ) -> Vec<Span<'r>> {
-                let mut elements = vec![];
+            ) -> VecDeque<Span<'r>> {
+                let mut elements = VecDeque::default();
                 let mut idx = 0;
                 for (highlight, range) in syntax.highlight(text.as_ref(), state) {
                     if idx < range.start {
-                        elements.push(Span::raw(text.extract_range(idx..range.start)));
+                        elements.push_back(Span::raw(text.extract_range(idx..range.start)));
                     }
-                    elements.push(Span::styled(
+                    elements.push_back(Span::styled(
                         text.extract_range(range.clone()),
                         Style::from(highlight),
                     ));
@@ -4247,7 +4247,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
                 let last = text.extract_range_from(idx..);
                 if !last.as_ref().is_empty() {
-                    elements.push(Span::raw(last));
+                    elements.push_back(Span::raw(last));
                 }
                 match syntax.underline() {
                     None => elements,
@@ -4257,16 +4257,15 @@ impl StatefulWidget for BufferWidget<'_> {
 
             fn add_underlines<'r>(
                 underlines: impl Iterator<Item = std::ops::Range<usize>>,
-                elements: Vec<Span<'r>>,
-            ) -> Vec<Span<'r>> {
+                mut input: VecDeque<Span<'r>>,
+            ) -> VecDeque<Span<'r>> {
                 let mut underlines = underlines.peekable();
                 if underlines.peek().is_none() {
                     // nothing to underline (the common case)
-                    return elements;
+                    return input;
                 }
 
-                let mut output = Vec::with_capacity(elements.len());
-                let mut input = elements.into();
+                let mut output = VecDeque::with_capacity(input.len());
                 let mut idx = 0;
                 for underline in underlines {
                     extract_bytes(&mut input, underline.start - idx, &mut output, |span| span);
@@ -4282,7 +4281,9 @@ impl StatefulWidget for BufferWidget<'_> {
                 output
             }
 
-            fn highlight_trailing_whitespace(mut colorized: Vec<Span<'_>>) -> Vec<Span<'_>> {
+            fn highlight_trailing_whitespace(
+                mut colorized: VecDeque<Span<'_>>,
+            ) -> VecDeque<Span<'_>> {
                 fn trim_end(s: &str) -> Result<(&str, &str), &str> {
                     let trimmed = s.trim_ascii_end();
                     if trimmed.len() == s.len() {
@@ -4292,7 +4293,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     }
                 }
 
-                if let Some(last) = colorized.last()
+                if let Some(last) = colorized.back()
                     && let Ok((non_ws, ws)) = trim_end(&last.content)
                     && !ws.is_empty()
                 {
@@ -4308,11 +4309,11 @@ impl StatefulWidget for BufferWidget<'_> {
                             .add_modifier(Modifier::REVERSED),
                     };
 
-                    colorized.pop();
+                    colorized.pop_back();
                     if !non_ws.content.is_empty() {
-                        colorized.push(non_ws);
+                        colorized.push_back(non_ws);
                     }
-                    colorized.push(ws);
+                    colorized.push_back(ws);
                     colorized
                 } else {
                     colorized
@@ -4333,8 +4334,8 @@ impl StatefulWidget for BufferWidget<'_> {
         }
 
         /// Widens line of spans by 1, for appending something at the end
-        fn widen<'s>(mut line: Vec<Span<'s>>) -> Vec<Span<'s>> {
-            line.push(Span::raw(" "));
+        fn widen<'s>(mut line: VecDeque<Span<'s>>) -> VecDeque<Span<'s>> {
+            line.push_back(Span::raw(" "));
             line
         }
 
@@ -4347,7 +4348,7 @@ impl StatefulWidget for BufferWidget<'_> {
         fn extract<'s>(
             input: &mut VecDeque<Span<'s>>,
             mut characters: usize,
-            output: &mut Vec<Span<'s>>,
+            output: &mut VecDeque<Span<'s>>,
             map: impl Fn(Span<'s>) -> Span<'s>,
         ) {
             fn split_cow(s: Cow<'_, str>, chars: usize) -> (Cow<'_, str>, Cow<'_, str>) {
@@ -4374,14 +4375,14 @@ impl StatefulWidget for BufferWidget<'_> {
                 let span_width = span.content.chars().count();
                 if span_width <= characters {
                     characters -= span_width;
-                    output.push(map(span));
+                    output.push_back(map(span));
                 } else {
                     let (prefix, suffix) = split_cow(span.content, characters);
                     input.push_front(Span {
                         style: span.style,
                         content: suffix,
                     });
-                    output.push(map(Span {
+                    output.push_back(map(Span {
                         style: span.style,
                         content: prefix,
                     }));
@@ -4393,7 +4394,7 @@ impl StatefulWidget for BufferWidget<'_> {
         fn extract_bytes<'s>(
             input: &mut VecDeque<Span<'s>>,
             mut bytes: usize,
-            output: &mut Vec<Span<'s>>,
+            output: &mut VecDeque<Span<'s>>,
             map: impl Fn(Span<'s>) -> Span<'s>,
         ) {
             fn split_cow(s: Cow<'_, str>, bytes: usize) -> (Cow<'_, str>, Cow<'_, str>) {
@@ -4422,14 +4423,14 @@ impl StatefulWidget for BufferWidget<'_> {
                 let span_width = span.content.len();
                 if span_width <= bytes {
                     bytes -= span_width;
-                    output.push(map(span));
+                    output.push_back(map(span));
                 } else {
                     let (prefix, suffix) = split_cow(span.content, bytes);
                     input.push_front(Span {
                         style: span.style,
                         content: suffix,
                     });
-                    output.push(map(Span {
+                    output.push_back(map(Span {
                         style: span.style,
                         content: prefix,
                     }));
@@ -4442,11 +4443,11 @@ impl StatefulWidget for BufferWidget<'_> {
         // highlighted match ranges (in ascending order)
         // and returns text in those ranges highlighted in some style
         fn highlight_matches<'s>(
-            colorized: Vec<Span<'s>>,
+            mut colorized: VecDeque<Span<'s>>,
             line_range: RangeInclusive<usize>,
             matches: &mut VecDeque<Range<usize>>,
             apply: impl Fn(Span<'s>) -> Span<'s> + Copy,
-        ) -> Vec<Span<'s>> {
+        ) -> VecDeque<Span<'s>> {
             // A trivial abstraction to make working
             // simultaneously with both line and match ranges
             // more intuitive.
@@ -4500,8 +4501,7 @@ impl StatefulWidget for BufferWidget<'_> {
             }
 
             let (line_start, line_end) = line_range.into_inner();
-            let mut colorized = VecDeque::from(colorized);
-            let mut highlighted = Vec::with_capacity(colorized.len());
+            let mut highlighted = VecDeque::with_capacity(colorized.len());
             let mut line_range = IntRange {
                 start: line_start,
                 end: line_end,
@@ -4555,17 +4555,16 @@ impl StatefulWidget for BufferWidget<'_> {
         // Takes syntax-colorized line of text and returns
         // portion highlighted, if necessary
         fn highlight_selection<'s>(
-            colorized: Vec<Span<'s>>,
+            mut colorized: VecDeque<Span<'s>>,
             line_range: RangeInclusive<usize>,
             (selection_start, selection_end): (usize, usize),
             highlight: impl Fn(Span<'s>) -> Span<'s>,
-        ) -> Vec<Span<'s>> {
+        ) -> VecDeque<Span<'s>> {
             let (line_start, line_end) = line_range.into_inner();
             if selection_end <= line_start || selection_start >= line_end {
                 colorized
             } else {
-                let mut colorized = VecDeque::from(colorized);
-                let mut highlighted = Vec::with_capacity(colorized.len());
+                let mut highlighted = VecDeque::with_capacity(colorized.len());
 
                 // output line_start to selection_start characters verbatim
                 extract(
@@ -4591,13 +4590,12 @@ impl StatefulWidget for BufferWidget<'_> {
         }
 
         fn highlight_parens<'s>(
-            colorized: Vec<Span<'s>>,
+            mut colorized: VecDeque<Span<'s>>,
             line_range: RangeInclusive<usize>,
             parens: &mut VecDeque<(usize, Color)>,
-        ) -> Vec<Span<'s>> {
+        ) -> VecDeque<Span<'s>> {
             let (line_start, line_end) = line_range.into_inner();
-            let mut colorized: VecDeque<_> = colorized.into();
-            let mut highlighted = Vec::with_capacity(colorized.len());
+            let mut highlighted = VecDeque::with_capacity(colorized.len());
             let mut offset = line_start;
             while parens
                 .pop_front_if(|(position, _)| *position < offset)
@@ -4644,14 +4642,14 @@ impl StatefulWidget for BufferWidget<'_> {
             text_area: Rect,
             buf: &mut ratatui::buffer::Buffer,
             prompt: &TextField,
-            highlight: impl FnOnce(Vec<Span<'s>>) -> Vec<Span<'s>>,
+            highlight: impl FnOnce(VecDeque<Span<'s>>) -> VecDeque<Span<'s>>,
             block: impl FnOnce(Block) -> Block,
         ) {
             let [_, dialog_area, _] =
                 Layout::vertical([Min(0), Length(3), Min(0)]).areas(text_area);
 
             Clear.render(dialog_area, buf);
-            Paragraph::new(Line::from(match syntax {
+            Paragraph::new(Line::from(Vec::from(match syntax {
                 FindSyntax::Plain(syntax) => highlight(colorize(
                     syntax,
                     &mut HighlightState::default(),
@@ -4664,7 +4662,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     prompt.chars().collect::<String>().into(),
                     true,
                 )),
-            }))
+            })))
             .scroll((
                 0,
                 (prompt.cursor_column() as u16).saturating_sub(dialog_area.width.saturating_sub(2)),
@@ -5044,7 +5042,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                  range,
                                  number,
                              }| {
-                                highlight_selection(
+                                Vec::from(highlight_selection(
                                     highlight_matches(
                                         colorize(
                                             syntax,
@@ -5059,7 +5057,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                     range.clone(),
                                     (selection_start, selection_end),
                                     |span| span.style(Style::new().bg(Color::Red).fg(Color::White)),
-                                )
+                                ))
                                 .into()
                             },
                         )
@@ -5109,7 +5107,7 @@ impl StatefulWidget for BufferWidget<'_> {
                              }| {
                                 let whole_range = widen_range(range);
 
-                                highlight_matches(
+                                Vec::from(highlight_matches(
                                     highlight_matches(
                                         highlight_matches(
                                             widen(colorize(
@@ -5140,7 +5138,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                                 .add_modifier(Modifier::REVERSED),
                                         )
                                     },
-                                )
+                                ))
                                 .into()
                             },
                         )
@@ -5183,7 +5181,7 @@ impl StatefulWidget for BufferWidget<'_> {
                              }| {
                                 let whole_range = widen_range(range);
 
-                                highlight_matches(
+                                Vec::from(highlight_matches(
                                     highlight_matches(
                                         highlight_matches(
                                             widen(colorize(
@@ -5219,7 +5217,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                                 .add_modifier(Modifier::REVERSED),
                                         )
                                     },
-                                )
+                                ))
                                 .into()
                             },
                         )
@@ -5242,7 +5240,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                  range,
                                  number,
                              }| {
-                                highlight_parens(
+                                Vec::from(highlight_parens(
                                     widen(highlight_selection(
                                         colorize(
                                             syntax,
@@ -5261,7 +5259,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                     )),
                                     range,
                                     &mut marks,
-                                )
+                                ))
                                 .into()
                             },
                         )
@@ -5279,7 +5277,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                      range,
                                      number,
                                  }| {
-                                    highlight_parens(
+                                    Vec::from(highlight_parens(
                                         widen(colorize(
                                             syntax,
                                             &mut hlstate,
@@ -5288,7 +5286,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                         )),
                                         range,
                                         &mut marks,
-                                    )
+                                    ))
                                     .into()
                                 },
                             )
@@ -5306,7 +5304,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                          range,
                                          number,
                                      }| {
-                                        highlight_parens(
+                                        Vec::from(highlight_parens(
                                             widen(highlight_selection(
                                                 colorize(
                                                     syntax,
@@ -5320,7 +5318,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                             )),
                                             range,
                                             &mut marks,
-                                        )
+                                        ))
                                         .into()
                                     },
                                 )
@@ -5512,9 +5510,8 @@ impl StatefulWidget for BufferWidget<'_> {
                     text_area,
                     buf,
                     prompt,
-                    |s| {
-                        let mut colorized = VecDeque::from(s);
-                        let mut highlighted = Vec::with_capacity(colorized.len());
+                    |mut colorized| {
+                        let mut highlighted = VecDeque::with_capacity(colorized.len());
 
                         // output everything to offset verbatim
                         extract(&mut colorized, *offset, &mut highlighted, |span| span);
@@ -5733,7 +5730,7 @@ impl CutBuffer {
                         .filter_map(|b| b.checked_sub(removed_chars))
                         .collect(),
                 })
-            },
+            }
         }
     }
 }
