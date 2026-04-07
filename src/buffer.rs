@@ -1470,7 +1470,13 @@ impl BufferContext {
             }
             Some(selection) => {
                 let mut secondary = Secondary::ge(alt, bookmarks, self.cursor.min(*selection));
-                match delete_surround(&mut rope, &mut self.cursor, selection, &mut secondary) {
+                match delete_surround(
+                    &mut rope,
+                    &mut self.cursor,
+                    selection,
+                    &mut secondary,
+                    |_| true,
+                ) {
                     Ok(()) => {
                         self.cursor_column = cursor_column(&rope, self.cursor);
                     }
@@ -2903,7 +2909,9 @@ impl MultiCursor {
                     Ok(to_delete)
                 }
                 Some(selection) => {
-                    match delete_surround(rope, &mut self.cursor, selection, secondary) {
+                    match delete_surround(rope, &mut self.cursor, selection, secondary, |pos| {
+                        self.range.contains(&pos)
+                    }) {
                         Ok(()) => {
                             use std::cmp::Ordering;
 
@@ -3891,19 +3899,22 @@ fn delete_surround(
     cursor: &mut usize,
     selection: &mut usize,
     alt: &mut Secondary<'_, '_>,
+    mut in_bounds: impl FnMut(usize) -> bool,
 ) -> Result<(), ()> {
     let (start, end) = reorder(&mut *cursor, selection);
 
     if let Some(prev_pos) = start.checked_sub(1)
+        && in_bounds(prev_pos)
+        && in_bounds(*end)
         && let Some(prev_char) = rope.get_char(prev_pos)
         && let Some(next_char) = rope.get_char(*end)
         && matches!(
             (prev_char, next_char),
             ('(', ')') | ('[', ']') | ('{', '}') | ('<', '>') | ('"', '"') | ('\'', '\'')
         )
+        && rope.try_remove(alt.remove(*end..*end + 1)).is_ok()
+        && rope.try_remove(alt.remove(prev_pos..*start)).is_ok()
     {
-        let _ = rope.try_remove(alt.remove(*end..*end + 1));
-        let _ = rope.try_remove(alt.remove(prev_pos..*start));
         alt.update(|pos| {
             *pos -= if *pos > *end {
                 2
