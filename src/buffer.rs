@@ -1469,22 +1469,21 @@ impl BufferContext {
                 // leave our cursor position and current column unchanged
             }
             Some(selection) => {
-                if let Err(mut alt) = delete_surround(
-                    &mut rope,
-                    &mut self.cursor,
-                    &mut self.cursor_column,
-                    selection,
-                    alt,
-                    bookmarks,
-                ) {
-                    zap_selection(
-                        &mut rope,
-                        &mut self.cursor,
-                        &mut self.cursor_column,
-                        *selection,
-                        &mut alt,
-                    );
-                    self.selection = None;
+                let mut secondary = Secondary::ge(alt, bookmarks, self.cursor.min(*selection));
+                match delete_surround(&mut rope, &mut self.cursor, selection, &mut secondary) {
+                    Ok(()) => {
+                        self.cursor_column = cursor_column(&rope, self.cursor);
+                    }
+                    Err(()) => {
+                        zap_selection(
+                            &mut rope,
+                            &mut self.cursor,
+                            &mut self.cursor_column,
+                            *selection,
+                            &mut secondary,
+                        );
+                        self.selection = None;
+                    }
                 }
             }
         }
@@ -3867,17 +3866,14 @@ fn perform_surround(
     }
 }
 
-/// Returns Ok is surround performed, or Err(Secondary) if not
-fn delete_surround<'s, 'm>(
+/// Returns Ok is surround performed, or Err if not
+fn delete_surround(
     rope: &mut ropey::Rope,
     cursor: &mut usize,
-    cursor_col: &mut usize,
     selection: &mut usize,
-    alt: Vec<AltCursor<'s>>,
-    bookmarks: private::BookmarksHandle<'m>,
-) -> Result<(), Secondary<'s, 'm>> {
+    alt: &mut Secondary<'_, '_>,
+) -> Result<(), ()> {
     let (start, end) = reorder(&mut *cursor, selection);
-    let mut alt = Secondary::ge(alt, bookmarks, *start);
 
     if let Some(prev_pos) = start.checked_sub(1)
         && let Some(prev_char) = rope.get_char(prev_pos)
@@ -3892,10 +3888,9 @@ fn delete_surround<'s, 'm>(
         alt.update(|pos| *pos -= if *pos > *end { 2 } else { 1 });
         *end -= 1;
         *start -= 1;
-        *cursor_col = cursor_column(rope, *cursor);
         Ok(())
     } else {
-        Err(alt)
+        Err(())
     }
 }
 
