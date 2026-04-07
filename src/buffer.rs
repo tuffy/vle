@@ -1882,68 +1882,12 @@ impl BufferContext {
         }
     }
 
-    /// Attempts to auto pair set, returning Ok if successful
-    pub fn try_auto_pair(&mut self) -> Result<(), ()> {
+    /// Attempts to select inside set, returning Ok if successful
+    pub fn try_select_inside(&mut self) -> Result<(), ()> {
         let buf = self.buffer.borrow();
-        let rope = &buf.rope;
-        let (start, end) = match self.selection {
-            Some(selection) => reorder(self.cursor, selection),
-            None => (self.cursor, self.cursor),
-        };
-        let start = start.checked_sub(1).ok_or(())?;
-
-        match match (rope.get_char(start), rope.get_char(end)) {
-            (Some('('), Some(')'))
-            | (Some('['), Some(']'))
-            | (Some('{'), Some('}'))
-            | (Some('<'), Some('>'))
-            | (Some('"'), Some('"'))
-            | (Some('\''), Some('\'')) => Some((start, end + 1)),
-            (_, Some(')')) => prev_pairing_char(rope, start)
-                .and_then(|(c, start)| (c == '(').then_some((start, end))),
-            (Some('('), _) => next_pairing_char(rope, end)
-                .and_then(|(c, end)| (c == ')').then_some((start + 1, end))),
-            (_, Some(']')) => prev_pairing_char(rope, start)
-                .and_then(|(c, start)| (c == '[').then_some((start, end))),
-            (Some('['), _) => next_pairing_char(rope, end)
-                .and_then(|(c, end)| (c == ']').then_some((start + 1, end))),
-            (_, Some('}')) => prev_pairing_char(rope, start)
-                .and_then(|(c, start)| (c == '{').then_some((start, end))),
-            (Some('{'), _) => next_pairing_char(rope, end)
-                .and_then(|(c, end)| (c == '}').then_some((start + 1, end))),
-            (_, Some('>')) => prev_pairing_char(rope, start)
-                .and_then(|(c, start)| (c == '<').then_some((start, end))),
-            (Some('<'), _) => next_pairing_char(rope, end)
-                .and_then(|(c, end)| (c == '>').then_some((start + 1, end))),
-            (_, Some('"')) => prev_pairing_char(rope, start)
-                .and_then(|(c, start)| (c == '"').then_some((start, end))),
-            (Some('"'), _) => next_pairing_char(rope, end)
-                .and_then(|(c, end)| (c == '"').then_some((start + 1, end))),
-            (_, Some('\'')) => prev_pairing_char(rope, start)
-                .and_then(|(c, start)| (c == '\'').then_some((start, end))),
-            (Some('\''), _) => next_pairing_char(rope, end)
-                .and_then(|(c, end)| (c == '\'').then_some((start + 1, end))),
-            _ => match (
-                prev_pairing_char(rope, start),
-                next_pairing_char(rope, end + 1),
-            ) {
-                (Some(('(', start)), Some((')', end)))
-                | (Some(('[', start)), Some((']', end)))
-                | (Some(('{', start)), Some(('}', end)))
-                | (Some(('<', start)), Some(('>', end)))
-                | (Some(('"', start)), Some(('"', end)))
-                | (Some(('\'', start)), Some(('\'', end))) => Some((start, end)),
-                _ => None,
-            },
-        } {
-            Some((start, end)) => {
-                self.cursor = end;
-                self.selection = Some(start);
-                self.cursor_column = cursor_column(rope, self.cursor);
-                Ok(())
-            }
-            None => Err(()),
-        }
+        try_select_inside(&buf.rope, &mut self.cursor, &mut self.selection).inspect(|()| {
+            self.cursor_column = cursor_column(&buf.rope, self.cursor);
+        })
     }
 
     pub fn select_word_or_lines(&mut self) {
@@ -5997,6 +5941,81 @@ fn patch_rope(
 
             source.insert(inserted_pos, &to_insert);
         }
+    }
+}
+
+/// Returns Ok if successful
+fn try_select_inside(
+    rope: &ropey::Rope,
+    cursor: &mut usize,
+    selection: &mut Option<usize>,
+) -> Result<(), ()> {
+    let (start, end) = match selection {
+        Some(selection) => reorder(*cursor, *selection),
+        None => (*cursor, *cursor),
+    };
+    let start = start.checked_sub(1).ok_or(())?;
+
+    match match (rope.get_char(start), rope.get_char(end)) {
+        (Some('('), Some(')'))
+        | (Some('['), Some(']'))
+        | (Some('{'), Some('}'))
+        | (Some('<'), Some('>'))
+        | (Some('"'), Some('"'))
+        | (Some('\''), Some('\'')) => Some((start, end + 1)),
+        (_, Some(')')) => {
+            prev_pairing_char(rope, start).and_then(|(c, start)| (c == '(').then_some((start, end)))
+        }
+        (Some('('), _) => {
+            next_pairing_char(rope, end).and_then(|(c, end)| (c == ')').then_some((start + 1, end)))
+        }
+        (_, Some(']')) => {
+            prev_pairing_char(rope, start).and_then(|(c, start)| (c == '[').then_some((start, end)))
+        }
+        (Some('['), _) => {
+            next_pairing_char(rope, end).and_then(|(c, end)| (c == ']').then_some((start + 1, end)))
+        }
+        (_, Some('}')) => {
+            prev_pairing_char(rope, start).and_then(|(c, start)| (c == '{').then_some((start, end)))
+        }
+        (Some('{'), _) => {
+            next_pairing_char(rope, end).and_then(|(c, end)| (c == '}').then_some((start + 1, end)))
+        }
+        (_, Some('>')) => {
+            prev_pairing_char(rope, start).and_then(|(c, start)| (c == '<').then_some((start, end)))
+        }
+        (Some('<'), _) => {
+            next_pairing_char(rope, end).and_then(|(c, end)| (c == '>').then_some((start + 1, end)))
+        }
+        (_, Some('"')) => {
+            prev_pairing_char(rope, start).and_then(|(c, start)| (c == '"').then_some((start, end)))
+        }
+        (Some('"'), _) => {
+            next_pairing_char(rope, end).and_then(|(c, end)| (c == '"').then_some((start + 1, end)))
+        }
+        (_, Some('\'')) => prev_pairing_char(rope, start)
+            .and_then(|(c, start)| (c == '\'').then_some((start, end))),
+        (Some('\''), _) => next_pairing_char(rope, end)
+            .and_then(|(c, end)| (c == '\'').then_some((start + 1, end))),
+        _ => match (
+            prev_pairing_char(rope, start),
+            next_pairing_char(rope, end + 1),
+        ) {
+            (Some(('(', start)), Some((')', end)))
+            | (Some(('[', start)), Some((']', end)))
+            | (Some(('{', start)), Some(('}', end)))
+            | (Some(('<', start)), Some(('>', end)))
+            | (Some(('"', start)), Some(('"', end)))
+            | (Some(('\'', start)), Some(('\'', end))) => Some((start, end)),
+            _ => None,
+        },
+    } {
+        Some((start, end)) => {
+            *cursor = end;
+            *selection = Some(start);
+            Ok(())
+        }
+        None => Err(()),
     }
 }
 

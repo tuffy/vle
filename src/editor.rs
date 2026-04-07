@@ -872,7 +872,7 @@ impl Editor {
             keybind!(GotoPair) => self.update_buffer(|b| b.select_matching_paren()),
             keybind!(Bookmark) => self.update_buffer(|b| b.toggle_bookmark()),
             keybind!(SelectInside) => {
-                if let Some(Err(())) = self.on_buffer(|b| b.try_auto_pair()) {
+                if let Some(Err(())) = self.on_buffer(|b| b.try_select_inside()) {
                     self.mode = EditorMode::SelectInside;
                 }
             }
