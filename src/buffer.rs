@@ -2873,7 +2873,7 @@ impl MultiCursor {
         }
     }
 
-    /// Returns Ok if delete performed successfully
+    /// Returns Ok(deleted) if delete performed successfully
     fn delete(
         &mut self,
         rope: &mut ropey::Rope,
@@ -2881,7 +2881,7 @@ impl MultiCursor {
         secondary: &mut Secondary,
     ) -> Result<usize, ()> {
         if self.cursor < self.range.end {
-            match self.zap_selection(rope, cursor, secondary) {
+            match &mut self.selection {
                 None => {
                     let to_delete = rope
                         .chars_at(self.cursor)
@@ -2902,7 +2902,26 @@ impl MultiCursor {
                     self.range.end -= to_delete;
                     Ok(to_delete)
                 }
-                Some(zapped) => Ok(zapped),
+                Some(selection) => {
+                    match delete_surround(rope, &mut self.cursor, selection, secondary) {
+                        Ok(()) => {
+                            use std::cmp::Ordering;
+
+                            self.range.end -= 2;
+                            match (self.cursor + 1).cmp(cursor) {
+                                Ordering::Less => {
+                                    *cursor = cursor.saturating_sub(2);
+                                }
+                                Ordering::Equal => {
+                                    *cursor = cursor.saturating_sub(1);
+                                }
+                                Ordering::Greater => { /* do nothing */ }
+                            }
+                            Ok(2)
+                        }
+                        Err(()) => self.zap_selection(rope, cursor, secondary).ok_or(()),
+                    }
+                }
             }
         } else {
             Err(())
@@ -3885,7 +3904,15 @@ fn delete_surround(
     {
         let _ = rope.try_remove(alt.remove(*end..*end + 1));
         let _ = rope.try_remove(alt.remove(prev_pos..*start));
-        alt.update(|pos| *pos -= if *pos > *end { 2 } else { 1 });
+        alt.update(|pos| {
+            *pos -= if *pos > *end {
+                2
+            } else if *pos >= *start {
+                1
+            } else {
+                0
+            }
+        });
         *end -= 1;
         *start -= 1;
         Ok(())
