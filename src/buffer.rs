@@ -1179,60 +1179,66 @@ impl BufferContext {
 
         match &mut self.selection {
             Some(selection) => match c {
-                '(' => perform_surround(
-                    &mut rope,
-                    &mut self.cursor,
-                    &mut self.cursor_column,
-                    selection,
-                    alt,
-                    bookmarks,
-                    ['(', ')'],
-                ),
-                '[' => perform_surround(
-                    &mut rope,
-                    &mut self.cursor,
-                    &mut self.cursor_column,
-                    selection,
-                    alt,
-                    bookmarks,
-                    ['[', ']'],
-                ),
-                '{' => perform_surround(
-                    &mut rope,
-                    &mut self.cursor,
-                    &mut self.cursor_column,
-                    selection,
-                    alt,
-                    bookmarks,
-                    ['{', '}'],
-                ),
-                '<' => perform_surround(
-                    &mut rope,
-                    &mut self.cursor,
-                    &mut self.cursor_column,
-                    selection,
-                    alt,
-                    bookmarks,
-                    ['<', '>'],
-                ),
-                '\"' => perform_surround(
-                    &mut rope,
-                    &mut self.cursor,
-                    &mut self.cursor_column,
-                    selection,
-                    alt,
-                    bookmarks,
-                    ['\"', '\"'],
-                ),
-                '\'' => perform_surround(
-                    &mut rope,
-                    &mut self.cursor,
-                    &mut self.cursor_column,
-                    selection,
-                    alt,
-                    bookmarks,
-                    ['\'', '\''],
-                ),
+                '(' => {
+                    perform_surround(
+                        &mut rope,
+                        &mut self.cursor,
+                        selection,
+                        &mut Secondary::new(alt, bookmarks),
+                        ['(', ')'],
+                    );
+                    self.cursor_column = cursor_column(&rope, self.cursor);
+                }
+                '[' => {
+                    perform_surround(
+                        &mut rope,
+                        &mut self.cursor,
+                        selection,
+                        &mut Secondary::new(alt, bookmarks),
+                        ['[', ']'],
+                    );
+                    self.cursor_column = cursor_column(&rope, self.cursor);
+                }
+                '{' => {
+                    perform_surround(
+                        &mut rope,
+                        &mut self.cursor,
+                        selection,
+                        &mut Secondary::new(alt, bookmarks),
+                        ['{', '}'],
+                    );
+                    self.cursor_column = cursor_column(&rope, self.cursor);
+                }
+                '<' => {
+                    perform_surround(
+                        &mut rope,
+                        &mut self.cursor,
+                        selection,
+                        &mut Secondary::new(alt, bookmarks),
+                        ['<', '>'],
+                    );
+                    self.cursor_column = cursor_column(&rope, self.cursor);
+                }
+                '\"' => {
+                    perform_surround(
+                        &mut rope,
+                        &mut self.cursor,
+                        selection,
+                        &mut Secondary::new(alt, bookmarks),
+                        ['\"', '\"'],
+                    );
+                    self.cursor_column = cursor_column(&rope, self.cursor);
+                }
+                '\'' => {
+                    perform_surround(
+                        &mut rope,
+                        &mut self.cursor,
+                        selection,
+                        &mut Secondary::new(alt, bookmarks),
+                        ['\'', '\''],
+                    );
+                    self.cursor_column = cursor_column(&rope, self.cursor);
+                }
                 _ => {
                     let mut alt = Secondary::ge(alt, bookmarks, self.cursor.min(*selection));
                     zap_selection(
@@ -3775,22 +3781,26 @@ pub fn next_closing_char(rope: &ropey::Rope, offset: usize, limit: usize) -> Opt
 fn perform_surround(
     rope: &mut ropey::Rope,
     cursor: &mut usize,
-    cursor_col: &mut usize,
     selection: &mut usize,
-    alt: Vec<AltCursor<'_>>,
-    bookmarks: private::BookmarksHandle<'_>,
+    alt: &mut Secondary<'_, '_>,
     [start, end]: [char; 2],
 ) {
+    let (start_pos, end_pos) = reorder(&mut *cursor, selection);
+    if rope.try_insert_char(*end_pos, end).is_ok()
+        && rope.try_insert_char(*start_pos, start).is_ok()
     {
-        let (start_pos, end_pos) = reorder(&mut *cursor, selection);
-        let mut alt = Secondary::ge(alt, bookmarks, *start_pos);
-        let _ = rope.try_insert_char(*end_pos, end);
-        let _ = rope.try_insert_char(*start_pos, start);
-        alt.update(|pos| *pos += if *pos > *end_pos { 2 } else { 1 });
+        alt.update(|pos| {
+            *pos += if *pos > *end_pos {
+                2
+            } else if *pos >= *start_pos {
+                1
+            } else {
+                0
+            }
+        });
         *start_pos += 1;
         *end_pos += 1;
     }
-    *cursor_col = cursor_column(rope, *cursor);
 }
 
 /// Returns Ok is surround performed, or Err(Secondary) if not
