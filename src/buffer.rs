@@ -1885,9 +1885,11 @@ impl BufferContext {
     /// Attempts to select inside set, returning Ok if successful
     pub fn try_select_inside(&mut self) -> Result<(), ()> {
         let buf = self.buffer.borrow();
-        try_select_inside(&buf.rope, &mut self.cursor, &mut self.selection).inspect(|()| {
-            self.cursor_column = cursor_column(&buf.rope, self.cursor);
-        })
+        try_select_inside(&buf.rope, &mut self.cursor, &mut self.selection, |_| true).inspect(
+            |()| {
+                self.cursor_column = cursor_column(&buf.rope, self.cursor);
+            },
+        )
     }
 
     pub fn select_word_or_lines(&mut self) {
@@ -2295,6 +2297,19 @@ impl BufferContext {
                 selecting,
             )
         });
+    }
+
+    pub fn multi_select_inside(&mut self, matches: &mut [MultiCursor], selected: usize) {
+        let buffer = self.buffer.borrow();
+        matches.iter_mut().for_each(|c| {
+            let _ = try_select_inside(&buffer.rope, &mut c.cursor, &mut c.selection, |pos| {
+                c.range.contains(&pos)
+            });
+        });
+        if let Some(c) = matches.get(selected) {
+            self.cursor = c.cursor;
+            self.cursor_column = cursor_column(&buffer.rope, self.cursor);
+        }
     }
 
     pub fn multi_cursor_copy(&mut self, matches: &mut [MultiCursor]) -> Option<EditorCutBuffer> {
@@ -5949,6 +5964,7 @@ fn try_select_inside(
     rope: &ropey::Rope,
     cursor: &mut usize,
     selection: &mut Option<usize>,
+    mut in_bounds: impl FnMut(usize) -> bool,
 ) -> Result<(), ()> {
     let (start, end) = match selection {
         Some(selection) => reorder(*cursor, *selection),
@@ -6011,9 +6027,13 @@ fn try_select_inside(
         },
     } {
         Some((start, end)) => {
-            *cursor = end;
-            *selection = Some(start);
-            Ok(())
+            if in_bounds(start) && in_bounds(end) {
+                *cursor = end;
+                *selection = Some(start);
+                Ok(())
+            } else {
+                Err(())
+            }
         }
         None => Err(()),
     }

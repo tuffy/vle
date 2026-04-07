@@ -1739,6 +1739,11 @@ fn process_multi_cursor(
             type_: SearchType::default(),
             range: range.take(),
         }),
+        keybind!(SelectInside) => {
+            *highlight = false;
+            buffer.multi_select_inside(matches, *match_idx);
+            None
+        }
         key!(Enter) => Some(EditorMode::default()),
         Event::Key(KeyEvent {
             code: KeyCode::Left,
