@@ -1268,13 +1268,6 @@ impl BufferContext {
     }
 
     pub fn paste(&mut self, alt: Vec<AltCursor<'_>>, cut_buffer: &mut Option<EditorCutBuffer>) {
-        fn indented(rope: &ropey::Rope, cursor: usize) -> bool {
-            match line_start_to_cursor(rope, cursor) {
-                Some(mut chars) => chars.all(|c| c == ' ' || c == '\t'),
-                None => false,
-            }
-        }
-
         match self.selection.as_mut() {
             None => {
                 // No active selection, so paste as-is
@@ -1285,11 +1278,6 @@ impl BufferContext {
 
                 match cut_buffer {
                     Some(EditorCutBuffer::Single(pasted)) => {
-                        let pasted = if indented(&rope, self.cursor) {
-                            pasted.trim_start()
-                        } else {
-                            MaybeRef::Ref(pasted)
-                        };
                         if rope.try_insert(self.cursor, &pasted.data).is_ok() {
                             let old_cursor = self.cursor;
                             self.cursor += alt.inc(pasted.chars_len);
@@ -1300,11 +1288,6 @@ impl BufferContext {
                     Some(EditorCutBuffer::Multiple(pasted_items)) => {
                         // insert first pasted item and rotate
                         if let Some(pasted) = pasted_items.first() {
-                            let pasted = if indented(&rope, self.cursor) {
-                                pasted.trim_start()
-                            } else {
-                                MaybeRef::Ref(pasted)
-                            };
                             if rope.try_insert(self.cursor, &pasted.data).is_ok() {
                                 let old_cursor = self.cursor;
                                 self.cursor += alt.inc(pasted.chars_len);
@@ -5779,26 +5762,6 @@ impl CutBuffer {
     pub fn as_str(&self) -> &str {
         self.data.as_str()
     }
-
-    fn trim_start(&self) -> MaybeRef<'_, Self> {
-        let data = self.data.trim_start();
-        match self.data.len() - data.len() {
-            0 => MaybeRef::Ref(self),
-            removed_bytes => {
-                let removed_chars = self.data.split_at(removed_bytes).0.chars().count();
-
-                MaybeRef::Owned(Self {
-                    chars_len: data.chars().count(),
-                    data: data.to_string(),
-                    bookmarks: self
-                        .bookmarks
-                        .iter()
-                        .filter_map(|b| b.checked_sub(removed_chars))
-                        .collect(),
-                })
-            }
-        }
-    }
 }
 
 impl From<String> for CutBuffer {
@@ -6145,26 +6108,6 @@ pub fn is_grapheme_part(c: char) -> bool {
     use unicode_width::UnicodeWidthChar;
 
     c.width() == Some(0)
-}
-
-/// A Cow-like value which may be borrowed or owned
-///
-/// Actual Cow supposes the item can be promoted to an owned value
-/// which we don't actually care about.
-enum MaybeRef<'t, T> {
-    Owned(T),
-    Ref(&'t T),
-}
-
-impl<T> std::ops::Deref for MaybeRef<'_, T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        match self {
-            Self::Owned(t) => t,
-            Self::Ref(t) => t,
-        }
-    }
 }
 
 fn reorder<T: Ord>(x: T, y: T) -> (T, T) {
