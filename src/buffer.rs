@@ -2640,18 +2640,82 @@ impl MultiCursor {
     ) -> (usize, usize) {
         use std::cmp::Ordering;
 
-        let zapped = self
-            .zap_selection(rope, cursor, secondary)
-            .unwrap_or_default();
-        let inserted = insert_char_or_pair(rope, self.cursor, secondary, c);
-        *cursor += match self.cursor.cmp(cursor) {
-            Ordering::Less => inserted,
-            Ordering::Equal => 1,
-            Ordering::Greater => 0,
-        };
-        self.cursor += 1;
-        self.range.end += inserted;
-        (zapped, inserted)
+        match (&mut self.selection, c) {
+            (Some(selection), '(') => {
+                *cursor += match self.cursor.cmp(cursor) {
+                    Ordering::Less => 2,
+                    Ordering::Equal => 1,
+                    Ordering::Greater => 0,
+                };
+                perform_surround(rope, &mut self.cursor, selection, secondary, ['(', ')']);
+                self.range.end += 2;
+                (0, 2)
+            }
+            (Some(selection), '[') => {
+                *cursor += match self.cursor.cmp(cursor) {
+                    Ordering::Less => 2,
+                    Ordering::Equal => 1,
+                    Ordering::Greater => 0,
+                };
+                perform_surround(rope, &mut self.cursor, selection, secondary, ['[', ']']);
+                self.range.end += 2;
+                (0, 2)
+            }
+            (Some(selection), '{') => {
+                *cursor += match self.cursor.cmp(cursor) {
+                    Ordering::Less => 2,
+                    Ordering::Equal => 1,
+                    Ordering::Greater => 0,
+                };
+                perform_surround(rope, &mut self.cursor, selection, secondary, ['{', '}']);
+                self.range.end += 2;
+                (0, 2)
+            }
+            (Some(selection), '<') => {
+                *cursor += match self.cursor.cmp(cursor) {
+                    Ordering::Less => 2,
+                    Ordering::Equal => 1,
+                    Ordering::Greater => 0,
+                };
+                perform_surround(rope, &mut self.cursor, selection, secondary, ['<', '>']);
+                self.range.end += 2;
+                (0, 2)
+            }
+            (Some(selection), '\"') => {
+                *cursor += match self.cursor.cmp(cursor) {
+                    Ordering::Less => 2,
+                    Ordering::Equal => 1,
+                    Ordering::Greater => 0,
+                };
+                perform_surround(rope, &mut self.cursor, selection, secondary, ['\"', '\"']);
+                self.range.end += 2;
+                (0, 2)
+            }
+            (Some(selection), '\'') => {
+                *cursor += match self.cursor.cmp(cursor) {
+                    Ordering::Less => 2,
+                    Ordering::Equal => 1,
+                    Ordering::Greater => 0,
+                };
+                perform_surround(rope, &mut self.cursor, selection, secondary, ['\'', '\'']);
+                self.range.end += 2;
+                (0, 2)
+            }
+            _ => {
+                let zapped = self
+                    .zap_selection(rope, cursor, secondary)
+                    .unwrap_or_default();
+                let inserted = insert_char_or_pair(rope, self.cursor, secondary, c);
+                *cursor += match self.cursor.cmp(cursor) {
+                    Ordering::Less => inserted,
+                    Ordering::Equal => 1,
+                    Ordering::Greater => 0,
+                };
+                self.cursor += 1;
+                self.range.end += inserted;
+                (zapped, inserted)
+            }
+        }
     }
 
     /// Returns number of zapped characters, if any
