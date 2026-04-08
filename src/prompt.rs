@@ -110,7 +110,7 @@ impl TextField {
         self.cursor = 0;
     }
 
-    /// Returns true if cursor if cursor is at end of word
+    /// Returns true if cursor is at end of word
     pub fn can_autocomplete(&self) -> bool {
         self.autocomplete_word().is_some()
     }
