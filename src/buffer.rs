@@ -540,11 +540,14 @@ mod private {
     // alternate cursor as its update closure is applied
     // to every reference it contains (if any).
     //
-    // Naturally, because Secondary is created via split-borrowing,
+    // Naturally, because Secondary is created via split-borrowing
+    // a Vec<AltCursor> and a handle to the Buffer's bookmarks,
     // the Layout enum can execute a closure on both the current
     // buffer and its alt cursor(s)
     // (since it owns BufferContexts on both halves of a split)
-    // but BufferContext methods need to have it passed in as an argument.
+    // but BufferContext methods need to have Vec<AltCursor>
+    // passed in as an argument to combine with the Rope's
+    // bookmarks to create a full Secondary struct.
 
     /// A secondary cursor which implements various math operations
     pub struct Secondary<'a, 'b> {
