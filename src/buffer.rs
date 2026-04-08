@@ -499,6 +499,53 @@ mod private {
         }
     }
 
+    // Secondary appears all over the place, and in order to understand
+    // what it's for, it's helpful to understand the problem that it solves.
+    // Let's take this layout as an example:
+    //
+    //         ┌───────────────────┐
+    //         │ Buffer            │
+    //         │ source = file.txt │
+    //         └─┬───────────────┬─┘
+    // ┌─────────┴───────┐  ┌────┴────────────┐
+    // │ BufferContext A │  │ BufferContext B │
+    // │ cursor = 200    │  │ cursor = 100    │
+    // └─────────┬───────┘  └────┬────────────┘
+    // ┌─────────┴───────┐  ┌────┴────────────┐
+    // │ Left Pane       │  │ Right Pane      │
+    // └─────────────────┘  └─────────────────┘
+    //
+    // Cursor positions are absolute offsets to the source buffer.
+    //
+    // As text is added to BufferContext B in the right pane
+    // BufferContext A's cursor in the left pane
+    // will appear to "drift" because the text it had been pointing
+    // to is shifted ahead while its position remains fixed.
+    //
+    // By providing a reference from BufferContext A to BufferContext B
+    // and updating their cursor positions simultaneously
+    // (so long as A's cursor is ahead of B's)
+    // the drifting problem is alleviated.
+    //
+    // ┌─────────────────┐   ┌──────────────────┐
+    // │ BufferContext A │   │ BufferContext B  │
+    // │                 │   │ cursor = 100     │ += 1
+    // │ cursor = 200    │ → │ &mut alt cursor  │ += 1
+    // └─────────────────┘   └──────────────────┘
+    //
+    // Bookmarks attached to the Buffer are handled
+    // using the same principle (which is why it takes two lifetimes).
+    //
+    // Once created, Secondary can be updated like a single
+    // alternate cursor as its update closure is applied
+    // to every reference it contains (if any).
+    //
+    // Naturally, because Secondary is created via split-borrowing,
+    // the Layout enum can execute a closure on both the current
+    // buffer and its alt cursor(s)
+    // (since it owns BufferContexts on both halves of a split)
+    // but BufferContext methods need to have it passed in as an argument.
+
     /// A secondary cursor which implements various math operations
     pub struct Secondary<'a, 'b> {
         // secondary cursor's position and selection, if any
