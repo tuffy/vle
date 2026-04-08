@@ -4170,6 +4170,28 @@ impl BufferList {
     }
 }
 
+// Rendering this BufferWidget is where the editor spends
+// the bulk of its time.  Much of it is just layering
+// highlight on top of highlight in a single pass
+// over all the lines in the viewport to create a single
+// styled Paragraph widget.
+//
+// In order to keep the editor scalable,
+// we style and render *only* the text in the viewport
+// (typically between 50-100 lines)
+// and ignore the rest of the text in the rope.
+// This requires a bit of hackery to handle multi-line comments,
+// but even ~6.5m line XML files (like the kind MAME builds every month)
+// are handled with ease.
+//
+// Using the Logos tokenizer for syntax highlighting is so
+// blisteringly fast that there's no need to waste any RAM
+// caching its work; we'll simply re-parse each visible line on each pass.
+//
+// I've thrown *all* the BufferWidget-specific rendering helper functions
+// in its render() function to avoid cluttering the rest of the namespace
+// so the actual meat of the function is smaller than it appears.
+
 pub struct BufferWidget<'e> {
     pub focused: bool,
     pub mode: Option<&'e mut EditorMode>,
@@ -4847,6 +4869,10 @@ impl StatefulWidget for BufferWidget<'_> {
             lines
         }
 
+        ///////////////////////////////
+        // Actual rendering starts here
+        ///////////////////////////////
+
         if let Some(EditorMode::Open { chooser }) = self.mode {
             // file selection mode overrides main editing mode
             use crate::files::FileChooser;
@@ -4878,6 +4904,10 @@ impl StatefulWidget for BufferWidget<'_> {
         } else {
             |_, _, _| { /* do nothing */ }
         };
+
+        /////////////////////////////////////////
+        // Render block borders according to mode
+        /////////////////////////////////////////
 
         let block = Block::bordered()
             .border_type(if focused {
@@ -5030,6 +5060,9 @@ impl StatefulWidget for BufferWidget<'_> {
 
         let viewport_start = rope.try_line_to_char(viewport_line).unwrap_or(0);
 
+        // Initial HighlightState varies according to whether
+        // we detect a multi-line comment is open or not.
+
         let mut hlstate: HighlightState = match syntax.multicomment() {
             Some(MultiCommentType::Bidirectional(f)) => rope
                 .lines_at(viewport_line)
@@ -5057,6 +5090,7 @@ impl StatefulWidget for BufferWidget<'_> {
             .unwrap_or(rope.len_chars())
             .saturating_sub(viewport_start);
 
+        // marks includes both bookmarks and open/close parentheses
         let mut marks: BTreeMap<usize, Color> =
             match prev_opening_char(rope, state.cursor, viewport_size) {
                 Some((opener, start)) => match next_closing_char(rope, state.cursor, viewport_size)
@@ -5086,6 +5120,7 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
+        // don't apply a mark to our cursor's position most of the time
         match self.mode {
             Some(EditorMode::SelectLine { .. }) => {
                 if let Some(mark) = marks.get_mut(&state.cursor) {
@@ -5098,6 +5133,11 @@ impl StatefulWidget for BufferWidget<'_> {
         }
 
         let mut marks = marks.into_iter().collect();
+
+        ////////////////////////////////////////////////////////////
+        // Generate and render the actual buffer text as a Paragraph
+        // according to the mode the buffer is in.
+        ////////////////////////////////////////////////////////////
 
         Paragraph::new(apply_margins(
             match self.mode {
@@ -5440,6 +5480,7 @@ impl StatefulWidget for BufferWidget<'_> {
         ))
         .render(text_area, buf);
 
+        // Render our drop-in Scrollbar replacement on the right
         Scrollbar.render(
             scrollbar_area,
             buf,
@@ -5447,6 +5488,11 @@ impl StatefulWidget for BufferWidget<'_> {
                 .viewport_content_length(viewport_height)
                 .position(current_line.unwrap_or(0)),
         );
+
+        ////////////////////////////////////////////////
+        // Overlay any help message on top of the buffer
+        // depending on the editor's mode.
+        ////////////////////////////////////////////////
 
         match self.mode {
             None | Some(EditorMode::Editing) | Some(EditorMode::Autocomplete { .. }) => {
@@ -5697,6 +5743,7 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
+        // Finally, display any status/error message pop-up exactly once
         if let Some(message) = state.message.take() {
             render_message(text_area, buf, message);
         }
