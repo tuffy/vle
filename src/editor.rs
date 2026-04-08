@@ -1460,14 +1460,24 @@ fn process_open_file<S: ChooserSource>(
     chooser: &mut FileChooserState<S>,
     event: Event,
 ) -> Option<EditorMode> {
-    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+    use crossterm::event::{
+        Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
+    };
 
     match event {
-        key!(Up) => {
+        key!(Up)
+        | Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            ..
+        }) => {
             chooser.arrow_up();
             None
         }
-        key!(Down) => {
+        key!(Down)
+        | Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            ..
+        }) => {
             chooser.arrow_down();
             None
         }
@@ -2019,7 +2029,9 @@ fn process_select_buffer(
     index: &mut usize,
     event: Event,
 ) -> Option<SelectBuffer> {
-    use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+    use crossterm::event::{
+        KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
+    };
 
     const PAGE_SIZE: usize = 5;
 
@@ -2034,7 +2046,11 @@ fn process_select_buffer(
     }
 
     match event {
-        key!(Up) => match index.checked_sub(1) {
+        key!(Up)
+        | Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            ..
+        }) => match index.checked_sub(1) {
             Some(new_index) => {
                 *index = new_index;
                 None
@@ -2046,7 +2062,11 @@ fn process_select_buffer(
                 None
             }
         },
-        key!(Down) => {
+        key!(Down)
+        | Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            ..
+        }) => {
             *index = (*index + 1) % buffer_list.len();
             None
         }
