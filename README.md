@@ -30,6 +30,31 @@ Its syntax highlighting for different languages are built-in
 and it uses no configuration file; its minimal configuration options
 are done via simple environment variables.
 
+# Recommended Terminals and Multiplexers
+
+Although intended to be compatible with as many different
+terminal emulators and multiplexers as possible,
+certain choices are more optimal than others.
+
+- [Alacritty](https://alacritty.org)
+  Somewhat spartan, but extremely fast.
+- [Ghostty](https://ghostty.org)
+  More featureful, and also quite fast.
+- [Rio](https://rioterm.com)
+  Another fine and capable choice.
+- [iTerm2](https://iterm2.com)
+  A good choice for MacOS users.
+- [WezTerm](https://wezterm.org)
+  Doesn't support <kbd>Ctrl</kbd>-<kbd>PgUp</kbd> and <kbd>Ctrl</kbd>-<kbd>PgDn</kbd>
+  keybindings to swap buffers. Use <kbd>Ctrl</kbd>-</kbd>]</kbd> instead.
+  Hasn't been updated in some time.
+- xterm
+  Doesn't support underline colors, but fine otherwise.
+- MacOS Terminal
+  Doesn't support <kbd>Shift</kbd>-<kbd>Up</kbd> and <kbd>Shift</kbd>-<kbd>Down</kbd>
+  keybindings to highlight text. Use <kbd>Ctrl</kbd>-<kbd>Space</kbd>
+  to set the mark instead.
+
 # Keybindings
 
 | Action                         | Shortcut       | Shortcut                           |
