@@ -6151,7 +6151,7 @@ impl<T> From<VecFiltered<T>> for std::collections::VecDeque<T> {
 
 #[cfg(feature = "underline-color")]
 fn underline_color(color: ratatui::style::Color) -> ratatui::style::Style {
-    Style::new().underlined().underline_color(color)
+    ratatui::style::Style::new().underlined().underline_color(color)
 }
 
 #[cfg(not(feature = "underline-color"))]
