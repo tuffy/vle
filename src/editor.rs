@@ -2364,9 +2364,12 @@ impl Layout {
                 left: inactive,
                 ..
             } => {
-                let (buffer_idx, buf, mut alts) = active.current_buffer_mut()?;
-                alts.extend(inactive.alt_cursors(buffer_idx));
-                Some((buffer_idx, buf, alts))
+                let (buffer_idx, buf, alts) = active.current_buffer_mut()?;
+                Some((
+                    buffer_idx,
+                    buf,
+                    concat_vec(alts, inactive.alt_cursors(buffer_idx)),
+                ))
             }
         }
     }
@@ -2386,11 +2389,10 @@ impl Layout {
                 left: first,
                 right: second,
                 ..
-            } => {
-                let mut cursors = first.alt_cursors(buffer_idx);
-                cursors.extend(second.alt_cursors(buffer_idx));
-                cursors
-            }
+            } => concat_vec(
+                first.alt_cursors(buffer_idx),
+                second.alt_cursors(buffer_idx),
+            ),
         }
     }
 
@@ -3379,4 +3381,13 @@ fn set_title<D: std::fmt::Display>(d: D) {
     use crossterm::{execute, terminal::SetTitle};
 
     let _ = execute!(std::io::stdout(), SetTitle(format!("vle {d}")),);
+}
+
+fn concat_vec<T>(mut a: Vec<T>, b: Vec<T>) -> Vec<T> {
+    if a.is_empty() {
+        b
+    } else {
+        a.extend(b);
+        a
+    }
 }
