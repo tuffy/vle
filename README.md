@@ -37,23 +37,54 @@ terminal emulators and multiplexers as possible,
 certain choices are more optimal than others.
 
 - [Alacritty](https://alacritty.org)
+
   Somewhat spartan, but extremely fast.
+
 - [Ghostty](https://ghostty.org)
+
   More featureful, and also quite fast.
+
 - [Rio](https://rioterm.com)
+
   Another fine and capable choice.
+
 - [iTerm2](https://iterm2.com)
+
   A good choice for MacOS users.
+
 - [WezTerm](https://wezterm.org)
+
   Doesn't support <kbd>Ctrl</kbd>-<kbd>PgUp</kbd> and <kbd>Ctrl</kbd>-<kbd>PgDn</kbd>
-  keybindings to swap buffers. Use <kbd>Ctrl</kbd>-</kbd>]</kbd> instead.
+  keybindings to swap buffers. Use <kbd>Ctrl</kbd>-<kbd>]</kbd> instead.
   Hasn't been updated in some time.
+
 - xterm
-  Doesn't support underline colors, but fine otherwise.
+
+  Doesn't support underline colors, but fine otherwise so long as its encoding is set to UTF-8.
+
 - MacOS Terminal
+
   Doesn't support <kbd>Shift</kbd>-<kbd>Up</kbd> and <kbd>Shift</kbd>-<kbd>Down</kbd>
   keybindings to highlight text. Use <kbd>Ctrl</kbd>-<kbd>Space</kbd>
   to set the mark instead.
+
+- [ZelliJ](https://zellij.dev)
+
+  A powerful terminal multiplexer, but uses many <kbd>Ctrl</kbd> keybindings
+  for its own functions. Alternatives are to use the <kbd>F</kbd> keybindings
+  for our own purposes, use <kbd>Ctrl</kbd>-<kbd>G</kbd> to lock the editor's pane
+  and make all the <kbd>Ctrl</kbd> keybindings available, or to update
+  Zellij's configuration and rebind keys as needed.
+
+- [tmux](https://github.com/tmux/tmux/wiki)
+
+  Another fine terminal multiplexer. Its default <kbd>Ctrl</kbd>-<kbd>B</kbd> keybinding
+  overrides our binding for bookmarks, but <kbd>Ins</kbd> can be substituted instead
+  or tmux's prefix key can be rebound to <kbd>Ctrl</kbd>-<kbd>A</kbd> (recommended).
+
+- [GNU Screen](https://www.gnu.org/software/screen)
+
+  Doesn't always fully clear the screen properly, which may result in graphical issues.
 
 # Keybindings
 
