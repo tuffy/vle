@@ -248,7 +248,7 @@ impl Source {
 }
 
 mod private {
-    use crate::buffer::{AltCursor, Buffer, Toggle};
+    use crate::buffer::{AltCursor, Buffer, MainCursor, Toggle};
     use std::cell::{Ref, RefCell, RefMut};
     use std::collections::BTreeMap;
     use std::ops::{Deref, DerefMut};
@@ -348,9 +348,16 @@ mod private {
         }
 
         /// If we're updating the buffer, log its old state on the undo stack
-        pub fn borrow_update(&self, cursor: usize, cursor_column: usize) -> RefMut<'_, Buffer> {
+        pub fn borrow_update(
+            &mut self,
+            main: MainCursor<'_>,
+            alt: &mut [AltCursor<'_>],
+        ) -> RefMut<'_, Buffer> {
             let mut buf = self.0.borrow_mut();
-            buf.perform_update(cursor, cursor_column);
+            if buf.perform_update() {
+                main.perform_update();
+                alt.iter_mut().for_each(|a| a.perform_update());
+            }
             buf
         }
 
@@ -805,16 +812,17 @@ impl Buffer {
         !self.bookmarks.is_empty()
     }
 
-    /// Adjust internal state for a move
-    pub fn perform_update(&mut self, cursor: usize, cursor_column: usize) {
+    /// Adjust internal state for a move, returns true if undo stack added
+    pub fn perform_update(&mut self) -> bool {
         if std::mem::take(&mut self.undo_finished) {
             self.undo.push(BufferState {
                 rope: self.rope.clone(),
-                cursor,
-                cursor_column,
                 bookmarks: self.bookmarks.clone(),
             });
             self.redo.clear();
+            true
+        } else {
+            false
         }
     }
 }
@@ -888,6 +896,8 @@ pub struct BufferContext {
     cursor_column: usize,           // cursor's desired column, as a display column
     selection: Option<usize>,       // cursor's text selection anchor
     message: Option<BufferMessage>, // some user-facing message
+    undo: Vec<BufferContextState>,  // the cursor undo stack
+    redo: Vec<BufferContextState>,  // the cursor redo stack
 }
 
 // moving the cursor vertically should preserve the cursor column
@@ -1221,10 +1231,19 @@ impl BufferContext {
         }
     }
 
-    pub fn insert_char(&mut self, alt: Vec<AltCursor<'_>>, c: char) {
+    pub fn insert_char(&mut self, mut alt: Vec<AltCursor<'_>>, c: char) {
         use unicode_width::UnicodeWidthChar;
 
-        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+        let mut buf = self.buffer.borrow_update(
+            MainCursor {
+                cursor: self.cursor,
+                cursor_column: self.cursor_column,
+                selection: self.selection,
+                undo: &mut self.undo,
+                redo: &mut self.redo,
+            },
+            &mut alt,
+        );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
 
         match &mut self.selection {
@@ -1317,12 +1336,21 @@ impl BufferContext {
         }
     }
 
-    pub fn paste(&mut self, alt: Vec<AltCursor<'_>>, cut_buffer: &mut Option<EditorCutBuffer>) {
+    pub fn paste(&mut self, mut alt: Vec<AltCursor<'_>>, cut_buffer: &mut Option<EditorCutBuffer>) {
         match self.selection.as_mut() {
             None => {
                 // No active selection, so paste as-is
 
-                let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+                let mut buf = self.buffer.borrow_update(
+                    MainCursor {
+                        cursor: self.cursor,
+                        cursor_column: self.cursor_column,
+                        selection: self.selection,
+                        undo: &mut self.undo,
+                        redo: &mut self.redo,
+                    },
+                    &mut alt,
+                );
                 let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
                 let mut alt = Secondary::ge(alt, bookmarks, self.cursor);
 
@@ -1352,7 +1380,16 @@ impl BufferContext {
             }
             Some(selection) => {
                 if let Some(cut_pasted) = cut_buffer.as_mut().and_then(|c| c.primary_mut()) {
-                    let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+                    let mut buf = self.buffer.borrow_update(
+                        MainCursor {
+                            cursor: self.cursor,
+                            cursor_column: self.cursor_column,
+                            selection: Some(*selection),
+                            undo: &mut self.undo,
+                            redo: &mut self.redo,
+                        },
+                        &mut alt,
+                    );
                     let (selection_start, selection_end) = reorder(self.cursor, *selection);
                     let cut_range = selection_start..selection_end;
                     let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
@@ -1399,8 +1436,17 @@ impl BufferContext {
         }
     }
 
-    pub fn newline(&mut self, alt: Vec<AltCursor<'_>>) {
-        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+    pub fn newline(&mut self, mut alt: Vec<AltCursor<'_>>) {
+        let mut buf = self.buffer.borrow_update(
+            MainCursor {
+                cursor: self.cursor,
+                cursor_column: self.cursor_column,
+                selection: self.selection,
+                undo: &mut self.undo,
+                redo: &mut self.redo,
+            },
+            &mut alt,
+        );
         let indent_char = if buf.tabs_required { '\t' } else { ' ' };
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
 
@@ -1450,8 +1496,17 @@ impl BufferContext {
         }
     }
 
-    pub fn backspace(&mut self, alt: Vec<AltCursor<'_>>) {
-        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+    pub fn backspace(&mut self, mut alt: Vec<AltCursor<'_>>) {
+        let mut buf = self.buffer.borrow_update(
+            MainCursor {
+                cursor: self.cursor,
+                cursor_column: self.cursor_column,
+                selection: self.selection,
+                undo: &mut self.undo,
+                redo: &mut self.redo,
+            },
+            &mut alt,
+        );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
 
         match self.selection.take() {
@@ -1478,8 +1533,17 @@ impl BufferContext {
         }
     }
 
-    pub fn delete(&mut self, alt: Vec<AltCursor<'_>>) {
-        let buf = &mut self.buffer.borrow_update(self.cursor, self.cursor_column);
+    pub fn delete(&mut self, mut alt: Vec<AltCursor<'_>>) {
+        let buf = &mut self.buffer.borrow_update(
+            MainCursor {
+                cursor: self.cursor,
+                cursor_column: self.cursor_column,
+                selection: self.selection,
+                undo: &mut self.undo,
+                redo: &mut self.redo,
+            },
+            &mut alt,
+        );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
 
         match &mut self.selection {
@@ -1565,10 +1629,19 @@ impl BufferContext {
         ))
     }
 
-    pub fn take_selection(&mut self, alt: Vec<AltCursor<'_>>) -> Option<CutBuffer> {
+    pub fn take_selection(&mut self, mut alt: Vec<AltCursor<'_>>) -> Option<CutBuffer> {
         let selection = self.selection.take()?;
         let (selection_start, selection_end) = reorder(self.cursor, selection);
-        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+        let mut buf = self.buffer.borrow_update(
+            MainCursor {
+                cursor: self.cursor,
+                cursor_column: self.cursor_column,
+                selection: self.selection,
+                undo: &mut self.undo,
+                redo: &mut self.redo,
+            },
+            &mut alt,
+        );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::ge(alt, bookmarks, selection_start);
 
@@ -1642,51 +1715,96 @@ impl BufferContext {
         Ok((idx, matches))
     }
 
-    pub fn perform_undo(&mut self) {
+    /// Performs undo on the active BufferContext, returns Ok(()) on success
+    pub fn perform_undo_active(&mut self) -> Result<(), ()> {
         let mut buf = self.buffer.borrow_mut();
-        match buf.undo.pop() {
-            Some(mut state) => {
+        match (buf.undo.pop(), self.undo.pop()) {
+            (Some(mut buf_state), Some(mut ctx_state)) => {
                 use std::ops::DerefMut;
-                std::mem::swap(buf.rope.get_mut().deref_mut(), &mut state.rope);
-                std::mem::swap(&mut buf.bookmarks, &mut state.bookmarks);
-                std::mem::swap(&mut self.cursor, &mut state.cursor);
-                std::mem::swap(&mut self.cursor_column, &mut state.cursor_column);
-                buf.redo.push(state);
+
+                std::mem::swap(buf.rope.get_mut().deref_mut(), &mut buf_state.rope);
+                std::mem::swap(&mut buf.bookmarks, &mut buf_state.bookmarks);
+                buf.redo.push(buf_state);
                 buf.undo_finished = true;
-                self.selection = None;
+
+                std::mem::swap(&mut self.cursor, &mut ctx_state.cursor);
+                std::mem::swap(&mut self.cursor_column, &mut ctx_state.cursor_column);
+                std::mem::swap(&mut self.selection, &mut ctx_state.selection);
+                self.redo.push(ctx_state);
+                Ok(())
             }
-            None => {
+            _ => {
                 self.message = Some(BufferMessage::Notice("nothing left to undo".into()));
+                Err(())
             }
         }
     }
 
-    pub fn perform_redo(&mut self) {
+    /// Performs undo on inactive BufferContext
+    pub fn perform_undo_inactive(&mut self) {
+        if let Some(mut ctx_state) = self.undo.pop() {
+            std::mem::swap(&mut self.cursor, &mut ctx_state.cursor);
+            std::mem::swap(&mut self.cursor_column, &mut ctx_state.cursor_column);
+            std::mem::swap(&mut self.selection, &mut ctx_state.selection);
+            self.redo.push(ctx_state);
+        }
+    }
+
+    /// Performs redo on the active BufferContext, returns Ok(()) on success
+    pub fn perform_redo_active(&mut self) -> Result<(), ()> {
         let mut buf = self.buffer.borrow_mut();
-        match buf.redo.pop() {
-            Some(mut state) => {
+        match (buf.redo.pop(), self.redo.pop()) {
+            (Some(mut buf_state), Some(mut ctx_state)) => {
                 use std::ops::DerefMut;
-                std::mem::swap(buf.rope.get_mut().deref_mut(), &mut state.rope);
-                std::mem::swap(&mut buf.bookmarks, &mut state.bookmarks);
-                std::mem::swap(&mut self.cursor, &mut state.cursor);
-                std::mem::swap(&mut self.cursor_column, &mut state.cursor_column);
-                buf.undo.push(state);
+
+                std::mem::swap(buf.rope.get_mut().deref_mut(), &mut buf_state.rope);
+                std::mem::swap(&mut buf.bookmarks, &mut buf_state.bookmarks);
+                buf.undo.push(buf_state);
                 buf.undo_finished = true;
-                self.selection = None;
+
+                std::mem::swap(&mut self.cursor, &mut ctx_state.cursor);
+                std::mem::swap(&mut self.cursor_column, &mut ctx_state.cursor_column);
+                std::mem::swap(&mut self.selection, &mut ctx_state.selection);
+                self.undo.push(ctx_state);
+
+                Ok(())
             }
-            None => {
+            _ => {
                 self.message = Some(BufferMessage::Notice("nothing left to redo".into()));
+                Err(())
             }
         }
     }
 
-    pub fn complete_or_indent(&mut self, alt: Vec<AltCursor<'_>>) -> Option<(usize, Vec<String>)> {
+    /// Performs undo on inactive BufferContext
+    pub fn perform_redo_inactive(&mut self) {
+        if let Some(mut ctx_state) = self.redo.pop() {
+            std::mem::swap(&mut self.cursor, &mut ctx_state.cursor);
+            std::mem::swap(&mut self.cursor_column, &mut ctx_state.cursor_column);
+            std::mem::swap(&mut self.selection, &mut ctx_state.selection);
+            self.undo.push(ctx_state);
+        }
+    }
+
+    pub fn complete_or_indent(
+        &mut self,
+        mut alt: Vec<AltCursor<'_>>,
+    ) -> Option<(usize, Vec<String>)> {
         match self.selection {
             None => {
                 if let matches @ Some(_) = self.autocomplete_matches() {
                     return matches;
                 }
-                let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+                let mut buf = self.buffer.borrow_update(
+                    MainCursor {
+                        cursor: self.cursor,
+                        cursor_column: self.cursor_column,
+                        selection: self.selection,
+                        undo: &mut self.undo,
+                        redo: &mut self.redo,
+                    },
+                    &mut alt,
+                );
                 let indent = match buf.tabs_required {
                     false => buf.tab_substitution.clone(),
                     true => "\t".to_string(),
@@ -1706,7 +1824,16 @@ impl BufferContext {
             selection_opt @ Some(_) => {
                 use std::convert::Infallible;
 
-                let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+                let mut buf = self.buffer.borrow_update(
+                    MainCursor {
+                        cursor: self.cursor,
+                        cursor_column: self.cursor_column,
+                        selection: self.selection,
+                        undo: &mut self.undo,
+                        redo: &mut self.redo,
+                    },
+                    &mut alt,
+                );
                 let indent = match buf.tabs_required {
                     false => buf.tab_substitution.clone(),
                     true => "\t".to_string(),
@@ -1740,14 +1867,23 @@ impl BufferContext {
 
     pub fn complete_or_unindent(
         &mut self,
-        alt: Vec<AltCursor<'_>>,
+        mut alt: Vec<AltCursor<'_>>,
     ) -> Option<(usize, Vec<String>)> {
         match self.selection {
             None => {
                 if let matches @ Some(_) = self.autocomplete_matches() {
                     return matches;
                 }
-                let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+                let mut buf = self.buffer.borrow_update(
+                    MainCursor {
+                        cursor: self.cursor,
+                        cursor_column: self.cursor_column,
+                        selection: self.selection,
+                        undo: &mut self.undo,
+                        redo: &mut self.redo,
+                    },
+                    &mut alt,
+                );
                 let indent = match buf.tabs_required {
                     false => buf.tab_substitution.clone(),
                     true => "\t".to_string(),
@@ -1785,7 +1921,16 @@ impl BufferContext {
                 None
             }
             selection_opt @ Some(_) => {
-                let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+                let mut buf = self.buffer.borrow_update(
+                    MainCursor {
+                        cursor: self.cursor,
+                        cursor_column: self.cursor_column,
+                        selection: self.selection,
+                        undo: &mut self.undo,
+                        redo: &mut self.redo,
+                    },
+                    &mut alt,
+                );
                 let indent = match buf.tabs_required {
                     false => buf.tab_substitution.clone(),
                     true => "\t".to_string(),
@@ -2071,12 +2216,21 @@ impl BufferContext {
 
     pub fn autocomplete(
         &mut self,
-        alt: Vec<AltCursor<'_>>,
+        mut alt: Vec<AltCursor<'_>>,
         offset: usize,
         original: &str,
         replacement: &str,
     ) {
-        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+        let mut buf = self.buffer.borrow_update(
+            MainCursor {
+                cursor: self.cursor,
+                cursor_column: self.cursor_column,
+                selection: self.selection,
+                undo: &mut self.undo,
+                redo: &mut self.redo,
+            },
+            &mut alt,
+        );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::ge(alt, bookmarks, offset);
 
@@ -2097,7 +2251,7 @@ impl BufferContext {
 
     pub fn multi_autocomplete(
         &mut self,
-        alt: Vec<AltCursor<'_>>,
+        mut alt: Vec<AltCursor<'_>>,
         matches: &mut [MultiCursor],
         mut offsets: &[usize],
         original: &str,
@@ -2106,7 +2260,16 @@ impl BufferContext {
         let original_chars = original.chars().count();
         let replacement_chars = replacement.chars().count();
 
-        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+        let mut buf = self.buffer.borrow_update(
+            MainCursor {
+                cursor: self.cursor,
+                cursor_column: self.cursor_column,
+                selection: self.selection,
+                undo: &mut self.undo,
+                redo: &mut self.redo,
+            },
+            &mut alt,
+        );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
 
@@ -2134,13 +2297,22 @@ impl BufferContext {
 
     pub fn multi_insert_char(
         &mut self,
-        alt: Vec<AltCursor<'_>>,
+        mut alt: Vec<AltCursor<'_>>,
         matches: &mut [MultiCursor],
         c: char,
     ) {
         use std::convert::Infallible;
 
-        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+        let mut buf = self.buffer.borrow_update(
+            MainCursor {
+                cursor: self.cursor,
+                cursor_column: self.cursor_column,
+                selection: self.selection,
+                undo: &mut self.undo,
+                redo: &mut self.redo,
+            },
+            &mut alt,
+        );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
 
@@ -2156,11 +2328,20 @@ impl BufferContext {
 
     pub fn multi_insert_group(
         &mut self,
-        alt: Vec<AltCursor<'_>>,
+        mut alt: Vec<AltCursor<'_>>,
         matches: &mut [MultiCursor],
         group_num: usize,
     ) {
-        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+        let mut buf = self.buffer.borrow_update(
+            MainCursor {
+                cursor: self.cursor,
+                cursor_column: self.cursor_column,
+                selection: self.selection,
+                undo: &mut self.undo,
+                redo: &mut self.redo,
+            },
+            &mut alt,
+        );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
 
@@ -2188,11 +2369,20 @@ impl BufferContext {
 
     pub fn multi_paste(
         &mut self,
-        alt: Vec<AltCursor<'_>>,
+        mut alt: Vec<AltCursor<'_>>,
         matches: &mut [MultiCursor],
         cut: &mut EditorCutBuffer,
     ) {
-        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+        let mut buf = self.buffer.borrow_update(
+            MainCursor {
+                cursor: self.cursor,
+                cursor_column: self.cursor_column,
+                selection: self.selection,
+                undo: &mut self.undo,
+                redo: &mut self.redo,
+            },
+            &mut alt,
+        );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
 
@@ -2238,11 +2428,20 @@ impl BufferContext {
 
     pub fn multi_insert_strings<'s>(
         &mut self,
-        alt: Vec<AltCursor<'_>>,
+        mut alt: Vec<AltCursor<'_>>,
         matches: &mut [MultiCursor],
         mut strings: impl std::iter::FusedIterator<Item = (usize, &'s str)>,
     ) {
-        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+        let mut buf = self.buffer.borrow_update(
+            MainCursor {
+                cursor: self.cursor,
+                cursor_column: self.cursor_column,
+                selection: self.selection,
+                undo: &mut self.undo,
+                redo: &mut self.redo,
+            },
+            &mut alt,
+        );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
 
@@ -2260,8 +2459,17 @@ impl BufferContext {
         );
     }
 
-    pub fn multi_backspace(&mut self, alt: Vec<AltCursor<'_>>, matches: &mut [MultiCursor]) {
-        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+    pub fn multi_backspace(&mut self, mut alt: Vec<AltCursor<'_>>, matches: &mut [MultiCursor]) {
+        let mut buf = self.buffer.borrow_update(
+            MainCursor {
+                cursor: self.cursor,
+                cursor_column: self.cursor_column,
+                selection: self.selection,
+                undo: &mut self.undo,
+                redo: &mut self.redo,
+            },
+            &mut alt,
+        );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
 
@@ -2274,8 +2482,17 @@ impl BufferContext {
         );
     }
 
-    pub fn multi_delete(&mut self, alt: Vec<AltCursor<'_>>, matches: &mut [MultiCursor]) {
-        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+    pub fn multi_delete(&mut self, mut alt: Vec<AltCursor<'_>>, matches: &mut [MultiCursor]) {
+        let mut buf = self.buffer.borrow_update(
+            MainCursor {
+                cursor: self.cursor,
+                cursor_column: self.cursor_column,
+                selection: self.selection,
+                undo: &mut self.undo,
+                redo: &mut self.redo,
+            },
+            &mut alt,
+        );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
 
@@ -2368,10 +2585,19 @@ impl BufferContext {
 
     pub fn multi_cursor_cut(
         &mut self,
-        alt: Vec<AltCursor<'_>>,
+        mut alt: Vec<AltCursor<'_>>,
         matches: &mut [MultiCursor],
     ) -> Option<EditorCutBuffer> {
-        let mut buf = self.buffer.borrow_update(self.cursor, self.cursor_column);
+        let mut buf = self.buffer.borrow_update(
+            MainCursor {
+                cursor: self.cursor,
+                cursor_column: self.cursor_column,
+                selection: self.selection,
+                undo: &mut self.undo,
+                redo: &mut self.redo,
+            },
+            &mut alt,
+        );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
         let mut cut_buffers = vec![];
@@ -2421,7 +2647,10 @@ impl BufferContext {
     pub fn alt_cursor(&mut self) -> AltCursor<'_> {
         AltCursor {
             cursor: &mut self.cursor,
+            cursor_column: self.cursor_column,
             selection: &mut self.selection,
+            undo: &mut self.undo,
+            redo: &mut self.redo,
         }
     }
 
@@ -2567,9 +2796,42 @@ impl std::fmt::Display for BufferContext {
     }
 }
 
+pub struct MainCursor<'a> {
+    cursor: usize,
+    cursor_column: usize,
+    selection: Option<usize>,
+    undo: &'a mut Vec<BufferContextState>,
+    redo: &'a mut Vec<BufferContextState>,
+}
+
+impl MainCursor<'_> {
+    fn perform_update(self) {
+        self.undo.push(BufferContextState {
+            cursor: self.cursor,
+            cursor_column: self.cursor_column,
+            selection: self.selection,
+        });
+        self.redo.clear();
+    }
+}
+
 pub struct AltCursor<'a> {
     cursor: &'a mut usize,
+    cursor_column: usize,
     selection: &'a mut Option<usize>,
+    undo: &'a mut Vec<BufferContextState>,
+    redo: &'a mut Vec<BufferContextState>,
+}
+
+impl AltCursor<'_> {
+    fn perform_update(&mut self) {
+        self.undo.push(BufferContextState {
+            cursor: *self.cursor,
+            cursor_column: self.cursor_column,
+            selection: *self.selection,
+        });
+        self.redo.clear();
+    }
 }
 
 pub struct MultiCursor {
@@ -3932,6 +4194,8 @@ impl From<Buffer> for BufferContext {
             cursor_column: 0,
             selection: None,
             message: None,
+            undo: vec![],
+            redo: vec![],
         }
     }
 }
@@ -5887,9 +6151,15 @@ fn search_area<'r>(
 /// Buffer's undo/redo state
 struct BufferState {
     rope: ropey::Rope,
+    bookmarks: private::Bookmarks,
+}
+
+/// BufferContext's undo/redo state
+#[derive(Clone)]
+struct BufferContextState {
     cursor: usize,
     cursor_column: usize,
-    bookmarks: private::Bookmarks,
+    selection: Option<usize>,
 }
 
 #[derive(Clone)]

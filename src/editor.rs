@@ -818,8 +818,16 @@ impl Editor {
                     b.paste(a, &mut self.cut_buffer);
                 });
             }
-            ctrl_keybind!(Undo) => self.update_buffer(|b| b.perform_undo()),
-            ctrl_keybind!(Redo) => self.update_buffer(|b| b.perform_redo()),
+            ctrl_keybind!(Undo) => {
+                let _ = self
+                    .layout
+                    .on_all(|b| b.perform_undo_active(), |b| b.perform_undo_inactive());
+            }
+            ctrl_keybind!(Redo) => {
+                let _ = self
+                    .layout
+                    .on_all(|b| b.perform_redo_active(), |b| b.perform_redo_inactive());
+            }
             keybind!(Save) => {
                 // if save fails, we'll already be in normal mode
                 // to display the save failure message
@@ -2417,6 +2425,69 @@ impl Layout {
         F: FnOnce(&mut crate::buffer::BufferContext, Vec<AltCursor<'_>>) -> T,
     {
         self.current_buffer_mut().map(|(_, buf, alts)| f(buf, alts))
+    }
+
+    fn on_all<F, G>(&mut self, on_active: F, on_rest: G) -> Result<usize, ()>
+    where
+        F: FnOnce(&mut BufferContext) -> Result<(), ()>,
+        G: Fn(&mut BufferContext) + Copy,
+    {
+        match self {
+            Self::Single(b) => {
+                let index = b.current_index();
+                on_active(b.get_mut(index).ok_or(())?).map(|()| index)
+            }
+            Self::Horizontal {
+                which: HorizontalPos::Top,
+                top: active,
+                bottom: inactive,
+                ..
+            }
+            | Self::Horizontal {
+                which: HorizontalPos::Bottom,
+                bottom: active,
+                top: inactive,
+                ..
+            }
+            | Self::Vertical {
+                which: VerticalPos::Left,
+                left: active,
+                right: inactive,
+                ..
+            }
+            | Self::Vertical {
+                which: VerticalPos::Right,
+                right: active,
+                left: inactive,
+                ..
+            } => {
+                let index = active.on_all(on_active, on_rest)?;
+                inactive.on_rest(index, on_rest);
+                Ok(index)
+            }
+        }
+    }
+
+    fn on_rest<F>(&mut self, index: usize, on_rest: F)
+    where
+        F: Fn(&mut BufferContext) + Copy,
+    {
+        match self {
+            Self::Single(b) => {
+                if let Some(buf) = b.get_mut(index) {
+                    on_rest(buf);
+                }
+            }
+            Self::Horizontal {
+                top: a, bottom: b, ..
+            }
+            | Self::Vertical {
+                left: a, right: b, ..
+            } => {
+                a.on_rest(index, on_rest);
+                b.on_rest(index, on_rest);
+            }
+        }
     }
 
     /// Returns currently active buffer_list and all alt buffer_lists
