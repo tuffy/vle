@@ -1355,24 +1355,13 @@ impl BufferContext {
                 let mut alt = Secondary::ge(alt, bookmarks, self.cursor);
 
                 match cut_buffer {
-                    Some(EditorCutBuffer::Single(pasted)) => {
+                    Some(cut_buffer) => {
+                        let pasted = cut_buffer.paste_and_rotate();
                         if rope.try_insert(self.cursor, &pasted.data).is_ok() {
                             let old_cursor = self.cursor;
                             self.cursor += alt.inc(pasted.chars_len);
                             alt.add_bookmarks(pasted.bookmarks.iter().map(|b| old_cursor + b));
                             self.cursor_column = cursor_column(&rope, self.cursor);
-                        }
-                    }
-                    Some(EditorCutBuffer::Multiple(pasted_items)) => {
-                        // insert first pasted item and rotate
-                        if let Some(pasted) = pasted_items.first() {
-                            if rope.try_insert(self.cursor, &pasted.data).is_ok() {
-                                let old_cursor = self.cursor;
-                                self.cursor += alt.inc(pasted.chars_len);
-                                alt.add_bookmarks(pasted.bookmarks.iter().map(|b| old_cursor + b));
-                                self.cursor_column = cursor_column(&rope, self.cursor);
-                            }
-                            pasted_items.rotate_left(1);
                         }
                     }
                     None => { /* nothing in cut buffer, so nothing to do */ }
@@ -6062,10 +6051,14 @@ pub enum EditorCutBuffer {
 }
 
 impl EditorCutBuffer {
-    pub fn primary(&self) -> Option<&CutBuffer> {
+    pub fn paste_and_rotate(&mut self) -> &CutBuffer {
         match self {
-            Self::Single(b) => Some(b),
-            Self::Multiple(v) => v.first(),
+            Self::Single(b) => b,
+            Self::Multiple(v) => {
+                // should always contain at least 2 buffers
+                v.rotate_left(1);
+                v.last().unwrap()
+            }
         }
     }
 
@@ -6074,10 +6067,6 @@ impl EditorCutBuffer {
             Self::Single(b) => Some(b),
             Self::Multiple(v) => v.first_mut(),
         }
-    }
-
-    pub fn cut_str(&self) -> Option<&str> {
-        self.primary().map(|c| c.as_str())
     }
 }
 

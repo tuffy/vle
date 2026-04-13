@@ -510,7 +510,7 @@ impl Editor {
                     if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
                         && let Some(new_mode) = process_search(
                             buf,
-                            self.cut_buffer.as_ref(),
+                            self.cut_buffer.as_mut(),
                             match type_ {
                                 SearchType::Plain => &mut self.last_plain_search,
                                 SearchType::Regex => &mut self.last_regex_search,
@@ -1565,7 +1565,7 @@ enum NextModeIncremental {
 
 fn process_search(
     buffer: &mut BufferContext,
-    cut_buffer: Option<&EditorCutBuffer>,
+    cut_buffer: Option<&mut EditorCutBuffer>,
     last_search: &mut Option<TextField>,
     prompt: &mut TextField,
     type_: &mut SearchType,
@@ -1581,8 +1581,8 @@ fn process_search(
 
     match event {
         ctrl_keybind!(Paste) => {
-            if let Some(s) = cut_buffer.and_then(|b| b.cut_str()) {
-                prompt.paste(s);
+            if let Some(c) = cut_buffer {
+                prompt.paste(c.paste_and_rotate().as_str());
             }
             None
         }
