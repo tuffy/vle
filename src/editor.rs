@@ -1575,9 +1575,7 @@ fn process_search(
     use crate::buffer::Normalizations;
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-    fn not_found<Q: std::fmt::Display>(query: Q) -> String {
-        format!("Not Found : {query}")
-    }
+    static NOT_FOUND: &str = "Not Found";
 
     match event {
         ctrl_keybind!(Paste) => {
@@ -1647,8 +1645,8 @@ fn process_search(
                         *last_search = Some(std::mem::take(prompt));
                         Some(NextModeIncremental::Browse { match_idx, matches })
                     }
-                    Err(err) => {
-                        buffer.set_error(not_found(err));
+                    Err(_) => {
+                        buffer.set_error(NOT_FOUND);
                         None
                     }
                 },
@@ -1657,8 +1655,8 @@ fn process_search(
                         *last_search = Some(std::mem::take(prompt));
                         Some(NextModeIncremental::Browse { match_idx, matches })
                     }
-                    Err(err) => {
-                        buffer.set_error(not_found(err));
+                    Err(_) => {
+                        buffer.set_error(NOT_FOUND);
                         None
                     }
                 },
@@ -1669,8 +1667,8 @@ fn process_search(
                         *last_search = Some(std::mem::take(prompt));
                         Some(NextModeIncremental::Browse { match_idx, matches })
                     }
-                    Err(err) => {
-                        buffer.set_error(not_found(err));
+                    Err(_) => {
+                        buffer.set_error(NOT_FOUND);
                         None
                     }
                 },
