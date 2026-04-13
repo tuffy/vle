@@ -4393,6 +4393,10 @@ impl BufferList {
         self.buffers.iter()
     }
 
+    pub fn buffers_mut(&mut self) -> impl Iterator<Item = &mut BufferContext> {
+        self.buffers.iter_mut()
+    }
+
     pub fn set_index(&mut self, index: usize) {
         if index < self.buffers.len() {
             self.current = index;

@@ -1364,6 +1364,17 @@ impl Editor {
             _ => { /* do nothing */ }
         }
     }
+
+    pub fn auto_save(&mut self) -> bool {
+        let b = self.layout.selected_buffer_list_mut();
+        b.buffers_mut().fold(false, |saved, buf| {
+            if buf.modified() {
+                saved || matches!(buf.verified_save(), Ok(Ok(())))
+            } else {
+                saved
+            }
+        })
+    }
 }
 
 fn process_select_line(

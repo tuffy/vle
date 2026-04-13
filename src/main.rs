@@ -23,7 +23,8 @@ mod syntax;
 use editor::{Editor, LineNumber};
 
 fn main() {
-    use crossterm::event::{Event, MouseEvent, MouseEventKind, read};
+    use crossterm::event::{Event, MouseEvent, MouseEventKind, poll, read};
+    use std::time::Duration;
 
     let mut editor = match open_editor() {
         Ok(editor) => editor,
@@ -34,20 +35,50 @@ fn main() {
     };
 
     if let Err(err) = execute_terminal(|terminal| {
-        while editor.has_open_buffers() {
-            let area = editor.display(terminal)?;
-            editor.process_event(
-                area,
-                loop {
-                    match read()? {
-                        Event::Mouse(MouseEvent {
-                            kind: MouseEventKind::Moved | MouseEventKind::Up(_),
-                            ..
-                        }) => { /* ignore mouse movement events */ }
-                        event => break event,
+        match std::env::var("VLE_AUTO_SAVE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .map(Duration::from_secs)
+            .filter(|d| *d > Duration::ZERO)
+        {
+            None => {
+                while editor.has_open_buffers() {
+                    let area = editor.display(terminal)?;
+                    editor.process_event(
+                        area,
+                        loop {
+                            match read()? {
+                                Event::Mouse(MouseEvent {
+                                    kind: MouseEventKind::Moved | MouseEventKind::Up(_),
+                                    ..
+                                }) => { /* ignore mouse movement events */ }
+                                event => break event,
+                            }
+                        },
+                    )
+                }
+            }
+            Some(max_wait) => {
+                while editor.has_open_buffers() {
+                    let area = editor.display(terminal)?;
+                    loop {
+                        match poll(max_wait)? {
+                            true => match read()? {
+                                Event::Mouse(MouseEvent {
+                                    kind: MouseEventKind::Moved | MouseEventKind::Up(_),
+                                    ..
+                                }) => { /* ignore mouse movement events */ }
+                                event => break editor.process_event(area, event),
+                            },
+                            false => {
+                                if editor.auto_save() {
+                                    break;
+                                }
+                            }
+                        }
                     }
-                },
-            );
+                }
+            }
         }
 
         Ok(())
