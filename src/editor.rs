@@ -1366,16 +1366,20 @@ impl Editor {
     }
 
     pub fn auto_save(&mut self) -> bool {
-        self.layout
-            .selected_buffer_list_mut()
-            .buffers_mut()
-            .fold(false, |saved, buf| {
-                if buf.modified() {
-                    matches!(buf.verified_save(), Ok(Ok(()))) | saved
-                } else {
-                    saved
-                }
-            })
+        if matches!(self.mode, EditorMode::Editing) {
+            self.layout
+                .selected_buffer_list_mut()
+                .buffers_mut()
+                .fold(false, |saved, buf| {
+                    if buf.modified() {
+                        matches!(buf.verified_save(), Ok(Ok(()))) | saved
+                    } else {
+                        saved
+                    }
+                })
+        } else {
+            false
+        }
     }
 }
 
