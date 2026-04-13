@@ -1704,6 +1704,67 @@ impl BufferContext {
         Ok((idx, matches))
     }
 
+    pub fn all_multiline_matches<S: SearchTerm>(
+        &mut self,
+        range: Option<&SelectionRange>,
+        term: S,
+    ) -> Result<(usize, Vec<MatchAndCaptures>), S> {
+        let buf = self.buffer.borrow_move();
+        let rope = &buf.rope;
+
+        let (whole_rope, offset) = match range {
+            None => (
+                rope.chunks()
+                    .fold(String::with_capacity(rope.len_bytes()), |mut acc, s| {
+                        acc.push_str(s);
+                        acc
+                    }),
+                0,
+            ),
+            Some(SelectionRange { start, lines }) => (
+                rope.lines_at(*start)
+                    .take(lines.get())
+                    .fold(String::new(), |mut acc, l| {
+                        acc.push_str(&Cow::from(l));
+                        acc
+                    }),
+                rope.line_to_byte(*start),
+            ),
+        };
+
+        let matches = term
+            .match_ranges(&whole_rope)
+            .map(|m| m + offset)
+            .filter_map(
+                |SearchMatch {
+                     start: s,
+                     end: e,
+                     groups: c,
+                 }| {
+                    Some((
+                        rope.try_byte_to_char(s).ok()?..rope.try_byte_to_char(e).ok()?,
+                        c,
+                    ))
+                },
+            )
+            .collect::<Vec<_>>();
+
+        let start = match self.selection {
+            Some(selection) => selection.min(self.cursor),
+            None => self.cursor,
+        };
+
+        let (idx, (next_match, _)) = matches
+            .iter()
+            .enumerate()
+            .find(|(_, (m, _))| m.start >= start)
+            .or_else(|| matches.first().map(|m| (0, m)))
+            .ok_or(term)?;
+        self.cursor = next_match.end;
+        self.selection = None;
+        Ok((idx, matches))
+    }
+
     /// Performs undo on the active BufferContext, returns Ok(()) on success
     pub fn perform_undo_active(&mut self) -> Result<(), ()> {
         let mut buf = self.buffer.borrow_mut();
@@ -6091,6 +6152,10 @@ impl CutBuffer {
 
     pub fn as_str(&self) -> &str {
         self.data.as_str()
+    }
+
+    pub fn multi_line(&self) -> bool {
+        self.data.contains('\n')
     }
 }
 

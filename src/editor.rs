@@ -1579,10 +1579,36 @@ fn process_search(
 
     match event {
         ctrl_keybind!(Paste) => {
-            if let Some(c) = cut_buffer {
+            let c = cut_buffer?;
+            let b = c.paste_and_rotate();
+            if b.multi_line() {
+                match Normalizations::try_from(b.as_str().to_string()) {
+                    Err(term) => match buffer.all_multiline_matches(range, term) {
+                        Ok((match_idx, matches)) => {
+                            *last_search = Some(std::mem::take(prompt));
+                            Some(NextModeIncremental::Browse { match_idx, matches })
+                        }
+                        Err(_) => {
+                            buffer.set_error(NOT_FOUND);
+                            None
+                        }
+                    },
+                    Ok(normalizations) => match buffer.all_multiline_matches(range, normalizations)
+                    {
+                        Ok((match_idx, matches)) => {
+                            *last_search = Some(std::mem::take(prompt));
+                            Some(NextModeIncremental::Browse { match_idx, matches })
+                        }
+                        Err(_) => {
+                            buffer.set_error(NOT_FOUND);
+                            None
+                        }
+                    },
+                }
+            } else {
                 prompt.paste(c.paste_and_rotate().as_str());
+                None
             }
-            None
         }
         key!(Tab) => {
             if prompt.is_empty() {
