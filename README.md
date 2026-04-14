@@ -203,12 +203,13 @@ the pane size ratios.
 With very little to configure, VLE doesn't use a config file at all.
 Any configuration is performed with a modest number of environmental variables:
 
-| Variable             | Default | Meaning                                  |
-|----------------------|---------|------------------------------------------|
-| `VLE_SPACES_PER_TAB` | 4       | number of spaces to output per tab       |
-| `VLE_ALWAYS_TAB`     | 0       | whether to always insert literal tabs    |
-| `VLE_PAGE_SIZE`      | 25      | number of lines PgUp and PgDn move       |
-| `VLE_EXT_MAP`        | empty   | syntax highlighting extension mapping    |
+| Variable             | Default   | Meaning                                  |
+|----------------------|-----------|------------------------------------------|
+| `VLE_SPACES_PER_TAB` | 4         | number of spaces to output per tab       |
+| `VLE_ALWAYS_TAB`     | 0         | whether to always insert literal tabs    |
+| `VLE_PAGE_SIZE`      | 25        | number of lines PgUp and PgDn move       |
+| `VLE_EXT_MAP`        | empty     | syntax highlighting extension mapping    |
+| `VLE_AUTO_SAVE`      | 0 (never) | save after number of idle seconds        |
 
 No config file means there's one less thing to install,
 learn the format of, modify or break.
