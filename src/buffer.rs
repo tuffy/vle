@@ -15,6 +15,7 @@ use ratatui::{
 };
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::num::NonZero;
 use std::ops::Range;
 use std::path::PathBuf;
@@ -3667,7 +3668,7 @@ pub struct SelectionRange {
     lines: NonZero<usize>,
 }
 
-pub trait SearchTerm: std::fmt::Display {
+pub trait SearchTerm: std::fmt::Display + Clone {
     /// Returns iterator of match ranges in bytes and any captured groups
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = SearchMatch>;
 }
@@ -3717,6 +3718,7 @@ impl SearchTerm for String {
     }
 }
 
+#[derive(Clone)]
 pub struct Normalizations(std::collections::HashSet<String>);
 
 impl TryFrom<String> for Normalizations {
@@ -4500,6 +4502,38 @@ impl BufferList {
             });
 
         finalize_matches(matches, prefix)
+    }
+
+    pub fn all_matches<S: SearchTerm>(
+        &mut self,
+        term: S,
+    ) -> Result<(usize, BTreeMap<usize, Vec<MultiCursor>>), S> {
+        let (mut current_indexes, matches): (
+            BTreeMap<usize, usize>,
+            BTreeMap<usize, Vec<MultiCursor>>,
+        ) = self
+            .buffers_mut()
+            .enumerate()
+            .filter_map(|(buf_idx, b)| {
+                let (match_idx, matches) = b.all_matches(None, term.clone()).ok()?;
+                Some((
+                    (buf_idx, match_idx),
+                    (buf_idx, matches.into_iter().map(|m| m.into()).collect()),
+                ))
+            })
+            .unzip();
+
+        let Some((buffer_idx, match_idx)) = current_indexes
+            .extract_if(self.current.., |_, _| true)
+            .next()
+            .or_else(|| current_indexes.pop_first())
+        else {
+            return Err(term);
+        };
+
+        self.current = buffer_idx;
+
+        Ok((match_idx, matches))
     }
 }
 
@@ -5610,6 +5644,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         .take(area.height.into())
                         .collect()
                 }
+                // TODO - add specific rendering for MultiCursorAll
                 Some(EditorMode::AutocompleteMulti {
                     matches,
                     offsets,
@@ -6011,6 +6046,10 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(EditorMode::MultiCursor { .. } | EditorMode::AutocompleteMulti { .. }) => {
+                show_sub_help(text_area, buf, REPLACE_MATCHES);
+            }
+            Some(EditorMode::MultiCursorAll { .. }) => {
+                // TODO - add dedicated help text for this mode?
                 show_sub_help(text_area, buf, REPLACE_MATCHES);
             }
             Some(EditorMode::MultiCursorMarkSet { .. }) => {

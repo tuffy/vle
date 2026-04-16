@@ -23,6 +23,7 @@ use ratatui::{
     layout::{Position, Rect},
     widgets::StatefulWidget,
 };
+use std::collections::BTreeMap;
 use std::ops::Range;
 use std::sync::LazyLock;
 
@@ -102,6 +103,14 @@ pub enum EditorMode {
         matches: Vec<MultiCursor>,
         match_idx: usize,
         range: Option<SelectionRange>,
+        highlight: bool,
+    },
+    /// Multi-cursor operation across multiple buffers
+    MultiCursorAll {
+        // a buffer index -> cursor matches mapping
+        matches: BTreeMap<usize, Vec<MultiCursor>>,
+        // which match is active in the currently active buffer
+        match_idx: usize,
         highlight: bool,
     },
     /// Querying for what regex group to paste
@@ -561,9 +570,11 @@ impl Editor {
                     {
                         self.mode = match new_mode {
                             NextModeIncremental::Browse { match_idx, matches } => {
-                                buf.set_cursor(matches[match_idx].0.end);
-                                buf.clear_selection();
+                                // I think these are unnecessary
+                                // buf.set_cursor(matches[match_idx].0.end);
+                                // buf.clear_selection();
 
+                                // TODO - try to avoid this re-mapping
                                 let matches = matches.into_iter().map(|r| r.into()).collect();
 
                                 EditorMode::MultiCursor {
@@ -604,6 +615,13 @@ impl Editor {
                         event,
                     ) {
                         self.mode = match new_mode {
+                            NextModeIncrementalAll::Browse { match_idx, matches } => {
+                                EditorMode::MultiCursorAll {
+                                    match_idx,
+                                    matches,
+                                    highlight: true,
+                                }
+                            }
                             NextModeIncrementalAll::SelectLine => EditorMode::SelectLine {
                                 prompt: LinePrompt::default(),
                             },
@@ -672,6 +690,22 @@ impl Editor {
                             };
                         }
                         _ => { /* do nothing */ }
+                    }
+                }
+                EditorMode::MultiCursorAll {
+                    matches,
+                    match_idx,
+                    highlight,
+                } => {
+                    if let Some(new_mode) = process_multi_cursor_all(
+                        &mut self.layout,
+                        &mut self.cut_buffer,
+                        matches,
+                        match_idx,
+                        highlight,
+                        event,
+                    ) {
+                        self.mode = new_mode;
                     }
                 }
                 EditorMode::PasteGroup {
@@ -1814,6 +1848,10 @@ fn process_search(
 }
 
 enum NextModeIncrementalAll {
+    Browse {
+        match_idx: usize,
+        matches: BTreeMap<usize, Vec<MultiCursor>>,
+    },
     SelectLine,
     Autocomplete {
         offset: usize,
@@ -1830,7 +1868,10 @@ fn process_search_all(
     type_: &mut SearchType,
     event: Event,
 ) -> Option<NextModeIncrementalAll> {
+    use crate::buffer::Normalizations;
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+    static NOT_FOUND: &str = "Not Found";
 
     match event {
         // keybind!(Paste) - TODO
@@ -1888,7 +1929,46 @@ fn process_search_all(
                 }
             }
         }
-        // keybind!(Enter) - TODO
+        key!(Enter) => match type_ {
+            SearchType::Plain => match Normalizations::try_from(prompt.value()?) {
+                Err(term) => match buffer_list.all_matches(term) {
+                    Ok((match_idx, matches)) => {
+                        *last_search = Some(std::mem::take(prompt));
+                        Some(NextModeIncrementalAll::Browse { match_idx, matches })
+                    }
+                    Err(_) => {
+                        buffer_list.current_mut()?.set_error(NOT_FOUND);
+                        None
+                    }
+                },
+                Ok(normalizations) => match buffer_list.all_matches(normalizations) {
+                    Ok((match_idx, matches)) => {
+                        *last_search = Some(std::mem::take(prompt));
+                        Some(NextModeIncrementalAll::Browse { match_idx, matches })
+                    }
+                    Err(_) => {
+                        buffer_list.current_mut()?.set_error(NOT_FOUND);
+                        None
+                    }
+                },
+            },
+            SearchType::Regex => match prompt.value()?.parse::<fancy_regex::Regex>() {
+                Ok(regex) => match buffer_list.all_matches(regex) {
+                    Ok((match_idx, matches)) => {
+                        *last_search = Some(std::mem::take(prompt));
+                        Some(NextModeIncrementalAll::Browse { match_idx, matches })
+                    }
+                    Err(_) => {
+                        buffer_list.current_mut()?.set_error(NOT_FOUND);
+                        None
+                    }
+                },
+                Err(err) => {
+                    buffer_list.current_mut()?.set_error(err.to_string());
+                    None
+                }
+            },
+        },
         keybind!(GotoLine) => Some(NextModeIncrementalAll::SelectLine),
         keybind!(Find) => {
             if prompt.is_empty()
@@ -2186,6 +2266,278 @@ fn process_multi_cursor_mark_set(
         }
         ctrl_keybind!(Mark) => Err(()),
         event => Ok(Some(event)),
+    }
+}
+
+fn process_multi_cursor_all(
+    layout: &mut Layout,
+    cut_buffer: &mut Option<EditorCutBuffer>,
+    matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
+    match_idx: &mut usize,
+    highlight: &mut bool,
+    event: Event,
+) -> Option<EditorMode> {
+    use crossterm::event::{
+        Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
+    };
+
+    fn on_all(
+        layout: &mut Layout,
+        matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
+        mut f: impl FnMut(&mut BufferContext, &mut [MultiCursor]),
+    ) {
+        let buffer_list = layout.selected_buffer_list_mut();
+
+        matches.iter_mut().for_each(|(idx, matches)| {
+            if let Some(buf) = buffer_list.get_mut(*idx) {
+                f(buf, matches);
+            }
+        });
+    }
+
+    fn on_all_at(
+        layout: &mut Layout,
+        matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
+        mut f: impl FnMut(&mut BufferContext, Vec<AltCursor<'_>>, &mut [MultiCursor]),
+    ) {
+        let (buffer_list, mut alts) = layout.current_buffer_list_mut();
+
+        matches.iter_mut().for_each(|(idx, matches)| {
+            if let Some(buf) = buffer_list.get_mut(*idx) {
+                f(
+                    buf,
+                    alts.iter_mut()
+                        .filter_map(|a| a.get_mut(*idx).map(|b| b.alt_cursor()))
+                        .collect(),
+                    matches,
+                );
+            }
+        });
+    }
+
+    match event {
+        Event::Key(KeyEvent {
+            code: KeyCode::Char(c),
+            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            *highlight = false;
+            on_all_at(layout, matches, |buffer, alt, matches| {
+                buffer.multi_insert_char(alt, matches, c);
+            });
+            None
+        }
+        // Event::Paste(pasted) => {
+        //     *highlight = false;
+        //     buffer.multi_insert_string(alt, matches, &pasted);
+        //     None
+        // }
+        key!(Backspace) => {
+            *highlight = false;
+            on_all_at(layout, matches, |buffer, alt, matches| {
+                buffer.multi_backspace(alt, matches);
+            });
+            None
+        }
+        key!(Delete) => {
+            *highlight = false;
+            on_all_at(layout, matches, |buffer, alt, matches| {
+                buffer.multi_delete(alt, matches);
+            });
+            None
+        }
+        // key!(CONTROL, Delete) => {
+        //     *highlight = true;
+        //     matches.remove(*match_idx);
+        //     match matches.len().checked_sub(1) {
+        //         Some(max) => {
+        //             *match_idx = (*match_idx).min(max);
+        //             buffer.set_cursor(matches.get(*match_idx)?.cursor());
+        //             None
+        //         }
+        //         None => Some(EditorMode::default()),
+        //     }
+        // }
+        // keybind!(Find) => Some(EditorMode::Search {
+        //     prompt: TextField::default(),
+        //     type_: SearchType::default(),
+        //     range: range.take(),
+        // }),
+        // keybind!(SelectInside) => {
+        //     *highlight = false;
+        //     buffer.multi_select_inside(matches, *match_idx);
+        //     None
+        // }
+        key!(Enter) => Some(EditorMode::default()),
+        Event::Key(KeyEvent {
+            code: KeyCode::Left,
+            modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            *highlight = false;
+            on_all(layout, matches, |buffer, matches| {
+                buffer.multi_cursor_back(matches, modifiers.contains(KeyModifiers::SHIFT));
+            });
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Right,
+            modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            *highlight = false;
+            on_all(layout, matches, |buffer, matches| {
+                buffer.multi_cursor_forward(matches, modifiers.contains(KeyModifiers::SHIFT));
+            });
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Home,
+            modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            *highlight = false;
+            on_all(layout, matches, |buffer, matches| {
+                buffer.multi_cursor_home(matches, modifiers.contains(KeyModifiers::SHIFT));
+            });
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::End,
+            modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            *highlight = false;
+            on_all(layout, matches, |buffer, matches| {
+                buffer.multi_cursor_end(matches, modifiers.contains(KeyModifiers::SHIFT));
+            });
+            None
+        }
+        // ctrl_keybind!(Paste) => match matches.iter().map(|m| m.paste_group_count()).max() {
+        //     Some(Some(total)) => Some(EditorMode::PasteGroup {
+        //         total: total.get(),
+        //         matches: std::mem::take(matches),
+        //         match_idx: std::mem::take(match_idx),
+        //         range: range.take(),
+        //         highlight: std::mem::take(highlight),
+        //     }),
+        //     _ => {
+        //         if let Some(cut) = cut_buffer {
+        //             buffer.multi_paste(alt, matches, cut);
+        //         }
+        //         None
+        //     }
+        // },
+        // ctrl_keybind!(Copy) => {
+        //     if let cut @ Some(_) = buffer.multi_cursor_copy(matches) {
+        //         *highlight = false;
+        //         *cut_buffer = cut;
+        //     }
+        //     None
+        // }
+        // ctrl_keybind!(Cut) => {
+        //     if let cut @ Some(_) = buffer.multi_cursor_cut(alt, matches) {
+        //         *highlight = false;
+        //         *cut_buffer = cut;
+        //     }
+        //     None
+        // }
+        // keybind!(WidenSelection) => {
+        //     *highlight = false;
+        //     buffer.multi_cursor_widen(matches);
+        //     None
+        // }
+        // keybind!(Bookmark) => {
+        //     *highlight = false;
+        //     buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));
+        //     None
+        // }
+        // key!(Tab) => {
+        //     let (offsets, completions) = buffer.multi_autocomplete_matches(matches)?;
+        //     match init_complete_forward(&completions) {
+        //         Some((index, original, replacement)) => {
+        //             buffer.multi_autocomplete(alt, matches, &offsets, original, replacement);
+        //             Some(EditorMode::AutocompleteMulti {
+        //                 matches: std::mem::take(matches),
+        //                 match_idx: std::mem::take(match_idx),
+        //                 range: std::mem::take(range),
+        //                 offsets,
+        //                 completions,
+        //                 index,
+        //             })
+        //         }
+        //         None => {
+        //             buffer.set_error("No Completions Found");
+        //             None
+        //         }
+        //     }
+        // }
+        // key!(SHIFT, BackTab) => {
+        //     let (offsets, completions) = buffer.multi_autocomplete_matches(matches)?;
+        //     match init_complete_backward(&completions) {
+        //         Some((index, original, replacement)) => {
+        //             buffer.multi_autocomplete(alt, matches, &offsets, original, replacement);
+        //             Some(EditorMode::AutocompleteMulti {
+        //                 matches: std::mem::take(matches),
+        //                 match_idx: std::mem::take(match_idx),
+        //                 range: std::mem::take(range),
+        //                 offsets,
+        //                 completions,
+        //                 index,
+        //             })
+        //         }
+        //         None => {
+        //             buffer.set_error("No Completions Found");
+        //             None
+        //         }
+        //     }
+        // }
+        // Event::Key(KeyEvent {
+        //     code: KeyCode::Up,
+        //     modifiers: KeyModifiers::NONE,
+        //     kind: KeyEventKind::Press,
+        //     ..
+        // })
+        // | Event::Mouse(MouseEvent {
+        //     kind: MouseEventKind::ScrollUp,
+        //     ..
+        // }) => {
+        //     *highlight = true;
+        //     *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
+        //     if let Some(r) = matches.get(*match_idx) {
+        //         buffer.set_cursor(r.cursor());
+        //     }
+        //     None
+        // }
+        // Event::Key(KeyEvent {
+        //     code: KeyCode::Down,
+        //     modifiers: KeyModifiers::NONE,
+        //     kind: KeyEventKind::Press,
+        //     ..
+        // })
+        // | Event::Mouse(MouseEvent {
+        //     kind: MouseEventKind::ScrollDown,
+        //     ..
+        // }) => {
+        //     *highlight = true;
+        //     *match_idx = (*match_idx + 1) % matches.len();
+        //     if let Some(r) = matches.get(*match_idx) {
+        //         buffer.set_cursor(r.cursor());
+        //     }
+        //     None
+        // }
+        // ctrl_keybind!(Mark) => Some(EditorMode::MultiCursorMarkSet {
+        //     matches: std::mem::take(matches),
+        //     match_idx: std::mem::take(match_idx),
+        //     range: std::mem::take(range),
+        //     highlight: std::mem::take(highlight),
+        // }),
+        _ => None,
     }
 }
 
