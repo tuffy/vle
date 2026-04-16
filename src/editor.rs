@@ -86,6 +86,10 @@ pub enum EditorMode {
         type_: SearchType,
         range: Option<SelectionRange>,
     },
+    SearchAll {
+        prompt: TextField,
+        type_: SearchType,
+    },
     /// Multi-cursor operation
     MultiCursor {
         matches: Vec<MultiCursor>,
@@ -126,6 +130,14 @@ pub enum EditorMode {
         prompt: TextField,
         type_: SearchType,
         range: Option<SelectionRange>,
+        offset: usize,            // our character offset in prompt
+        completions: Vec<String>, // autocompletion candidates
+        index: usize,             // the current candidate
+    },
+    /// Performing autocomplete during a search all
+    AutocompleteSearchAll {
+        prompt: TextField,
+        type_: SearchType,
         offset: usize,            // our character offset in prompt
         completions: Vec<String>, // autocompletion candidates
         index: usize,             // the current candidate
@@ -450,6 +462,32 @@ impl Editor {
                         self.process_event(area, event);
                     }
                 },
+                EditorMode::AutocompleteSearchAll {
+                    prompt,
+                    type_,
+                    offset,
+                    index,
+                    completions,
+                } => match event {
+                    key!(Tab) => {
+                        // switch to next candidate
+                        let (current, next) = complete_forward(index, completions);
+                        prompt.autocomplete(*offset, current, next);
+                    }
+                    key!(SHIFT, BackTab) => {
+                        // switch to previous candidate
+                        let (current, previous) = complete_backward(index, completions);
+                        prompt.autocomplete(*offset, current, previous);
+                    }
+                    event => {
+                        // end autocomplete
+                        self.mode = EditorMode::SearchAll {
+                            prompt: std::mem::take(prompt),
+                            type_: std::mem::take(type_),
+                        };
+                        self.process_event(area, event);
+                    }
+                },
                 EditorMode::AutocompleteMulti {
                     matches,
                     match_idx,
@@ -549,6 +587,36 @@ impl Editor {
                             },
                             NextModeIncremental::SelectLine => EditorMode::SelectLine {
                                 prompt: LinePrompt::default(),
+                            },
+                        };
+                    }
+                }
+                EditorMode::SearchAll { prompt, type_ } => {
+                    if let Some(new_mode) = process_search_all(
+                        self.layout.selected_buffer_list_mut(),
+                        self.cut_buffer.as_mut(),
+                        match type_ {
+                            SearchType::Plain => &mut self.last_plain_search,
+                            SearchType::Regex => &mut self.last_regex_search,
+                        },
+                        prompt,
+                        type_,
+                        event,
+                    ) {
+                        self.mode = match new_mode {
+                            NextModeIncrementalAll::SelectLine => EditorMode::SelectLine {
+                                prompt: LinePrompt::default(),
+                            },
+                            NextModeIncrementalAll::Autocomplete {
+                                offset,
+                                completions,
+                                index,
+                            } => EditorMode::AutocompleteSearchAll {
+                                prompt: std::mem::take(prompt),
+                                type_: std::mem::take(type_),
+                                offset,
+                                completions,
+                                index,
                             },
                         };
                     }
@@ -666,6 +734,12 @@ impl Editor {
                                 }
                             }
                             self.mode = EditorMode::default();
+                        }
+                        Some(SelectBuffer::FindAll) => {
+                            self.mode = EditorMode::SearchAll {
+                                prompt: TextField::default(),
+                                type_: SearchType::default(),
+                            };
                         }
                         None => { /* do nothing */ }
                     }
@@ -1739,6 +1813,100 @@ fn process_search(
     }
 }
 
+enum NextModeIncrementalAll {
+    SelectLine,
+    Autocomplete {
+        offset: usize,
+        completions: Vec<String>,
+        index: usize,
+    },
+}
+
+fn process_search_all(
+    buffer_list: &mut BufferList,
+    cut_buffer: Option<&mut EditorCutBuffer>,
+    last_search: &mut Option<TextField>,
+    prompt: &mut TextField,
+    type_: &mut SearchType,
+    event: Event,
+) -> Option<NextModeIncrementalAll> {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+    match event {
+        // keybind!(Paste) - TODO
+        key!(Tab) => {
+            if prompt.is_empty() {
+                prompt.reset();
+                *type_ = match *type_ {
+                    SearchType::Plain => SearchType::Regex,
+                    SearchType::Regex => SearchType::Plain,
+                };
+                None
+            } else {
+                let (offset, search) = prompt.autocomplete_word()?;
+                let completions = buffer_list.search_autocomplete_matches(search);
+                match init_complete_forward(&completions) {
+                    Some((index, original, replacement)) => {
+                        prompt.autocomplete(offset, original, replacement);
+                        Some(NextModeIncrementalAll::Autocomplete {
+                            offset,
+                            completions,
+                            index,
+                        })
+                    }
+                    None => {
+                        buffer_list.current_mut()?.set_error("No Completions Found");
+                        None
+                    }
+                }
+            }
+        }
+        key!(SHIFT, BackTab) => {
+            if prompt.is_empty() {
+                prompt.reset();
+                *type_ = match *type_ {
+                    SearchType::Plain => SearchType::Regex,
+                    SearchType::Regex => SearchType::Plain,
+                };
+                None
+            } else {
+                let (offset, search) = prompt.autocomplete_word()?;
+                let completions = buffer_list.search_autocomplete_matches(search);
+                match init_complete_backward(&completions) {
+                    Some((index, original, replacement)) => {
+                        prompt.autocomplete(offset, original, replacement);
+                        Some(NextModeIncrementalAll::Autocomplete {
+                            offset,
+                            completions,
+                            index,
+                        })
+                    }
+                    None => {
+                        buffer_list.current_mut()?.set_error("No Completions Found");
+                        None
+                    }
+                }
+            }
+        }
+        // keybind!(Enter) - TODO
+        keybind!(GotoLine) => Some(NextModeIncrementalAll::SelectLine),
+        keybind!(Find) => {
+            if prompt.is_empty()
+                && let Some(last) = last_search
+            {
+                *prompt = last.clone();
+            } else {
+                prompt.reset();
+            }
+            None
+        }
+        event => {
+            prompt.process_event(event);
+            None
+        }
+    }
+}
+
 // Yes, I know this has a lot of arguments
 #[allow(clippy::too_many_arguments)]
 fn process_multi_cursor(
@@ -2066,6 +2234,7 @@ enum SelectBuffer {
     Finish,
     SwapPanes(usize, usize),
     SaveAll,
+    FindAll,
     ReloadAll,
     QuitAll,
 }
@@ -2171,6 +2340,7 @@ fn process_select_buffer(
             .ok()
             .map(|()| SelectBuffer::Finish),
         keybind!(Save) => Some(SelectBuffer::SaveAll),
+        keybind!(Find) => Some(SelectBuffer::FindAll),
         keybind!(Reload) => Some(SelectBuffer::ReloadAll),
         keybind!(Quit) => Some(SelectBuffer::QuitAll),
         _ => None, // ignore other events
@@ -2945,8 +3115,12 @@ impl Layout {
                     x: text_area.x + text_area.width,
                     y: text_area.y.saturating_sub(1),
                 }),
-                Some(EditorMode::Search { prompt, .. })
-                | Some(EditorMode::AutocompleteSearch { prompt, .. }) => {
+                Some(
+                    EditorMode::Search { prompt, .. }
+                    | EditorMode::AutocompleteSearch { prompt, .. }
+                    | EditorMode::SearchAll { prompt, .. }
+                    | EditorMode::AutocompleteSearchAll { prompt, .. },
+                ) => {
                     let [_, dialog_area, _] =
                         Layout::vertical([Min(0), Length(3), Min(0)]).areas(text_area);
                     let dialog_area = Block::bordered().inner(dialog_area);

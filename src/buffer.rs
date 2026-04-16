@@ -4489,6 +4489,18 @@ impl BufferList {
 
         Ok(Ok(count))
     }
+
+    /// Returns autocomplete matches for a Find prompt
+    pub fn search_autocomplete_matches(&self, prefix: String) -> Vec<String> {
+        let matches = self
+            .buffers
+            .iter()
+            .fold(radix_trie::Trie::default(), |acc, buf| {
+                accumulate_matches(acc, &buf.buffer.borrow().rope, &prefix)
+            });
+
+        finalize_matches(matches, prefix)
+    }
 }
 
 // Rendering this BufferWidget is where the editor spends
@@ -5913,8 +5925,12 @@ impl StatefulWidget for BufferWidget<'_> {
                     },
                 );
             }
-            Some(EditorMode::Search { prompt, type_, .. }) => {
+            Some(
+                EditorMode::Search { prompt, type_, .. }
+                | EditorMode::SearchAll { prompt, type_, .. },
+            ) => {
                 show_sub_help(text_area, buf, &find_mode_help(prompt, *type_));
+                // TODO - add "Find All" to title prompt
                 render_find_prompt(
                     match type_ {
                         SearchType::Plain => FindSyntax::Plain(syntax),
@@ -5936,15 +5952,25 @@ impl StatefulWidget for BufferWidget<'_> {
                     },
                 );
             }
-            Some(EditorMode::AutocompleteSearch {
-                prompt,
-                type_,
-                offset,
-                completions,
-                index,
-                ..
-            }) => {
+            Some(
+                EditorMode::AutocompleteSearch {
+                    prompt,
+                    type_,
+                    offset,
+                    completions,
+                    index,
+                    ..
+                }
+                | EditorMode::AutocompleteSearchAll {
+                    prompt,
+                    type_,
+                    offset,
+                    completions,
+                    index,
+                },
+            ) => {
                 show_sub_help(text_area, buf, &find_mode_help(prompt, *type_));
+                // TODO - add "Find All" to title prompt
                 render_find_prompt(
                     match type_ {
                         SearchType::Plain => FindSyntax::Plain(syntax),
@@ -6407,19 +6433,25 @@ fn try_select_inside(
     }
 }
 
-fn autocomplete_matches(rope: &ropey::Rope, prefix: String) -> Vec<String> {
-    use radix_trie::{Trie, TrieCommon};
-
-    let mut counts: Trie<String, u64> = Trie::default();
-
+fn accumulate_matches(
+    mut acc: radix_trie::Trie<String, u64>,
+    rope: &ropey::Rope,
+    prefix: &str,
+) -> radix_trie::Trie<String, u64> {
     for line in rope.lines() {
         let line = Cow::from(line);
         for word in line.split(|c| !is_word_part(c)).filter(|s| !s.is_empty()) {
-            if word.starts_with(&prefix) && word != prefix {
-                counts.map_with_default(word.to_string(), |c| *c += 1, 1);
+            if word.starts_with(prefix) && word != prefix {
+                acc.map_with_default(word.to_string(), |c| *c += 1, 1);
             }
         }
     }
+
+    acc
+}
+
+fn finalize_matches(counts: radix_trie::Trie<String, u64>, prefix: String) -> Vec<String> {
+    use radix_trie::TrieCommon;
 
     let mut counts = counts
         .iter()
@@ -6431,6 +6463,11 @@ fn autocomplete_matches(rope: &ropey::Rope, prefix: String) -> Vec<String> {
     std::iter::once(prefix)
         .chain(counts.into_iter().map(|(s, _)| s).rev())
         .collect()
+}
+
+fn autocomplete_matches(rope: &ropey::Rope, prefix: String) -> Vec<String> {
+    let matches = accumulate_matches(radix_trie::Trie::default(), rope, &prefix);
+    finalize_matches(matches, prefix)
 }
 
 struct Thousands(usize);
