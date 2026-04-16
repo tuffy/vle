@@ -5390,7 +5390,7 @@ impl StatefulWidget for BufferWidget<'_> {
             .right_aligned(),
         );
 
-        let block = match self.mode {
+        let block = match &self.mode {
             Some(
                 EditorMode::MultiCursor {
                     match_idx, matches, ..
@@ -5996,7 +5996,7 @@ impl StatefulWidget for BufferWidget<'_> {
         // depending on the editor's mode.
         ////////////////////////////////////////////////
 
-        match self.mode {
+        match &self.mode {
             None | Some(EditorMode::Editing) | Some(EditorMode::Autocomplete { .. }) => {
                 if let Some(Help {
                     find,
@@ -6119,7 +6119,6 @@ impl StatefulWidget for BufferWidget<'_> {
                 | EditorMode::SearchAll { prompt, type_, .. },
             ) => {
                 show_sub_help(text_area, buf, &find_mode_help(prompt, *type_));
-                // TODO - add "Find All" to title prompt
                 render_find_prompt(
                     match type_ {
                         SearchType::Plain => FindSyntax::Plain(syntax),
@@ -6129,15 +6128,23 @@ impl StatefulWidget for BufferWidget<'_> {
                     buf,
                     prompt,
                     |s| s,
-                    |b| match state
-                        .message
-                        .take_if(|m| matches!(m, BufferMessage::Error(_)))
-                    {
-                        Some(BufferMessage::Error(err)) => b
-                            .title_top(type_.to_string())
-                            .title_bottom(Line::from(err.to_string()).centered())
-                            .border_style(Style::default().fg(Color::Red)),
-                        _ => b.title_top(type_.to_string()),
+                    |b| {
+                        let title_top = if matches!(&self.mode, Some(EditorMode::SearchAll { .. }))
+                        {
+                            format!("{type_} All")
+                        } else {
+                            type_.to_string()
+                        };
+                        match state
+                            .message
+                            .take_if(|m| matches!(m, BufferMessage::Error(_)))
+                        {
+                            Some(BufferMessage::Error(err)) => b
+                                .title_top(title_top)
+                                .title_bottom(Line::from(err.to_string()).centered())
+                                .border_style(Style::default().fg(Color::Red)),
+                            _ => b.title_top(title_top),
+                        }
                     },
                 );
             }
@@ -6159,7 +6166,6 @@ impl StatefulWidget for BufferWidget<'_> {
                 },
             ) => {
                 show_sub_help(text_area, buf, &find_mode_help(prompt, *type_));
-                // TODO - add "Find All" to title prompt
                 render_find_prompt(
                     match type_ {
                         SearchType::Plain => FindSyntax::Plain(syntax),
@@ -6187,15 +6193,24 @@ impl StatefulWidget for BufferWidget<'_> {
 
                         highlighted
                     },
-                    |b| match state
-                        .message
-                        .take_if(|m| matches!(m, BufferMessage::Error(_)))
-                    {
-                        Some(BufferMessage::Error(err)) => b
-                            .title_top(type_.to_string())
-                            .title_bottom(Line::from(err.to_string()).centered())
-                            .border_style(Style::default().fg(Color::Red)),
-                        _ => b.title_top(type_.to_string()),
+                    |b| {
+                        let title_top =
+                            if matches!(&self.mode, Some(EditorMode::AutocompleteSearchAll { .. }))
+                            {
+                                format!("{type_} All")
+                            } else {
+                                type_.to_string()
+                            };
+                        match state
+                            .message
+                            .take_if(|m| matches!(m, BufferMessage::Error(_)))
+                        {
+                            Some(BufferMessage::Error(err)) => b
+                                .title_top(title_top)
+                                .title_bottom(Line::from(err.to_string()).centered())
+                                .border_style(Style::default().fg(Color::Red)),
+                            _ => b.title_top(title_top),
+                        }
                     },
                 );
             }
