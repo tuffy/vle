@@ -4535,6 +4535,38 @@ impl BufferList {
 
         Ok((match_idx, matches))
     }
+
+    pub fn all_multiline_matches<S: SearchTerm>(
+        &mut self,
+        term: S,
+    ) -> Result<(usize, BTreeMap<usize, Vec<MultiCursor>>), S> {
+        let (mut current_indexes, matches): (
+            BTreeMap<usize, usize>,
+            BTreeMap<usize, Vec<MultiCursor>>,
+        ) = self
+            .buffers_mut()
+            .enumerate()
+            .filter_map(|(buf_idx, b)| {
+                let (match_idx, matches) = b.all_multiline_matches(None, term.clone()).ok()?;
+                Some((
+                    (buf_idx, match_idx),
+                    (buf_idx, matches.into_iter().map(|m| m.into()).collect()),
+                ))
+            })
+            .unzip();
+
+        let Some((buffer_idx, match_idx)) = current_indexes
+            .extract_if(self.current.., |_, _| true)
+            .next()
+            .or_else(|| current_indexes.pop_first())
+        else {
+            return Err(term);
+        };
+
+        self.current = buffer_idx;
+
+        Ok((match_idx, matches))
+    }
 }
 
 // Rendering this BufferWidget is where the editor spends

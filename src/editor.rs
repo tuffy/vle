@@ -1874,7 +1874,37 @@ fn process_search_all(
     static NOT_FOUND: &str = "Not Found";
 
     match event {
-        // keybind!(Paste) - TODO
+        ctrl_keybind!(Paste) => {
+            let c = cut_buffer?;
+            let b = c.paste_and_rotate();
+            if b.multi_line() {
+                match Normalizations::try_from(b.as_str().to_string()) {
+                    Err(term) => match buffer_list.all_multiline_matches(term) {
+                        Ok((match_idx, matches)) => {
+                            *last_search = Some(std::mem::take(prompt));
+                            Some(NextModeIncrementalAll::Browse { match_idx, matches })
+                        }
+                        Err(_) => {
+                            buffer_list.current_mut()?.set_error(NOT_FOUND);
+                            None
+                        }
+                    },
+                    Ok(normalizations) => match buffer_list.all_multiline_matches(normalizations) {
+                        Ok((match_idx, matches)) => {
+                            *last_search = Some(std::mem::take(prompt));
+                            Some(NextModeIncrementalAll::Browse { match_idx, matches })
+                        }
+                        Err(_) => {
+                            buffer_list.current_mut()?.set_error(NOT_FOUND);
+                            None
+                        }
+                    },
+                }
+            } else {
+                prompt.paste(c.paste_and_rotate().as_str());
+                None
+            }
+        }
         key!(Tab) => {
             if prompt.is_empty() {
                 prompt.reset();
