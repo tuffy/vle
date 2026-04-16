@@ -2328,11 +2328,13 @@ fn process_multi_cursor_all(
             });
             None
         }
-        // Event::Paste(pasted) => {
-        //     *highlight = false;
-        //     buffer.multi_insert_string(alt, matches, &pasted);
-        //     None
-        // }
+        Event::Paste(pasted) => {
+            *highlight = false;
+            on_all_at(layout, matches, |buffer, alt, matches| {
+                buffer.multi_insert_string(alt, matches, &pasted);
+            });
+            None
+        }
         key!(Backspace) => {
             *highlight = false;
             on_all_at(layout, matches, |buffer, alt, matches| {
@@ -2359,16 +2361,17 @@ fn process_multi_cursor_all(
         //         None => Some(EditorMode::default()),
         //     }
         // }
-        // keybind!(Find) => Some(EditorMode::Search {
-        //     prompt: TextField::default(),
-        //     type_: SearchType::default(),
-        //     range: range.take(),
-        // }),
-        // keybind!(SelectInside) => {
-        //     *highlight = false;
-        //     buffer.multi_select_inside(matches, *match_idx);
-        //     None
-        // }
+        keybind!(Find) => Some(EditorMode::SearchAll {
+            prompt: TextField::default(),
+            type_: SearchType::default(),
+        }),
+        keybind!(SelectInside) => {
+            *highlight = false;
+            on_all(layout, matches, |buffer, matches| {
+                buffer.multi_select_inside(matches, *match_idx);
+            });
+            None
+        }
         key!(Enter) => Some(EditorMode::default()),
         Event::Key(KeyEvent {
             code: KeyCode::Left,
@@ -2447,16 +2450,20 @@ fn process_multi_cursor_all(
         //     }
         //     None
         // }
-        // keybind!(WidenSelection) => {
-        //     *highlight = false;
-        //     buffer.multi_cursor_widen(matches);
-        //     None
-        // }
-        // keybind!(Bookmark) => {
-        //     *highlight = false;
-        //     buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));
-        //     None
-        // }
+        keybind!(WidenSelection) => {
+            *highlight = false;
+            on_all(layout, matches, |buffer, matches| {
+                buffer.multi_cursor_widen(matches);
+            });
+            None
+        }
+        keybind!(Bookmark) => {
+            *highlight = false;
+            on_all(layout, matches, |buffer, matches| {
+                buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));
+            });
+            None
+        }
         // key!(Tab) => {
         //     let (offsets, completions) = buffer.multi_autocomplete_matches(matches)?;
         //     match init_complete_forward(&completions) {
