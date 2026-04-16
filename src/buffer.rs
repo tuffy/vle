@@ -4619,6 +4619,11 @@ impl StatefulWidget for BufferWidget<'_> {
         const MATCHING: Color = Color::Green;
         const MISMATCH: Color = Color::Red;
         const BOOKMARK: Color = Color::Cyan;
+        const HIGHLIGHTED: Style = Style::new().bg(Color::Yellow).fg(Color::Black);
+
+        fn sub_match_ranges(matches: &[MultiCursor]) -> VecDeque<Range<usize>> {
+            matches.iter().map(|m| m.range.start..m.range.end).collect()
+        }
 
         struct EditorLine<'s> {
             line: Cow<'s, str>,
@@ -5547,12 +5552,6 @@ impl StatefulWidget for BufferWidget<'_> {
                         ..
                     },
                 ) => {
-                    const HIGHLIGHTED: Style = Style::new().bg(Color::Yellow).fg(Color::Black);
-
-                    fn sub_match_ranges(matches: &[MultiCursor]) -> VecDeque<Range<usize>> {
-                        matches.iter().map(|m| m.range.start..m.range.end).collect()
-                    }
-
                     let selection_start = matches[*match_idx].range.start;
                     let selection_end = matches[*match_idx].range.end;
                     let mut matches = sub_match_ranges(matches);
@@ -5663,7 +5662,111 @@ impl StatefulWidget for BufferWidget<'_> {
                         .take(area.height.into())
                         .collect()
                 }
-                // TODO - add specific rendering for MultiCursorAll
+                Some(EditorMode::MultiCursorAll {
+                    matches,
+                    match_idx,
+                    highlight: true,
+                    ..
+                }) if let Some(matches) = matches.get(&self.buffer_idx) => {
+                    let selection_start = matches[*match_idx].range.start;
+                    let selection_end = matches[*match_idx].range.end;
+                    let mut matches = sub_match_ranges(matches);
+
+                    EditorLine::iter(rope, viewport_line)
+                        .map(
+                            |EditorLine {
+                                 line,
+                                 range,
+                                 number,
+                             }| {
+                                Vec::from(highlight_selection(
+                                    highlight_matches(
+                                        colorize(
+                                            syntax,
+                                            &mut hlstate,
+                                            line,
+                                            current_line == Some(number),
+                                        ),
+                                        range.clone(),
+                                        &mut matches,
+                                        |span| span.style(HIGHLIGHTED),
+                                    ),
+                                    range.clone(),
+                                    (selection_start, selection_end),
+                                    |span| span.style(Style::new().bg(Color::Red).fg(Color::White)),
+                                ))
+                                .into()
+                            },
+                        )
+                        .map(|line| widen_tabs(line))
+                        .take(area.height.into())
+                        .collect()
+                }
+                Some(EditorMode::MultiCursorAll {
+                    matches,
+                    match_idx,
+                    highlight: false,
+                    ..
+                }) if let Some(matches) = matches.get(&self.buffer_idx) => {
+                    let (mut cursors, (mut ranges, selections)): (
+                        VecDeque<_>,
+                        (_, VecFiltered<_>),
+                    ) = matches
+                        .iter()
+                        .map(|m| {
+                            (
+                                m.cursor..m.cursor + 1,
+                                (m.range.clone(), m.selection_range()),
+                            )
+                        })
+                        .unzip();
+
+                    cursors.retain(|r| r.start != state.cursor);
+                    let mut selections = selections.into();
+
+                    EditorLine::iter(rope, viewport_line)
+                        .map(
+                            |EditorLine {
+                                 line,
+                                 range,
+                                 number,
+                             }| {
+                                let whole_range = widen_range(range);
+
+                                Vec::from(highlight_matches(
+                                    highlight_matches(
+                                        highlight_matches(
+                                            widen(colorize(
+                                                syntax,
+                                                &mut hlstate,
+                                                line,
+                                                current_line == Some(number),
+                                            )),
+                                            whole_range.clone(),
+                                            &mut ranges,
+                                            |span| span.patch_style(underline_color(Color::Blue)),
+                                        ),
+                                        whole_range.clone(),
+                                        &mut selections,
+                                        |span| span.style(EDITING),
+                                    ),
+                                    whole_range,
+                                    &mut cursors,
+                                    |span| {
+                                        span.style(
+                                            Style::new()
+                                                .fg(Color::Blue)
+                                                .add_modifier(Modifier::REVERSED),
+                                        )
+                                    },
+                                ))
+                                .into()
+                            },
+                        )
+                        .map(|line| widen_tabs(line))
+                        .take(area.height.into())
+                        .collect()
+                }
                 Some(EditorMode::AutocompleteMulti {
                     matches,
                     offsets,

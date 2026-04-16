@@ -9,6 +9,7 @@ categories = ["development-tools", "text-editors"]
 authors = ["Brian Langenberger <bjl@usa.net>"]
 repository = "https://github.com/tuffy/vle"
 homepage = "https://github.com/tuffy/vle"
+rust-version = "1.95"
 
 [[bin]]
 name = "vle"
