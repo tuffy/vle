@@ -2504,40 +2504,89 @@ fn process_multi_cursor_all(
         //         }
         //     }
         // }
-        // Event::Key(KeyEvent {
-        //     code: KeyCode::Up,
-        //     modifiers: KeyModifiers::NONE,
-        //     kind: KeyEventKind::Press,
-        //     ..
-        // })
-        // | Event::Mouse(MouseEvent {
-        //     kind: MouseEventKind::ScrollUp,
-        //     ..
-        // }) => {
-        //     *highlight = true;
-        //     *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
-        //     if let Some(r) = matches.get(*match_idx) {
-        //         buffer.set_cursor(r.cursor());
-        //     }
-        //     None
-        // }
-        // Event::Key(KeyEvent {
-        //     code: KeyCode::Down,
-        //     modifiers: KeyModifiers::NONE,
-        //     kind: KeyEventKind::Press,
-        //     ..
-        // })
-        // | Event::Mouse(MouseEvent {
-        //     kind: MouseEventKind::ScrollDown,
-        //     ..
-        // }) => {
-        //     *highlight = true;
-        //     *match_idx = (*match_idx + 1) % matches.len();
-        //     if let Some(r) = matches.get(*match_idx) {
-        //         buffer.set_cursor(r.cursor());
-        //     }
-        //     None
-        // }
+        Event::Key(KeyEvent {
+            code: KeyCode::Up,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        })
+        | Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            ..
+        }) => {
+            let buffer_list = layout.selected_buffer_list_mut();
+            let buffer_index = buffer_list.current_index();
+            if let Some(buffer_cursors) = matches.get(&buffer_index) {
+                *highlight = true;
+                match match_idx.checked_sub(1) {
+                    Some(new_idx) => {
+                        // move on to previous index in the set of matches
+                        *match_idx = new_idx;
+                        if let Some(r) = buffer_cursors.get(new_idx)
+                            && let Some(buffer) = buffer_list.get_mut(buffer_index)
+                        {
+                            buffer.set_cursor(r.cursor());
+                        }
+                    }
+                    None => {
+                        use core::ops::Bound;
+
+                        // move on to the last index of the previous buffer's matches
+                        if let Some((prev_idx, prev_cursors)) = matches
+                            .range((Bound::Unbounded, Bound::Excluded(buffer_index)))
+                            .next_back()
+                            .or_else(|| matches.last_key_value())
+                            && let Some(r) = prev_cursors.last()
+                            && let Ok(buffer) = buffer_list.select_buffer(*prev_idx)
+                        {
+                            *match_idx = prev_cursors.len() - 1;
+                            buffer.set_cursor(r.cursor());
+                        }
+                    }
+                }
+            }
+            None
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Down,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        })
+        | Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            ..
+        }) => {
+            let buffer_list = layout.selected_buffer_list_mut();
+            let buffer_index = buffer_list.current_index();
+            if let Some(buffer_cursors) = matches.get(&buffer_index) {
+                *highlight = true;
+                if (*match_idx + 1) < buffer_cursors.len() {
+                    // move on to the next index in the set of matches
+                    *match_idx += 1;
+                    if let Some(r) = buffer_cursors.get(*match_idx)
+                        && let Some(buffer) = buffer_list.get_mut(buffer_index)
+                    {
+                        buffer.set_cursor(r.cursor());
+                    }
+                } else {
+                    use core::ops::Bound;
+
+                    // move to the first index of the next buffer's matches
+                    if let Some((next_idx, next_cursors)) = matches
+                        .range((Bound::Excluded(buffer_index), Bound::Unbounded))
+                        .next()
+                        .or_else(|| matches.first_key_value())
+                        && let Some(r) = next_cursors.first()
+                        && let Ok(buffer) = buffer_list.select_buffer(*next_idx)
+                    {
+                        *match_idx = 0;
+                        buffer.set_cursor(r.cursor());
+                    }
+                }
+            }
+            None
+        }
         // ctrl_keybind!(Mark) => Some(EditorMode::MultiCursorMarkSet {
         //     matches: std::mem::take(matches),
         //     match_idx: std::mem::take(match_idx),
@@ -2688,7 +2737,7 @@ fn process_select_buffer(
         key!(Enter) => buffer_list
             .select_buffer(*index)
             .ok()
-            .map(|()| SelectBuffer::Finish),
+            .map(|_| SelectBuffer::Finish),
         Event::Key(KeyEvent {
             code: KeyCode::Char(c),
             modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
@@ -2697,7 +2746,7 @@ fn process_select_buffer(
         }) => buffer_list
             .select_buffer(char_to_index(c)?)
             .ok()
-            .map(|()| SelectBuffer::Finish),
+            .map(|_| SelectBuffer::Finish),
         keybind!(Save) => Some(SelectBuffer::SaveAll),
         keybind!(Find) => Some(SelectBuffer::FindAll),
         keybind!(Reload) => Some(SelectBuffer::ReloadAll),

@@ -4335,11 +4335,11 @@ impl BufferList {
         }
     }
 
-    /// Returns Ok(()) if index is valid
-    pub fn select_buffer(&mut self, index: usize) -> Result<(), ()> {
+    /// Returns Ok(&mut BufferContext) if index is valid
+    pub fn select_buffer(&mut self, index: usize) -> Result<&mut BufferContext, ()> {
         if index < self.buffers.len() {
             self.current = index;
-            Ok(())
+            self.buffers.get_mut(index).ok_or(())
         } else {
             Err(())
         }
