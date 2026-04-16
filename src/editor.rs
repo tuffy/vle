@@ -2478,35 +2478,15 @@ fn process_multi_cursor_all(
             });
             None
         }
-        // ctrl_keybind!(Paste) => match matches.iter().map(|m| m.paste_group_count()).max() {
-        //     Some(Some(total)) => Some(EditorMode::PasteGroup {
-        //         total: total.get(),
-        //         matches: std::mem::take(matches),
-        //         match_idx: std::mem::take(match_idx),
-        //         range: range.take(),
-        //         highlight: std::mem::take(highlight),
-        //     }),
-        //     _ => {
-        //         if let Some(cut) = cut_buffer {
-        //             buffer.multi_paste(alt, matches, cut);
-        //         }
-        //         None
-        //     }
-        // },
-        // ctrl_keybind!(Copy) => {
-        //     if let cut @ Some(_) = buffer.multi_cursor_copy(matches) {
-        //         *highlight = false;
-        //         *cut_buffer = cut;
-        //     }
-        //     None
-        // }
-        // ctrl_keybind!(Cut) => {
-        //     if let cut @ Some(_) = buffer.multi_cursor_cut(alt, matches) {
-        //         *highlight = false;
-        //         *cut_buffer = cut;
-        //     }
-        //     None
-        // }
+        ctrl_keybind!(Paste) => {
+            // TODO - support pasting from regex groups
+            if let Some(cut) = cut_buffer {
+                on_all_at(layout, matches, |buffer, alt, matches| {
+                    buffer.multi_paste(alt, matches, cut);
+                });
+            }
+            None
+        }
         keybind!(WidenSelection) => {
             *highlight = false;
             on_all(layout, matches, |buffer, matches| {
@@ -2521,7 +2501,7 @@ fn process_multi_cursor_all(
             });
             None
         }
-        // key!(Tab) => {
+        // TODO - key!(Tab) => {
         //     let (offsets, completions) = buffer.multi_autocomplete_matches(matches)?;
         //     match init_complete_forward(&completions) {
         //         Some((index, original, replacement)) => {
@@ -2541,7 +2521,7 @@ fn process_multi_cursor_all(
         //         }
         //     }
         // }
-        // key!(SHIFT, BackTab) => {
+        // TODO - key!(SHIFT, BackTab) => {
         //     let (offsets, completions) = buffer.multi_autocomplete_matches(matches)?;
         //     match init_complete_backward(&completions) {
         //         Some((index, original, replacement)) => {
@@ -2644,7 +2624,7 @@ fn process_multi_cursor_all(
             }
             None
         }
-        // ctrl_keybind!(Mark) => Some(EditorMode::MultiCursorMarkSet {
+        // TODO - ctrl_keybind!(Mark) => Some(EditorMode::MultiCursorMarkSet {
         //     matches: std::mem::take(matches),
         //     match_idx: std::mem::take(match_idx),
         //     range: std::mem::take(range),
