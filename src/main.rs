@@ -207,6 +207,7 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
                         let tcp = TcpStream::connect(&format!("{host}:{port}"))?;
                         let mut sess = Session::new()?;
                         sess.set_tcp_stream(tcp);
+                        sess.set_keepalive(true, 60);
                         sess.handshake()?;
                         sess.userauth_pubkey_file(
                             &username,
@@ -221,6 +222,7 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
                         let tcp = TcpStream::connect(&format!("{host}:{port}"))?;
                         let mut sess = Session::new()?;
                         sess.set_tcp_stream(tcp);
+                        sess.set_keepalive(true, 60);
                         sess.handshake()?;
                         sess.userauth_password(&username, &password)?;
                         sess
