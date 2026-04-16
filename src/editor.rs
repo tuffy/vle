@@ -2349,18 +2349,45 @@ fn process_multi_cursor_all(
             });
             None
         }
-        // key!(CONTROL, Delete) => {
-        //     *highlight = true;
-        //     matches.remove(*match_idx);
-        //     match matches.len().checked_sub(1) {
-        //         Some(max) => {
-        //             *match_idx = (*match_idx).min(max);
-        //             buffer.set_cursor(matches.get(*match_idx)?.cursor());
-        //             None
-        //         }
-        //         None => Some(EditorMode::default()),
-        //     }
-        // }
+        key!(CONTROL, Delete) => {
+            use std::collections::btree_map::Entry;
+
+            *highlight = true;
+            let buffer_list = layout.selected_buffer_list_mut();
+            let buffer_index = buffer_list.current_index();
+            let Entry::Occupied(mut buffer_matches) = matches.entry(buffer_index) else {
+                return None;
+            };
+            buffer_matches.get_mut().remove(*match_idx);
+            match buffer_matches.get().len().checked_sub(1) {
+                Some(max) => {
+                    *match_idx = (*match_idx).min(max);
+                    buffer_list
+                        .get_mut(buffer_index)?
+                        .set_cursor(buffer_matches.get().get(*match_idx)?.cursor());
+                    None
+                }
+                None => {
+                    use core::ops::Bound;
+
+                    buffer_matches.remove();
+                    if let Some((next_idx, next_cursors)) = matches
+                        .range((Bound::Excluded(buffer_index), Bound::Unbounded))
+                        .next()
+                        .or_else(|| matches.first_key_value())
+                        && let Some(r) = next_cursors.first()
+                        && let Ok(buffer) = buffer_list.select_buffer(*next_idx)
+                    {
+                        *match_idx = 0;
+                        buffer.set_cursor(r.cursor());
+                        None
+                    } else {
+                        // no next buffer to switch to
+                        Some(EditorMode::default())
+                    }
+                }
+            }
+        }
         keybind!(Find) => Some(EditorMode::SearchAll {
             prompt: TextField::default(),
             type_: SearchType::default(),
