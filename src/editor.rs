@@ -3853,6 +3853,7 @@ impl StatefulWidget for LayoutWidget<'_> {
         match layout {
             Layout::Single(single) => {
                 let multiple_buffers = single.multiple_buffers();
+                let buffer_idx = single.current_index();
 
                 if let Some(buffer) = single.current_mut() {
                     BufferWidget {
@@ -3861,6 +3862,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                         show_help: show_help
                             .then(|| buffer.help_options(multiple_buffers, multiple_panes)),
                         show_sub_help,
+                        buffer_idx,
                     }
                     .render(area, buf, buffer);
                 }

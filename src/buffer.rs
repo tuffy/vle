@@ -4564,6 +4564,7 @@ pub struct BufferWidget<'e> {
     pub mode: Option<&'e mut EditorMode>,
     pub show_help: Option<Help>,
     pub show_sub_help: bool,
+    pub buffer_idx: usize,
 }
 
 impl BufferWidget<'_> {
@@ -5372,6 +5373,24 @@ impl StatefulWidget for BufferWidget<'_> {
             }) => block.border_style(Style::default().magenta()).title_bottom(
                 border_title(
                     format!("Match {} / {}", *match_idx + 1, matches.len()),
+                    focused,
+                )
+                .centered(),
+            ),
+            Some(EditorMode::MultiCursorAll {
+                match_idx, matches, ..
+            }) => block.title_bottom(
+                border_title(
+                    format!(
+                        "Match {} / {}",
+                        matches
+                            .range(0..self.buffer_idx)
+                            .map(|(_, m)| m.len())
+                            .sum::<usize>()
+                            + *match_idx
+                            + 1,
+                        matches.values().map(|m| m.len()).sum::<usize>()
+                    ),
                     focused,
                 )
                 .centered(),
