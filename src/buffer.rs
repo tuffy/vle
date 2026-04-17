@@ -4651,8 +4651,8 @@ impl StatefulWidget for BufferWidget<'_> {
         use crate::editor::SearchType;
         use crate::help::{
             CONFIRM_CLOSE, MARK_SET, MULTICURSOR_MARK_SET, PASTE_GROUP, REPLACE_MATCHES,
-            REPLACE_MATCHES_ALL, SELECT_BUFFER, SELECT_INSIDE, SELECT_LINE, SELECT_LINE_BOOKMARKED,
-            SPLIT_PANE, VERIFY_RELOAD, VERIFY_SAVE, render_help,
+            SELECT_BUFFER, SELECT_INSIDE, SELECT_LINE, SELECT_LINE_BOOKMARKED, SPLIT_PANE,
+            VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
         use crate::prompt::TextField;
         use crate::scrollbar::{Scrollbar, ScrollbarState};
@@ -6359,11 +6359,13 @@ impl StatefulWidget for BufferWidget<'_> {
                     },
                 );
             }
-            Some(EditorMode::MultiCursor { .. } | EditorMode::AutocompleteMulti { .. }) => {
+            Some(
+                EditorMode::MultiCursor { .. }
+                | EditorMode::AutocompleteMulti { .. }
+                | EditorMode::MultiCursorAll { .. }
+                | EditorMode::AutocompleteMultiAll { .. },
+            ) => {
                 show_sub_help(text_area, buf, REPLACE_MATCHES);
-            }
-            Some(EditorMode::MultiCursorAll { .. } | EditorMode::AutocompleteMultiAll { .. }) => {
-                show_sub_help(text_area, buf, REPLACE_MATCHES_ALL);
             }
             Some(
                 EditorMode::MultiCursorMarkSet { .. } | EditorMode::MultiCursorMarkSetAll { .. },

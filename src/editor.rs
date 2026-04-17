@@ -2596,8 +2596,58 @@ fn process_multi_cursor_all(
                 None
             }
         },
-        // keybind!(Copy)
-        // keybind!(Cut)
+        ctrl_keybind!(Copy) => {
+            let mut cut = vec![];
+            on_all(layout, matches, |buffer, matches| {
+                cut.extend(buffer.multi_cursor_copy(matches));
+            });
+            match cut.len() {
+                0 => { /* do nothing */ }
+                1 => {
+                    *highlight = false;
+                    *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
+                    layout
+                        .selected_buffer_list_mut()
+                        .current_mut()?
+                        .set_message("Copied 1 Item");
+                }
+                n => {
+                    *highlight = false;
+                    *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
+                    layout
+                        .selected_buffer_list_mut()
+                        .current_mut()?
+                        .set_message(format!("Copied {n} Items"));
+                }
+            }
+            None
+        }
+        ctrl_keybind!(Cut) => {
+            let mut cut = vec![];
+            on_all_at(layout, matches, |buffer, alt, matches| {
+                cut.extend(buffer.multi_cursor_cut(alt, matches));
+            });
+            match cut.len() {
+                0 => { /* do nothing */ }
+                1 => {
+                    *highlight = false;
+                    *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
+                    layout
+                        .selected_buffer_list_mut()
+                        .current_mut()?
+                        .set_message("Cut 1 Item");
+                }
+                n => {
+                    *highlight = false;
+                    *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
+                    layout
+                        .selected_buffer_list_mut()
+                        .current_mut()?
+                        .set_message(format!("Cut {n} Items"));
+                }
+            }
+            None
+        }
         keybind!(WidenSelection) => {
             *highlight = false;
             on_all(layout, matches, |buffer, matches| {

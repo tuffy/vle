@@ -341,20 +341,6 @@ pub static REPLACE_MATCHES: &[Keybinding] = &[
     none(&["Enter"], "Finish"),
 ];
 
-pub static REPLACE_MATCHES_ALL: &[Keybinding] = &[
-    none(&[UP, DOWN], "Select Match"),
-    ctrl(&["Del"], "Remove Match"),
-    keybind::<key::Find>("New Search"),
-    keybind::<key::SelectInside>("Select Inside Pairs"),
-    keybind::<key::WidenSelection>("Widen Selections"),
-    keybind::<key::Bookmark>("Bookmark Positions"),
-    none(&[LEFT, RIGHT], "Move Cursors"),
-    shift(&[LEFT, RIGHT], "Highlight Text"),
-    ctrl_keybind::<key::Mark>("Set Mark"),
-    ctrl_keybind::<key::Paste>("Paste"),
-    none(&["Enter"], "Finish"),
-];
-
 pub static MULTICURSOR_MARK_SET: &[Keybinding] = &[
     none(&[LEFT, RIGHT, "Home", "End"], "Highlight Text"),
     ctrl_keybind::<key::Mark>("Finish"),
