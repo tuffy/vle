@@ -173,6 +173,14 @@ pub enum EditorMode {
         completions: Vec<String>, // autocompletion candidates
         index: usize,             // current autocompletion candidate
     },
+    /// Performing autocomplete in multi-cursor mode across multiple buffers
+    AutocompleteMultiAll {
+        matches: BTreeMap<usize, Vec<MultiCursor>>,
+        match_idx: usize,
+        offsets: BTreeMap<usize, Vec<usize>>, // autocompletion offsets
+        completions: Vec<String>,             // autocompletion candidates
+        index: usize,                         // current candidate
+    },
     /// Determining what buffer to select from menu
     SelectBuffer {
         buffer_list: Vec<BufferId>, // buffers
@@ -538,6 +546,47 @@ impl Editor {
                             matches: std::mem::take(matches),
                             match_idx: std::mem::take(match_idx),
                             range: std::mem::take(range),
+                            highlight: false,
+                        };
+                        self.process_event(area, event);
+                    }
+                },
+                EditorMode::AutocompleteMultiAll {
+                    matches,
+                    match_idx,
+                    offsets,
+                    completions,
+                    index,
+                } => match event {
+                    key!(Tab) => {
+                        // switch to next candidate
+                        let (current, next) = complete_forward(index, completions);
+                        on_all_offset_at(
+                            &mut self.layout,
+                            matches,
+                            offsets,
+                            |b, a, matches, offsets| {
+                                b.multi_autocomplete(a, matches, offsets, current, next);
+                            },
+                        );
+                    }
+                    key!(SHIFT, BackTab) => {
+                        // switch to previous candidate
+                        let (current, previous) = complete_backward(index, completions);
+                        on_all_offset_at(
+                            &mut self.layout,
+                            matches,
+                            offsets,
+                            |b, a, matches, offsets| {
+                                b.multi_autocomplete(a, matches, offsets, current, previous);
+                            },
+                        );
+                    }
+                    event => {
+                        // end autocomplete
+                        self.mode = EditorMode::MultiCursorAll {
+                            matches: std::mem::take(matches),
+                            match_idx: std::mem::take(match_idx),
                             highlight: false,
                         };
                         self.process_event(area, event);
@@ -2541,46 +2590,60 @@ fn process_multi_cursor_all(
             });
             None
         }
-        // TODO - key!(Tab) => {
-        //     let (offsets, completions) = buffer.multi_autocomplete_matches(matches)?;
-        //     match init_complete_forward(&completions) {
-        //         Some((index, original, replacement)) => {
-        //             buffer.multi_autocomplete(alt, matches, &offsets, original, replacement);
-        //             Some(EditorMode::AutocompleteMulti {
-        //                 matches: std::mem::take(matches),
-        //                 match_idx: std::mem::take(match_idx),
-        //                 range: std::mem::take(range),
-        //                 offsets,
-        //                 completions,
-        //                 index,
-        //             })
-        //         }
-        //         None => {
-        //             buffer.set_error("No Completions Found");
-        //             None
-        //         }
-        //     }
-        // }
-        // TODO - key!(SHIFT, BackTab) => {
-        //     let (offsets, completions) = buffer.multi_autocomplete_matches(matches)?;
-        //     match init_complete_backward(&completions) {
-        //         Some((index, original, replacement)) => {
-        //             buffer.multi_autocomplete(alt, matches, &offsets, original, replacement);
-        //             Some(EditorMode::AutocompleteMulti {
-        //                 matches: std::mem::take(matches),
-        //                 match_idx: std::mem::take(match_idx),
-        //                 range: std::mem::take(range),
-        //                 offsets,
-        //                 completions,
-        //                 index,
-        //             })
-        //         }
-        //         None => {
-        //             buffer.set_error("No Completions Found");
-        //             None
-        //         }
-        //     }
-        // }
+        key!(Tab) => {
+            let buffer_list = layout.selected_buffer_list_mut();
+            let (offsets, completions) = buffer_list.multi_autocomplete_matches(matches)?;
+            match init_complete_forward(&completions) {
+                Some((index, original, replacement)) => {
+                    on_all_offset_at(
+                        layout,
+                        matches,
+                        &offsets,
+                        |buffer, alt, matches, offsets| {
+                            buffer.multi_autocomplete(alt, matches, offsets, original, replacement);
+                        },
+                    );
+                    Some(EditorMode::AutocompleteMultiAll {
+                        matches: std::mem::take(matches),
+                        match_idx: std::mem::take(match_idx),
+                        offsets,
+                        completions,
+                        index,
+                    })
+                }
+                None => {
+                    buffer_list.current_mut()?.set_error("No Completions Found");
+                    None
+                }
+            }
+        }
+        key!(SHIFT, BackTab) => {
+            let buffer_list = layout.selected_buffer_list_mut();
+            let (offsets, completions) = buffer_list.multi_autocomplete_matches(matches)?;
+            match init_complete_backward(&completions) {
+                Some((index, original, replacement)) => {
+                    on_all_offset_at(
+                        layout,
+                        matches,
+                        &offsets,
+                        |buffer, alt, matches, offsets| {
+                            buffer.multi_autocomplete(alt, matches, offsets, original, replacement);
+                        },
+                    );
+                    Some(EditorMode::AutocompleteMultiAll {
+                        matches: std::mem::take(matches),
+                        match_idx: std::mem::take(match_idx),
+                        offsets,
+                        completions,
+                        index,
+                    })
+                }
+                None => {
+                    buffer_list.current_mut()?.set_error("No Completions Found");
+                    None
+                }
+            }
+        }
         Event::Key(KeyEvent {
             code: KeyCode::Up,
             modifiers: KeyModifiers::NONE,
@@ -4287,6 +4350,30 @@ fn on_all_at(
             );
         }
     });
+}
+
+fn on_all_offset_at(
+    layout: &mut Layout,
+    matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
+    offsets: &BTreeMap<usize, Vec<usize>>,
+    mut f: impl FnMut(&mut BufferContext, Vec<AltCursor<'_>>, &mut [MultiCursor], &[usize]),
+) {
+    let (buffer_list, mut alts) = layout.current_buffer_list_mut();
+
+    matches.iter_mut().for_each(|(idx, matches)| {
+        if let Some(buf) = buffer_list.get_mut(*idx)
+            && let Some(offsets) = offsets.get(idx)
+        {
+            f(
+                buf,
+                alts.iter_mut()
+                    .filter_map(|a| a.get_mut(*idx).map(|b| b.alt_cursor()))
+                    .collect(),
+                matches,
+                offsets,
+            );
+        }
+    })
 }
 
 fn set_title<D: std::fmt::Display>(d: D) {

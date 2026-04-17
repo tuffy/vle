@@ -2236,7 +2236,7 @@ impl BufferContext {
     }
 
     /// Given a set of cursors, attempts to find a common search prefix.
-    /// If found, returns set of completions.
+    /// If found, returns set of offsets and completions.
     pub fn multi_autocomplete_matches(
         &self,
         cursors: &[MultiCursor],
@@ -4567,6 +4567,51 @@ impl BufferList {
 
         Ok((match_idx, matches))
     }
+
+    /// Given set of cursors, attempts to find common search prefix
+    /// If found, returns offsets by buffer index and completions.
+    pub fn multi_autocomplete_matches(
+        &self,
+        cursors: &BTreeMap<usize, Vec<MultiCursor>>,
+    ) -> Option<(BTreeMap<usize, Vec<usize>>, Vec<String>)> {
+        let mut offsets: BTreeMap<usize, Vec<usize>> = BTreeMap::default();
+        let mut prefix = None;
+
+        // determine common prefix among all cursors on all buffers
+        for (buf_idx, buf_cursors) in cursors {
+            let buf = self.buffers.get(*buf_idx)?;
+            let rope = &buf.buffer.borrow().rope;
+            let offsets = offsets.entry(*buf_idx).or_default();
+            for cursor in buf_cursors {
+                let (offset, p) = cursor.autocomplete_prefix(rope)?;
+                offsets.push(offset);
+                match &mut prefix {
+                    None => {
+                        prefix = Some(p);
+                    }
+                    Some(prefix) => {
+                        if prefix != &p {
+                            return None;
+                        }
+                    }
+                }
+            }
+        }
+
+        let prefix = prefix?;
+
+        // calculate best matches for prefix across all buffers
+        let matches = cursors
+            .keys()
+            .fold(radix_trie::Trie::default(), |acc, buf_idx| {
+                match self.buffers.get(*buf_idx) {
+                    Some(buf) => accumulate_matches(acc, &buf.buffer.borrow().rope, &prefix),
+                    None => acc,
+                }
+            });
+
+        Some((offsets, finalize_matches(matches, prefix)))
+    }
 }
 
 // Rendering this BufferWidget is where the editor spends
@@ -5414,9 +5459,14 @@ impl StatefulWidget for BufferWidget<'_> {
                 )
                 .centered(),
             ),
-            Some(EditorMode::MultiCursorAll {
-                match_idx, matches, ..
-            }) => block.title_bottom(
+            Some(
+                EditorMode::MultiCursorAll {
+                    match_idx, matches, ..
+                }
+                | EditorMode::AutocompleteMultiAll {
+                    match_idx, matches, ..
+                },
+            ) => block.title_bottom(
                 border_title(
                     format!(
                         "Match {} / {}",
@@ -5914,6 +5964,77 @@ impl StatefulWidget for BufferWidget<'_> {
                         .take(area.height.into())
                         .collect()
                 }
+                Some(EditorMode::AutocompleteMultiAll {
+                    matches,
+                    offsets,
+                    completions,
+                    index,
+                    ..
+                }) if let Some(matches) = matches.get(&self.buffer_idx)
+                    && let Some(offsets) = offsets.get(&self.buffer_idx) =>
+                {
+                    // We're underlining the multicursors' effective range (in blue),
+                    // the autocompletion replacements (in red)
+                    // *and* the cursors themselves (as a blue block).
+                    // Yes, I know it's a lot.
+
+                    let (mut cursors, mut ranges): (VecDeque<_>, _) = matches
+                        .iter()
+                        .map(|m| (m.cursor..m.cursor + 1, m.range.clone()))
+                        .unzip();
+
+                    let completion_chars = completions[*index].chars().count();
+                    let mut replacements = matches
+                        .iter()
+                        .zip(offsets)
+                        .map(|(m, o)| m.range.start + *o..m.range.start + *o + completion_chars)
+                        .collect();
+
+                    cursors.retain(|r| r.start != state.cursor);
+
+                    EditorLine::iter(rope, viewport_line)
+                        .map(
+                            |EditorLine {
+                                 line,
+                                 range,
+                                 number,
+                             }| {
+                                let whole_range = widen_range(range);
+
+                                Vec::from(highlight_matches(
+                                    highlight_matches(
+                                        highlight_matches(
+                                            widen(colorize(
+                                                syntax,
+                                                &mut hlstate,
+                                                line,
+                                                current_line == Some(number),
+                                            )),
+                                            whole_range.clone(),
+                                            &mut ranges,
+                                            |span| span.patch_style(underline_color(Color::Blue)),
+                                        ),
+                                        whole_range.clone(),
+                                        &mut replacements,
+                                        |span| span.patch_style(underline_color(Color::Red)),
+                                    ),
+                                    whole_range,
+                                    &mut cursors,
+                                    |span| {
+                                        span.style(
+                                            Style::new()
+                                                .fg(Color::Blue)
+                                                .add_modifier(Modifier::REVERSED),
+                                        )
+                                    },
+                                ))
+                                .into()
+                            },
+                        )
+                        .map(|line| widen_tabs(line))
+                        .take(area.height.into())
+                        .collect()
+                }
                 Some(EditorMode::Autocomplete {
                     offset,
                     completions,
@@ -6263,7 +6384,7 @@ impl StatefulWidget for BufferWidget<'_> {
             Some(EditorMode::MultiCursor { .. } | EditorMode::AutocompleteMulti { .. }) => {
                 show_sub_help(text_area, buf, REPLACE_MATCHES);
             }
-            Some(EditorMode::MultiCursorAll { .. }) => {
+            Some(EditorMode::MultiCursorAll { .. } | EditorMode::AutocompleteMultiAll { .. }) => {
                 show_sub_help(text_area, buf, REPLACE_MATCHES_ALL);
             }
             Some(
