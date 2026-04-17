@@ -2250,16 +2250,36 @@ fn process_multi_cursor(
             }
         },
         ctrl_keybind!(Copy) => {
-            if let cut @ Some(_) = buffer.multi_cursor_copy(matches) {
-                *highlight = false;
-                *cut_buffer = cut;
+            let cut = buffer.multi_cursor_copy(matches);
+            match cut.len() {
+                0 => { /* do nothing */ }
+                1 => {
+                    buffer.set_message("Copied 1 Item");
+                    *highlight = false;
+                    *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
+                }
+                n => {
+                    buffer.set_message(format!("Copied {n} Items"));
+                    *highlight = false;
+                    *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
+                }
             }
             None
         }
         ctrl_keybind!(Cut) => {
-            if let cut @ Some(_) = buffer.multi_cursor_cut(alt, matches) {
-                *highlight = false;
-                *cut_buffer = cut;
+            let cut = buffer.multi_cursor_cut(alt, matches);
+            match cut.len() {
+                0 => { /* do nothing */ }
+                1 => {
+                    buffer.set_message("Cut 1 Item");
+                    *highlight = false;
+                    *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
+                }
+                n => {
+                    buffer.set_message(format!("Cut {n} Items"));
+                    *highlight = false;
+                    *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
+                }
             }
             None
         }
@@ -2576,6 +2596,8 @@ fn process_multi_cursor_all(
                 None
             }
         },
+        // keybind!(Copy)
+        // keybind!(Cut)
         keybind!(WidenSelection) => {
             *highlight = false;
             on_all(layout, matches, |buffer, matches| {

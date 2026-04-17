@@ -2613,32 +2613,20 @@ impl BufferContext {
         }
     }
 
-    pub fn multi_cursor_copy(&mut self, matches: &mut [MultiCursor]) -> Option<EditorCutBuffer> {
+    pub fn multi_cursor_copy(&self, matches: &mut [MultiCursor]) -> Vec<CutBuffer> {
         let buffer = &self.buffer.borrow();
 
-        let copies = matches
+        matches
             .iter_mut()
             .filter_map(|m| m.get_selection(&buffer.rope, &buffer.bookmarks))
-            .collect::<Vec<_>>();
-
-        match copies.len() {
-            0 => None,
-            1 => {
-                self.message = Some(BufferMessage::Notice("Copied 1 Item".into()));
-                Some(EditorCutBuffer::Multiple(copies))
-            }
-            n => {
-                self.message = Some(BufferMessage::Notice(format!("Copied {n} Items").into()));
-                Some(EditorCutBuffer::Multiple(copies))
-            }
-        }
+            .collect()
     }
 
     pub fn multi_cursor_cut(
         &mut self,
         mut alt: Vec<AltCursor<'_>>,
         matches: &mut [MultiCursor],
-    ) -> Option<EditorCutBuffer> {
+    ) -> Vec<CutBuffer> {
         let mut buf = self.buffer.borrow_update(
             MainCursor {
                 cursor: self.cursor,
@@ -2668,17 +2656,7 @@ impl BufferContext {
             },
         );
 
-        match cut_buffers.len() {
-            0 => None,
-            1 => {
-                self.message = Some(BufferMessage::Notice("Cut 1 Item".into()));
-                Some(EditorCutBuffer::Multiple(cut_buffers))
-            }
-            n => {
-                self.message = Some(BufferMessage::Notice(format!("Cut {n} Items").into()));
-                Some(EditorCutBuffer::Multiple(cut_buffers))
-            }
-        }
+        cut_buffers
     }
 
     pub fn multi_cursor_widen(&mut self, matches: &mut [MultiCursor]) {
