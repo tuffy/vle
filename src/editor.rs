@@ -113,6 +113,12 @@ pub enum EditorMode {
         match_idx: usize,
         highlight: bool,
     },
+    /// Multi-cursor operation with mark set
+    MultiCursorMarkSetAll {
+        matches: BTreeMap<usize, Vec<MultiCursor>>,
+        match_idx: usize,
+        highlight: bool,
+    },
     /// Querying for what regex group to paste
     PasteGroup {
         matches: Vec<MultiCursor>,
@@ -686,6 +692,37 @@ impl Editor {
                                 matches: std::mem::take(matches),
                                 match_idx: std::mem::take(match_idx),
                                 range: std::mem::take(range),
+                                highlight: std::mem::take(highlight),
+                            };
+                        }
+                        _ => { /* do nothing */ }
+                    }
+                }
+                EditorMode::MultiCursorMarkSetAll {
+                    matches,
+                    match_idx,
+                    highlight,
+                } => {
+                    match process_multi_cursor_mark_set_all(
+                        &mut self.layout,
+                        matches,
+                        highlight,
+                        event,
+                    ) {
+                        Ok(Some(event)) => {
+                            // end mark set
+                            self.mode = EditorMode::MultiCursorAll {
+                                matches: std::mem::take(matches),
+                                match_idx: std::mem::take(match_idx),
+                                highlight: std::mem::take(highlight),
+                            };
+                            self.process_event(area, event);
+                        }
+                        Err(()) => {
+                            // end mark set
+                            self.mode = EditorMode::MultiCursorAll {
+                                matches: std::mem::take(matches),
+                                match_idx: std::mem::take(match_idx),
                                 highlight: std::mem::take(highlight),
                             };
                         }
@@ -2624,13 +2661,88 @@ fn process_multi_cursor_all(
             }
             None
         }
-        // TODO - ctrl_keybind!(Mark) => Some(EditorMode::MultiCursorMarkSet {
-        //     matches: std::mem::take(matches),
-        //     match_idx: std::mem::take(match_idx),
-        //     range: std::mem::take(range),
-        //     highlight: std::mem::take(highlight),
-        // }),
+        ctrl_keybind!(Mark) => Some(EditorMode::MultiCursorMarkSetAll {
+            matches: std::mem::take(matches),
+            match_idx: std::mem::take(match_idx),
+            highlight: std::mem::take(highlight),
+        }),
         _ => None,
+    }
+}
+
+fn process_multi_cursor_mark_set_all(
+    layout: &mut Layout,
+    matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
+    highlight: &mut bool,
+    event: Event,
+) -> Result<Option<Event>, ()> {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+    fn on_all(
+        layout: &mut Layout,
+        matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
+        mut f: impl FnMut(&mut BufferContext, &mut [MultiCursor]),
+    ) {
+        let buffer_list = layout.selected_buffer_list_mut();
+
+        matches.iter_mut().for_each(|(idx, matches)| {
+            if let Some(buf) = buffer_list.get_mut(*idx) {
+                f(buf, matches);
+            }
+        });
+    }
+
+    match event {
+        Event::Key(KeyEvent {
+            code: KeyCode::Left,
+            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            *highlight = false;
+            on_all(layout, matches, |buffer, matches| {
+                buffer.multi_cursor_back(matches, true);
+            });
+            Ok(None)
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Right,
+            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            *highlight = false;
+            on_all(layout, matches, |buffer, matches| {
+                buffer.multi_cursor_forward(matches, true);
+            });
+            Ok(None)
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::Home,
+            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            *highlight = false;
+            on_all(layout, matches, |buffer, matches| {
+                buffer.multi_cursor_home(matches, true);
+            });
+            Ok(None)
+        }
+        Event::Key(KeyEvent {
+            code: KeyCode::End,
+            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            *highlight = false;
+            on_all(layout, matches, |buffer, matches| {
+                buffer.multi_cursor_end(matches, true);
+            });
+            Ok(None)
+        }
+        ctrl_keybind!(Mark) => Err(()),
+        event => Ok(Some(event)),
     }
 }
 

@@ -380,6 +380,7 @@ pub static SELECT_BUFFER: &[Keybinding] = &[
     ctrl(&[UP, DOWN], "Swap Buffer Locations"),
     none(&["Enter"], "Select Chosen Buffer"),
     keybind::<key::Save>("Save All Buffers"),
+    keybind::<key::Find>("Find in All Buffers"),
     keybind::<key::Reload>("Reload All Buffers"),
     keybind::<key::Quit>("Quit All Buffers"),
 ];

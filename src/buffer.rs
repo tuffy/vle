@@ -5694,12 +5694,20 @@ impl StatefulWidget for BufferWidget<'_> {
                         .take(area.height.into())
                         .collect()
                 }
-                Some(EditorMode::MultiCursorAll {
-                    matches,
-                    match_idx,
-                    highlight: true,
-                    ..
-                }) if let Some(matches) = matches.get(&self.buffer_idx) => {
+                Some(
+                    EditorMode::MultiCursorAll {
+                        matches,
+                        match_idx,
+                        highlight: true,
+                        ..
+                    }
+                    | EditorMode::MultiCursorMarkSetAll {
+                        matches,
+                        match_idx,
+                        highlight: true,
+                        ..
+                    },
+                ) if let Some(matches) = matches.get(&self.buffer_idx) => {
                     let selection_start = matches[*match_idx].range.start;
                     let selection_end = matches[*match_idx].range.end;
                     let mut matches = sub_match_ranges(matches);
@@ -5734,12 +5742,20 @@ impl StatefulWidget for BufferWidget<'_> {
                         .take(area.height.into())
                         .collect()
                 }
-                Some(EditorMode::MultiCursorAll {
-                    matches,
-                    match_idx,
-                    highlight: false,
-                    ..
-                }) if let Some(matches) = matches.get(&self.buffer_idx) => {
+                Some(
+                    EditorMode::MultiCursorAll {
+                        matches,
+                        match_idx,
+                        highlight: false,
+                        ..
+                    }
+                    | EditorMode::MultiCursorMarkSetAll {
+                        matches,
+                        match_idx,
+                        highlight: false,
+                        ..
+                    },
+                ) if let Some(matches) = matches.get(&self.buffer_idx) => {
                     let (mut cursors, (mut ranges, selections)): (
                         VecDeque<_>,
                         (_, VecFiltered<_>),
@@ -6220,7 +6236,9 @@ impl StatefulWidget for BufferWidget<'_> {
             Some(EditorMode::MultiCursorAll { .. }) => {
                 show_sub_help(text_area, buf, REPLACE_MATCHES_ALL);
             }
-            Some(EditorMode::MultiCursorMarkSet { .. }) => {
+            Some(
+                EditorMode::MultiCursorMarkSet { .. } | EditorMode::MultiCursorMarkSetAll { .. },
+            ) => {
                 show_sub_help(text_area, buf, MULTICURSOR_MARK_SET);
             }
             Some(EditorMode::PasteGroup { total, .. }) => {
