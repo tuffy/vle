@@ -127,6 +127,13 @@ pub enum EditorMode {
         range: Option<SelectionRange>,
         highlight: bool,
     },
+    /// Querying for what regex group to paste in all buffers
+    PasteGroupAll {
+        matches: BTreeMap<usize, Vec<MultiCursor>>,
+        match_idx: usize,
+        total: usize,
+        highlight: bool,
+    },
     /// Opening a new file
     Open {
         #[cfg(not(feature = "ssh"))]
@@ -760,6 +767,25 @@ impl Editor {
                         matches: std::mem::take(matches),
                         match_idx: std::mem::take(match_idx),
                         range: range.take(),
+                        highlight: std::mem::take(highlight),
+                    };
+                }
+                EditorMode::PasteGroupAll {
+                    matches,
+                    match_idx,
+                    highlight,
+                    ..
+                } => {
+                    process_paste_group_all(
+                        &mut self.layout,
+                        matches,
+                        self.cut_buffer.as_mut(),
+                        event,
+                    );
+
+                    self.mode = EditorMode::MultiCursorAll {
+                        matches: std::mem::take(matches),
+                        match_idx: std::mem::take(match_idx),
                         highlight: std::mem::take(highlight),
                     };
                 }
@@ -2348,40 +2374,6 @@ fn process_multi_cursor_all(
         Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
     };
 
-    fn on_all(
-        layout: &mut Layout,
-        matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
-        mut f: impl FnMut(&mut BufferContext, &mut [MultiCursor]),
-    ) {
-        let buffer_list = layout.selected_buffer_list_mut();
-
-        matches.iter_mut().for_each(|(idx, matches)| {
-            if let Some(buf) = buffer_list.get_mut(*idx) {
-                f(buf, matches);
-            }
-        });
-    }
-
-    fn on_all_at(
-        layout: &mut Layout,
-        matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
-        mut f: impl FnMut(&mut BufferContext, Vec<AltCursor<'_>>, &mut [MultiCursor]),
-    ) {
-        let (buffer_list, mut alts) = layout.current_buffer_list_mut();
-
-        matches.iter_mut().for_each(|(idx, matches)| {
-            if let Some(buf) = buffer_list.get_mut(*idx) {
-                f(
-                    buf,
-                    alts.iter_mut()
-                        .filter_map(|a| a.get_mut(*idx).map(|b| b.alt_cursor()))
-                        .collect(),
-                    matches,
-                );
-            }
-        });
-    }
-
     match event {
         Event::Key(KeyEvent {
             code: KeyCode::Char(c),
@@ -2515,15 +2507,26 @@ fn process_multi_cursor_all(
             });
             None
         }
-        ctrl_keybind!(Paste) => {
-            // TODO - support pasting from regex groups
-            if let Some(cut) = cut_buffer {
-                on_all_at(layout, matches, |buffer, alt, matches| {
-                    buffer.multi_paste(alt, matches, cut);
-                });
+        ctrl_keybind!(Paste) => match matches
+            .values()
+            .flat_map(|m| m.iter().map(|m| m.paste_group_count()))
+            .max()
+        {
+            Some(Some(total)) => Some(EditorMode::PasteGroupAll {
+                total: total.get(),
+                matches: std::mem::take(matches),
+                match_idx: std::mem::take(match_idx),
+                highlight: std::mem::take(highlight),
+            }),
+            _ => {
+                if let Some(cut) = cut_buffer {
+                    on_all_at(layout, matches, |buffer, alt, matches| {
+                        buffer.multi_paste(alt, matches, cut);
+                    });
+                }
+                None
             }
-            None
-        }
+        },
         keybind!(WidenSelection) => {
             *highlight = false;
             on_all(layout, matches, |buffer, matches| {
@@ -2678,20 +2681,6 @@ fn process_multi_cursor_mark_set_all(
 ) -> Result<Option<Event>, ()> {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-    fn on_all(
-        layout: &mut Layout,
-        matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
-        mut f: impl FnMut(&mut BufferContext, &mut [MultiCursor]),
-    ) {
-        let buffer_list = layout.selected_buffer_list_mut();
-
-        matches.iter_mut().for_each(|(idx, matches)| {
-            if let Some(buf) = buffer_list.get_mut(*idx) {
-                f(buf, matches);
-            }
-        });
-    }
-
     match event {
         Event::Key(KeyEvent {
             code: KeyCode::Left,
@@ -2781,6 +2770,50 @@ fn process_paste_group(
         ctrl_keybind!(Paste) => {
             if let Some(cut) = cut_buffer {
                 buf.multi_paste(alt, matches, cut);
+            }
+        }
+        _ => { /* ignore other events */ }
+    }
+}
+
+fn process_paste_group_all(
+    layout: &mut Layout,
+    matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
+    cut_buffer: Option<&mut EditorCutBuffer>,
+    event: Event,
+) {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+    match event {
+        Event::Key(KeyEvent {
+            code: KeyCode::Char(c @ '0'..='9'),
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            ..
+        }) => {
+            let group = match c {
+                '0' => 0,
+                '1' => 1,
+                '2' => 2,
+                '3' => 3,
+                '4' => 4,
+                '5' => 5,
+                '6' => 6,
+                '7' => 7,
+                '8' => 8,
+                '9' => 9,
+                _ => unreachable!(),
+            };
+
+            on_all_at(layout, matches, |buf, alt, matches| {
+                buf.multi_insert_group(alt, matches, group);
+            });
+        }
+        ctrl_keybind!(Paste) => {
+            if let Some(cut) = cut_buffer {
+                on_all_at(layout, matches, |buf, alt, matches| {
+                    buf.multi_paste(alt, matches, cut);
+                });
             }
         }
         _ => { /* ignore other events */ }
@@ -4220,6 +4253,40 @@ where
         completions[std::mem::replace(index, previous_index)].as_ref(),
         completions[previous_index].as_ref(),
     )
+}
+
+fn on_all(
+    layout: &mut Layout,
+    matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
+    mut f: impl FnMut(&mut BufferContext, &mut [MultiCursor]),
+) {
+    let buffer_list = layout.selected_buffer_list_mut();
+
+    matches.iter_mut().for_each(|(idx, matches)| {
+        if let Some(buf) = buffer_list.get_mut(*idx) {
+            f(buf, matches);
+        }
+    });
+}
+
+fn on_all_at(
+    layout: &mut Layout,
+    matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
+    mut f: impl FnMut(&mut BufferContext, Vec<AltCursor<'_>>, &mut [MultiCursor]),
+) {
+    let (buffer_list, mut alts) = layout.current_buffer_list_mut();
+
+    matches.iter_mut().for_each(|(idx, matches)| {
+        if let Some(buf) = buffer_list.get_mut(*idx) {
+            f(
+                buf,
+                alts.iter_mut()
+                    .filter_map(|a| a.get_mut(*idx).map(|b| b.alt_cursor()))
+                    .collect(),
+                matches,
+            );
+        }
+    });
 }
 
 fn set_title<D: std::fmt::Display>(d: D) {

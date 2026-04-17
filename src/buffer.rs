@@ -5432,6 +5432,24 @@ impl StatefulWidget for BufferWidget<'_> {
                 )
                 .centered(),
             ),
+            Some(EditorMode::MultiCursorMarkSetAll {
+                match_idx, matches, ..
+            }) => block.border_style(Style::default().magenta()).title_bottom(
+                border_title(
+                    format!(
+                        "Match {} / {}",
+                        matches
+                            .range(0..self.buffer_idx)
+                            .map(|(_, m)| m.len())
+                            .sum::<usize>()
+                            + *match_idx
+                            + 1,
+                        matches.values().map(|m| m.len()).sum::<usize>()
+                    ),
+                    focused,
+                )
+                .centered(),
+            ),
             Some(EditorMode::SelectLine { .. }) => {
                 let mut bookmarks = buffer.bookmarks.range(..=state.cursor).rev().peekable();
                 if let Some(b) = bookmarks.peek()
@@ -5706,6 +5724,12 @@ impl StatefulWidget for BufferWidget<'_> {
                         match_idx,
                         highlight: true,
                         ..
+                    }
+                    | EditorMode::PasteGroupAll {
+                        matches,
+                        match_idx,
+                        highlight: true,
+                        ..
                     },
                 ) if let Some(matches) = matches.get(&self.buffer_idx) => {
                     let selection_start = matches[*match_idx].range.start;
@@ -5750,6 +5774,12 @@ impl StatefulWidget for BufferWidget<'_> {
                         ..
                     }
                     | EditorMode::MultiCursorMarkSetAll {
+                        matches,
+                        match_idx,
+                        highlight: false,
+                        ..
+                    }
+                    | EditorMode::PasteGroupAll {
                         matches,
                         match_idx,
                         highlight: false,
@@ -6241,7 +6271,9 @@ impl StatefulWidget for BufferWidget<'_> {
             ) => {
                 show_sub_help(text_area, buf, MULTICURSOR_MARK_SET);
             }
-            Some(EditorMode::PasteGroup { total, .. }) => {
+            Some(
+                EditorMode::PasteGroup { total, .. } | EditorMode::PasteGroupAll { total, .. },
+            ) => {
                 show_sub_help(
                     text_area,
                     buf,
