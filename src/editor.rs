@@ -863,11 +863,25 @@ impl Editor {
                         }
                         Some(SelectBuffer::ReloadAll) => {
                             let (list, mut alts) = self.layout.current_buffer_list_mut();
-                            if let Err(crate::buffer::Modified) = list.reload_all(&mut alts) {
-                                self.mode = EditorMode::VerifyReload
+                            match list.reload_all(&mut alts) {
+                                Ok(Ok(reloaded)) => {
+                                    self.layout.on_current(|b| {
+                                        match reloaded {
+                                            0 => { /* do nothing */ }
+                                            1 => b.set_message("Reloaded 1 Buffer"),
+                                            n => b.set_message(format!("Reloaded {n} Buffers")),
+                                        }
+                                        set_title(b);
+                                    });
+                                    self.mode = EditorMode::default();
+                                }
+                                Ok(Err(err)) => {
+                                    self.layout.on_current(|b| b.set_error(err.to_string()));
+                                }
+                                Err(crate::buffer::Modified) => {
+                                    self.mode = EditorMode::VerifyReload;
+                                }
                             }
-                            self.layout.on_current(|b| set_title(b));
-                            self.mode = EditorMode::default();
                         }
                         Some(SelectBuffer::QuitAll) => {
                             while let Some(buf) = self.layout.selected_buffer_list().current() {
@@ -1188,10 +1202,14 @@ impl Editor {
                 },
             },
             keybind!(Reload) => {
-                if let Some(Err(crate::buffer::Modified)) =
-                    self.on_buffer_at(|b, a| b.verified_reload(a))
-                {
-                    self.mode = EditorMode::VerifyReload;
+                match self.on_buffer_at(|b, a| b.verified_reload(a)) {
+                    Some(Err(crate::buffer::Modified)) => {
+                        self.mode = EditorMode::VerifyReload;
+                    }
+                    Some(Ok(Err(err))) => {
+                        self.update_buffer(|b| b.set_error(err.to_string()));
+                    }
+                    None | Some(Ok(Ok(()))) => { /* do nothing */ }
                 }
             }
             keybind!(UpdateLines) | key!(CONTROL, 'r') => {
@@ -1422,9 +1440,13 @@ impl Editor {
         match event {
             key!('y') => {
                 // reload buffer anyway
-                self.update_buffer_at(|b, a| {
-                    // on failure, buffer already populated with error
-                    let _ = b.reload(a);
+                self.update_buffer_at(|b, a| match b.reload(a) {
+                    Ok(()) => {
+                        b.set_message("Reloaded");
+                    }
+                    Err(err) => {
+                        b.set_error(err.to_string());
+                    }
                 });
                 self.mode = EditorMode::default();
             }

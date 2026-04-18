@@ -925,12 +925,6 @@ impl BufferContext {
         self.buffer
             .borrow_mut()
             .reload(&mut self.cursor, &mut self.selection, alt)
-            .inspect(|()| {
-                self.message = Some(BufferMessage::Notice("Reloaded".into()));
-            })
-            .inspect_err(|err| {
-                self.message = Some(BufferMessage::Error(err.to_string().into()));
-            })
     }
 
     // Ok(Ok(()))    - buffer not modified, reload successful
