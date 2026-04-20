@@ -853,13 +853,25 @@ impl Editor {
                             self.layout.swap_buffers(idx_a, idx_b);
                         }
                         Some(SelectBuffer::SaveAll) => {
-                            if let Err(crate::buffer::Modified) =
-                                self.layout.selected_buffer_list_mut().save_all()
-                            {
-                                self.mode = EditorMode::VerifySave;
+                            match self.layout.selected_buffer_list_mut().save_all() {
+                                Ok(Ok(saved)) => {
+                                    self.layout.on_current(|b| {
+                                        match saved {
+                                            0 => { /* do nothing */ }
+                                            1 => b.set_message("Saved 1 Buffer"),
+                                            n => b.set_message(format!("Saved {n} Buffers")),
+                                        }
+                                        set_title(b);
+                                    });
+                                    self.mode = EditorMode::default();
+                                }
+                                Ok(Err(err)) => {
+                                    self.layout.on_current(|b| b.set_error(err.to_string()));
+                                }
+                                Err(crate::buffer::Modified) => {
+                                    self.mode = EditorMode::VerifySave;
+                                }
                             }
-                            self.layout.on_current(|b| set_title(b));
-                            self.mode = EditorMode::default();
                         }
                         Some(SelectBuffer::ReloadAll) => {
                             let (list, mut alts) = self.layout.current_buffer_list_mut();
