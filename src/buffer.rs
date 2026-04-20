@@ -2659,6 +2659,10 @@ impl BufferContext {
             .for_each(|m| m.widen_selection(&mut self.cursor));
     }
 
+    pub fn set_buffer_message(&mut self, message: BufferMessage) {
+        self.message = Some(message);
+    }
+
     pub fn set_error<S: Into<Cow<'static, str>>>(&mut self, err: S) {
         self.message = Some(BufferMessage::Error(err.into()))
     }
@@ -2741,7 +2745,8 @@ impl BufferContext {
         ))
     }
 
-    pub fn toggle_bookmarks(&mut self, positions: impl Iterator<Item = usize>) {
+    #[must_use]
+    pub fn toggle_bookmarks(&mut self, positions: impl Iterator<Item = usize>) -> ToggledBookmarks {
         let mut added = 0;
         let mut removed = 0;
         let mut buf = self.buffer.borrow_mut();
@@ -2757,27 +2762,7 @@ impl BufferContext {
             }
         }
 
-        match (added, removed) {
-            (0, 0) => {}
-            (1, 0) => {
-                self.message = Some(BufferMessage::Notice("Bookmark Added".into()));
-            }
-            (n, 0) => {
-                self.message = Some(BufferMessage::Notice(format!("{n} Bookmarks Added").into()));
-            }
-            (0, 1) => {
-                self.message = Some(BufferMessage::Notice("Bookmark Removed".into()));
-            }
-            (0, n) => {
-                self.message = Some(BufferMessage::Notice(
-                    format!("{n} Bookmarks Removed").into(),
-                ));
-            }
-            _ => {
-                // an unusual case
-                self.message = Some(BufferMessage::Notice("Bookmarks Toggled".into()));
-            }
-        }
+        ToggledBookmarks { added, removed }
     }
 
     /// If cursor at a bookmark, delete it
@@ -2816,6 +2801,51 @@ impl BufferContext {
 impl std::fmt::Display for BufferContext {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         self.buffer.borrow().source().name().fmt(f)
+    }
+}
+
+#[derive(Default)]
+pub struct ToggledBookmarks {
+    added: usize,
+    removed: usize,
+}
+
+impl std::ops::AddAssign for ToggledBookmarks {
+    fn add_assign(&mut self, Self { added, removed }: Self) {
+        self.added += added;
+        self.removed += removed;
+    }
+}
+
+impl TryFrom<ToggledBookmarks> for BufferMessage {
+    type Error = ();
+
+    fn try_from(toggled: ToggledBookmarks) -> Result<Self, ()> {
+        match toggled {
+            ToggledBookmarks {
+                added: 0,
+                removed: 0,
+            } => Err(()),
+            ToggledBookmarks {
+                added: 1,
+                removed: 0,
+            } => Ok(BufferMessage::Notice("Bookmark Added".into())),
+            ToggledBookmarks {
+                added: n,
+                removed: 0,
+            } => Ok(BufferMessage::Notice(format!("{n} Bookmarks Added").into())),
+            ToggledBookmarks {
+                added: 0,
+                removed: 1,
+            } => Ok(BufferMessage::Notice("Bookmark Removed".into())),
+            ToggledBookmarks {
+                added: 0,
+                removed: n,
+            } => Ok(BufferMessage::Notice(
+                format!("{n} Bookmarks Removed").into(),
+            )),
+            ToggledBookmarks { .. } => Ok(BufferMessage::Notice("Bookmarks Toggled".into())),
+        }
     }
 }
 

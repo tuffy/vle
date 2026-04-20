@@ -2324,7 +2324,10 @@ fn process_multi_cursor(
         }
         keybind!(Bookmark) => {
             *highlight = false;
-            buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));
+            let toggled = buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));
+            if let Ok(msg) = toggled.try_into() {
+                buffer.set_buffer_message(msg);
+            }
             None
         }
         key!(Tab) => {
@@ -2690,10 +2693,18 @@ fn process_multi_cursor_all(
             None
         }
         keybind!(Bookmark) => {
+            use crate::buffer::ToggledBookmarks;
+
             *highlight = false;
+            let mut toggled = ToggledBookmarks::default();
             on_all(layout, matches, |buffer, matches| {
-                buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));
+                toggled += buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));
             });
+            if let Some(buf) = layout.selected_buffer_list_mut().current_mut()
+                && let Ok(msg) = toggled.try_into()
+            {
+                buf.set_buffer_message(msg);
+            }
             None
         }
         key!(Tab) => {
