@@ -5439,7 +5439,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
         let block = match &self.mode {
             Some(EditorMode::SingleBuffer {
-                cursor:
+                cursors:
                     MultiCursors {
                         match_idx,
                         matches,
@@ -5458,7 +5458,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 .centered(),
             ),
             Some(EditorMode::AllBuffers {
-                cursor:
+                cursors:
                     MultiCursors {
                         match_idx,
                         matches,
@@ -5613,7 +5613,7 @@ impl StatefulWidget for BufferWidget<'_> {
         Paragraph::new(apply_margins(
             match self.mode {
                 Some(EditorMode::SingleBuffer {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             matches,
                             match_idx,
@@ -5661,7 +5661,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         .collect()
                 }
                 Some(EditorMode::SingleBuffer {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             matches,
                             highlight: false,
@@ -5733,7 +5733,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         .collect()
                 }
                 Some(EditorMode::AllBuffers {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             matches,
                             match_idx,
@@ -5779,7 +5779,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         .collect()
                 }
                 Some(EditorMode::AllBuffers {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             matches,
                             match_idx,
@@ -5850,7 +5850,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         .collect()
                 }
                 Some(EditorMode::SingleBuffer {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             matches,
                             mode:
@@ -5926,7 +5926,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         .collect()
                 }
                 Some(EditorMode::AllBuffers {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             matches,
                             mode:
@@ -6376,7 +6376,7 @@ impl StatefulWidget for BufferWidget<'_> {
             }
             Some(
                 EditorMode::SingleBuffer {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             mode: MultiCursorMode::Editing | MultiCursorMode::Autocomplete { .. },
                             ..
@@ -6384,7 +6384,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     ..
                 }
                 | EditorMode::AllBuffers {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             mode: MultiCursorMode::Editing | MultiCursorMode::Autocomplete { .. },
                             ..
@@ -6395,7 +6395,7 @@ impl StatefulWidget for BufferWidget<'_> {
             }
             Some(
                 EditorMode::SingleBuffer {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             mode: MultiCursorMode::MarkSet,
                             ..
@@ -6403,7 +6403,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     ..
                 }
                 | EditorMode::AllBuffers {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             mode: MultiCursorMode::MarkSet,
                             ..
@@ -6414,7 +6414,7 @@ impl StatefulWidget for BufferWidget<'_> {
             }
             Some(
                 EditorMode::SingleBuffer {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             mode: MultiCursorMode::PasteGroup { total, .. },
                             ..
@@ -6422,7 +6422,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     ..
                 }
                 | EditorMode::AllBuffers {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             mode: MultiCursorMode::PasteGroup { total, .. },
                             ..

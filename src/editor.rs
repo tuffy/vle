@@ -76,31 +76,26 @@ pub enum EditorMode {
     /// Querying which direction to split the pane
     SplitPane,
     /// Verifying whether to close dirty buffer
-    ConfirmClose {
-        buffer: BufferId,
-    },
+    ConfirmClose { buffer: BufferId },
     /// Querying for what to select inside of
     SelectInside,
     /// Querying for which line to select
-    SelectLine {
-        prompt: LinePrompt,
-    },
+    SelectLine { prompt: LinePrompt },
     /// Querying for what text to search for
     Search {
         search: Search,
         range: Option<SelectionRange>,
     },
-    SearchAll {
-        search: Search,
-    },
+    /// Querying for what text to search for across all buffers
+    SearchAll { search: Search },
     /// Multi-cursor operation on single buffer
     SingleBuffer {
-        cursor: MultiCursors<Vec<MultiCursor>, Vec<usize>>,
+        cursors: MultiCursors<Vec<MultiCursor>, Vec<usize>>,
         range: Option<SelectionRange>,
     },
     /// Multi-cursor operation on multiple buffers
     AllBuffers {
-        cursor: MultiCursors<BTreeMap<usize, Vec<MultiCursor>>, BTreeMap<usize, Vec<usize>>>,
+        cursors: MultiCursors<BTreeMap<usize, Vec<MultiCursor>>, BTreeMap<usize, Vec<usize>>>,
     },
     /// Opening a new file
     Open {
@@ -524,7 +519,7 @@ impl Editor {
                     }
                 },
                 EditorMode::SingleBuffer {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             matches,
                             match_idx,
@@ -555,7 +550,7 @@ impl Editor {
                     event => {
                         // end autocomplete
                         self.mode = EditorMode::SingleBuffer {
-                            cursor: MultiCursors {
+                            cursors: MultiCursors {
                                 matches: std::mem::take(matches),
                                 match_idx: std::mem::take(match_idx),
                                 highlight: false,
@@ -567,7 +562,7 @@ impl Editor {
                     }
                 },
                 EditorMode::AllBuffers {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             matches,
                             match_idx,
@@ -607,7 +602,7 @@ impl Editor {
                     event => {
                         // end autocomplete
                         self.mode = EditorMode::AllBuffers {
-                            cursor: MultiCursors {
+                            cursors: MultiCursors {
                                 matches: std::mem::take(matches),
                                 match_idx: std::mem::take(match_idx),
                                 highlight: false,
@@ -669,7 +664,7 @@ impl Editor {
                                 let matches = matches.into_iter().map(|r| r.into()).collect();
 
                                 EditorMode::SingleBuffer {
-                                    cursor: MultiCursors {
+                                    cursors: MultiCursors {
                                         matches,
                                         match_idx,
                                         highlight: true,
@@ -722,7 +717,7 @@ impl Editor {
                         self.mode = match new_mode {
                             NextModeIncrementalAll::Browse { match_idx, matches } => {
                                 EditorMode::AllBuffers {
-                                    cursor: MultiCursors {
+                                    cursors: MultiCursors {
                                         matches,
                                         match_idx,
                                         highlight: true,
@@ -752,7 +747,7 @@ impl Editor {
                     }
                 }
                 EditorMode::SingleBuffer {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             matches,
                             match_idx,
@@ -777,7 +772,7 @@ impl Editor {
                     }
                 }
                 EditorMode::SingleBuffer {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             matches,
                             match_idx,
@@ -793,7 +788,7 @@ impl Editor {
                         Some(Ok(Some(event))) => {
                             // end mark set
                             self.mode = EditorMode::SingleBuffer {
-                                cursor: MultiCursors {
+                                cursors: MultiCursors {
                                     matches: std::mem::take(matches),
                                     match_idx: std::mem::take(match_idx),
                                     highlight: std::mem::take(highlight),
@@ -806,7 +801,7 @@ impl Editor {
                         Some(Err(())) => {
                             // end mark set
                             self.mode = EditorMode::SingleBuffer {
-                                cursor: MultiCursors {
+                                cursors: MultiCursors {
                                     matches: std::mem::take(matches),
                                     match_idx: std::mem::take(match_idx),
                                     highlight: std::mem::take(highlight),
@@ -819,7 +814,7 @@ impl Editor {
                     }
                 }
                 EditorMode::AllBuffers {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             matches,
                             match_idx,
@@ -836,7 +831,7 @@ impl Editor {
                         Ok(Some(event)) => {
                             // end mark set
                             self.mode = EditorMode::AllBuffers {
-                                cursor: MultiCursors {
+                                cursors: MultiCursors {
                                     matches: std::mem::take(matches),
                                     match_idx: std::mem::take(match_idx),
                                     highlight: std::mem::take(highlight),
@@ -848,7 +843,7 @@ impl Editor {
                         Err(()) => {
                             // end mark set
                             self.mode = EditorMode::AllBuffers {
-                                cursor: MultiCursors {
+                                cursors: MultiCursors {
                                     matches: std::mem::take(matches),
                                     match_idx: std::mem::take(match_idx),
                                     highlight: std::mem::take(highlight),
@@ -860,7 +855,7 @@ impl Editor {
                     }
                 }
                 EditorMode::AllBuffers {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             matches,
                             match_idx,
@@ -880,7 +875,7 @@ impl Editor {
                     }
                 }
                 EditorMode::SingleBuffer {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             matches,
                             match_idx,
@@ -894,7 +889,7 @@ impl Editor {
                     });
 
                     self.mode = EditorMode::SingleBuffer {
-                        cursor: MultiCursors {
+                        cursors: MultiCursors {
                             matches: std::mem::take(matches),
                             match_idx: std::mem::take(match_idx),
                             highlight: std::mem::take(highlight),
@@ -904,7 +899,7 @@ impl Editor {
                     };
                 }
                 EditorMode::AllBuffers {
-                    cursor:
+                    cursors:
                         MultiCursors {
                             matches,
                             match_idx,
@@ -920,7 +915,7 @@ impl Editor {
                     );
 
                     self.mode = EditorMode::AllBuffers {
-                        cursor: MultiCursors {
+                        cursors: MultiCursors {
                             matches: std::mem::take(matches),
                             match_idx: std::mem::take(match_idx),
                             highlight: std::mem::take(highlight),
@@ -1246,7 +1241,7 @@ impl Editor {
                             let matches = matches.into_iter().map(|r| r.into()).collect();
 
                             EditorMode::SingleBuffer {
-                                cursor: MultiCursors {
+                                cursors: MultiCursors {
                                     matches,
                                     match_idx,
                                     highlight: true,
@@ -1331,7 +1326,7 @@ impl Editor {
                     && let Some(match_idx) = matches.len().checked_sub(1)
                 {
                     self.mode = EditorMode::SingleBuffer {
-                        cursor: MultiCursors {
+                        cursors: MultiCursors {
                             matches,
                             match_idx,
                             highlight: false,
@@ -2381,7 +2376,7 @@ fn process_multi_cursor(
         }
         ctrl_keybind!(Paste) => match matches.iter().map(|m| m.paste_group_count()).max() {
             Some(Some(total)) => Some(EditorMode::SingleBuffer {
-                cursor: MultiCursors {
+                cursors: MultiCursors {
                     matches: std::mem::take(matches),
                     match_idx: std::mem::take(match_idx),
                     highlight: std::mem::take(highlight),
@@ -2449,7 +2444,7 @@ fn process_multi_cursor(
                 Some((index, original, replacement)) => {
                     buffer.multi_autocomplete(alt, matches, &offsets, original, replacement);
                     Some(EditorMode::SingleBuffer {
-                        cursor: MultiCursors {
+                        cursors: MultiCursors {
                             matches: std::mem::take(matches),
                             match_idx: std::mem::take(match_idx),
                             highlight: false,
@@ -2474,7 +2469,7 @@ fn process_multi_cursor(
                 Some((index, original, replacement)) => {
                     buffer.multi_autocomplete(alt, matches, &offsets, original, replacement);
                     Some(EditorMode::SingleBuffer {
-                        cursor: MultiCursors {
+                        cursors: MultiCursors {
                             matches: std::mem::take(matches),
                             match_idx: std::mem::take(match_idx),
                             highlight: false,
@@ -2528,7 +2523,7 @@ fn process_multi_cursor(
             None
         }
         ctrl_keybind!(Mark) => Some(EditorMode::SingleBuffer {
-            cursor: MultiCursors {
+            cursors: MultiCursors {
                 matches: std::mem::take(matches),
                 match_idx: std::mem::take(match_idx),
                 highlight: std::mem::take(highlight),
@@ -2748,7 +2743,7 @@ fn process_multi_cursor_all(
             .max()
         {
             Some(Some(total)) => Some(EditorMode::AllBuffers {
-                cursor: MultiCursors {
+                cursors: MultiCursors {
                     matches: std::mem::take(matches),
                     match_idx: std::mem::take(match_idx),
                     highlight: std::mem::take(highlight),
@@ -2852,7 +2847,7 @@ fn process_multi_cursor_all(
                         },
                     );
                     Some(EditorMode::AllBuffers {
-                        cursor: MultiCursors {
+                        cursors: MultiCursors {
                             matches: std::mem::take(matches),
                             match_idx: std::mem::take(match_idx),
                             highlight: false,
@@ -2884,7 +2879,7 @@ fn process_multi_cursor_all(
                         },
                     );
                     Some(EditorMode::AllBuffers {
-                        cursor: MultiCursors {
+                        cursors: MultiCursors {
                             matches: std::mem::take(matches),
                             match_idx: std::mem::take(match_idx),
                             highlight: false,
@@ -2986,7 +2981,7 @@ fn process_multi_cursor_all(
             None
         }
         ctrl_keybind!(Mark) => Some(EditorMode::AllBuffers {
-            cursor: MultiCursors {
+            cursors: MultiCursors {
                 matches: std::mem::take(matches),
                 match_idx: std::mem::take(match_idx),
                 highlight: std::mem::take(highlight),
