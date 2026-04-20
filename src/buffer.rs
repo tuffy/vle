@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::editor::EditorMode;
+use crate::editor::{EditorMode, MultiCursorMode, MultiCursors};
 use crate::endings::LineEndings;
 use crate::syntax::Highlighter;
 use ratatui::{
@@ -5438,55 +5438,37 @@ impl StatefulWidget for BufferWidget<'_> {
         );
 
         let block = match &self.mode {
-            Some(
-                EditorMode::MultiCursor {
-                    match_idx, matches, ..
-                }
-                | EditorMode::AutocompleteMulti {
-                    match_idx, matches, ..
-                },
-            ) => block.title_bottom(
+            Some(EditorMode::SingleBuffer {
+                cursor:
+                    MultiCursors {
+                        match_idx,
+                        matches,
+                        mode:
+                            MultiCursorMode::Editing
+                            | MultiCursorMode::MarkSet
+                            | MultiCursorMode::Autocomplete { .. },
+                        ..
+                    },
+                ..
+            }) => block.title_bottom(
                 border_title(
                     format!("Match {} / {}", *match_idx + 1, matches.len()),
                     focused,
                 )
                 .centered(),
             ),
-            Some(EditorMode::MultiCursorMarkSet {
-                match_idx, matches, ..
-            }) => block.border_style(Style::default().magenta()).title_bottom(
-                border_title(
-                    format!("Match {} / {}", *match_idx + 1, matches.len()),
-                    focused,
-                )
-                .centered(),
-            ),
-            Some(
-                EditorMode::MultiCursorAll {
-                    match_idx, matches, ..
-                }
-                | EditorMode::AutocompleteMultiAll {
-                    match_idx, matches, ..
-                },
-            ) => block.title_bottom(
-                border_title(
-                    format!(
-                        "Match {} / {}",
-                        matches
-                            .range(0..self.buffer_idx)
-                            .map(|(_, m)| m.len())
-                            .sum::<usize>()
-                            + *match_idx
-                            + 1,
-                        matches.values().map(|m| m.len()).sum::<usize>()
-                    ),
-                    focused,
-                )
-                .centered(),
-            ),
-            Some(EditorMode::MultiCursorMarkSetAll {
-                match_idx, matches, ..
-            }) => block.border_style(Style::default().magenta()).title_bottom(
+            Some(EditorMode::AllBuffers {
+                cursor:
+                    MultiCursors {
+                        match_idx,
+                        matches,
+                        mode:
+                            MultiCursorMode::Editing
+                            | MultiCursorMode::MarkSet
+                            | MultiCursorMode::Autocomplete { .. },
+                        ..
+                    },
+            }) => block.title_bottom(
                 border_title(
                     format!(
                         "Match {} / {}",
@@ -5523,13 +5505,9 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
             Some(EditorMode::SplitPane) => block.border_style(Style::default().blue()),
-            Some(EditorMode::MarkSet) => line_count(
-                rope,
-                block.border_style(Style::default().magenta()),
-                state.cursor,
-                state.selection,
-                focused,
-            ),
+            Some(EditorMode::MarkSet) => {
+                line_count(rope, block, state.cursor, state.selection, focused)
+            }
             Some(EditorMode::Open { .. }) => block,
             _ => line_count(rope, block, state.cursor, state.selection, focused),
         };
@@ -5634,26 +5612,20 @@ impl StatefulWidget for BufferWidget<'_> {
 
         Paragraph::new(apply_margins(
             match self.mode {
-                Some(
-                    EditorMode::MultiCursor {
-                        matches,
-                        match_idx,
-                        highlight: true,
-                        ..
-                    }
-                    | EditorMode::MultiCursorMarkSet {
-                        matches,
-                        match_idx,
-                        highlight: true,
-                        ..
-                    }
-                    | EditorMode::PasteGroup {
-                        matches,
-                        match_idx,
-                        highlight: true,
-                        ..
-                    },
-                ) => {
+                Some(EditorMode::SingleBuffer {
+                    cursor:
+                        MultiCursors {
+                            matches,
+                            match_idx,
+                            highlight: true,
+                            mode:
+                                MultiCursorMode::Editing
+                                | MultiCursorMode::MarkSet
+                                | MultiCursorMode::PasteGroup { .. },
+                            ..
+                        },
+                    ..
+                }) => {
                     let selection_start = matches[*match_idx].range.start;
                     let selection_end = matches[*match_idx].range.end;
                     let mut matches = sub_match_ranges(matches);
@@ -5688,23 +5660,19 @@ impl StatefulWidget for BufferWidget<'_> {
                         .take(area.height.into())
                         .collect()
                 }
-                Some(
-                    EditorMode::MultiCursor {
-                        matches,
-                        highlight: false,
-                        ..
-                    }
-                    | EditorMode::MultiCursorMarkSet {
-                        matches,
-                        highlight: false,
-                        ..
-                    }
-                    | EditorMode::PasteGroup {
-                        matches,
-                        highlight: false,
-                        ..
-                    },
-                ) => {
+                Some(EditorMode::SingleBuffer {
+                    cursor:
+                        MultiCursors {
+                            matches,
+                            highlight: false,
+                            mode:
+                                MultiCursorMode::Editing
+                                | MultiCursorMode::MarkSet
+                                | MultiCursorMode::PasteGroup { .. },
+                            ..
+                        },
+                    ..
+                }) => {
                     let (mut cursors, (mut ranges, selections)): (
                         VecDeque<_>,
                         (_, VecFiltered<_>),
@@ -5764,26 +5732,18 @@ impl StatefulWidget for BufferWidget<'_> {
                         .take(area.height.into())
                         .collect()
                 }
-                Some(
-                    EditorMode::MultiCursorAll {
-                        matches,
-                        match_idx,
-                        highlight: true,
-                        ..
-                    }
-                    | EditorMode::MultiCursorMarkSetAll {
-                        matches,
-                        match_idx,
-                        highlight: true,
-                        ..
-                    }
-                    | EditorMode::PasteGroupAll {
-                        matches,
-                        match_idx,
-                        highlight: true,
-                        ..
-                    },
-                ) if let Some(matches) = matches.get(&self.buffer_idx) => {
+                Some(EditorMode::AllBuffers {
+                    cursor:
+                        MultiCursors {
+                            matches,
+                            match_idx,
+                            highlight: true,
+                            mode:
+                                MultiCursorMode::Editing
+                                | MultiCursorMode::MarkSet
+                                | MultiCursorMode::PasteGroup { .. },
+                        },
+                }) if let Some(matches) = matches.get(&self.buffer_idx) => {
                     let selection_start = matches[*match_idx].range.start;
                     let selection_end = matches[*match_idx].range.end;
                     let mut matches = sub_match_ranges(matches);
@@ -5818,26 +5778,18 @@ impl StatefulWidget for BufferWidget<'_> {
                         .take(area.height.into())
                         .collect()
                 }
-                Some(
-                    EditorMode::MultiCursorAll {
-                        matches,
-                        match_idx,
-                        highlight: false,
-                        ..
-                    }
-                    | EditorMode::MultiCursorMarkSetAll {
-                        matches,
-                        match_idx,
-                        highlight: false,
-                        ..
-                    }
-                    | EditorMode::PasteGroupAll {
-                        matches,
-                        match_idx,
-                        highlight: false,
-                        ..
-                    },
-                ) if let Some(matches) = matches.get(&self.buffer_idx) => {
+                Some(EditorMode::AllBuffers {
+                    cursor:
+                        MultiCursors {
+                            matches,
+                            match_idx,
+                            highlight: false,
+                            mode:
+                                MultiCursorMode::Editing
+                                | MultiCursorMode::MarkSet
+                                | MultiCursorMode::PasteGroup { .. },
+                        },
+                }) if let Some(matches) = matches.get(&self.buffer_idx) => {
                     let (mut cursors, (mut ranges, selections)): (
                         VecDeque<_>,
                         (_, VecFiltered<_>),
@@ -5897,11 +5849,18 @@ impl StatefulWidget for BufferWidget<'_> {
                         .take(area.height.into())
                         .collect()
                 }
-                Some(EditorMode::AutocompleteMulti {
-                    matches,
-                    offsets,
-                    completions,
-                    index,
+                Some(EditorMode::SingleBuffer {
+                    cursor:
+                        MultiCursors {
+                            matches,
+                            mode:
+                                MultiCursorMode::Autocomplete {
+                                    offsets,
+                                    completions,
+                                    index,
+                                },
+                            ..
+                        },
                     ..
                 }) => {
                     // We're underlining the multicursors' effective range (in blue),
@@ -5966,12 +5925,18 @@ impl StatefulWidget for BufferWidget<'_> {
                         .take(area.height.into())
                         .collect()
                 }
-                Some(EditorMode::AutocompleteMultiAll {
-                    matches,
-                    offsets,
-                    completions,
-                    index,
-                    ..
+                Some(EditorMode::AllBuffers {
+                    cursor:
+                        MultiCursors {
+                            matches,
+                            mode:
+                                MultiCursorMode::Autocomplete {
+                                    offsets,
+                                    completions,
+                                    index,
+                                },
+                            ..
+                        },
                 }) if let Some(matches) = matches.get(&self.buffer_idx)
                     && let Some(offsets) = offsets.get(&self.buffer_idx) =>
                 {
@@ -6384,20 +6349,59 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(
-                EditorMode::MultiCursor { .. }
-                | EditorMode::AutocompleteMulti { .. }
-                | EditorMode::MultiCursorAll { .. }
-                | EditorMode::AutocompleteMultiAll { .. },
+                EditorMode::SingleBuffer {
+                    cursor:
+                        MultiCursors {
+                            mode: MultiCursorMode::Editing | MultiCursorMode::Autocomplete { .. },
+                            ..
+                        },
+                    ..
+                }
+                | EditorMode::AllBuffers {
+                    cursor:
+                        MultiCursors {
+                            mode: MultiCursorMode::Editing | MultiCursorMode::Autocomplete { .. },
+                            ..
+                        },
+                },
             ) => {
                 show_sub_help(text_area, buf, REPLACE_MATCHES);
             }
             Some(
-                EditorMode::MultiCursorMarkSet { .. } | EditorMode::MultiCursorMarkSetAll { .. },
+                EditorMode::SingleBuffer {
+                    cursor:
+                        MultiCursors {
+                            mode: MultiCursorMode::MarkSet,
+                            ..
+                        },
+                    ..
+                }
+                | EditorMode::AllBuffers {
+                    cursor:
+                        MultiCursors {
+                            mode: MultiCursorMode::MarkSet,
+                            ..
+                        },
+                },
             ) => {
                 show_sub_help(text_area, buf, MULTICURSOR_MARK_SET);
             }
             Some(
-                EditorMode::PasteGroup { total, .. } | EditorMode::PasteGroupAll { total, .. },
+                EditorMode::SingleBuffer {
+                    cursor:
+                        MultiCursors {
+                            mode: MultiCursorMode::PasteGroup { total, .. },
+                            ..
+                        },
+                    ..
+                }
+                | EditorMode::AllBuffers {
+                    cursor:
+                        MultiCursors {
+                            mode: MultiCursorMode::PasteGroup { total, .. },
+                            ..
+                        },
+                },
             ) => {
                 show_sub_help(
                     text_area,

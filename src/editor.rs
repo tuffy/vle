@@ -91,48 +91,14 @@ pub enum EditorMode {
         prompt: TextField,
         type_: SearchType,
     },
-    /// Multi-cursor operation
-    MultiCursor {
-        matches: Vec<MultiCursor>,
-        match_idx: usize,
+    /// Multi-cursor operation on single buffer
+    SingleBuffer {
+        cursor: MultiCursors<Vec<MultiCursor>, Vec<usize>>,
         range: Option<SelectionRange>,
-        highlight: bool,
     },
-    /// Multi-cursor operation with mark set
-    MultiCursorMarkSet {
-        matches: Vec<MultiCursor>,
-        match_idx: usize,
-        range: Option<SelectionRange>,
-        highlight: bool,
-    },
-    /// Multi-cursor operation across multiple buffers
-    MultiCursorAll {
-        // a buffer index -> cursor matches mapping
-        matches: BTreeMap<usize, Vec<MultiCursor>>,
-        // which match is active in the currently active buffer
-        match_idx: usize,
-        highlight: bool,
-    },
-    /// Multi-cursor operation with mark set
-    MultiCursorMarkSetAll {
-        matches: BTreeMap<usize, Vec<MultiCursor>>,
-        match_idx: usize,
-        highlight: bool,
-    },
-    /// Querying for what regex group to paste
-    PasteGroup {
-        matches: Vec<MultiCursor>,
-        match_idx: usize,
-        total: usize,
-        range: Option<SelectionRange>,
-        highlight: bool,
-    },
-    /// Querying for what regex group to paste in all buffers
-    PasteGroupAll {
-        matches: BTreeMap<usize, Vec<MultiCursor>>,
-        match_idx: usize,
-        total: usize,
-        highlight: bool,
+    /// Multi-cursor operation on multiple buffers
+    AllBuffers {
+        cursor: MultiCursors<BTreeMap<usize, Vec<MultiCursor>>, BTreeMap<usize, Vec<usize>>>,
     },
     /// Opening a new file
     Open {
@@ -164,27 +130,43 @@ pub enum EditorMode {
         completions: Vec<String>, // autocompletion candidates
         index: usize,             // the current candidate
     },
-    /// Performing autocomplete in a multi-cursor context
-    AutocompleteMulti {
-        matches: Vec<MultiCursor>,
-        match_idx: usize,
-        range: Option<SelectionRange>,
-        offsets: Vec<usize>,      // autocompletion offsets
-        completions: Vec<String>, // autocompletion candidates
-        index: usize,             // current autocompletion candidate
-    },
-    /// Performing autocomplete in multi-cursor mode across multiple buffers
-    AutocompleteMultiAll {
-        matches: BTreeMap<usize, Vec<MultiCursor>>,
-        match_idx: usize,
-        offsets: BTreeMap<usize, Vec<usize>>, // autocompletion offsets
-        completions: Vec<String>,             // autocompletion candidates
-        index: usize,                         // current candidate
-    },
     /// Determining what buffer to select from menu
     SelectBuffer {
         buffer_list: Vec<BufferId>, // buffers
         index: usize,               // buffer index to select
+    },
+}
+
+/// A multi-cursor mode in one or several buffers
+pub struct MultiCursors<M, O> {
+    /// The multi-cursor matches
+    pub matches: M,
+    /// The currently selected match index
+    pub match_idx: usize,
+    /// Whether to highlight the matches
+    pub highlight: bool,
+    /// One of several multi-cursor specific modes
+    pub mode: MultiCursorMode<O>,
+}
+
+pub enum MultiCursorMode<O> {
+    /// Normal editing
+    Editing,
+    /// A mark is set
+    MarkSet,
+    /// Determining what regex paste group to paste
+    PasteGroup {
+        /// Total number of paste groups
+        total: usize,
+    },
+    /// Performing autocompletion
+    Autocomplete {
+        /// Character offset(s) in prompt
+        offsets: O,
+        /// Autocompletion candidates
+        completions: Vec<String>,
+        /// The current candidate
+        index: usize,
     },
 }
 
@@ -518,13 +500,20 @@ impl Editor {
                         self.process_event(area, event);
                     }
                 },
-                EditorMode::AutocompleteMulti {
-                    matches,
-                    match_idx,
+                EditorMode::SingleBuffer {
+                    cursor:
+                        MultiCursors {
+                            matches,
+                            match_idx,
+                            mode:
+                                MultiCursorMode::Autocomplete {
+                                    offsets,
+                                    completions,
+                                    index,
+                                },
+                            ..
+                        },
                     range,
-                    offsets,
-                    completions,
-                    index,
                 } => match event {
                     key!(Tab) => {
                         // switch to next candidate
@@ -542,21 +531,31 @@ impl Editor {
                     }
                     event => {
                         // end autocomplete
-                        self.mode = EditorMode::MultiCursor {
-                            matches: std::mem::take(matches),
-                            match_idx: std::mem::take(match_idx),
+                        self.mode = EditorMode::SingleBuffer {
+                            cursor: MultiCursors {
+                                matches: std::mem::take(matches),
+                                match_idx: std::mem::take(match_idx),
+                                highlight: false,
+                                mode: MultiCursorMode::Editing,
+                            },
                             range: std::mem::take(range),
-                            highlight: false,
                         };
                         self.process_event(area, event);
                     }
                 },
-                EditorMode::AutocompleteMultiAll {
-                    matches,
-                    match_idx,
-                    offsets,
-                    completions,
-                    index,
+                EditorMode::AllBuffers {
+                    cursor:
+                        MultiCursors {
+                            matches,
+                            match_idx,
+                            mode:
+                                MultiCursorMode::Autocomplete {
+                                    offsets,
+                                    completions,
+                                    index,
+                                },
+                            ..
+                        },
                 } => match event {
                     key!(Tab) => {
                         // switch to next candidate
@@ -584,10 +583,13 @@ impl Editor {
                     }
                     event => {
                         // end autocomplete
-                        self.mode = EditorMode::MultiCursorAll {
-                            matches: std::mem::take(matches),
-                            match_idx: std::mem::take(match_idx),
-                            highlight: false,
+                        self.mode = EditorMode::AllBuffers {
+                            cursor: MultiCursors {
+                                matches: std::mem::take(matches),
+                                match_idx: std::mem::take(match_idx),
+                                highlight: false,
+                                mode: MultiCursorMode::Editing,
+                            },
                         };
                         self.process_event(area, event);
                     }
@@ -639,11 +641,14 @@ impl Editor {
                                 // TODO - try to avoid this re-mapping
                                 let matches = matches.into_iter().map(|r| r.into()).collect();
 
-                                EditorMode::MultiCursor {
-                                    matches,
-                                    match_idx,
+                                EditorMode::SingleBuffer {
+                                    cursor: MultiCursors {
+                                        matches,
+                                        match_idx,
+                                        highlight: true,
+                                        mode: MultiCursorMode::Editing,
+                                    },
                                     range: range.take(),
-                                    highlight: true,
                                 }
                             }
                             NextModeIncremental::Autocomplete {
@@ -678,10 +683,13 @@ impl Editor {
                     ) {
                         self.mode = match new_mode {
                             NextModeIncrementalAll::Browse { match_idx, matches } => {
-                                EditorMode::MultiCursorAll {
-                                    match_idx,
-                                    matches,
-                                    highlight: true,
+                                EditorMode::AllBuffers {
+                                    cursor: MultiCursors {
+                                        matches,
+                                        match_idx,
+                                        highlight: true,
+                                        mode: MultiCursorMode::Editing,
+                                    },
                                 }
                             }
                             NextModeIncrementalAll::SelectLine => EditorMode::SelectLine {
@@ -701,11 +709,15 @@ impl Editor {
                         };
                     }
                 }
-                EditorMode::MultiCursor {
-                    matches,
-                    match_idx,
+                EditorMode::SingleBuffer {
+                    cursor:
+                        MultiCursors {
+                            matches,
+                            match_idx,
+                            highlight,
+                            mode: MultiCursorMode::Editing,
+                        },
                     range,
-                    highlight,
                 } => {
                     if let Some(Some(new_mode)) = self.layout.on_current_at(|b, a| {
                         process_multi_cursor(
@@ -722,11 +734,15 @@ impl Editor {
                         self.mode = new_mode;
                     }
                 }
-                EditorMode::MultiCursorMarkSet {
-                    matches,
-                    match_idx,
+                EditorMode::SingleBuffer {
+                    cursor:
+                        MultiCursors {
+                            matches,
+                            match_idx,
+                            highlight,
+                            mode: MultiCursorMode::MarkSet,
+                        },
                     range,
-                    highlight,
                 } => {
                     match self
                         .layout
@@ -734,30 +750,40 @@ impl Editor {
                     {
                         Some(Ok(Some(event))) => {
                             // end mark set
-                            self.mode = EditorMode::MultiCursor {
-                                matches: std::mem::take(matches),
-                                match_idx: std::mem::take(match_idx),
+                            self.mode = EditorMode::SingleBuffer {
+                                cursor: MultiCursors {
+                                    matches: std::mem::take(matches),
+                                    match_idx: std::mem::take(match_idx),
+                                    highlight: std::mem::take(highlight),
+                                    mode: MultiCursorMode::Editing,
+                                },
                                 range: std::mem::take(range),
-                                highlight: std::mem::take(highlight),
                             };
                             self.process_event(area, event);
                         }
                         Some(Err(())) => {
                             // end mark set
-                            self.mode = EditorMode::MultiCursor {
-                                matches: std::mem::take(matches),
-                                match_idx: std::mem::take(match_idx),
+                            self.mode = EditorMode::SingleBuffer {
+                                cursor: MultiCursors {
+                                    matches: std::mem::take(matches),
+                                    match_idx: std::mem::take(match_idx),
+                                    highlight: std::mem::take(highlight),
+                                    mode: MultiCursorMode::Editing,
+                                },
                                 range: std::mem::take(range),
-                                highlight: std::mem::take(highlight),
                             };
                         }
                         _ => { /* do nothing */ }
                     }
                 }
-                EditorMode::MultiCursorMarkSetAll {
-                    matches,
-                    match_idx,
-                    highlight,
+                EditorMode::AllBuffers {
+                    cursor:
+                        MultiCursors {
+                            matches,
+                            match_idx,
+                            highlight,
+                            mode: MultiCursorMode::MarkSet,
+                        },
                 } => {
                     match process_multi_cursor_mark_set_all(
                         &mut self.layout,
@@ -767,28 +793,38 @@ impl Editor {
                     ) {
                         Ok(Some(event)) => {
                             // end mark set
-                            self.mode = EditorMode::MultiCursorAll {
-                                matches: std::mem::take(matches),
-                                match_idx: std::mem::take(match_idx),
-                                highlight: std::mem::take(highlight),
+                            self.mode = EditorMode::AllBuffers {
+                                cursor: MultiCursors {
+                                    matches: std::mem::take(matches),
+                                    match_idx: std::mem::take(match_idx),
+                                    highlight: std::mem::take(highlight),
+                                    mode: MultiCursorMode::Editing,
+                                },
                             };
                             self.process_event(area, event);
                         }
                         Err(()) => {
                             // end mark set
-                            self.mode = EditorMode::MultiCursorAll {
-                                matches: std::mem::take(matches),
-                                match_idx: std::mem::take(match_idx),
-                                highlight: std::mem::take(highlight),
+                            self.mode = EditorMode::AllBuffers {
+                                cursor: MultiCursors {
+                                    matches: std::mem::take(matches),
+                                    match_idx: std::mem::take(match_idx),
+                                    highlight: std::mem::take(highlight),
+                                    mode: MultiCursorMode::Editing,
+                                },
                             };
                         }
                         _ => { /* do nothing */ }
                     }
                 }
-                EditorMode::MultiCursorAll {
-                    matches,
-                    match_idx,
-                    highlight,
+                EditorMode::AllBuffers {
+                    cursor:
+                        MultiCursors {
+                            matches,
+                            match_idx,
+                            highlight,
+                            mode: MultiCursorMode::Editing,
+                        },
                 } => {
                     if let Some(new_mode) = process_multi_cursor_all(
                         &mut self.layout,
@@ -801,29 +837,38 @@ impl Editor {
                         self.mode = new_mode;
                     }
                 }
-                EditorMode::PasteGroup {
-                    matches,
-                    match_idx,
+                EditorMode::SingleBuffer {
+                    cursor:
+                        MultiCursors {
+                            matches,
+                            match_idx,
+                            highlight,
+                            mode: MultiCursorMode::PasteGroup { .. },
+                        },
                     range,
-                    highlight,
-                    ..
                 } => {
                     self.layout.update_current_at(|b, a| {
                         process_paste_group(b, matches, self.cut_buffer.as_mut(), event, a);
                     });
 
-                    self.mode = EditorMode::MultiCursor {
-                        matches: std::mem::take(matches),
-                        match_idx: std::mem::take(match_idx),
-                        range: range.take(),
-                        highlight: std::mem::take(highlight),
+                    self.mode = EditorMode::SingleBuffer {
+                        cursor: MultiCursors {
+                            matches: std::mem::take(matches),
+                            match_idx: std::mem::take(match_idx),
+                            highlight: std::mem::take(highlight),
+                            mode: MultiCursorMode::Editing,
+                        },
+                        range: std::mem::take(range),
                     };
                 }
-                EditorMode::PasteGroupAll {
-                    matches,
-                    match_idx,
-                    highlight,
-                    ..
+                EditorMode::AllBuffers {
+                    cursor:
+                        MultiCursors {
+                            matches,
+                            match_idx,
+                            highlight,
+                            mode: MultiCursorMode::PasteGroup { .. },
+                        },
                 } => {
                     process_paste_group_all(
                         &mut self.layout,
@@ -832,10 +877,13 @@ impl Editor {
                         event,
                     );
 
-                    self.mode = EditorMode::MultiCursorAll {
-                        matches: std::mem::take(matches),
-                        match_idx: std::mem::take(match_idx),
-                        highlight: std::mem::take(highlight),
+                    self.mode = EditorMode::AllBuffers {
+                        cursor: MultiCursors {
+                            matches: std::mem::take(matches),
+                            match_idx: std::mem::take(match_idx),
+                            highlight: std::mem::take(highlight),
+                            mode: MultiCursorMode::Editing,
+                        },
                     };
                 }
                 EditorMode::SplitPane => self.process_split_pane(event),
@@ -1152,11 +1200,14 @@ impl Editor {
 
                             let matches = matches.into_iter().map(|r| r.into()).collect();
 
-                            EditorMode::MultiCursor {
-                                matches,
-                                match_idx,
+                            EditorMode::SingleBuffer {
+                                cursor: MultiCursors {
+                                    matches,
+                                    match_idx,
+                                    highlight: true,
+                                    mode: MultiCursorMode::Editing,
+                                },
                                 range: None,
-                                highlight: true,
                             }
                         })
                     }
@@ -1228,11 +1279,14 @@ impl Editor {
                 if let Some(matches) = self.on_buffer(|b| b.selection_cursors())
                     && let Some(match_idx) = matches.len().checked_sub(1)
                 {
-                    self.mode = EditorMode::MultiCursor {
-                        matches,
-                        match_idx,
+                    self.mode = EditorMode::SingleBuffer {
+                        cursor: MultiCursors {
+                            matches,
+                            match_idx,
+                            highlight: false,
+                            mode: MultiCursorMode::Editing,
+                        },
                         range: None,
-                        highlight: false,
                     };
                 }
             }
@@ -2269,12 +2323,14 @@ fn process_multi_cursor(
             None
         }
         ctrl_keybind!(Paste) => match matches.iter().map(|m| m.paste_group_count()).max() {
-            Some(Some(total)) => Some(EditorMode::PasteGroup {
-                total: total.get(),
-                matches: std::mem::take(matches),
-                match_idx: std::mem::take(match_idx),
+            Some(Some(total)) => Some(EditorMode::SingleBuffer {
+                cursor: MultiCursors {
+                    matches: std::mem::take(matches),
+                    match_idx: std::mem::take(match_idx),
+                    highlight: std::mem::take(highlight),
+                    mode: MultiCursorMode::PasteGroup { total: total.get() },
+                },
                 range: range.take(),
-                highlight: std::mem::take(highlight),
             }),
             _ => {
                 if let Some(cut) = cut_buffer {
@@ -2335,13 +2391,18 @@ fn process_multi_cursor(
             match init_complete_forward(&completions) {
                 Some((index, original, replacement)) => {
                     buffer.multi_autocomplete(alt, matches, &offsets, original, replacement);
-                    Some(EditorMode::AutocompleteMulti {
-                        matches: std::mem::take(matches),
-                        match_idx: std::mem::take(match_idx),
+                    Some(EditorMode::SingleBuffer {
+                        cursor: MultiCursors {
+                            matches: std::mem::take(matches),
+                            match_idx: std::mem::take(match_idx),
+                            highlight: false,
+                            mode: MultiCursorMode::Autocomplete {
+                                offsets,
+                                completions,
+                                index,
+                            },
+                        },
                         range: std::mem::take(range),
-                        offsets,
-                        completions,
-                        index,
                     })
                 }
                 None => {
@@ -2355,13 +2416,18 @@ fn process_multi_cursor(
             match init_complete_backward(&completions) {
                 Some((index, original, replacement)) => {
                     buffer.multi_autocomplete(alt, matches, &offsets, original, replacement);
-                    Some(EditorMode::AutocompleteMulti {
-                        matches: std::mem::take(matches),
-                        match_idx: std::mem::take(match_idx),
+                    Some(EditorMode::SingleBuffer {
+                        cursor: MultiCursors {
+                            matches: std::mem::take(matches),
+                            match_idx: std::mem::take(match_idx),
+                            highlight: false,
+                            mode: MultiCursorMode::Autocomplete {
+                                offsets,
+                                completions,
+                                index,
+                            },
+                        },
                         range: std::mem::take(range),
-                        offsets,
-                        completions,
-                        index,
                     })
                 }
                 None => {
@@ -2404,11 +2470,14 @@ fn process_multi_cursor(
             }
             None
         }
-        ctrl_keybind!(Mark) => Some(EditorMode::MultiCursorMarkSet {
-            matches: std::mem::take(matches),
-            match_idx: std::mem::take(match_idx),
+        ctrl_keybind!(Mark) => Some(EditorMode::SingleBuffer {
+            cursor: MultiCursors {
+                matches: std::mem::take(matches),
+                match_idx: std::mem::take(match_idx),
+                highlight: std::mem::take(highlight),
+                mode: MultiCursorMode::MarkSet,
+            },
             range: std::mem::take(range),
-            highlight: std::mem::take(highlight),
         }),
         _ => None,
     }
@@ -2618,11 +2687,13 @@ fn process_multi_cursor_all(
             .flat_map(|m| m.iter().map(|m| m.paste_group_count()))
             .max()
         {
-            Some(Some(total)) => Some(EditorMode::PasteGroupAll {
-                total: total.get(),
-                matches: std::mem::take(matches),
-                match_idx: std::mem::take(match_idx),
-                highlight: std::mem::take(highlight),
+            Some(Some(total)) => Some(EditorMode::AllBuffers {
+                cursor: MultiCursors {
+                    matches: std::mem::take(matches),
+                    match_idx: std::mem::take(match_idx),
+                    highlight: std::mem::take(highlight),
+                    mode: MultiCursorMode::PasteGroup { total: total.get() },
+                },
             }),
             _ => {
                 if let Some(cut) = cut_buffer {
@@ -2720,12 +2791,17 @@ fn process_multi_cursor_all(
                             buffer.multi_autocomplete(alt, matches, offsets, original, replacement);
                         },
                     );
-                    Some(EditorMode::AutocompleteMultiAll {
-                        matches: std::mem::take(matches),
-                        match_idx: std::mem::take(match_idx),
-                        offsets,
-                        completions,
-                        index,
+                    Some(EditorMode::AllBuffers {
+                        cursor: MultiCursors {
+                            matches: std::mem::take(matches),
+                            match_idx: std::mem::take(match_idx),
+                            highlight: false,
+                            mode: MultiCursorMode::Autocomplete {
+                                offsets,
+                                completions,
+                                index,
+                            },
+                        },
                     })
                 }
                 None => {
@@ -2747,12 +2823,17 @@ fn process_multi_cursor_all(
                             buffer.multi_autocomplete(alt, matches, offsets, original, replacement);
                         },
                     );
-                    Some(EditorMode::AutocompleteMultiAll {
-                        matches: std::mem::take(matches),
-                        match_idx: std::mem::take(match_idx),
-                        offsets,
-                        completions,
-                        index,
+                    Some(EditorMode::AllBuffers {
+                        cursor: MultiCursors {
+                            matches: std::mem::take(matches),
+                            match_idx: std::mem::take(match_idx),
+                            highlight: false,
+                            mode: MultiCursorMode::Autocomplete {
+                                offsets,
+                                completions,
+                                index,
+                            },
+                        },
                     })
                 }
                 None => {
@@ -2844,10 +2925,13 @@ fn process_multi_cursor_all(
             }
             None
         }
-        ctrl_keybind!(Mark) => Some(EditorMode::MultiCursorMarkSetAll {
-            matches: std::mem::take(matches),
-            match_idx: std::mem::take(match_idx),
-            highlight: std::mem::take(highlight),
+        ctrl_keybind!(Mark) => Some(EditorMode::AllBuffers {
+            cursor: MultiCursors {
+                matches: std::mem::take(matches),
+                match_idx: std::mem::take(match_idx),
+                highlight: std::mem::take(highlight),
+                mode: MultiCursorMode::MarkSet,
+            },
         }),
         _ => None,
     }
