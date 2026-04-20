@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::editor::{EditorMode, MultiCursorMode, MultiCursors};
+use crate::editor::{EditorMode, MultiCursorMode, MultiCursors, Search, SearchMode};
 use crate::endings::LineEndings;
 use crate::syntax::Highlighter;
 use ratatui::{
@@ -6249,8 +6249,23 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(
-                EditorMode::Search { prompt, type_, .. }
-                | EditorMode::SearchAll { prompt, type_, .. },
+                EditorMode::Search {
+                    search:
+                        Search {
+                            prompt,
+                            type_,
+                            mode: SearchMode::Editing,
+                        },
+                    ..
+                }
+                | EditorMode::SearchAll {
+                    search:
+                        Search {
+                            prompt,
+                            type_,
+                            mode: SearchMode::Editing,
+                        },
+                },
             ) => {
                 show_sub_help(text_area, buf, &find_mode_help(prompt, *type_));
                 render_find_prompt(
@@ -6283,20 +6298,32 @@ impl StatefulWidget for BufferWidget<'_> {
                 );
             }
             Some(
-                EditorMode::AutocompleteSearch {
-                    prompt,
-                    type_,
-                    offset,
-                    completions,
-                    index,
+                EditorMode::Search {
+                    search:
+                        Search {
+                            prompt,
+                            type_,
+                            mode:
+                                SearchMode::Autocomplete {
+                                    offset,
+                                    completions,
+                                    index,
+                                },
+                        },
                     ..
                 }
-                | EditorMode::AutocompleteSearchAll {
-                    prompt,
-                    type_,
-                    offset,
-                    completions,
-                    index,
+                | EditorMode::SearchAll {
+                    search:
+                        Search {
+                            prompt,
+                            type_,
+                            mode:
+                                SearchMode::Autocomplete {
+                                    offset,
+                                    completions,
+                                    index,
+                                },
+                        },
                 },
             ) => {
                 show_sub_help(text_area, buf, &find_mode_help(prompt, *type_));
@@ -6328,13 +6355,12 @@ impl StatefulWidget for BufferWidget<'_> {
                         highlighted
                     },
                     |b| {
-                        let title_top =
-                            if matches!(&self.mode, Some(EditorMode::AutocompleteSearchAll { .. }))
-                            {
-                                format!("{type_} All")
-                            } else {
-                                type_.to_string()
-                            };
+                        let title_top = if matches!(&self.mode, Some(EditorMode::SearchAll { .. }))
+                        {
+                            format!("{type_} All")
+                        } else {
+                            type_.to_string()
+                        };
                         match state
                             .message
                             .take_if(|m| matches!(m, BufferMessage::Error(_)))

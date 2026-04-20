@@ -76,20 +76,22 @@ pub enum EditorMode {
     /// Querying which direction to split the pane
     SplitPane,
     /// Verifying whether to close dirty buffer
-    ConfirmClose { buffer: BufferId },
+    ConfirmClose {
+        buffer: BufferId,
+    },
     /// Querying for what to select inside of
     SelectInside,
     /// Querying for which line to select
-    SelectLine { prompt: LinePrompt },
+    SelectLine {
+        prompt: LinePrompt,
+    },
     /// Querying for what text to search for
     Search {
-        prompt: TextField,
-        type_: SearchType,
+        search: Search,
         range: Option<SelectionRange>,
     },
     SearchAll {
-        prompt: TextField,
-        type_: SearchType,
+        search: Search,
     },
     /// Multi-cursor operation on single buffer
     SingleBuffer {
@@ -113,27 +115,30 @@ pub enum EditorMode {
         completions: Vec<String>, // autocompletion candidates
         index: usize,             // the current candidate
     },
-    /// Performing autocomplete during a search
-    AutocompleteSearch {
-        prompt: TextField,
-        type_: SearchType,
-        range: Option<SelectionRange>,
-        offset: usize,            // our character offset in prompt
-        completions: Vec<String>, // autocompletion candidates
-        index: usize,             // the current candidate
-    },
-    /// Performing autocomplete during a search all
-    AutocompleteSearchAll {
-        prompt: TextField,
-        type_: SearchType,
-        offset: usize,            // our character offset in prompt
-        completions: Vec<String>, // autocompletion candidates
-        index: usize,             // the current candidate
-    },
     /// Determining what buffer to select from menu
     SelectBuffer {
         buffer_list: Vec<BufferId>, // buffers
         index: usize,               // buffer index to select
+    },
+}
+
+pub struct Search {
+    pub prompt: TextField,
+    pub type_: SearchType,
+    pub mode: SearchMode,
+}
+
+pub enum SearchMode {
+    /// Normal editing of the search prompt
+    Editing,
+    /// Performing autocompletion in search prompt
+    Autocomplete {
+        /// Character offset in prompt
+        offset: usize,
+        /// Autocompletion candidates
+        completions: Vec<String>,
+        /// The current candidate
+        index: usize,
     },
 }
 
@@ -446,13 +451,19 @@ impl Editor {
                         self.process_normal_event(area, event);
                     }
                 },
-                EditorMode::AutocompleteSearch {
-                    prompt,
-                    type_,
+                EditorMode::Search {
+                    search:
+                        Search {
+                            prompt,
+                            type_,
+                            mode:
+                                SearchMode::Autocomplete {
+                                    offset,
+                                    completions,
+                                    index,
+                                },
+                        },
                     range,
-                    offset,
-                    index,
-                    completions,
                 } => match event {
                     key!(Tab) => {
                         // switch to next candidate
@@ -467,19 +478,28 @@ impl Editor {
                     event => {
                         // end autocomplete
                         self.mode = EditorMode::Search {
-                            prompt: std::mem::take(prompt),
-                            type_: std::mem::take(type_),
+                            search: Search {
+                                prompt: std::mem::take(prompt),
+                                type_: std::mem::take(type_),
+                                mode: SearchMode::Editing,
+                            },
                             range: std::mem::take(range),
                         };
                         self.process_event(area, event);
                     }
                 },
-                EditorMode::AutocompleteSearchAll {
-                    prompt,
-                    type_,
-                    offset,
-                    index,
-                    completions,
+                EditorMode::SearchAll {
+                    search:
+                        Search {
+                            prompt,
+                            type_,
+                            mode:
+                                SearchMode::Autocomplete {
+                                    offset,
+                                    index,
+                                    completions,
+                                },
+                        },
                 } => match event {
                     key!(Tab) => {
                         // switch to next candidate
@@ -494,8 +514,11 @@ impl Editor {
                     event => {
                         // end autocomplete
                         self.mode = EditorMode::SearchAll {
-                            prompt: std::mem::take(prompt),
-                            type_: std::mem::take(type_),
+                            search: Search {
+                                prompt: std::mem::take(prompt),
+                                type_: std::mem::take(type_),
+                                mode: SearchMode::Editing,
+                            },
                         };
                         self.process_event(area, event);
                     }
@@ -614,8 +637,12 @@ impl Editor {
                     }
                 }
                 EditorMode::Search {
-                    prompt,
-                    type_,
+                    search:
+                        Search {
+                            prompt,
+                            type_,
+                            mode: SearchMode::Editing,
+                        },
                     range,
                 } => {
                     if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
@@ -655,13 +682,17 @@ impl Editor {
                                 offset,
                                 completions,
                                 index,
-                            } => EditorMode::AutocompleteSearch {
-                                prompt: std::mem::take(prompt),
-                                type_: std::mem::take(type_),
+                            } => EditorMode::Search {
+                                search: Search {
+                                    prompt: std::mem::take(prompt),
+                                    type_: std::mem::take(type_),
+                                    mode: SearchMode::Autocomplete {
+                                        offset,
+                                        completions,
+                                        index,
+                                    },
+                                },
                                 range: std::mem::take(range),
-                                offset,
-                                completions,
-                                index,
                             },
                             NextModeIncremental::SelectLine => EditorMode::SelectLine {
                                 prompt: LinePrompt::default(),
@@ -669,7 +700,14 @@ impl Editor {
                         };
                     }
                 }
-                EditorMode::SearchAll { prompt, type_ } => {
+                EditorMode::SearchAll {
+                    search:
+                        Search {
+                            prompt,
+                            type_,
+                            mode: SearchMode::Editing,
+                        },
+                } => {
                     if let Some(new_mode) = process_search_all(
                         self.layout.selected_buffer_list_mut(),
                         self.cut_buffer.as_mut(),
@@ -699,12 +737,16 @@ impl Editor {
                                 offset,
                                 completions,
                                 index,
-                            } => EditorMode::AutocompleteSearchAll {
-                                prompt: std::mem::take(prompt),
-                                type_: std::mem::take(type_),
-                                offset,
-                                completions,
-                                index,
+                            } => EditorMode::SearchAll {
+                                search: Search {
+                                    prompt: std::mem::take(prompt),
+                                    type_: std::mem::take(type_),
+                                    mode: SearchMode::Autocomplete {
+                                        offset,
+                                        completions,
+                                        index,
+                                    },
+                                },
                             },
                         };
                     }
@@ -957,8 +999,11 @@ impl Editor {
                         }
                         Some(SelectBuffer::FindAll) => {
                             self.mode = EditorMode::SearchAll {
-                                prompt: TextField::default(),
-                                type_: SearchType::default(),
+                                search: Search {
+                                    prompt: TextField::default(),
+                                    type_: SearchType::default(),
+                                    mode: SearchMode::Editing,
+                                },
                             };
                         }
                         None => { /* do nothing */ }
@@ -1212,13 +1257,19 @@ impl Editor {
                         })
                     }
                     Some(SelectionType::Range(range)) => Ok(EditorMode::Search {
-                        prompt: TextField::default(),
-                        type_: SearchType::default(),
+                        search: Search {
+                            prompt: TextField::default(),
+                            type_: SearchType::default(),
+                            mode: SearchMode::Editing,
+                        },
                         range: Some(range),
                     }),
                     None => Ok(EditorMode::Search {
-                        prompt: TextField::default(),
-                        type_: SearchType::default(),
+                        search: Search {
+                            prompt: TextField::default(),
+                            type_: SearchType::default(),
+                            mode: SearchMode::Editing,
+                        },
                         range: None,
                     }),
                 }) {
@@ -1766,8 +1817,11 @@ fn process_select_line(
             Some(EditorMode::default())
         }
         keybind!(Find) => Some(EditorMode::Search {
-            prompt: TextField::default(),
-            type_: SearchType::default(),
+            search: Search {
+                prompt: TextField::default(),
+                type_: SearchType::default(),
+                mode: SearchMode::Editing,
+            },
             range: None,
         }),
         key!(Up) => {
@@ -2272,8 +2326,11 @@ fn process_multi_cursor(
             }
         }
         keybind!(Find) => Some(EditorMode::Search {
-            prompt: TextField::default(),
-            type_: SearchType::default(),
+            search: Search {
+                prompt: TextField::default(),
+                type_: SearchType::default(),
+                mode: SearchMode::Editing,
+            },
             range: range.take(),
         }),
         keybind!(SelectInside) => {
@@ -2623,8 +2680,11 @@ fn process_multi_cursor_all(
             }
         }
         keybind!(Find) => Some(EditorMode::SearchAll {
-            prompt: TextField::default(),
-            type_: SearchType::default(),
+            search: Search {
+                prompt: TextField::default(),
+                type_: SearchType::default(),
+                mode: SearchMode::Editing,
+            },
         }),
         keybind!(SelectInside) => {
             *highlight = false;
@@ -3970,10 +4030,13 @@ impl Layout {
                     y: text_area.y.saturating_sub(1),
                 }),
                 Some(
-                    EditorMode::Search { prompt, .. }
-                    | EditorMode::AutocompleteSearch { prompt, .. }
-                    | EditorMode::SearchAll { prompt, .. }
-                    | EditorMode::AutocompleteSearchAll { prompt, .. },
+                    EditorMode::Search {
+                        search: Search { prompt, .. },
+                        ..
+                    }
+                    | EditorMode::SearchAll {
+                        search: Search { prompt, .. },
+                    },
                 ) => {
                     let [_, dialog_area, _] =
                         Layout::vertical([Min(0), Length(3), Min(0)]).areas(text_area);
