@@ -24,7 +24,6 @@ use ratatui::{
     widgets::StatefulWidget,
 };
 use std::collections::BTreeMap;
-use std::ops::Range;
 use std::sync::LazyLock;
 
 static PAGE_SIZE: LazyLock<usize> = LazyLock::new(|| {
@@ -656,13 +655,6 @@ impl Editor {
                     {
                         self.mode = match new_mode {
                             NextModeIncremental::Browse { match_idx, matches } => {
-                                // I think these are unnecessary
-                                // buf.set_cursor(matches[match_idx].0.end);
-                                // buf.clear_selection();
-
-                                // TODO - try to avoid this re-mapping
-                                let matches = matches.into_iter().map(|r| r.into()).collect();
-
                                 EditorMode::SingleBuffer {
                                     cursors: MultiCursors {
                                         matches,
@@ -1235,11 +1227,6 @@ impl Editor {
                             Err(selection) => b.all_matches(None, selection).map_err(|_| ()),
                         })
                         .map(|(match_idx, matches)| {
-                            b.set_cursor(matches[match_idx].0.end);
-                            b.clear_selection();
-
-                            let matches = matches.into_iter().map(|r| r.into()).collect();
-
                             EditorMode::SingleBuffer {
                                 cursors: MultiCursors {
                                     matches,
@@ -1927,7 +1914,7 @@ fn process_open_file<S: ChooserSource>(
 enum NextModeIncremental {
     Browse {
         match_idx: usize,
-        matches: Vec<(Range<usize>, Vec<String>)>,
+        matches: Vec<MultiCursor>,
     },
     SelectLine,
     Autocomplete {

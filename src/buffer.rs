@@ -887,8 +887,6 @@ pub struct Help {
     multiple_panes: bool,
 }
 
-type MatchAndCaptures = (Range<usize>, Vec<String>);
-
 /// A buffer with additional context on a per-view basis
 #[derive(Clone)]
 pub struct BufferContext {
@@ -967,10 +965,6 @@ impl BufferContext {
     pub fn set_cursor(&mut self, cursor: usize) {
         self.cursor = cursor;
         self.cursor_column = cursor_column(&self.buffer.borrow_move().rope, self.cursor);
-    }
-
-    pub fn clear_selection(&mut self) {
-        self.selection = None;
     }
 
     /// Returns cursor position in rope as (row, col), if possible
@@ -1657,7 +1651,7 @@ impl BufferContext {
         &mut self,
         range: Option<&SelectionRange>,
         term: S,
-    ) -> Result<(usize, Vec<MatchAndCaptures>), S> {
+    ) -> Result<(usize, Vec<MultiCursor>), S> {
         let buf = self.buffer.borrow_move();
         let rope = &buf.rope;
 
@@ -1667,20 +1661,18 @@ impl BufferContext {
                     .map(|m| m + offset)
                     .collect::<Vec<_>>()
             })
-            .filter_map(
-                |SearchMatch {
-                     start: s,
-                     end: e,
-                     groups: c,
-                 }| {
-                    // convert ranges in bytes (from SearchTerm)
-                    // to ranges in characters (for Ropey)
-                    Some((
-                        rope.try_byte_to_char(s).ok()?..rope.try_byte_to_char(e).ok()?,
-                        c,
-                    ))
-                },
-            )
+            .filter_map(|SearchMatch { start, end, groups }| {
+                // convert ranges in bytes (from SearchTerm)
+                // to ranges in characters (for Ropey)
+                let start_char = rope.try_byte_to_char(start).ok()?;
+                let end_char = rope.try_byte_to_char(end).ok()?;
+                Some(MultiCursor {
+                    cursor: end_char,
+                    selection: Some(start_char),
+                    range: start_char..end_char,
+                    groups,
+                })
+            })
             .collect::<Vec<_>>();
 
         let start = match self.selection {
@@ -1688,13 +1680,13 @@ impl BufferContext {
             None => self.cursor,
         };
 
-        let (idx, (next_match, _)) = matches
+        let (idx, next_match) = matches
             .iter()
             .enumerate()
-            .find(|(_, (m, _))| m.start >= start)
+            .find(|(_, m)| m.range.start >= start)
             .or_else(|| matches.first().map(|m| (0, m)))
             .ok_or(term)?;
-        self.cursor = next_match.end;
+        self.cursor = next_match.range.end;
         self.selection = None;
         Ok((idx, matches))
     }
@@ -1703,7 +1695,7 @@ impl BufferContext {
         &mut self,
         range: Option<&SelectionRange>,
         term: S,
-    ) -> Result<(usize, Vec<MatchAndCaptures>), S> {
+    ) -> Result<(usize, Vec<MultiCursor>), S> {
         let buf = self.buffer.borrow_move();
         let rope = &buf.rope;
 
@@ -1730,18 +1722,18 @@ impl BufferContext {
         let matches = term
             .match_ranges(&whole_rope)
             .map(|m| m + offset)
-            .filter_map(
-                |SearchMatch {
-                     start: s,
-                     end: e,
-                     groups: c,
-                 }| {
-                    Some((
-                        rope.try_byte_to_char(s).ok()?..rope.try_byte_to_char(e).ok()?,
-                        c,
-                    ))
-                },
-            )
+            .filter_map(|SearchMatch { start, end, groups }| {
+                // convert ranges in bytes (from SearchTerm)
+                // to ranges in characters (for Ropey)
+                let start_char = rope.try_byte_to_char(start).ok()?;
+                let end_char = rope.try_byte_to_char(end).ok()?;
+                Some(MultiCursor {
+                    cursor: end_char,
+                    selection: Some(start_char),
+                    range: start_char..end_char,
+                    groups,
+                })
+            })
             .collect::<Vec<_>>();
 
         let start = match self.selection {
@@ -1749,13 +1741,13 @@ impl BufferContext {
             None => self.cursor,
         };
 
-        let (idx, (next_match, _)) = matches
+        let (idx, next_match) = matches
             .iter()
             .enumerate()
-            .find(|(_, (m, _))| m.start >= start)
+            .find(|(_, m)| m.range.start >= start)
             .or_else(|| matches.first().map(|m| (0, m)))
             .ok_or(term)?;
-        self.cursor = next_match.end;
+        self.cursor = next_match.range.end;
         self.selection = None;
         Ok((idx, matches))
     }
@@ -3499,17 +3491,6 @@ impl From<Range<usize>> for MultiCursor {
     }
 }
 
-impl From<(Range<usize>, Vec<String>)> for MultiCursor {
-    fn from((range, groups): (Range<usize>, Vec<String>)) -> Self {
-        Self {
-            cursor: range.end,
-            selection: Some(range.start),
-            range,
-            groups,
-        }
-    }
-}
-
 impl From<SelectedLine> for MultiCursor {
     fn from(line: SelectedLine) -> Self {
         Self {
@@ -4518,10 +4499,7 @@ impl BufferList {
             .enumerate()
             .filter_map(|(buf_idx, b)| {
                 let (match_idx, matches) = b.all_matches(None, term.clone()).ok()?;
-                Some((
-                    (buf_idx, match_idx),
-                    (buf_idx, matches.into_iter().map(|m| m.into()).collect()),
-                ))
+                Some(((buf_idx, match_idx), (buf_idx, matches)))
             })
             .unzip();
 
@@ -4550,10 +4528,7 @@ impl BufferList {
             .enumerate()
             .filter_map(|(buf_idx, b)| {
                 let (match_idx, matches) = b.all_multiline_matches(None, term.clone()).ok()?;
-                Some((
-                    (buf_idx, match_idx),
-                    (buf_idx, matches.into_iter().map(|m| m.into()).collect()),
-                ))
+                Some(((buf_idx, match_idx), (buf_idx, matches)))
             })
             .unzip();
 
