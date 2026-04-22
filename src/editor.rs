@@ -266,6 +266,7 @@ pub struct Editor {
     last_regex_search: Option<TextField>, // previous regex search
     show_help: bool,                      // whether to show keybindinings
     show_sub_help: bool,                  // whether to show sub-mode help
+    open_dir: Option<std::path::PathBuf>, // currently open directory
     #[cfg(feature = "ssh")]
     remote: Option<ssh2::Session>, // remote SSH session
 }
@@ -281,6 +282,7 @@ impl Editor {
             last_regex_search: None,
             show_help: false,
             show_sub_help: true,
+            open_dir: None,
             #[cfg(feature = "ssh")]
             remote: None,
         })
@@ -294,7 +296,7 @@ impl Editor {
         Ok(Self {
             mode: SshSource::open(&remote)
                 .ok()
-                .and_then(|source| FileChooserState::new(EitherSource::Ssh(source)).ok())
+                .and_then(|source| FileChooserState::new(EitherSource::Ssh(source), None).ok())
                 .map(|chooser| EditorMode::Open {
                     chooser: Box::new(chooser),
                 })
@@ -626,7 +628,9 @@ impl Editor {
                     }
                 }
                 EditorMode::Open { chooser } => {
-                    if let Some(new_mode) = process_open_file(&mut self.layout, chooser, event) {
+                    if let Some(new_mode) =
+                        process_open_file(&mut self.layout, chooser, &mut self.open_dir, event)
+                    {
                         self.mode = new_mode;
                     }
                 }
@@ -1259,7 +1263,7 @@ impl Editor {
                 }
             }
             #[cfg(not(feature = "ssh"))]
-            keybind!(Open) => match FileChooserState::new(LocalSource) {
+            keybind!(Open) => match FileChooserState::new(LocalSource, self.open_dir.clone()) {
                 Ok(chooser) => {
                     self.mode = EditorMode::Open {
                         chooser: Box::new(chooser),
@@ -1271,7 +1275,10 @@ impl Editor {
             },
             #[cfg(feature = "ssh")]
             keybind!(Open) => match self.remote.as_ref() {
-                None => match FileChooserState::new(EitherSource::Local(LocalSource)) {
+                None => match FileChooserState::new(
+                    EitherSource::Local(LocalSource),
+                    self.open_dir.clone(),
+                ) {
                     Ok(chooser) => {
                         self.mode = EditorMode::Open {
                             chooser: Box::new(chooser),
@@ -1282,7 +1289,10 @@ impl Editor {
                     }
                 },
                 Some(remote) => match SshSource::open(remote) {
-                    Ok(source) => match FileChooserState::new(EitherSource::Ssh(source)) {
+                    Ok(source) => match FileChooserState::new(
+                        EitherSource::Ssh(source),
+                        self.open_dir.clone(),
+                    ) {
                         Ok(chooser) => {
                             self.mode = EditorMode::Open {
                                 chooser: Box::new(chooser),
@@ -1827,6 +1837,7 @@ fn process_select_line(
 fn process_open_file<S: ChooserSource>(
     layout: &mut Layout,
     chooser: &mut FileChooserState<S>,
+    open_dir: &mut Option<std::path::PathBuf>,
     event: Event,
 ) -> Option<EditorMode> {
     use crossterm::event::{
@@ -1898,12 +1909,14 @@ fn process_open_file<S: ChooserSource>(
         key!(Enter) => {
             for selected in chooser.select()? {
                 if let Err(()) = layout.add(selected) {
+                    *open_dir = Some(chooser.selected_dir().to_path_buf());
                     return Some(EditorMode::default());
                 }
             }
             if let Some(buf) = layout.selected_buffer_list().current() {
                 set_title(buf);
             }
+            *open_dir = Some(chooser.selected_dir().to_path_buf());
             Some(EditorMode::default())
         }
         _ => None, // ignore other events

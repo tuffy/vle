@@ -325,13 +325,14 @@ pub struct FileChooserState<S: ChooserSource> {
 impl<S: ChooserSource> FileChooserState<S> {
     /// May return an error if unable to get the current
     /// working directory or are unable to read it
-    pub fn new(source: S) -> Result<Self, S::Error> {
+    pub fn new(source: S, dir: Option<PathBuf>) -> Result<Self, S::Error> {
         let cwd = source.current_dir()?;
+        let dir = dir.unwrap_or_else(|| cwd.clone());
 
-        let contents = source.read_dir(&cwd, false)?;
+        let contents = source.read_dir(&dir, false)?;
 
         Ok(Self {
-            dir: cwd.clone(),
+            dir,
             dir_count: contents.iter().take_while(|e| e.is_dir).count(),
             contents,
             cwd,
@@ -369,6 +370,10 @@ impl<S: ChooserSource> FileChooserState<S> {
 
     pub fn selected_entry(&self) -> Option<usize> {
         self.index
+    }
+
+    pub fn selected_dir(&self) -> &Path {
+        self.dir.as_path()
     }
 
     pub fn arrow_up(&mut self) {
