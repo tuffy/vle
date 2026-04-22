@@ -4060,13 +4060,13 @@ impl Layout {
                         .max();
 
                     let [_, dialog_area, _] =
-                        Layout::horizontal([Min(0), Length(width? + 2), Min(0)]).areas(area);
+                        Layout::horizontal([Min(0), Length(width? + 2), Min(0)]).areas(text_area);
                     let [_, dialog_area, _] =
                         Layout::vertical([Min(0), Length(buffer_list.len() as u16 + 2), Min(0)])
                             .areas(dialog_area);
 
                     Some(Position {
-                        x: dialog_area.x,
+                        x: dialog_area.x + 1,
                         y: dialog_area.y + (*index as u16) + 1,
                     })
                 }
