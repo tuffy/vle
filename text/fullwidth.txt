@@ -1,4 +1,8 @@
-abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz
+ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ
 ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ
-abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz
 0123456789012345678901234567890123456789012345678901
+０１２３４５６７８９０１２３４５６７８９０１２３４５
+abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz
+ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ
+!"#$%&'()*+,-.:;<=>?@!"#$%&'()*+,-.:;<=>?@
+！＂＃＄％＆＇（）＊＋，－．：；＜＝＞？＠
