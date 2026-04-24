@@ -579,8 +579,7 @@ impl Editor {
                     key!(Tab) => {
                         // switch to next candidate
                         let (current, next) = complete_forward(index, completions);
-                        on_all_offset_at(
-                            &mut self.layout,
+                        self.layout.on_global_offset_at(
                             matches,
                             offsets,
                             |b, a, matches, offsets| {
@@ -591,8 +590,7 @@ impl Editor {
                     key!(SHIFT, BackTab) => {
                         // switch to previous candidate
                         let (current, previous) = complete_backward(index, completions);
-                        on_all_offset_at(
-                            &mut self.layout,
+                        self.layout.on_global_offset_at(
                             matches,
                             offsets,
                             |b, a, matches, offsets| {
@@ -2609,28 +2607,28 @@ fn process_multi_cursor_all(
             ..
         }) => {
             *highlight = false;
-            on_all_at(layout, matches, |buffer, alt, matches| {
+            layout.on_global_at(matches, |buffer, alt, matches| {
                 buffer.multi_insert_char(alt, matches, c);
             });
             None
         }
         Event::Paste(pasted) => {
             *highlight = false;
-            on_all_at(layout, matches, |buffer, alt, matches| {
+            layout.on_global_at(matches, |buffer, alt, matches| {
                 buffer.multi_insert_string(alt, matches, &pasted);
             });
             None
         }
         key!(Backspace) => {
             *highlight = false;
-            on_all_at(layout, matches, |buffer, alt, matches| {
+            layout.on_global_at(matches, |buffer, alt, matches| {
                 buffer.multi_backspace(alt, matches);
             });
             None
         }
         key!(Delete) => {
             *highlight = false;
-            on_all_at(layout, matches, |buffer, alt, matches| {
+            layout.on_global_at(matches, |buffer, alt, matches| {
                 buffer.multi_delete(alt, matches);
             });
             None
@@ -2683,7 +2681,7 @@ fn process_multi_cursor_all(
         }),
         keybind!(SelectInside) => {
             *highlight = false;
-            on_all(layout, matches, |buffer, matches| {
+            layout.on_global(matches, |buffer, matches| {
                 buffer.multi_select_inside(matches, *match_idx);
             });
             None
@@ -2696,7 +2694,7 @@ fn process_multi_cursor_all(
             ..
         }) => {
             *highlight = false;
-            on_all(layout, matches, |buffer, matches| {
+            layout.on_global(matches, |buffer, matches| {
                 buffer.multi_cursor_back(matches, modifiers.contains(KeyModifiers::SHIFT));
             });
             None
@@ -2708,7 +2706,7 @@ fn process_multi_cursor_all(
             ..
         }) => {
             *highlight = false;
-            on_all(layout, matches, |buffer, matches| {
+            layout.on_global(matches, |buffer, matches| {
                 buffer.multi_cursor_forward(matches, modifiers.contains(KeyModifiers::SHIFT));
             });
             None
@@ -2720,7 +2718,7 @@ fn process_multi_cursor_all(
             ..
         }) => {
             *highlight = false;
-            on_all(layout, matches, |buffer, matches| {
+            layout.on_global(matches, |buffer, matches| {
                 buffer.multi_cursor_home(matches, modifiers.contains(KeyModifiers::SHIFT));
             });
             None
@@ -2732,7 +2730,7 @@ fn process_multi_cursor_all(
             ..
         }) => {
             *highlight = false;
-            on_all(layout, matches, |buffer, matches| {
+            layout.on_global(matches, |buffer, matches| {
                 buffer.multi_cursor_end(matches, modifiers.contains(KeyModifiers::SHIFT));
             });
             None
@@ -2752,7 +2750,7 @@ fn process_multi_cursor_all(
             }),
             _ => {
                 if let Some(cut) = cut_buffer {
-                    on_all_at(layout, matches, |buffer, alt, matches| {
+                    layout.on_global_at(matches, |buffer, alt, matches| {
                         buffer.multi_paste(alt, matches, cut);
                     });
                 }
@@ -2761,7 +2759,7 @@ fn process_multi_cursor_all(
         },
         ctrl_keybind!(Copy) => {
             let mut cut = vec![];
-            on_all(layout, matches, |buffer, matches| {
+            layout.on_global(matches, |buffer, matches| {
                 cut.extend(buffer.multi_cursor_copy(matches));
             });
             match cut.len() {
@@ -2787,7 +2785,7 @@ fn process_multi_cursor_all(
         }
         ctrl_keybind!(Cut) => {
             let mut cut = vec![];
-            on_all_at(layout, matches, |buffer, alt, matches| {
+            layout.on_global_at(matches, |buffer, alt, matches| {
                 cut.extend(buffer.multi_cursor_cut(alt, matches));
             });
             match cut.len() {
@@ -2813,7 +2811,7 @@ fn process_multi_cursor_all(
         }
         keybind!(WidenSelection) => {
             *highlight = false;
-            on_all(layout, matches, |buffer, matches| {
+            layout.on_global(matches, |buffer, matches| {
                 buffer.multi_cursor_widen(matches);
             });
             None
@@ -2823,7 +2821,7 @@ fn process_multi_cursor_all(
 
             *highlight = false;
             let mut toggled = ToggledBookmarks::default();
-            on_all(layout, matches, |buffer, matches| {
+            layout.on_global(matches, |buffer, matches| {
                 toggled += buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));
             });
             if let Some(buf) = layout.selected_buffer_list_mut().current_mut()
@@ -2838,8 +2836,7 @@ fn process_multi_cursor_all(
             let (offsets, completions) = buffer_list.multi_autocomplete_matches(matches)?;
             match init_complete_forward(&completions) {
                 Some((index, original, replacement)) => {
-                    on_all_offset_at(
-                        layout,
+                    layout.on_global_offset_at(
                         matches,
                         &offsets,
                         |buffer, alt, matches, offsets| {
@@ -2870,8 +2867,7 @@ fn process_multi_cursor_all(
             let (offsets, completions) = buffer_list.multi_autocomplete_matches(matches)?;
             match init_complete_backward(&completions) {
                 Some((index, original, replacement)) => {
-                    on_all_offset_at(
-                        layout,
+                    layout.on_global_offset_at(
                         matches,
                         &offsets,
                         |buffer, alt, matches, offsets| {
@@ -3008,7 +3004,7 @@ fn process_multi_cursor_mark_set_all(
             ..
         }) => {
             *highlight = false;
-            on_all(layout, matches, |buffer, matches| {
+            layout.on_global(matches, |buffer, matches| {
                 buffer.multi_cursor_back(matches, true);
             });
             Ok(None)
@@ -3020,7 +3016,7 @@ fn process_multi_cursor_mark_set_all(
             ..
         }) => {
             *highlight = false;
-            on_all(layout, matches, |buffer, matches| {
+            layout.on_global(matches, |buffer, matches| {
                 buffer.multi_cursor_forward(matches, true);
             });
             Ok(None)
@@ -3032,7 +3028,7 @@ fn process_multi_cursor_mark_set_all(
             ..
         }) => {
             *highlight = false;
-            on_all(layout, matches, |buffer, matches| {
+            layout.on_global(matches, |buffer, matches| {
                 buffer.multi_cursor_home(matches, true);
             });
             Ok(None)
@@ -3044,7 +3040,7 @@ fn process_multi_cursor_mark_set_all(
             ..
         }) => {
             *highlight = false;
-            on_all(layout, matches, |buffer, matches| {
+            layout.on_global(matches, |buffer, matches| {
                 buffer.multi_cursor_end(matches, true);
             });
             Ok(None)
@@ -3124,13 +3120,13 @@ fn process_paste_group_all(
                 _ => unreachable!(),
             };
 
-            on_all_at(layout, matches, |buf, alt, matches| {
+            layout.on_global_at(matches, |buf, alt, matches| {
                 buf.multi_insert_group(alt, matches, group);
             });
         }
         ctrl_keybind!(Paste) => {
             if let Some(cut) = cut_buffer {
-                on_all_at(layout, matches, |buf, alt, matches| {
+                layout.on_global_at(matches, |buf, alt, matches| {
                     buf.multi_paste(alt, matches, cut);
                 });
             }
@@ -3608,6 +3604,64 @@ impl Layout {
                 b.on_rest(index, on_rest);
             }
         }
+    }
+
+    fn on_global(
+        &mut self,
+        matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
+        mut f: impl FnMut(&mut BufferContext, &mut [MultiCursor]),
+    ) {
+        let buffer_list = self.selected_buffer_list_mut();
+
+        matches.iter_mut().for_each(|(idx, matches)| {
+            if let Some(buf) = buffer_list.get_mut(*idx) {
+                f(buf, matches);
+            }
+        });
+    }
+
+    fn on_global_at(
+        &mut self,
+        matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
+        mut f: impl FnMut(&mut BufferContext, Vec<AltCursor<'_>>, &mut [MultiCursor]),
+    ) {
+        let (buffer_list, mut alts) = self.current_buffer_list_mut();
+
+        matches.iter_mut().for_each(|(idx, matches)| {
+            if let Some(buf) = buffer_list.get_mut(*idx) {
+                f(
+                    buf,
+                    alts.iter_mut()
+                        .filter_map(|a| a.get_mut(*idx).map(|b| b.alt_cursor()))
+                        .collect(),
+                    matches,
+                );
+            }
+        });
+    }
+
+    fn on_global_offset_at(
+        &mut self,
+        matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
+        offsets: &BTreeMap<usize, Vec<usize>>,
+        mut f: impl FnMut(&mut BufferContext, Vec<AltCursor<'_>>, &mut [MultiCursor], &[usize]),
+    ) {
+        let (buffer_list, mut alts) = self.current_buffer_list_mut();
+
+        matches.iter_mut().for_each(|(idx, matches)| {
+            if let Some(buf) = buffer_list.get_mut(*idx)
+                && let Some(offsets) = offsets.get(idx)
+            {
+                f(
+                    buf,
+                    alts.iter_mut()
+                        .filter_map(|a| a.get_mut(*idx).map(|b| b.alt_cursor()))
+                        .collect(),
+                    matches,
+                    offsets,
+                );
+            }
+        })
     }
 
     /// Returns currently active buffer_list and all alt buffer_lists
@@ -4597,64 +4651,6 @@ where
         completions[std::mem::replace(index, previous_index)].as_ref(),
         completions[previous_index].as_ref(),
     )
-}
-
-fn on_all(
-    layout: &mut Layout,
-    matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
-    mut f: impl FnMut(&mut BufferContext, &mut [MultiCursor]),
-) {
-    let buffer_list = layout.selected_buffer_list_mut();
-
-    matches.iter_mut().for_each(|(idx, matches)| {
-        if let Some(buf) = buffer_list.get_mut(*idx) {
-            f(buf, matches);
-        }
-    });
-}
-
-fn on_all_at(
-    layout: &mut Layout,
-    matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
-    mut f: impl FnMut(&mut BufferContext, Vec<AltCursor<'_>>, &mut [MultiCursor]),
-) {
-    let (buffer_list, mut alts) = layout.current_buffer_list_mut();
-
-    matches.iter_mut().for_each(|(idx, matches)| {
-        if let Some(buf) = buffer_list.get_mut(*idx) {
-            f(
-                buf,
-                alts.iter_mut()
-                    .filter_map(|a| a.get_mut(*idx).map(|b| b.alt_cursor()))
-                    .collect(),
-                matches,
-            );
-        }
-    });
-}
-
-fn on_all_offset_at(
-    layout: &mut Layout,
-    matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
-    offsets: &BTreeMap<usize, Vec<usize>>,
-    mut f: impl FnMut(&mut BufferContext, Vec<AltCursor<'_>>, &mut [MultiCursor], &[usize]),
-) {
-    let (buffer_list, mut alts) = layout.current_buffer_list_mut();
-
-    matches.iter_mut().for_each(|(idx, matches)| {
-        if let Some(buf) = buffer_list.get_mut(*idx)
-            && let Some(offsets) = offsets.get(idx)
-        {
-            f(
-                buf,
-                alts.iter_mut()
-                    .filter_map(|a| a.get_mut(*idx).map(|b| b.alt_cursor()))
-                    .collect(),
-                matches,
-                offsets,
-            );
-        }
-    })
 }
 
 fn set_title<D: std::fmt::Display>(d: D) {
