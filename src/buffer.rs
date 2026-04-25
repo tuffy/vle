@@ -5612,23 +5612,25 @@ impl StatefulWidget for BufferWidget<'_> {
                                  range,
                                  number,
                              }| {
-                                Vec::from(highlight_selection(
-                                    highlight_matches(
-                                        colorize(
-                                            syntax,
-                                            &mut hlstate,
-                                            line,
-                                            current_line == Some(number),
-                                        ),
-                                        range.clone(),
-                                        &mut matches,
-                                        |span| span.style(HIGHLIGHTED),
-                                    ),
+                                let colorized = colorize(
+                                    syntax,
+                                    &mut hlstate,
+                                    line,
+                                    current_line == Some(number),
+                                );
+                                let matches = highlight_matches(
+                                    colorized,
+                                    range.clone(),
+                                    &mut matches,
+                                    |span| span.style(HIGHLIGHTED),
+                                );
+                                let selection = highlight_selection(
+                                    matches,
                                     range.clone(),
                                     (selection_start, selection_end),
                                     |span| span.style(Style::new().bg(Color::Red).fg(Color::White)),
-                                ))
-                                .into()
+                                );
+                                Vec::from(selection).into()
                             },
                         )
                         .map(|line| widen_tabs(line))
@@ -5672,24 +5674,27 @@ impl StatefulWidget for BufferWidget<'_> {
                                  number,
                              }| {
                                 let whole_range = widen_range(range);
-
-                                Vec::from(highlight_matches(
-                                    highlight_matches(
-                                        highlight_matches(
-                                            widen(colorize(
-                                                syntax,
-                                                &mut hlstate,
-                                                line,
-                                                current_line == Some(number),
-                                            )),
-                                            whole_range.clone(),
-                                            &mut ranges,
-                                            |span| span.patch_style(underline_color(Color::Blue)),
-                                        ),
-                                        whole_range.clone(),
-                                        &mut selections,
-                                        |span| span.style(EDITING),
-                                    ),
+                                let colorized = colorize(
+                                    syntax,
+                                    &mut hlstate,
+                                    line,
+                                    current_line == Some(number),
+                                );
+                                let widened = widen(colorized);
+                                let underlined = highlight_matches(
+                                    widened,
+                                    whole_range.clone(),
+                                    &mut ranges,
+                                    |span| span.patch_style(underline_color(Color::Blue)),
+                                );
+                                let selections = highlight_matches(
+                                    underlined,
+                                    whole_range.clone(),
+                                    &mut selections,
+                                    |span| span.style(EDITING),
+                                );
+                                let cursors = highlight_matches(
+                                    selections,
                                     whole_range,
                                     &mut cursors,
                                     |span| {
@@ -5699,8 +5704,8 @@ impl StatefulWidget for BufferWidget<'_> {
                                                 .add_modifier(Modifier::REVERSED),
                                         )
                                     },
-                                ))
-                                .into()
+                                );
+                                Vec::from(cursors).into()
                             },
                         )
                         .map(|line| widen_tabs(line))
@@ -5730,23 +5735,25 @@ impl StatefulWidget for BufferWidget<'_> {
                                  range,
                                  number,
                              }| {
-                                Vec::from(highlight_selection(
-                                    highlight_matches(
-                                        colorize(
-                                            syntax,
-                                            &mut hlstate,
-                                            line,
-                                            current_line == Some(number),
-                                        ),
-                                        range.clone(),
-                                        &mut matches,
-                                        |span| span.style(HIGHLIGHTED),
-                                    ),
+                                let colorized = colorize(
+                                    syntax,
+                                    &mut hlstate,
+                                    line,
+                                    current_line == Some(number),
+                                );
+                                let matches = highlight_matches(
+                                    colorized,
+                                    range.clone(),
+                                    &mut matches,
+                                    |span| span.style(HIGHLIGHTED),
+                                );
+                                let selection = highlight_selection(
+                                    matches,
                                     range.clone(),
                                     (selection_start, selection_end),
                                     |span| span.style(Style::new().bg(Color::Red).fg(Color::White)),
-                                ))
-                                .into()
+                                );
+                                Vec::from(selection).into()
                             },
                         )
                         .map(|line| widen_tabs(line))
@@ -5790,23 +5797,27 @@ impl StatefulWidget for BufferWidget<'_> {
                              }| {
                                 let whole_range = widen_range(range);
 
-                                Vec::from(highlight_matches(
-                                    highlight_matches(
-                                        highlight_matches(
-                                            widen(colorize(
-                                                syntax,
-                                                &mut hlstate,
-                                                line,
-                                                current_line == Some(number),
-                                            )),
-                                            whole_range.clone(),
-                                            &mut ranges,
-                                            |span| span.patch_style(underline_color(Color::Blue)),
-                                        ),
-                                        whole_range.clone(),
-                                        &mut selections,
-                                        |span| span.style(EDITING),
-                                    ),
+                                let colorized = colorize(
+                                    syntax,
+                                    &mut hlstate,
+                                    line,
+                                    current_line == Some(number),
+                                );
+                                let widened = widen(colorized);
+                                let ranges = highlight_matches(
+                                    widened,
+                                    whole_range.clone(),
+                                    &mut ranges,
+                                    |span| span.patch_style(underline_color(Color::Blue)),
+                                );
+                                let selections = highlight_matches(
+                                    ranges,
+                                    whole_range.clone(),
+                                    &mut selections,
+                                    |span| span.style(EDITING),
+                                );
+                                let cursor = highlight_matches(
+                                    selections,
                                     whole_range,
                                     &mut cursors,
                                     |span| {
@@ -5816,8 +5827,8 @@ impl StatefulWidget for BufferWidget<'_> {
                                                 .add_modifier(Modifier::REVERSED),
                                         )
                                     },
-                                ))
-                                .into()
+                                );
+                                Vec::from(cursor).into()
                             },
                         )
                         .map(|line| widen_tabs(line))
@@ -5866,23 +5877,27 @@ impl StatefulWidget for BufferWidget<'_> {
                              }| {
                                 let whole_range = widen_range(range);
 
-                                Vec::from(highlight_matches(
-                                    highlight_matches(
-                                        highlight_matches(
-                                            widen(colorize(
-                                                syntax,
-                                                &mut hlstate,
-                                                line,
-                                                current_line == Some(number),
-                                            )),
-                                            whole_range.clone(),
-                                            &mut ranges,
-                                            |span| span.patch_style(underline_color(Color::Blue)),
-                                        ),
-                                        whole_range.clone(),
-                                        &mut replacements,
-                                        |span| span.patch_style(underline_color(Color::Red)),
-                                    ),
+                                let colorized = colorize(
+                                    syntax,
+                                    &mut hlstate,
+                                    line,
+                                    current_line == Some(number),
+                                );
+                                let widened = widen(colorized);
+                                let ranges = highlight_matches(
+                                    widened,
+                                    whole_range.clone(),
+                                    &mut ranges,
+                                    |span| span.patch_style(underline_color(Color::Blue)),
+                                );
+                                let replacements = highlight_matches(
+                                    ranges,
+                                    whole_range.clone(),
+                                    &mut replacements,
+                                    |span| span.patch_style(underline_color(Color::Red)),
+                                );
+                                let cursors = highlight_matches(
+                                    replacements,
                                     whole_range,
                                     &mut cursors,
                                     |span| {
@@ -5892,8 +5907,8 @@ impl StatefulWidget for BufferWidget<'_> {
                                                 .add_modifier(Modifier::REVERSED),
                                         )
                                     },
-                                ))
-                                .into()
+                                );
+                                Vec::from(cursors).into()
                             },
                         )
                         .map(|line| widen_tabs(line))
@@ -5943,23 +5958,27 @@ impl StatefulWidget for BufferWidget<'_> {
                              }| {
                                 let whole_range = widen_range(range);
 
-                                Vec::from(highlight_matches(
-                                    highlight_matches(
-                                        highlight_matches(
-                                            widen(colorize(
-                                                syntax,
-                                                &mut hlstate,
-                                                line,
-                                                current_line == Some(number),
-                                            )),
-                                            whole_range.clone(),
-                                            &mut ranges,
-                                            |span| span.patch_style(underline_color(Color::Blue)),
-                                        ),
-                                        whole_range.clone(),
-                                        &mut replacements,
-                                        |span| span.patch_style(underline_color(Color::Red)),
-                                    ),
+                                let colorized = colorize(
+                                    syntax,
+                                    &mut hlstate,
+                                    line,
+                                    current_line == Some(number),
+                                );
+                                let widened = widen(colorized);
+                                let ranges = highlight_matches(
+                                    widened,
+                                    whole_range.clone(),
+                                    &mut ranges,
+                                    |span| span.patch_style(underline_color(Color::Blue)),
+                                );
+                                let replacements = highlight_matches(
+                                    ranges,
+                                    whole_range.clone(),
+                                    &mut replacements,
+                                    |span| span.patch_style(underline_color(Color::Red)),
+                                );
+                                let cursors = highlight_matches(
+                                    replacements,
                                     whole_range,
                                     &mut cursors,
                                     |span| {
@@ -5969,8 +5988,8 @@ impl StatefulWidget for BufferWidget<'_> {
                                                 .add_modifier(Modifier::REVERSED),
                                         )
                                     },
-                                ))
-                                .into()
+                                );
+                                Vec::from(cursors).into()
                             },
                         )
                         .map(|line| widen_tabs(line))
@@ -5992,22 +6011,21 @@ impl StatefulWidget for BufferWidget<'_> {
                                  range,
                                  number,
                              }| {
-                                Vec::from(highlight_parens(
-                                    widen(highlight_selection(
-                                        colorize(
-                                            syntax,
-                                            &mut hlstate,
-                                            line,
-                                            current_line == Some(number),
-                                        ),
-                                        range.clone(),
-                                        (completion_start, completion_end),
-                                        |span| span.patch_style(underline_color(Color::Red)),
-                                    )),
-                                    range,
-                                    &mut marks,
-                                ))
-                                .into()
+                                let colorized = colorize(
+                                    syntax,
+                                    &mut hlstate,
+                                    line,
+                                    current_line == Some(number),
+                                );
+                                let selection = highlight_selection(
+                                    colorized,
+                                    range.clone(),
+                                    (completion_start, completion_end),
+                                    |span| span.patch_style(underline_color(Color::Red)),
+                                );
+                                let widened = widen(selection);
+                                let parens = highlight_parens(widened, range, &mut marks);
+                                Vec::from(parens).into()
                             },
                         )
                         .map(|line| widen_tabs(line))
@@ -6024,17 +6042,15 @@ impl StatefulWidget for BufferWidget<'_> {
                                      range,
                                      number,
                                  }| {
-                                    Vec::from(highlight_parens(
-                                        widen(colorize(
-                                            syntax,
-                                            &mut hlstate,
-                                            line,
-                                            current_line == Some(number),
-                                        )),
-                                        range,
-                                        &mut marks,
-                                    ))
-                                    .into()
+                                    let colorized = colorize(
+                                        syntax,
+                                        &mut hlstate,
+                                        line,
+                                        current_line == Some(number),
+                                    );
+                                    let widened = widen(colorized);
+                                    let parens = highlight_parens(widened, range, &mut marks);
+                                    Vec::from(parens).into()
                                 },
                             )
                             .map(|line| widen_tabs(line))
@@ -6051,22 +6067,21 @@ impl StatefulWidget for BufferWidget<'_> {
                                          range,
                                          number,
                                      }| {
-                                        Vec::from(highlight_parens(
-                                            widen(highlight_selection(
-                                                colorize(
-                                                    syntax,
-                                                    &mut hlstate,
-                                                    line,
-                                                    current_line == Some(number),
-                                                ),
-                                                range.clone(),
-                                                (selection_start, selection_end),
-                                                |span| span.style(EDITING),
-                                            )),
-                                            range,
-                                            &mut marks,
-                                        ))
-                                        .into()
+                                        let colorized = colorize(
+                                            syntax,
+                                            &mut hlstate,
+                                            line,
+                                            current_line == Some(number),
+                                        );
+                                        let selection = highlight_selection(
+                                            colorized,
+                                            range.clone(),
+                                            (selection_start, selection_end),
+                                            |span| span.style(EDITING),
+                                        );
+                                        let widened = widen(selection);
+                                        let parens = highlight_parens(widened, range, &mut marks);
+                                        Vec::from(parens).into()
                                     },
                                 )
                                 .map(|line| widen_tabs(line))
