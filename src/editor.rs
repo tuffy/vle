@@ -4361,6 +4361,22 @@ impl StatefulWidget for EditorWidget<'_> {
         buf: &mut ratatui::buffer::Buffer,
         layout: &mut Layout,
     ) {
+        fn highlight_selected(
+            tabs: Vec<String>,
+            matches: &BTreeMap<usize, Vec<MultiCursor>>,
+        ) -> ratatui::widgets::Tabs<'_> {
+            use ratatui::style::Style;
+            use ratatui::text::{Line, Span};
+
+            ratatui::widgets::Tabs::new(tabs.into_iter().enumerate().map(|(buf_idx, tab)| {
+                if matches.contains_key(&buf_idx) {
+                    Line::from(Span::styled(tab, Style::new().blue()))
+                } else {
+                    Line::from(tab)
+                }
+            }))
+        }
+
         let Self {
             mode,
             show_help,
@@ -4380,15 +4396,20 @@ impl StatefulWidget for EditorWidget<'_> {
             };
 
             let [tabs_area, layout_area] = Layout::vertical([Length(1), Min(0)]).areas(area);
-            Tabs::new(tabs)
-                .highlight_style(if self.focused {
-                    Style::default().bold().underlined()
-                } else {
-                    Style::default()
-                })
-                .divider(symbols::DOT)
-                .select(index)
-                .render(tabs_area, buf);
+            (match mode {
+                EditorMode::AllBuffers {
+                    cursors: MultiCursors { matches, .. },
+                } => highlight_selected(tabs, matches),
+                _ => Tabs::new(tabs),
+            })
+            .highlight_style(if self.focused {
+                Style::default().bold().underlined()
+            } else {
+                Style::default()
+            })
+            .divider(symbols::DOT)
+            .select(index)
+            .render(tabs_area, buf);
             area = layout_area;
         }
 
