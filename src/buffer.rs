@@ -4408,7 +4408,7 @@ impl BufferList {
                 self.current,
                 self.buffers
                     .iter()
-                    .map(|b| b.buffer.borrow().source.short_name().into_owned())
+                    .map(|b| format!(" {} ", b.buffer.borrow().source.short_name()))
                     .collect(),
             )
         })

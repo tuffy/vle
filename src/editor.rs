@@ -4217,13 +4217,12 @@ impl Layout {
                 for (index, tab) in tabs.into_iter().enumerate() {
                     use unicode_width::UnicodeWidthStr;
 
-                    let tab_width = tab.width() as u16 + 2; // +2 for padding
+                    let tab_width = tab.width() as u16;
                     if col <= tab_width {
                         self.selected_buffer_list_mut().set_index(index);
                         return;
                     } else {
-                        // +1 for separator
-                        col = match col.checked_sub(tab_width + 1) {
+                        col = match col.checked_sub(tab_width) {
                             Some(col) => col,
                             None => return,
                         };
@@ -4391,7 +4390,6 @@ impl StatefulWidget for EditorWidget<'_> {
                     Layout,
                 },
                 style::Style,
-                symbols,
                 widgets::{Tabs, Widget},
             };
 
@@ -4403,11 +4401,12 @@ impl StatefulWidget for EditorWidget<'_> {
                 _ => Tabs::new(tabs),
             })
             .highlight_style(if self.focused {
-                Style::default().bold().underlined()
+                Style::default().reversed()
             } else {
                 Style::default()
             })
-            .divider(symbols::DOT)
+            .divider("")
+            .padding("", "")
             .select(index)
             .render(tabs_area, buf);
             area = layout_area;
