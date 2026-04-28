@@ -4670,7 +4670,7 @@ impl StatefulWidget for BufferWidget<'_> {
         use std::ops::RangeInclusive;
 
         const EDITING: Style = Style::new().add_modifier(Modifier::REVERSED);
-        const MATCHING: Color = Color::Green;
+        const MATCHING: Color = Color::Yellow;
         const MISMATCH: Color = Color::Red;
         const BOOKMARK: Color = Color::Cyan;
         const HIGHLIGHTED: Style = Style::new().bg(Color::Yellow).fg(Color::Black);
