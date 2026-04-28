@@ -37,6 +37,6 @@ ropey = "1.6"
 unicode-width = "0.2"
 ssh2 = { version = "0.9", optional = true }
 rpassword = { version = "7.4", optional = true }
-fancy-regex = "0.17"
+fancy-regex = "0.18"
 radix_trie = "0.3"
 unicode-normalization = "0.1"
