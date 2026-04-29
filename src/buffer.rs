@@ -6173,9 +6173,8 @@ impl StatefulWidget for BufferWidget<'_> {
                     ));
                     help.push(F10);
                     help.extend(EDITING_2);
-                    help.extend(
-                        has_selection.then_some(ctrl(&["Home", "End"], "Start / End of Selection")),
-                    );
+                    help.extend(has_selection.then_some(ctrl(&["Home"], "Start of Selection")));
+                    help.extend(has_selection.then_some(ctrl(&["End"], "End of Selection")));
                     help.push(none(
                         &["Tab"],
                         if matches!(cursor_pos, CursorPos::AfterWord) {
