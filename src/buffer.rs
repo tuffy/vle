@@ -4409,10 +4409,12 @@ impl BufferList {
                 self.buffers
                     .iter()
                     .enumerate()
-                    .map(|(idx, b)| if self.current == idx {
-                        format!("[{}]", b.buffer.borrow().source.short_name())
-                    } else {
-                        format!(" {} ", b.buffer.borrow().source.short_name())
+                    .map(|(idx, b)| {
+                        if self.current == idx {
+                            format!("[{}]", b.buffer.borrow().source.short_name())
+                        } else {
+                            format!(" {} ", b.buffer.borrow().source.short_name())
+                        }
                     })
                     .collect(),
             )
@@ -4679,6 +4681,9 @@ impl StatefulWidget for BufferWidget<'_> {
         const MISMATCH: Color = Color::Red;
         const BOOKMARK: Color = Color::Cyan;
         const HIGHLIGHTED: Style = Style::new().bg(Color::Yellow).fg(Color::Black);
+        const HIGHLIGHT_MATCH: Style = underline_color(Color::Red)
+            .bg(Color::Yellow)
+            .fg(Color::Black);
 
         fn sub_match_ranges(matches: &[MultiCursor]) -> VecDeque<Range<usize>> {
             matches.iter().map(|m| m.range.start..m.range.end).collect()
@@ -5633,7 +5638,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                     matches,
                                     range.clone(),
                                     (selection_start, selection_end),
-                                    |span| span.style(Style::new().bg(Color::Red).fg(Color::White)),
+                                    |span| span.style(HIGHLIGHT_MATCH),
                                 );
                                 Vec::from(selection).into()
                             },
@@ -5756,7 +5761,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                     matches,
                                     range.clone(),
                                     (selection_start, selection_end),
-                                    |span| span.style(Style::new().bg(Color::Red).fg(Color::White)),
+                                    |span| span.style(HIGHLIGHT_MATCH),
                                 );
                                 Vec::from(selection).into()
                             },
@@ -6922,14 +6927,14 @@ impl<T> From<VecFiltered<T>> for std::collections::VecDeque<T> {
 }
 
 #[cfg(feature = "underline-color")]
-fn underline_color(color: ratatui::style::Color) -> ratatui::style::Style {
+const fn underline_color(color: ratatui::style::Color) -> ratatui::style::Style {
     ratatui::style::Style::new()
         .underlined()
         .underline_color(color)
 }
 
 #[cfg(not(feature = "underline-color"))]
-fn underline_color(_color: ratatui::style::Color) -> ratatui::style::Style {
+const fn underline_color(_color: ratatui::style::Color) -> ratatui::style::Style {
     ratatui::style::Style::new().underlined()
 }
 
