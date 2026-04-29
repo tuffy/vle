@@ -4408,7 +4408,12 @@ impl BufferList {
                 self.current,
                 self.buffers
                     .iter()
-                    .map(|b| format!(" {} ", b.buffer.borrow().source.short_name()))
+                    .enumerate()
+                    .map(|(idx, b)| if self.current == idx {
+                        format!("[{}]", b.buffer.borrow().source.short_name())
+                    } else {
+                        format!(" {} ", b.buffer.borrow().source.short_name())
+                    })
                     .collect(),
             )
         })

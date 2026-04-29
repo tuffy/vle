@@ -4401,7 +4401,7 @@ impl StatefulWidget for EditorWidget<'_> {
                 _ => Tabs::new(tabs),
             })
             .highlight_style(if self.focused {
-                Style::default().reversed()
+                Style::default().bold()
             } else {
                 Style::default()
             })
