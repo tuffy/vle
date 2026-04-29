@@ -4681,7 +4681,7 @@ impl StatefulWidget for BufferWidget<'_> {
         const MISMATCH: Color = Color::Red;
         const BOOKMARK: Color = Color::Cyan;
         const HIGHLIGHTED: Style = Style::new().bg(Color::Yellow).fg(Color::Black);
-        const HIGHLIGHT_MATCH: Style = underline_color(Color::Red)
+        const HIGHLIGHT_MATCH: Style = underline_color(Color::Blue)
             .bg(Color::Yellow)
             .fg(Color::Black);
 
