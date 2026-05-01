@@ -24,6 +24,8 @@ use ratatui::{
     widgets::StatefulWidget,
 };
 use std::collections::BTreeMap;
+#[cfg(feature = "ssh")]
+use std::rc::Rc;
 use std::sync::LazyLock;
 
 static PAGE_SIZE: LazyLock<usize> = LazyLock::new(|| {
@@ -257,6 +259,63 @@ macro_rules! key {
     };
 }
 
+#[cfg(feature = "ssh")]
+struct Remote {
+    sftp: Rc<ssh2::Sftp>,
+}
+
+#[cfg(feature = "ssh")]
+impl TryFrom<ssh2::Session> for Remote {
+    type Error = ssh2::Error;
+
+    fn try_from(session: ssh2::Session) -> Result<Self, Self::Error> {
+        Ok(Self {
+            sftp: Rc::new(session.sftp()?),
+        })
+    }
+}
+
+#[cfg(feature = "ssh")]
+impl Remote {
+    fn sftp(&self) -> Rc<ssh2::Sftp> {
+        Rc::clone(&self.sftp)
+    }
+}
+
+#[cfg(feature = "ssh")]
+#[derive(Debug)]
+pub enum RemoteError {
+    Io(std::io::Error),
+    Ssh(ssh2::Error),
+}
+
+#[cfg(feature = "ssh")]
+impl std::fmt::Display for RemoteError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Io(i) => i.fmt(f),
+            Self::Ssh(s) => s.fmt(f),
+        }
+    }
+}
+
+#[cfg(feature = "ssh")]
+impl std::error::Error for RemoteError {}
+
+#[cfg(feature = "ssh")]
+impl From<std::io::Error> for RemoteError {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(err)
+    }
+}
+
+#[cfg(feature = "ssh")]
+impl From<ssh2::Error> for RemoteError {
+    fn from(err: ssh2::Error) -> Self {
+        Self::Ssh(err)
+    }
+}
+
 pub struct Editor {
     layout: Layout,                       // the editor's pane layout
     focused: bool,                        // whether the editor has focus
@@ -268,7 +327,7 @@ pub struct Editor {
     show_sub_help: bool,                  // whether to show sub-mode help
     open_dir: Option<std::path::PathBuf>, // currently open directory
     #[cfg(feature = "ssh")]
-    remote: Option<ssh2::Session>, // remote SSH session
+    remote: Option<Remote>, // remote SSH session
 }
 
 impl Editor {
@@ -292,15 +351,16 @@ impl Editor {
     pub fn new_remote(
         buffers: impl IntoIterator<Item = Source>,
         remote: ssh2::Session,
-    ) -> std::io::Result<Self> {
+    ) -> Result<Self, RemoteError> {
+        let remote = Remote::try_from(remote)?;
+
         Ok(Self {
-            mode: SshSource::open(&remote)
-                .ok()
-                .and_then(|source| FileChooserState::new(EitherSource::Ssh(source), None).ok())
-                .map(|chooser| EditorMode::Open {
-                    chooser: Box::new(chooser),
-                })
-                .unwrap_or_default(),
+            mode: EditorMode::Open {
+                chooser: Box::new(FileChooserState::new(
+                    EitherSource::Ssh(SshSource::open(remote.sftp())),
+                    None,
+                )?),
+            },
             remote: Some(remote),
             ..Self::new(buffers)?
         })
@@ -1286,23 +1346,16 @@ impl Editor {
                         self.update_buffer(|b| b.set_error(err.to_string()));
                     }
                 },
-                Some(remote) => match SshSource::open(remote) {
-                    Ok(source) => match FileChooserState::new(
-                        EitherSource::Ssh(source),
-                        self.open_dir.clone(),
-                    ) {
-                        Ok(chooser) => {
-                            self.mode = EditorMode::Open {
-                                chooser: Box::new(chooser),
-                            }
+                Some(remote) => match FileChooserState::new(
+                    EitherSource::Ssh(SshSource::open(remote.sftp())),
+                    self.open_dir.clone(),
+                ) {
+                    Ok(chooser) => {
+                        self.mode = EditorMode::Open {
+                            chooser: Box::new(chooser),
                         }
-                        Err(err) => {
-                            self.update_buffer(|b| b.set_error(err.to_string()));
-                        }
-                    },
-                    Err(err) => {
-                        self.update_buffer(|b| b.set_error(err.to_string()));
                     }
+                    Err(err) => self.update_buffer(|b| b.set_error(err.to_string())),
                 },
             },
             keybind!(Reload) => {

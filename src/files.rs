@@ -7,6 +7,8 @@
 // except according to those terms.
 
 use crate::buffer::Source;
+#[cfg(feature = "ssh")]
+use crate::editor::RemoteError;
 use crate::prompt::TextField;
 use ratatui::widgets::StatefulWidget;
 use std::collections::BTreeSet;
@@ -76,10 +78,8 @@ pub struct SshSource {
 
 #[cfg(feature = "ssh")]
 impl SshSource {
-    pub fn open(session: &ssh2::Session) -> Result<Self, ssh2::Error> {
-        session.sftp().map(|remote| Self {
-            remote: std::rc::Rc::new(remote),
-        })
+    pub fn open(remote: std::rc::Rc<ssh2::Sftp>) -> Self {
+        Self { remote }
     }
 }
 
@@ -130,19 +130,19 @@ pub enum EitherSource {
 
 #[cfg(feature = "ssh")]
 impl ChooserSource for EitherSource {
-    type Error = EitherError;
+    type Error = RemoteError;
 
     fn current_dir(&self) -> Result<PathBuf, Self::Error> {
         match self {
-            Self::Local(l) => l.current_dir().map_err(EitherError::Io),
-            Self::Ssh(s) => s.current_dir().map_err(EitherError::Ssh),
+            Self::Local(l) => l.current_dir().map_err(RemoteError::Io),
+            Self::Ssh(s) => s.current_dir().map_err(RemoteError::Ssh),
         }
     }
 
     fn read_dir(&self, dir: &Path, show_hidden: bool) -> Result<Vec<Entry>, Self::Error> {
         match self {
-            Self::Local(l) => l.read_dir(dir, show_hidden).map_err(EitherError::Io),
-            Self::Ssh(s) => s.read_dir(dir, show_hidden).map_err(EitherError::Ssh),
+            Self::Local(l) => l.read_dir(dir, show_hidden).map_err(RemoteError::Io),
+            Self::Ssh(s) => s.read_dir(dir, show_hidden).map_err(RemoteError::Ssh),
         }
     }
 
@@ -153,26 +153,6 @@ impl ChooserSource for EitherSource {
         }
     }
 }
-
-#[cfg(feature = "ssh")]
-#[derive(Debug)]
-pub enum EitherError {
-    Io(std::io::Error),
-    Ssh(ssh2::Error),
-}
-
-#[cfg(feature = "ssh")]
-impl std::fmt::Display for EitherError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::Io(i) => i.fmt(f),
-            Self::Ssh(s) => s.fmt(f),
-        }
-    }
-}
-
-#[cfg(feature = "ssh")]
-impl std::error::Error for EitherError {}
 
 pub struct FileChooser<S: ChooserSource> {
     phantom: std::marker::PhantomData<S>,

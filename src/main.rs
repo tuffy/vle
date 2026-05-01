@@ -204,7 +204,7 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
                         } else {
                             Some(rpassword::prompt_password("Private Key Password : ")?)
                         };
-                        let tcp = TcpStream::connect(&format!("{host}:{port}"))?;
+                        let tcp = TcpStream::connect(format!("{host}:{port}"))?;
                         let mut sess = Session::new()?;
                         sess.set_tcp_stream(tcp);
                         sess.handshake()?;
@@ -219,7 +219,7 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
                     }
                     None => {
                         let password = rpassword::prompt_password("Password : ")?;
-                        let tcp = TcpStream::connect(&format!("{host}:{port}"))?;
+                        let tcp = TcpStream::connect(format!("{host}:{port}"))?;
                         let mut sess = Session::new()?;
                         sess.set_tcp_stream(tcp);
                         sess.handshake()?;
