@@ -4431,7 +4431,12 @@ impl BufferList {
     pub fn save_all(&mut self) -> Result<std::io::Result<usize>, Modified> {
         let mut count = 0;
 
-        for (idx, buf) in self.buffers.iter_mut().enumerate() {
+        for (idx, buf) in self
+            .buffers
+            .iter_mut()
+            .enumerate()
+            .filter(|(_, buf)| buf.modified())
+        {
             match buf.verified_save() {
                 Ok(Ok(())) => {
                     count += 1;
