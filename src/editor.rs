@@ -24,6 +24,7 @@ use ratatui::{
     widgets::StatefulWidget,
 };
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 #[cfg(feature = "ssh")]
 use std::rc::Rc;
 use std::sync::LazyLock;
@@ -326,6 +327,41 @@ impl From<ssh2::Error> for RemoteError {
     }
 }
 
+#[derive(Default)]
+pub struct OpenDir {
+    local: Option<PathBuf>,
+    #[cfg(feature = "ssh")]
+    ssh: Option<PathBuf>,
+}
+
+impl std::ops::Index<DirTarget> for OpenDir {
+    type Output = Option<PathBuf>;
+
+    fn index(&self, index: DirTarget) -> &Option<PathBuf> {
+        match index {
+            DirTarget::Local => &self.local,
+            #[cfg(feature = "ssh")]
+            DirTarget::Ssh => &self.ssh,
+        }
+    }
+}
+
+impl std::ops::IndexMut<DirTarget> for OpenDir {
+    fn index_mut(&mut self, index: DirTarget) -> &mut Option<PathBuf> {
+        match index {
+            DirTarget::Local => &mut self.local,
+            #[cfg(feature = "ssh")]
+            DirTarget::Ssh => &mut self.ssh,
+        }
+    }
+}
+
+pub enum DirTarget {
+    Local,
+    #[cfg(feature = "ssh")]
+    Ssh,
+}
+
 pub struct Editor {
     layout: Layout,                       // the editor's pane layout
     focused: bool,                        // whether the editor has focus
@@ -335,7 +371,7 @@ pub struct Editor {
     last_regex_search: Option<TextField>, // previous regex search
     show_help: bool,                      // whether to show keybindinings
     show_sub_help: bool,                  // whether to show sub-mode help
-    open_dir: Option<std::path::PathBuf>, // currently open directory
+    open_dir: OpenDir,                    // currently open directory
     #[cfg(feature = "ssh")]
     remote: Option<Remote>, // remote SSH session
 }
@@ -351,7 +387,7 @@ impl Editor {
             last_regex_search: None,
             show_help: false,
             show_sub_help: true,
-            open_dir: None,
+            open_dir: OpenDir::default(),
             #[cfg(feature = "ssh")]
             remote: None,
         })
@@ -1333,21 +1369,23 @@ impl Editor {
                 }
             }
             #[cfg(not(feature = "ssh"))]
-            keybind!(Open) => match FileChooserState::new(LocalSource, self.open_dir.clone()) {
-                Ok(chooser) => {
-                    self.mode = EditorMode::Open {
-                        chooser: Box::new(chooser),
+            keybind!(Open) => {
+                match FileChooserState::new(LocalSource, self.open_dir[DirTarget::Local].clone()) {
+                    Ok(chooser) => {
+                        self.mode = EditorMode::Open {
+                            chooser: Box::new(chooser),
+                        }
+                    }
+                    Err(err) => {
+                        self.update_buffer(|b| b.set_error(err.to_string()));
                     }
                 }
-                Err(err) => {
-                    self.update_buffer(|b| b.set_error(err.to_string()));
-                }
-            },
+            }
             #[cfg(feature = "ssh")]
             keybind!(Open) => match self.remote.as_ref() {
                 None => match FileChooserState::new(
                     EitherSource::Local(LocalSource),
-                    self.open_dir.clone(),
+                    self.open_dir[DirTarget::Local].clone(),
                 ) {
                     Ok(chooser) => {
                         self.mode = EditorMode::Open {
@@ -1360,7 +1398,7 @@ impl Editor {
                 },
                 Some(remote) => match FileChooserState::new(
                     EitherSource::Ssh(SshSource::open(remote.to_string(), remote.sftp())),
-                    self.open_dir.clone(),
+                    self.open_dir[DirTarget::Ssh].clone(),
                 ) {
                     Ok(chooser) => {
                         self.mode = EditorMode::Open {
@@ -1900,7 +1938,7 @@ fn process_select_line(
 fn process_open_file<S: ChooserSource>(
     layout: &mut Layout,
     chooser: &mut FileChooserState<S>,
-    open_dir: &mut Option<std::path::PathBuf>,
+    open_dir: &mut OpenDir,
     event: Event,
 ) -> Option<EditorMode> {
     use crossterm::event::{
@@ -1972,14 +2010,14 @@ fn process_open_file<S: ChooserSource>(
         key!(Enter) => {
             for selected in chooser.select()? {
                 if let Err(()) = layout.add(selected) {
-                    *open_dir = Some(chooser.selected_dir().to_path_buf());
+                    open_dir[chooser.target()] = Some(chooser.selected_dir().to_path_buf());
                     return Some(EditorMode::default());
                 }
             }
             if let Some(buf) = layout.selected_buffer_list().current() {
                 set_title(buf);
             }
-            *open_dir = Some(chooser.selected_dir().to_path_buf());
+            open_dir[chooser.target()] = Some(chooser.selected_dir().to_path_buf());
             Some(EditorMode::default())
         }
         _ => None, // ignore other events

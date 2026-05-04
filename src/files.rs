@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use crate::buffer::Source;
+use crate::editor::DirTarget;
 #[cfg(feature = "ssh")]
 use crate::editor::RemoteError;
 use crate::prompt::TextField;
@@ -28,6 +29,8 @@ pub trait ChooserSource: std::fmt::Display {
     fn read_dir(&self, dir: &Path, show_hidden: bool) -> Result<Vec<Entry>, Self::Error>;
 
     fn open(&self, path: PathBuf) -> Source;
+
+    fn target(&self) -> DirTarget;
 }
 
 #[derive(Default)]
@@ -74,6 +77,10 @@ impl ChooserSource for LocalSource {
 
     fn open(&self, path: PathBuf) -> Source {
         Source::Local(path)
+    }
+
+    fn target(&self) -> DirTarget {
+        DirTarget::Local
     }
 }
 
@@ -134,6 +141,10 @@ impl ChooserSource for SshSource {
             path,
         }
     }
+
+    fn target(&self) -> DirTarget {
+        DirTarget::Ssh
+    }
 }
 
 #[cfg(feature = "ssh")]
@@ -174,6 +185,13 @@ impl ChooserSource for EitherSource {
         match self {
             Self::Local(l) => l.open(path),
             Self::Ssh(s) => s.open(path),
+        }
+    }
+
+    fn target(&self) -> DirTarget {
+        match self {
+            Self::Local(l) => l.target(),
+            Self::Ssh(s) => s.target(),
         }
     }
 }
@@ -582,6 +600,10 @@ impl<S: ChooserSource> FileChooserState<S> {
             Chosen::New(filename) => (filename.cursor_column() as u16 + 1, 1),
             Chosen::Selected(_) => (1, 1),
         }
+    }
+
+    pub fn target(&self) -> DirTarget {
+        self.source.target()
     }
 }
 
