@@ -5372,6 +5372,13 @@ impl StatefulWidget for BufferWidget<'_> {
             block.border_style(Style::default().dim())
         };
 
+        #[cfg(feature = "ssh")]
+        let block = if matches!(buffer.source, Source::Ssh { .. }) {
+            block.title_bottom(border_title("SSH".to_string(), focused).right_aligned())
+        } else {
+            block
+        };
+
         let block = match buffer.endings.name() {
             Some(name) => block
                 .title_bottom(border_title(syntax.to_string(), focused).right_aligned())
