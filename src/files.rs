@@ -21,7 +21,7 @@ const TEXT_WIDTH: u16 = 30;
 /// Size of each page, in rows
 const PAGE_SIZE: usize = 10;
 
-pub trait ChooserSource: std::fmt::Display {
+pub trait ChooserSource: Clone + std::fmt::Display {
     type Error: std::fmt::Display;
 
     fn current_dir(&self) -> Result<PathBuf, Self::Error>;
@@ -31,9 +31,20 @@ pub trait ChooserSource: std::fmt::Display {
     fn open(&self, path: PathBuf) -> Source;
 
     fn target(&self) -> DirTarget;
+
+    /// Returns whether target can be toggled
+    fn toggleable(&self) -> bool {
+        false
+    }
+
+    /// Returns new target, if any
+    fn toggle_source(&mut self) -> DirTarget {
+        // nothing else to switch to by default
+        self.target()
+    }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct LocalSource;
 
 impl std::fmt::Display for LocalSource {
@@ -85,6 +96,7 @@ impl ChooserSource for LocalSource {
 }
 
 #[cfg(feature = "ssh")]
+#[derive(Clone)]
 pub struct SshSource {
     label: String,
     remote: std::rc::Rc<ssh2::Sftp>,
@@ -148,17 +160,48 @@ impl ChooserSource for SshSource {
 }
 
 #[cfg(feature = "ssh")]
+#[derive(Clone)]
 pub enum EitherSource {
+    /// No SSH connection specified, only local files possible
     Local(LocalSource),
-    Ssh(SshSource),
+    /// Either remote or local files are possible
+    Ssh {
+        local: LocalSource,
+        ssh: SshSource,
+        active: DirTarget,
+    },
+}
+
+#[cfg(feature = "ssh")]
+impl EitherSource {
+    pub fn local() -> Self {
+        Self::Local(LocalSource)
+    }
+
+    pub fn ssh(ssh: SshSource, active: DirTarget) -> Self {
+        Self::Ssh {
+            local: LocalSource,
+            ssh,
+            active,
+        }
+    }
 }
 
 #[cfg(feature = "ssh")]
 impl std::fmt::Display for EitherSource {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::Local(s) => s.fmt(f),
-            Self::Ssh(s) => s.fmt(f),
+            Self::Local(local)
+            | Self::Ssh {
+                local,
+                active: DirTarget::Local,
+                ..
+            } => local.fmt(f),
+            Self::Ssh {
+                ssh,
+                active: DirTarget::Ssh,
+                ..
+            } => ssh.fmt(f),
         }
     }
 }
@@ -169,29 +212,89 @@ impl ChooserSource for EitherSource {
 
     fn current_dir(&self) -> Result<PathBuf, Self::Error> {
         match self {
-            Self::Local(l) => l.current_dir().map_err(RemoteError::Io),
-            Self::Ssh(s) => s.current_dir().map_err(RemoteError::Ssh),
+            Self::Local(local)
+            | Self::Ssh {
+                local,
+                active: DirTarget::Local,
+                ..
+            } => local.current_dir().map_err(RemoteError::Io),
+            Self::Ssh {
+                ssh,
+                active: DirTarget::Ssh,
+                ..
+            } => ssh.current_dir().map_err(RemoteError::Ssh),
         }
     }
 
     fn read_dir(&self, dir: &Path, show_hidden: bool) -> Result<Vec<Entry>, Self::Error> {
         match self {
-            Self::Local(l) => l.read_dir(dir, show_hidden).map_err(RemoteError::Io),
-            Self::Ssh(s) => s.read_dir(dir, show_hidden).map_err(RemoteError::Ssh),
+            Self::Local(local)
+            | Self::Ssh {
+                local,
+                active: DirTarget::Local,
+                ..
+            } => local.read_dir(dir, show_hidden).map_err(RemoteError::Io),
+            Self::Ssh {
+                ssh,
+                active: DirTarget::Ssh,
+                ..
+            } => ssh.read_dir(dir, show_hidden).map_err(RemoteError::Ssh),
         }
     }
 
     fn open(&self, path: PathBuf) -> Source {
         match self {
-            Self::Local(l) => l.open(path),
-            Self::Ssh(s) => s.open(path),
+            Self::Local(local)
+            | Self::Ssh {
+                local,
+                active: DirTarget::Local,
+                ..
+            } => local.open(path),
+            Self::Ssh {
+                ssh,
+                active: DirTarget::Ssh,
+                ..
+            } => ssh.open(path),
         }
     }
 
     fn target(&self) -> DirTarget {
         match self {
-            Self::Local(l) => l.target(),
-            Self::Ssh(s) => s.target(),
+            Self::Local(local)
+            | Self::Ssh {
+                local,
+                active: DirTarget::Local,
+                ..
+            } => local.target(),
+            Self::Ssh {
+                ssh,
+                active: DirTarget::Ssh,
+                ..
+            } => ssh.target(),
+        }
+    }
+
+    fn toggleable(&self) -> bool {
+        matches!(self, Self::Ssh { .. })
+    }
+
+    fn toggle_source(&mut self) -> DirTarget {
+        match self {
+            Self::Local(_) => DirTarget::Local,
+            Self::Ssh {
+                active: active @ DirTarget::Local,
+                ..
+            } => {
+                *active = DirTarget::Ssh;
+                DirTarget::Ssh
+            }
+            Self::Ssh {
+                active: active @ DirTarget::Ssh,
+                ..
+            } => {
+                *active = DirTarget::Local;
+                DirTarget::Local
+            }
         }
     }
 }
@@ -218,7 +321,7 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
         state: &mut FileChooserState<S>,
     ) {
         use crate::buffer::{BufferMessage, render_message};
-        use crate::help::{CREATE_FILE, OPEN_FILE, render_help};
+        use crate::help::{CREATE_FILE, OPEN_FILE, OPEN_FILE_TOGGLEABLE, render_help};
         use crate::scrollbar::{Scrollbar, ScrollbarState};
         use ratatui::{
             layout::{
@@ -322,7 +425,13 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
             list_area,
             buf,
             match &state.chosen {
-                Chosen::Default | Chosen::Selected(_) => OPEN_FILE,
+                Chosen::Default | Chosen::Selected(_) => {
+                    if state.source.toggleable() {
+                        OPEN_FILE_TOGGLEABLE
+                    } else {
+                        OPEN_FILE
+                    }
+                }
                 Chosen::New(_) => CREATE_FILE,
             },
             |b| {
@@ -604,6 +713,14 @@ impl<S: ChooserSource> FileChooserState<S> {
 
     pub fn target(&self) -> DirTarget {
         self.source.target()
+    }
+
+    pub fn toggle_source(&mut self, open_dir: &mut crate::editor::OpenDir) -> Result<(), S::Error> {
+        if self.source.toggleable() {
+            let target = self.source.toggle_source();
+            *self = Self::new(self.source.clone(), open_dir[target].clone())?;
+        }
+        Ok(())
     }
 }
 

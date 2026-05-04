@@ -319,6 +319,17 @@ pub static OPEN_FILE: &[Keybinding] = &[
     none(&["Esc"], "Cancel"),
 ];
 
+pub static OPEN_FILE_TOGGLEABLE: &[Keybinding] = &[
+    none(&[DOWN, UP], "Navigate Entries"),
+    none(&[LEFT], "Up Directory"),
+    none(&[RIGHT], "Down Directory"),
+    none(&["Tab"], "Toggle File to Open"),
+    ctrl(&["H"], "Toggle Show Hidden Files"),
+    keybind::<key::Open>("Toggle Local/SSH Files"),
+    none(&["Enter"], "Select File(s)"),
+    none(&["Esc"], "Cancel"),
+];
+
 pub static CREATE_FILE: &[Keybinding] = &[
     none(&["Enter"], "Create New File"),
     none(&["Esc"], "Cancel"),

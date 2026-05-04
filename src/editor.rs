@@ -6,6 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#[cfg(not(feature = "ssh"))]
+use crate::files::LocalSource;
 #[cfg(feature = "ssh")]
 use crate::files::{EitherSource, SshSource};
 use crate::key;
@@ -14,7 +16,7 @@ use crate::{
         AltCursor, BufferContext, BufferId, BufferList, EditorCutBuffer, MultiCursor,
         SelectionRange, Source,
     },
-    files::{ChooserSource, FileChooserState, LocalSource},
+    files::{ChooserSource, FileChooserState},
     key::{Binding, CtrlBinding},
     prompt::{LinePrompt, TextField},
 };
@@ -332,6 +334,7 @@ pub struct OpenDir {
     local: Option<PathBuf>,
     #[cfg(feature = "ssh")]
     ssh: Option<PathBuf>,
+    last: Option<DirTarget>,
 }
 
 impl std::ops::Index<DirTarget> for OpenDir {
@@ -356,6 +359,7 @@ impl std::ops::IndexMut<DirTarget> for OpenDir {
     }
 }
 
+#[derive(Copy, Clone)]
 pub enum DirTarget {
     Local,
     #[cfg(feature = "ssh")]
@@ -405,7 +409,10 @@ impl Editor {
         Ok(Self {
             mode: EditorMode::Open {
                 chooser: Box::new(FileChooserState::new(
-                    EitherSource::Ssh(SshSource::open(remote.to_string(), remote.sftp())),
+                    EitherSource::ssh(
+                        SshSource::open(remote.to_string(), remote.sftp()),
+                        DirTarget::Ssh,
+                    ),
                     None,
                 )?),
             },
@@ -1384,7 +1391,7 @@ impl Editor {
             #[cfg(feature = "ssh")]
             keybind!(Open) => match self.remote.as_ref() {
                 None => match FileChooserState::new(
-                    EitherSource::Local(LocalSource),
+                    EitherSource::local(),
                     self.open_dir[DirTarget::Local].clone(),
                 ) {
                     Ok(chooser) => {
@@ -1397,8 +1404,11 @@ impl Editor {
                     }
                 },
                 Some(remote) => match FileChooserState::new(
-                    EitherSource::Ssh(SshSource::open(remote.to_string(), remote.sftp())),
-                    self.open_dir[DirTarget::Ssh].clone(),
+                    EitherSource::ssh(
+                        SshSource::open(remote.to_string(), remote.sftp()),
+                        self.open_dir.last.unwrap_or(DirTarget::Ssh),
+                    ),
+                    self.open_dir[self.open_dir.last.unwrap_or(DirTarget::Ssh)].clone(),
                 ) {
                     Ok(chooser) => {
                         self.mode = EditorMode::Open {
@@ -2011,6 +2021,7 @@ fn process_open_file<S: ChooserSource>(
             for selected in chooser.select()? {
                 if let Err(()) = layout.add(selected) {
                     open_dir[chooser.target()] = Some(chooser.selected_dir().to_path_buf());
+                    open_dir.last = Some(chooser.target());
                     return Some(EditorMode::default());
                 }
             }
@@ -2018,7 +2029,16 @@ fn process_open_file<S: ChooserSource>(
                 set_title(buf);
             }
             open_dir[chooser.target()] = Some(chooser.selected_dir().to_path_buf());
+            open_dir.last = Some(chooser.target());
             Some(EditorMode::default())
+        }
+        keybind!(Open) => {
+            if let Err(err) = chooser.toggle_source(open_dir)
+                && let Some(buf) = layout.selected_buffer_list_mut().current_mut()
+            {
+                buf.set_error(err.to_string());
+            }
+            None
         }
         _ => None, // ignore other events
     }
