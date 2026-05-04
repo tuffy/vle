@@ -20,7 +20,7 @@ const TEXT_WIDTH: u16 = 30;
 /// Size of each page, in rows
 const PAGE_SIZE: usize = 10;
 
-pub trait ChooserSource {
+pub trait ChooserSource: std::fmt::Display {
     type Error: std::fmt::Display;
 
     fn current_dir(&self) -> Result<PathBuf, Self::Error>;
@@ -32,6 +32,12 @@ pub trait ChooserSource {
 
 #[derive(Default)]
 pub struct LocalSource;
+
+impl std::fmt::Display for LocalSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        "Local Files".fmt(f)
+    }
+}
 
 impl ChooserSource for LocalSource {
     type Error = std::io::Error;
@@ -73,13 +79,21 @@ impl ChooserSource for LocalSource {
 
 #[cfg(feature = "ssh")]
 pub struct SshSource {
+    label: String,
     remote: std::rc::Rc<ssh2::Sftp>,
 }
 
 #[cfg(feature = "ssh")]
 impl SshSource {
-    pub fn open(remote: std::rc::Rc<ssh2::Sftp>) -> Self {
-        Self { remote }
+    pub fn open(label: String, remote: std::rc::Rc<ssh2::Sftp>) -> Self {
+        Self { label, remote }
+    }
+}
+
+#[cfg(feature = "ssh")]
+impl std::fmt::Display for SshSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.label.fmt(f)
     }
 }
 
@@ -126,6 +140,16 @@ impl ChooserSource for SshSource {
 pub enum EitherSource {
     Local(LocalSource),
     Ssh(SshSource),
+}
+
+#[cfg(feature = "ssh")]
+impl std::fmt::Display for EitherSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Local(s) => s.fmt(f),
+            Self::Ssh(s) => s.fmt(f),
+        }
+    }
 }
 
 #[cfg(feature = "ssh")]
@@ -195,7 +219,15 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
                 Span::raw("\u{252b}"),
                 Span::styled(state.dir.display().to_string(), Style::default().bold()),
                 Span::raw("\u{2523}"),
-            ]));
+            ]))
+            .title_bottom(
+                Line::from(vec![
+                    Span::raw("\u{252b}"),
+                    Span::styled(state.source.to_string(), Style::default().bold()),
+                    Span::raw("\u{2523}"),
+                ])
+                .centered(),
+            );
 
         ratatui::widgets::Clear.render(area, buf);
 

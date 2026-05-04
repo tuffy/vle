@@ -261,24 +261,34 @@ macro_rules! key {
 
 #[cfg(feature = "ssh")]
 struct Remote {
+    username: String,
+    hostname: String,
     sftp: Rc<ssh2::Sftp>,
 }
 
 #[cfg(feature = "ssh")]
-impl TryFrom<ssh2::Session> for Remote {
-    type Error = ssh2::Error;
-
-    fn try_from(session: ssh2::Session) -> Result<Self, Self::Error> {
+impl Remote {
+    fn open(
+        username: String,
+        hostname: String,
+        session: ssh2::Session,
+    ) -> Result<Self, ssh2::Error> {
         Ok(Self {
+            username,
+            hostname,
             sftp: Rc::new(session.sftp()?),
         })
+    }
+
+    fn sftp(&self) -> Rc<ssh2::Sftp> {
+        Rc::clone(&self.sftp)
     }
 }
 
 #[cfg(feature = "ssh")]
-impl Remote {
-    fn sftp(&self) -> Rc<ssh2::Sftp> {
-        Rc::clone(&self.sftp)
+impl std::fmt::Display for Remote {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}@{}", self.username, self.hostname)
     }
 }
 
@@ -351,13 +361,15 @@ impl Editor {
     pub fn new_remote(
         buffers: impl IntoIterator<Item = Source>,
         remote: ssh2::Session,
+        username: String,
+        hostname: String,
     ) -> Result<Self, RemoteError> {
-        let remote = Remote::try_from(remote)?;
+        let remote = Remote::open(username, hostname, remote)?;
 
         Ok(Self {
             mode: EditorMode::Open {
                 chooser: Box::new(FileChooserState::new(
-                    EitherSource::Ssh(SshSource::open(remote.sftp())),
+                    EitherSource::Ssh(SshSource::open(remote.to_string(), remote.sftp())),
                     None,
                 )?),
             },
@@ -1347,7 +1359,7 @@ impl Editor {
                     }
                 },
                 Some(remote) => match FileChooserState::new(
-                    EitherSource::Ssh(SshSource::open(remote.sftp())),
+                    EitherSource::Ssh(SshSource::open(remote.to_string(), remote.sftp())),
                     self.open_dir.clone(),
                 ) {
                     Ok(chooser) => {

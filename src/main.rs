@@ -228,6 +228,8 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
                         sess
                     }
                 },
+                username,
+                host,
             )?;
 
             Ok(match line {
