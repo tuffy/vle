@@ -5312,17 +5312,19 @@ impl StatefulWidget for BufferWidget<'_> {
         }
 
         /// Removes "chars" from the start of each line, if any
-        fn truncate_start(mut lines: Vec<Line<'_>>, chars: usize) -> Vec<Line<'_>> {
-            fn truncate_line(line: &mut VecDeque<Span<'_>>, mut characters: usize) {
-                while characters > 0 {
+        fn truncate_start(mut lines: Vec<Line<'_>>, columns: usize) -> Vec<Line<'_>> {
+            fn truncate_line(line: &mut VecDeque<Span<'_>>, mut columns: usize) {
+                use unicode_width::UnicodeWidthChar;
+
+                while columns > 0 {
                     let Some(span) = line.pop_front() else {
                         return;
                     };
-                    let span_width = span.content.chars().count();
-                    if span_width <= characters {
-                        characters -= span_width;
+                    let span_width: usize = span.content.chars().filter_map(|c| c.width()).sum();
+                    if span_width <= columns {
+                        columns -= span_width;
                     } else {
-                        let suffix = truncate_cow(span.content, characters);
+                        let suffix = truncate_cow(span.content, columns);
                         line.push_front(Span {
                             style: span.style,
                             content: suffix,
@@ -5332,8 +5334,18 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
 
-            fn truncate_cow(s: Cow<'_, str>, chars: usize) -> Cow<'_, str> {
-                let Some((split_point, _)) = s.char_indices().nth(chars) else {
+            fn truncate_cow(s: Cow<'_, str>, mut columns: usize) -> Cow<'_, str> {
+                use unicode_width::UnicodeWidthChar;
+
+                let Some((split_point, _)) = s.char_indices().find(|(_, c)| {
+                    let width = c.width().unwrap_or(0);
+                    if width <= columns {
+                        columns -= width;
+                        false
+                    } else {
+                        true
+                    }
+                }) else {
                     return "".into();
                 };
 
@@ -5349,12 +5361,12 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
 
-            match chars {
+            match columns {
                 0 => lines,
-                chars => {
+                columns => {
                     lines.iter_mut().for_each(|l| {
                         let mut line = std::mem::take(&mut l.spans).into();
-                        truncate_line(&mut line, chars);
+                        truncate_line(&mut line, columns);
                         l.spans = line.into();
                     });
                     lines
