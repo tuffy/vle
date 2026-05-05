@@ -5352,11 +5352,25 @@ impl StatefulWidget for BufferWidget<'_> {
                 match s {
                     Cow::Borrowed(slice) => {
                         let (_, end) = slice.split_at(split_point);
-                        Cow::Borrowed(end)
+                        match columns {
+                            0 => Cow::Borrowed(end),
+                            cols => Cow::Owned(
+                                std::iter::repeat_n(' ', cols)
+                                    .chain(end.chars().skip(1))
+                                    .collect(),
+                            ),
+                        }
                     }
                     Cow::Owned(mut string) => {
                         let suffix = string.split_off(split_point);
-                        Cow::Owned(suffix)
+                        match columns {
+                            0 => Cow::Owned(suffix),
+                            cols => Cow::Owned(
+                                std::iter::repeat_n(' ', cols)
+                                    .chain(suffix.chars().skip(1))
+                                    .collect(),
+                            ),
+                        }
                     }
                 }
             }
