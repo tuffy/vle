@@ -262,6 +262,32 @@ macro_rules! key {
     };
 }
 
+#[derive(Default)]
+struct LastSearch {
+    plain: Option<TextField>,
+    regex: Option<TextField>,
+}
+
+impl std::ops::Index<SearchType> for LastSearch {
+    type Output = Option<TextField>;
+
+    fn index(&self, t: SearchType) -> &Option<TextField> {
+        match t {
+            SearchType::Plain => &self.plain,
+            SearchType::Regex => &self.regex,
+        }
+    }
+}
+
+impl std::ops::IndexMut<SearchType> for LastSearch {
+    fn index_mut(&mut self, t: SearchType) -> &mut Option<TextField> {
+        match t {
+            SearchType::Plain => &mut self.plain,
+            SearchType::Regex => &mut self.regex,
+        }
+    }
+}
+
 #[cfg(feature = "ssh")]
 struct Remote {
     username: String,
@@ -367,15 +393,14 @@ pub enum DirTarget {
 }
 
 pub struct Editor {
-    layout: Layout,                       // the editor's pane layout
-    focused: bool,                        // whether the editor has focus
-    mode: EditorMode,                     // what mode the editing is in
-    cut_buffer: Option<EditorCutBuffer>,  // contents of cut buffer
-    last_plain_search: Option<TextField>, // previous plaintext search
-    last_regex_search: Option<TextField>, // previous regex search
-    show_help: bool,                      // whether to show keybindinings
-    show_sub_help: bool,                  // whether to show sub-mode help
-    open_dir: OpenDir,                    // currently open directory
+    layout: Layout,                      // the editor's pane layout
+    focused: bool,                       // whether the editor has focus
+    mode: EditorMode,                    // what mode the editing is in
+    cut_buffer: Option<EditorCutBuffer>, // contents of cut buffer
+    last_search: LastSearch,             // last searches performed
+    show_help: bool,                     // whether to show keybindinings
+    show_sub_help: bool,                 // whether to show sub-mode help
+    open_dir: OpenDir,                   // currently open directory
     #[cfg(feature = "ssh")]
     remote: Option<Remote>, // remote SSH session
 }
@@ -387,8 +412,7 @@ impl Editor {
             focused: true,
             mode: EditorMode::default(),
             cut_buffer: None,
-            last_plain_search: None,
-            last_regex_search: None,
+            last_search: LastSearch::default(),
             show_help: false,
             show_sub_help: true,
             open_dir: OpenDir::default(),
@@ -760,10 +784,7 @@ impl Editor {
                         && let Some(new_mode) = process_search(
                             buf,
                             self.cut_buffer.as_mut(),
-                            match type_ {
-                                SearchType::Plain => &mut self.last_plain_search,
-                                SearchType::Regex => &mut self.last_regex_search,
-                            },
+                            &mut self.last_search[*type_],
                             prompt,
                             type_,
                             range.as_ref(),
@@ -815,10 +836,7 @@ impl Editor {
                     if let Some(new_mode) = process_search_all(
                         self.layout.selected_buffer_list_mut(),
                         self.cut_buffer.as_mut(),
-                        match type_ {
-                            SearchType::Plain => &mut self.last_plain_search,
-                            SearchType::Regex => &mut self.last_regex_search,
-                        },
+                        &mut self.last_search[*type_],
                         prompt,
                         type_,
                         event,
