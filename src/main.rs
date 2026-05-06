@@ -19,6 +19,7 @@ mod key;
 mod prompt;
 mod scrollbar;
 mod syntax;
+mod truncate;
 
 use editor::{Editor, LineNumber};
 

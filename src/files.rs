@@ -368,21 +368,16 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
                         .title("Filename"),
                 )
                 .render(text_area, buf),
-            Chosen::New(filename) => Paragraph::new(filename.value().unwrap_or_default())
-                .scroll((
-                    0,
-                    filename
-                        .cursor_column()
-                        .saturating_sub(TEXT_WIDTH.into())
-                        .try_into()
-                        .unwrap(),
-                ))
-                .block(
-                    Block::bordered()
-                        .border_type(BorderType::Rounded)
-                        .title("Filename"),
-                )
-                .render(text_area, buf),
+            Chosen::New(filename) => Paragraph::new(crate::truncate::line_start(
+                filename.value().unwrap_or_default().into(),
+                filename.cursor_column().saturating_sub(TEXT_WIDTH.into()),
+            ))
+            .block(
+                Block::bordered()
+                    .border_type(BorderType::Rounded)
+                    .title("Filename"),
+            )
+            .render(text_area, buf),
             Chosen::Selected(items) => Paragraph::new(match items.len() {
                 1 => Cow::Borrowed("1 File Selected"),
                 n => Cow::Owned(format!("{n} Files Selected")),
@@ -706,7 +701,7 @@ impl<S: ChooserSource> FileChooserState<S> {
     pub fn cursor_position(&self) -> (u16, u16) {
         match &self.chosen {
             Chosen::Default => (1, 1),
-            Chosen::New(filename) => (filename.cursor_column() as u16 + 1, 1),
+            Chosen::New(filename) => ((filename.cursor_column() as u16).min(TEXT_WIDTH) + 1, 1),
             Chosen::Selected(_) => (1, 1),
         }
     }
