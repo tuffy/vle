@@ -64,29 +64,12 @@ pub struct Scrollbar;
 impl StatefulWidget for Scrollbar {
     type State = ScrollbarState;
 
-    fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer, state: &mut Self::State) {
-        use ratatui::layout::{
-            Constraint::{Length, Min},
-            Layout,
-        };
+    fn render(self, track: Rect, buf: &mut ratatui::buffer::Buffer, state: &mut Self::State) {
         use ratatui::style::Style;
 
         // ensure we're at least one pixel wide
-        if area.width == 0 {
+        if track.width == 0 {
             return;
-        }
-
-        let [top_arrow, track, bottom_arrow] =
-            Layout::vertical([Length(1), Min(0), Length(1)]).areas(area);
-
-        // paint top arrow, if possible
-        if top_arrow.height > 0 {
-            buf[(top_arrow.x, top_arrow.y)].set_char('\u{25B2}');
-        }
-
-        // paint bottom arrow, if possible
-        if bottom_arrow.height > 0 {
-            buf[(bottom_arrow.x, bottom_arrow.y)].set_char('\u{25BC}');
         }
 
         // determining max thumb position also checks whether
