@@ -400,7 +400,14 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
             .highlight_style(Style::default().add_modifier(Modifier::REVERSED)),
             list_area,
             buf,
-            &mut ListState::default().with_selected(state.selected_entry()),
+            &mut ListState::default()
+                .with_selected(state.selected_entry())
+                .with_offset(
+                    state
+                        .selected_entry()
+                        .map(|s| s.saturating_sub(usize::from(list_area.height) / 2))
+                        .unwrap_or_default(),
+                ),
         );
 
         Scrollbar.render(
@@ -411,8 +418,8 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
                 .position(
                     state
                         .selected_entry()
-                        .unwrap_or_default()
-                        .saturating_sub(list_area.height.into()),
+                        .map(|s| s.saturating_sub(usize::from(list_area.height) / 2))
+                        .unwrap_or_default(),
                 ),
         );
 
