@@ -6541,7 +6541,7 @@ fn render_pane_index(area: Rect, buf: &mut ratatui::buffer::Buffer, index: char)
             Constraint::{Length, Min},
             Layout,
         },
-        style::{Color, Style},
+        style::Style,
         text::Text,
         widgets::{Block, BorderType, Clear, Paragraph, Widget},
     };
