@@ -6546,8 +6546,8 @@ fn render_pane_index(area: Rect, buf: &mut ratatui::buffer::Buffer, index: char)
         widgets::{Block, BorderType, Clear, Paragraph, Widget},
     };
 
-    let [dialog_area, _] = Layout::horizontal([Length(5), Min(0)]).areas(area);
-    let [dialog_area, _] = Layout::vertical([Length(3), Min(0)]).areas(dialog_area);
+    let [_, dialog_area, _] = Layout::horizontal([Min(0), Length(5), Min(0)]).areas(area);
+    let [_, dialog_area, _] = Layout::vertical([Min(0), Length(3), Min(0)]).areas(dialog_area);
 
     Clear.render(dialog_area, buf);
     Paragraph::new(Text::styled(
