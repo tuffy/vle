@@ -4594,15 +4594,15 @@ impl StatefulWidget for EditorWidget<'_> {
             area = layout_area;
         }
 
-        let is_split = matches!(&mode, EditorMode::SplitPane);
+        let multiple_panes = !matches!(layout, Layout::Single(_));
 
-        match is_split {
+        match matches!(&mode, EditorMode::SplitPane) {
             true => LayoutWidget {
                 mode,
                 show_help,
                 show_sub_help,
                 focused,
-                multiple_panes: !matches!(layout, Layout::Single(_)),
+                multiple_panes,
                 pane_indices: &mut ('1'..='9').chain(std::iter::once('0').chain('A'..='Z')),
             }
             .render(area, buf, layout),
@@ -4611,7 +4611,7 @@ impl StatefulWidget for EditorWidget<'_> {
                 show_help,
                 show_sub_help,
                 focused,
-                multiple_panes: !matches!(layout, Layout::Single(_)),
+                multiple_panes,
                 pane_indices: &mut std::iter::empty(),
             }
             .render(area, buf, layout),

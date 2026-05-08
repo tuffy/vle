@@ -6542,22 +6542,24 @@ fn render_pane_index(area: Rect, buf: &mut ratatui::buffer::Buffer, index: char)
             Layout,
         },
         style::{Color, Style},
-        widgets::{Block, BorderType, Clear, Padding, Paragraph, Widget},
+        text::Text,
+        widgets::{Block, BorderType, Clear, Paragraph, Widget},
     };
 
     let [dialog_area, _] = Layout::horizontal([Length(5), Min(0)]).areas(area);
     let [dialog_area, _] = Layout::vertical([Length(3), Min(0)]).areas(dialog_area);
 
     Clear.render(dialog_area, buf);
-    Paragraph::new(index.to_string())
-        .style(Style::default().fg(Color::Blue))
-        .block(
-            Block::bordered()
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().blue())
-                .padding(Padding::horizontal(1)),
-        )
-        .render(dialog_area, buf);
+    Paragraph::new(Text::styled(
+        format!(" {index} "),
+        Style::default().reversed(),
+    ))
+    .block(
+        Block::bordered()
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().blue()),
+    )
+    .render(dialog_area, buf);
 }
 
 pub fn render_list(
