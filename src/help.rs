@@ -271,6 +271,7 @@ pub static CONFIRM_CLOSE: &[Keybinding] = &[
 ];
 
 pub static SPLIT_PANE: &[Keybinding] = &[
+    none(&["0\u{2026}9", "A\u{2026}Z"], "Select Pane by Letter"),
     none(&[LEFT, RIGHT], "Split Vertically \u{25e7} / \u{25e8}"),
     none(&[UP, DOWN], "Split Horizontally \u{2b12} / \u{2b13}"),
     ctrl(&[LEFT, DOWN, UP, RIGHT], "Switch Pane in Direction"),

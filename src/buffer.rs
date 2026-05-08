@@ -4631,6 +4631,7 @@ pub struct BufferWidget<'e> {
     pub show_help: Option<Help>,
     pub show_sub_help: bool,
     pub buffer_idx: usize,
+    pub pane_idx: Option<char>,
 }
 
 impl BufferWidget<'_> {
@@ -6497,6 +6498,11 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
+        // Display any pane index in the upper-left
+        if let Some(index) = self.pane_idx {
+            render_pane_index(text_area, buf, index);
+        }
+
         // Finally, display any status/error message pop-up exactly once
         if let Some(message) = state.message.take() {
             render_message(text_area, buf, message);
@@ -6526,6 +6532,31 @@ pub fn render_message(area: Rect, buf: &mut ratatui::buffer::Buffer, message: Bu
             BufferMessage::Error(_) => Style::default().fg(Color::Red),
         })
         .block(Block::bordered().border_type(BorderType::Rounded))
+        .render(dialog_area, buf);
+}
+
+fn render_pane_index(area: Rect, buf: &mut ratatui::buffer::Buffer, index: char) {
+    use ratatui::{
+        layout::{
+            Constraint::{Length, Min},
+            Layout,
+        },
+        style::{Color, Style},
+        widgets::{Block, BorderType, Clear, Padding, Paragraph, Widget},
+    };
+
+    let [dialog_area, _] = Layout::horizontal([Length(5), Min(0)]).areas(area);
+    let [dialog_area, _] = Layout::vertical([Length(3), Min(0)]).areas(dialog_area);
+
+    Clear.render(dialog_area, buf);
+    Paragraph::new(index.to_string())
+        .style(Style::default().fg(Color::Blue))
+        .block(
+            Block::bordered()
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().blue())
+                .padding(Padding::horizontal(1)),
+        )
         .render(dialog_area, buf);
 }
 

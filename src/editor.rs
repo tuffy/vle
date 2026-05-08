@@ -1789,6 +1789,16 @@ impl Editor {
             key!(Enter) => {
                 self.mode = EditorMode::default();
             }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char(c),
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
+                ..
+            }) if let Some(mut index) = char_to_index(c) => {
+                if let Ok(()) = self.layout.select_by_index(&mut index) {
+                    self.mode = EditorMode::default();
+                }
+            }
             _ => { /* ignore other events */ }
         }
     }
@@ -3299,16 +3309,6 @@ fn process_select_buffer(
 
     const PAGE_SIZE: usize = 5;
 
-    fn char_to_index(c: char) -> Option<usize> {
-        match c {
-            c @ '1'..='9' => Some((u32::from(c) - u32::from('1')) as usize),
-            '0' => Some(9),
-            c @ 'a'..='z' => Some((u32::from(c) - u32::from('a')) as usize + 10),
-            c @ 'A'..='Z' => Some((u32::from(c) - u32::from('A')) as usize + 10),
-            _ => None,
-        }
-    }
-
     match event {
         key!(Up)
         | Event::Mouse(MouseEvent {
@@ -4474,6 +4474,47 @@ impl Layout {
             }
         }
     }
+
+    /// Returns Ok(()) if we contain index and selection performed
+    /// Returns Err(()) if we do not contain index
+    fn select_by_index(&mut self, index: &mut usize) -> Result<(), ()> {
+        match self {
+            Self::Single(_) => {
+                if *index == 0 {
+                    Ok(())
+                } else {
+                    *index -= 1;
+                    Err(())
+                }
+            }
+            Self::Horizontal {
+                top, bottom, which, ..
+            } => {
+                if top.select_by_index(index).is_ok() {
+                    *which = HorizontalPos::Top;
+                    Ok(())
+                } else if bottom.select_by_index(index).is_ok() {
+                    *which = HorizontalPos::Bottom;
+                    Ok(())
+                } else {
+                    Err(())
+                }
+            }
+            Self::Vertical {
+                left, right, which, ..
+            } => {
+                if left.select_by_index(index).is_ok() {
+                    *which = VerticalPos::Left;
+                    Ok(())
+                } else if right.select_by_index(index).is_ok() {
+                    *which = VerticalPos::Right;
+                    Ok(())
+                } else {
+                    Err(())
+                }
+            }
+        }
+    }
 }
 
 /// Directions for moving or splitting panes
@@ -4553,26 +4594,41 @@ impl StatefulWidget for EditorWidget<'_> {
             area = layout_area;
         }
 
-        LayoutWidget {
-            mode,
-            show_help,
-            show_sub_help,
-            focused,
-            multiple_panes: !matches!(layout, Layout::Single(_)),
+        let is_split = matches!(&mode, EditorMode::SplitPane);
+
+        match is_split {
+            true => LayoutWidget {
+                mode,
+                show_help,
+                show_sub_help,
+                focused,
+                multiple_panes: !matches!(layout, Layout::Single(_)),
+                pane_indices: &mut ('1'..='9').chain(std::iter::once('0').chain('A'..='Z')),
+            }
+            .render(area, buf, layout),
+            false => LayoutWidget {
+                mode,
+                show_help,
+                show_sub_help,
+                focused,
+                multiple_panes: !matches!(layout, Layout::Single(_)),
+                pane_indices: &mut std::iter::empty(),
+            }
+            .render(area, buf, layout),
         }
-        .render(area, buf, layout)
     }
 }
 
-struct LayoutWidget<'e> {
+struct LayoutWidget<'e, 'i, I> {
     focused: bool,
     mode: &'e mut EditorMode,
     show_help: bool,
     show_sub_help: bool,
     multiple_panes: bool,
+    pane_indices: &'i mut I,
 }
 
-impl StatefulWidget for LayoutWidget<'_> {
+impl<I: std::iter::FusedIterator<Item = char>> StatefulWidget for LayoutWidget<'_, '_, I> {
     type State = Layout;
 
     fn render(
@@ -4589,6 +4645,7 @@ impl StatefulWidget for LayoutWidget<'_> {
             show_sub_help,
             focused,
             multiple_panes,
+            pane_indices,
         } = self;
 
         match layout {
@@ -4604,6 +4661,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                             .then(|| buffer.help_options(multiple_buffers, multiple_panes)),
                         show_sub_help,
                         buffer_idx,
+                        pane_idx: pane_indices.next(),
                     }
                     .render(area, buf, buffer);
                 }
@@ -4627,6 +4685,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                         show_help,
                         show_sub_help,
                         multiple_panes,
+                        pane_indices,
                     },
                     HorizontalPos::Bottom => LayoutWidget {
                         focused: false,
@@ -4634,6 +4693,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                         show_help: false,
                         show_sub_help: false,
                         multiple_panes: false,
+                        pane_indices,
                     },
                 })
                 .render(top_area, buf, top);
@@ -4645,6 +4705,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                         show_help: false,
                         show_sub_help: false,
                         multiple_panes: false,
+                        pane_indices,
                     },
                     HorizontalPos::Bottom => LayoutWidget {
                         focused,
@@ -4652,6 +4713,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                         show_help,
                         show_sub_help,
                         multiple_panes,
+                        pane_indices,
                     },
                 })
                 .render(bottom_area, buf, bottom);
@@ -4676,6 +4738,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                         show_help,
                         show_sub_help,
                         multiple_panes,
+                        pane_indices,
                     },
                     VerticalPos::Right => LayoutWidget {
                         focused: false,
@@ -4683,6 +4746,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                         show_help: false,
                         show_sub_help: false,
                         multiple_panes: false,
+                        pane_indices,
                     },
                 })
                 .render(left_area, buf, left);
@@ -4694,6 +4758,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                         show_help: false,
                         show_sub_help: false,
                         multiple_panes: false,
+                        pane_indices,
                     },
                     VerticalPos::Right => LayoutWidget {
                         focused,
@@ -4701,6 +4766,7 @@ impl StatefulWidget for LayoutWidget<'_> {
                         show_help,
                         show_sub_help,
                         multiple_panes,
+                        pane_indices,
                     },
                 })
                 .render(right_area, buf, right);
@@ -4812,6 +4878,16 @@ where
         completions[std::mem::replace(index, previous_index)].as_ref(),
         completions[previous_index].as_ref(),
     )
+}
+
+fn char_to_index(c: char) -> Option<usize> {
+    match c {
+        c @ '1'..='9' => Some((u32::from(c) - u32::from('1')) as usize),
+        '0' => Some(9),
+        c @ 'a'..='z' => Some((u32::from(c) - u32::from('a')) as usize + 10),
+        c @ 'A'..='Z' => Some((u32::from(c) - u32::from('A')) as usize + 10),
+        _ => None,
+    }
 }
 
 fn set_title<D: std::fmt::Display>(d: D) {
