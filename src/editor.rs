@@ -4262,7 +4262,10 @@ impl Layout {
 
                     Some(Position {
                         x: dialog_area.x + 1,
-                        y: dialog_area.y + (*index as u16) + 1,
+                        y: dialog_area.y
+                            + ((*index).min(usize::from(dialog_area.height).saturating_sub(3))
+                                as u16)
+                            + 1,
                     })
                 }
                 _ => {
