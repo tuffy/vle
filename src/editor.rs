@@ -116,8 +116,8 @@ pub enum EditorMode {
     },
     /// Determining what buffer to select from menu
     SelectBuffer {
-        buffer_list: Vec<BufferId>, // buffers
-        index: usize,               // buffer index to select
+        buffer_list: Vec<BufferListItem>, // buffers
+        index: usize,                     // buffer index to select
     },
 }
 
@@ -139,6 +139,30 @@ pub enum SearchMode {
         /// The current candidate
         index: usize,
     },
+}
+
+pub struct BufferListItem {
+    pub buffer: BufferId,
+    modified: bool,
+}
+
+impl BufferListItem {
+    fn new(buffer: &BufferContext) -> Self {
+        Self {
+            modified: buffer.modified(),
+            buffer: buffer.id(),
+        }
+    }
+}
+
+impl std::fmt::Display for BufferListItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if self.modified {
+            write!(f, "{} *", self.buffer)
+        } else {
+            self.buffer.fmt(f)
+        }
+    }
 }
 
 /// A multi-cursor mode in one or several buffers
@@ -1468,7 +1492,10 @@ impl Editor {
             key!(CONTROL, '5') => {
                 let buffer_list = self.layout.selected_buffer_list();
                 let index = buffer_list.current_index();
-                let buffer_list = buffer_list.buffers().map(|b| b.id()).collect();
+                let buffer_list = buffer_list
+                    .buffers()
+                    .map(|b| BufferListItem::new(b))
+                    .collect();
                 self.mode = EditorMode::SelectBuffer { buffer_list, index };
             }
             Event::Mouse(MouseEvent {

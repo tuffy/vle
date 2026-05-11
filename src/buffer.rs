@@ -6470,7 +6470,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 let list = ratatui::widgets::List::new(
                     buffer_list
                         .iter()
-                        .map(|bid| (bid.to_string(), *bid == selected_buf))
+                        .map(|bid| (bid.to_string(), bid.buffer == selected_buf))
                         .inspect(|(s, _)| {
                             use unicode_width::UnicodeWidthStr;
 
