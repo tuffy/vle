@@ -237,12 +237,60 @@ fn open_editor() -> Result<Editor, Box<dyn std::error::Error>> {
     }
 }
 
-fn execute_editor(
-    mut editor: Editor,
-    terminal: &mut ratatui::DefaultTerminal,
-) -> std::io::Result<()> {
+fn execute_editor(editor: Editor, terminal: &mut ratatui::DefaultTerminal) -> std::io::Result<()> {
     use crossterm::event::{Event, MouseEvent, MouseEventKind, poll, read};
     use std::time::Duration;
+
+    fn no_auto_save(
+        mut editor: Editor,
+        terminal: &mut ratatui::DefaultTerminal,
+    ) -> std::io::Result<()> {
+        while editor.has_open_buffers() {
+            let area = editor.display(terminal)?;
+            editor.process_event(
+                area,
+                loop {
+                    match read()? {
+                        Event::Mouse(MouseEvent {
+                            kind: MouseEventKind::Moved | MouseEventKind::Up(_),
+                            ..
+                        }) => { /* ignore mouse movement events */ }
+                        event => break event,
+                    }
+                },
+            )
+        }
+
+        Ok(())
+    }
+
+    fn auto_save(
+        mut editor: Editor,
+        terminal: &mut ratatui::DefaultTerminal,
+        max_wait: Duration,
+    ) -> std::io::Result<()> {
+        while editor.has_open_buffers() {
+            let area = editor.display(terminal)?;
+            loop {
+                match poll(max_wait)? {
+                    true => match read()? {
+                        Event::Mouse(MouseEvent {
+                            kind: MouseEventKind::Moved | MouseEventKind::Up(_),
+                            ..
+                        }) => { /* ignore mouse movement events */ }
+                        event => break editor.process_event(area, event),
+                    },
+                    false => {
+                        if editor.auto_save() {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 
     match std::env::var("VLE_AUTO_SAVE")
         .ok()
@@ -250,45 +298,7 @@ fn execute_editor(
         .map(Duration::from_secs)
         .filter(|d| *d > Duration::ZERO)
     {
-        None => {
-            while editor.has_open_buffers() {
-                let area = editor.display(terminal)?;
-                editor.process_event(
-                    area,
-                    loop {
-                        match read()? {
-                            Event::Mouse(MouseEvent {
-                                kind: MouseEventKind::Moved | MouseEventKind::Up(_),
-                                ..
-                            }) => { /* ignore mouse movement events */ }
-                            event => break event,
-                        }
-                    },
-                )
-            }
-        }
-        Some(max_wait) => {
-            while editor.has_open_buffers() {
-                let area = editor.display(terminal)?;
-                loop {
-                    match poll(max_wait)? {
-                        true => match read()? {
-                            Event::Mouse(MouseEvent {
-                                kind: MouseEventKind::Moved | MouseEventKind::Up(_),
-                                ..
-                            }) => { /* ignore mouse movement events */ }
-                            event => break editor.process_event(area, event),
-                        },
-                        false => {
-                            if editor.auto_save() {
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        None => no_auto_save(editor, terminal),
+        Some(max_wait) => auto_save(editor, terminal, max_wait),
     }
-
-    Ok(())
 }

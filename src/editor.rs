@@ -1494,7 +1494,7 @@ impl Editor {
                 let index = buffer_list.current_index();
                 let buffer_list = buffer_list
                     .buffers()
-                    .map(|b| BufferListItem::new(b))
+                    .map(BufferListItem::new)
                     .collect();
                 self.mode = EditorMode::SelectBuffer { buffer_list, index };
             }
