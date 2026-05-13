@@ -326,10 +326,21 @@ impl Remote {
         hostname: String,
         session: ssh2::Session,
     ) -> Result<Self, ssh2::Error> {
+        use std::thread::{sleep, spawn};
+        use std::time::Duration;
+
+        let sftp = Rc::new(session.sftp()?);
+
+        spawn(move || {
+            while let Ok(seconds) = session.keepalive_send() {
+                sleep(Duration::from_secs(seconds.into()));
+            }
+        });
+
         Ok(Self {
             username,
             hostname,
-            sftp: Rc::new(session.sftp()?),
+            sftp,
         })
     }
 
@@ -1492,10 +1503,7 @@ impl Editor {
             key!(CONTROL, '5') => {
                 let buffer_list = self.layout.selected_buffer_list();
                 let index = buffer_list.current_index();
-                let buffer_list = buffer_list
-                    .buffers()
-                    .map(BufferListItem::new)
-                    .collect();
+                let buffer_list = buffer_list.buffers().map(BufferListItem::new).collect();
                 self.mode = EditorMode::SelectBuffer { buffer_list, index };
             }
             Event::Mouse(MouseEvent {
