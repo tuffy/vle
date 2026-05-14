@@ -9,6 +9,7 @@
 use crate::editor::{EditorMode, MultiCursorMode, MultiCursors, Search, SearchMode};
 use crate::endings::LineEndings;
 use crate::syntax::Highlighter;
+use radix_trie::Trie;
 use ratatui::{
     layout::{Position, Rect},
     widgets::StatefulWidget,
@@ -4489,12 +4490,9 @@ impl BufferList {
 
     /// Returns autocomplete matches for a Find prompt
     pub fn search_autocomplete_matches(&self, prefix: String) -> Vec<String> {
-        let matches = self
-            .buffers
-            .iter()
-            .fold(radix_trie::Trie::default(), |acc, buf| {
-                accumulate_matches(acc, &buf.buffer.borrow().rope, &prefix)
-            });
+        let matches = self.buffers.iter().fold(Trie::default(), |acc, buf| {
+            accumulate_matches(acc, &buf.buffer.borrow().rope, &prefix)
+        });
 
         finalize_matches(matches, prefix)
     }
@@ -4590,14 +4588,12 @@ impl BufferList {
         let prefix = prefix?;
 
         // calculate best matches for prefix across all buffers
-        let matches = cursors
-            .keys()
-            .fold(radix_trie::Trie::default(), |acc, buf_idx| {
-                match self.buffers.get(*buf_idx) {
-                    Some(buf) => accumulate_matches(acc, &buf.buffer.borrow().rope, &prefix),
-                    None => acc,
-                }
-            });
+        let matches = cursors.keys().fold(Trie::default(), |acc, buf_idx| {
+            match self.buffers.get(*buf_idx) {
+                Some(buf) => accumulate_matches(acc, &buf.buffer.borrow().rope, &prefix),
+                None => acc,
+            }
+        });
 
         Some((offsets, finalize_matches(matches, prefix)))
     }
@@ -6894,10 +6890,10 @@ fn try_select_inside(
 }
 
 fn accumulate_matches(
-    mut acc: radix_trie::Trie<String, u64>,
+    mut acc: Trie<String, u64>,
     rope: &ropey::Rope,
     prefix: &str,
-) -> radix_trie::Trie<String, u64> {
+) -> Trie<String, u64> {
     for line in rope.lines() {
         let line = Cow::from(line);
         for word in line.split(|c| !is_word_part(c)).filter(|s| !s.is_empty()) {
@@ -6910,7 +6906,7 @@ fn accumulate_matches(
     acc
 }
 
-fn finalize_matches(counts: radix_trie::Trie<String, u64>, prefix: String) -> Vec<String> {
+fn finalize_matches(counts: Trie<String, u64>, prefix: String) -> Vec<String> {
     use radix_trie::TrieCommon;
 
     let mut counts = counts
@@ -6926,7 +6922,7 @@ fn finalize_matches(counts: radix_trie::Trie<String, u64>, prefix: String) -> Ve
 }
 
 fn autocomplete_matches(rope: &ropey::Rope, prefix: String) -> Vec<String> {
-    let matches = accumulate_matches(radix_trie::Trie::default(), rope, &prefix);
+    let matches = accumulate_matches(Trie::default(), rope, &prefix);
     finalize_matches(matches, prefix)
 }
 
