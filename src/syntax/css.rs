@@ -43,7 +43,7 @@ impl TryFrom<CssToken> for Highlight {
 
     fn try_from(t: CssToken) -> Result<Highlight, ()> {
         match t {
-            CssToken::Property => Ok(Color::LightYellow.into()),
+            CssToken::Property => Ok(Color::Blue.into()),
             CssToken::StartComment | CssToken::EndComment => Ok(color::COMMENT),
             CssToken::Syntax => Ok(Color::Green.into()),
             CssToken::Class => Ok(Color::Red.into()),
