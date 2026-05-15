@@ -351,7 +351,7 @@ mod private {
 
         /// If we're updating the buffer, log its old state on the undo stack
         pub fn borrow_update(
-            &mut self,
+            &self,
             main: MainCursor<'_>,
             alt: &mut [AltCursor<'_>],
         ) -> RefMut<'_, Buffer> {
@@ -1185,7 +1185,7 @@ impl BufferContext {
     }
 
     pub fn last_line(&self) -> usize {
-        self.buffer.borrow_mut().rope.len_lines().saturating_sub(1)
+        self.buffer.borrow().rope.len_lines().saturating_sub(1)
     }
 
     pub fn select_line(&mut self, line: usize) {
