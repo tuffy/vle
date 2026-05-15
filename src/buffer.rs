@@ -4679,12 +4679,12 @@ impl StatefulWidget for BufferWidget<'_> {
         use std::ops::RangeInclusive;
 
         const EDITING: Style = Style::new().add_modifier(Modifier::REVERSED);
-        const MATCHING: Color = Color::Yellow;
+        const MATCHING: Color = Color::LightYellow;
         const MISMATCH: Color = Color::Red;
         const BOOKMARK: Color = Color::Cyan;
-        const HIGHLIGHTED: Style = Style::new().bg(Color::Yellow).fg(Color::Black);
+        const HIGHLIGHTED: Style = Style::new().bg(Color::LightYellow).fg(Color::Black);
         const HIGHLIGHT_MATCH: Style = underline_color(Color::Blue)
-            .bg(Color::Yellow)
+            .bg(Color::LightYellow)
             .fg(Color::Black);
 
         fn sub_match_ranges(matches: &[MultiCursor]) -> VecDeque<Range<usize>> {
@@ -5591,7 +5591,7 @@ impl StatefulWidget for BufferWidget<'_> {
         match self.mode {
             Some(EditorMode::SelectLine { .. }) => {
                 if let Some(mark) = marks.get_mut(&state.cursor) {
-                    *mark = Color::Yellow;
+                    *mark = Color::LightYellow;
                 }
             }
             _ => {

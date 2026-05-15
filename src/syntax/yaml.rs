@@ -50,7 +50,7 @@ impl TryFrom<YamlToken> for Highlight {
     fn try_from(t: YamlToken) -> Result<Highlight, ()> {
         match t {
             YamlToken::Comment => Ok(color::COMMENT),
-            YamlToken::Symbol => Ok(Color::Yellow.into()),
+            YamlToken::Symbol => Ok(Color::LightYellow.into()),
             YamlToken::String => Ok(color::STRING),
             YamlToken::Name => Ok(Color::Magenta.into()),
             YamlToken::Number => Ok(color::NUMBER),
