@@ -2789,6 +2789,11 @@ impl BufferContext {
     pub fn previous_bookmark(&mut self) {
         self.goto_bookmark(false);
     }
+
+    /// Buffer's total bookmark count
+    pub fn bookmarks(&self) -> usize {
+        self.buffer.borrow().bookmarks.len()
+    }
 }
 
 impl std::fmt::Display for BufferContext {
@@ -6454,6 +6459,11 @@ impl StatefulWidget for BufferWidget<'_> {
             }
             Some(EditorMode::Open { .. }) => { /* already handled, above */ }
             Some(EditorMode::SelectBuffer { buffer_list, index }) => {
+                use ratatui::{
+                    layout::Constraint,
+                    widgets::{Cell, Row},
+                };
+
                 fn shortcut_letters() -> impl Iterator<Item = char> {
                     ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
                         .into_iter()
@@ -6462,34 +6472,65 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
 
                 let selected_buf = state.id();
-                let mut width = 0;
-                let list = ratatui::widgets::List::new(
-                    buffer_list
-                        .iter()
-                        .map(|bid| (bid.to_string(), bid.buffer == selected_buf))
-                        .inspect(|(s, _)| {
-                            use unicode_width::UnicodeWidthStr;
+                let mut max_name = 0; // width of longest buffer name, in columns
+                let mut max_bookmarks = 0; // maximum number of bookmarks
+                let rows = shortcut_letters()
+                    .zip(
+                        buffer_list
+                            .iter()
+                            .map(|bid| {
+                                (
+                                    bid.to_string(),
+                                    bid.bookmarks,
+                                    bid.modified,
+                                    bid.buffer == selected_buf,
+                                )
+                            })
+                            .inspect(|(s, bookmarks, _, _)| {
+                                use unicode_width::UnicodeWidthStr;
 
-                            width = width.max(match u16::try_from(s.width()) {
-                                Ok(w) => w.saturating_add(4),
-                                Err(_) => u16::MAX,
-                            });
-                        })
-                        .zip(shortcut_letters())
-                        .map(|((s, selected), c)| {
-                            Line::from_iter([
-                                Span::styled(c.to_string(), Style::new().reversed()),
-                                Span::raw(" : "),
-                                if selected {
-                                    Span::styled(s, Style::new().underlined())
-                                } else {
-                                    Span::raw(s)
-                                },
-                            ])
-                        }),
+                                max_name = max_name.max(s.width());
+                                max_bookmarks = max_bookmarks.max(*bookmarks)
+                            }),
+                    )
+                    .map(|(c, (s, bookmarks, modified, selected))| {
+                        Row::new([
+                            Cell::new(c.to_string()).style(Style::new().reversed()),
+                            Cell::new(if modified { "*" } else { " " }),
+                            Cell::new(s).style(if selected {
+                                Style::new().underlined()
+                            } else {
+                                Style::new()
+                            }),
+                            if bookmarks == 0 {
+                                Cell::new("")
+                            } else {
+                                Cell::new(bookmarks.to_string())
+                                    .style(Style::new().bg(BOOKMARK).fg(Color::Black))
+                            },
+                        ])
+                    })
+                    .collect::<Vec<_>>();
+
+                let table_rows = rows.len();
+                let column_widths = [
+                    1,
+                    1,
+                    max_name as u16,
+                    max_bookmarks.checked_ilog10().map(|i| i + 1).unwrap_or(0) as u16,
+                ];
+                let table_width = column_widths.iter().sum::<u16>() + 3;
+                let table = ratatui::widgets::Table::new(rows, column_widths.map(Constraint::Max));
+                let mut state = ratatui::widgets::TableState::default().with_selected(Some(*index));
+
+                render_list(
+                    text_area,
+                    buf,
+                    table,
+                    &mut state,
+                    table_rows as u16,
+                    table_width,
                 );
-                let mut state = ratatui::widgets::ListState::default().with_selected(Some(*index));
-                render_list(text_area, buf, list, &mut state, width);
                 show_sub_help(text_area, buf, SELECT_BUFFER);
             }
         }
@@ -6561,8 +6602,9 @@ fn render_pane_index(area: Rect, buf: &mut ratatui::buffer::Buffer, index: char)
 pub fn render_list(
     area: Rect,
     buf: &mut ratatui::buffer::Buffer,
-    list: ratatui::widgets::List,
-    state: &mut ratatui::widgets::ListState,
+    table: ratatui::widgets::Table,
+    state: &mut ratatui::widgets::TableState,
+    rows: u16,
     width: u16,
 ) {
     use ratatui::{
@@ -6577,11 +6619,11 @@ pub fn render_list(
 
     let [_, dialog_area, _] = Layout::horizontal([Min(0), Length(width + 2), Min(0)]).areas(area);
     let [_, dialog_area, _] =
-        Layout::vertical([Min(0), Length(list.len() as u16 + 2), Min(0)]).areas(dialog_area);
+        Layout::vertical([Min(0), Length(rows + 2), Min(0)]).areas(dialog_area);
 
     Clear.render(dialog_area, buf);
     StatefulWidget::render(
-        list.highlight_style(Style::new().reversed()).block(
+        table.row_highlight_style(Style::new().reversed()).block(
             Block::bordered()
                 .border_type(BorderType::Rounded)
                 .title_top(Line::from("Buffer").centered()),

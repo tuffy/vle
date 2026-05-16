@@ -143,7 +143,8 @@ pub enum SearchMode {
 
 pub struct BufferListItem {
     pub buffer: BufferId,
-    modified: bool,
+    pub modified: bool,
+    pub bookmarks: usize,
 }
 
 impl BufferListItem {
@@ -151,17 +152,14 @@ impl BufferListItem {
         Self {
             modified: buffer.modified(),
             buffer: buffer.id(),
+            bookmarks: buffer.bookmarks(),
         }
     }
 }
 
 impl std::fmt::Display for BufferListItem {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if self.modified {
-            write!(f, "{} *", self.buffer)
-        } else {
-            self.buffer.fmt(f)
-        }
+        self.buffer.fmt(f)
     }
 }
 
@@ -4278,31 +4276,7 @@ impl Layout {
                         y: text_area.y + y,
                     })
                 }
-                Some(EditorMode::SelectBuffer { buffer_list, index }) => {
-                    use unicode_width::UnicodeWidthStr;
-
-                    let width = buffer_list
-                        .iter()
-                        .map(|bid| match u16::try_from(bid.to_string().width()) {
-                            Ok(w) => w.saturating_add(4),
-                            Err(_) => u16::MAX,
-                        })
-                        .max();
-
-                    let [_, dialog_area, _] =
-                        Layout::horizontal([Min(0), Length(width? + 2), Min(0)]).areas(text_area);
-                    let [_, dialog_area, _] =
-                        Layout::vertical([Min(0), Length(buffer_list.len() as u16 + 2), Min(0)])
-                            .areas(dialog_area);
-
-                    Some(Position {
-                        x: dialog_area.x + 1,
-                        y: dialog_area.y
-                            + ((*index).min(usize::from(dialog_area.height).saturating_sub(3))
-                                as u16)
-                            + 1,
-                    })
-                }
+                Some(EditorMode::SelectBuffer { .. }) => None,
                 _ => {
                     let x = (col + usize::from(text_area.x)).min(
                         (text_area.x
