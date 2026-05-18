@@ -1150,7 +1150,6 @@ impl Editor {
                                     self.layout.remove(buf.id());
                                 }
                             }
-                            self.mode = EditorMode::default();
                         }
                         Some(SelectBuffer::FindAll) => {
                             self.mode = EditorMode::SearchAll {
