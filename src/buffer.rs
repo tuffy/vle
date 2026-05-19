@@ -5587,16 +5587,11 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
-        // don't apply a mark to our cursor's position most of the time
-        match self.mode {
-            Some(EditorMode::SelectLine { .. }) => {
-                if let Some(mark) = marks.get_mut(&state.cursor) {
-                    *mark = Color::LightYellow;
-                }
-            }
-            _ => {
-                marks.remove(&state.cursor);
-            }
+        // re-color current mark in yellow when cycling bookmarks
+        if let Some(EditorMode::SelectLine { .. }) = self.mode
+            && let Some(mark) = marks.get_mut(&state.cursor)
+        {
+            *mark = Color::LightYellow;
         }
 
         let mut marks = marks.into_iter().collect();
