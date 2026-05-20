@@ -6040,8 +6040,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                         (completion_start, completion_end),
                                         |span| span.patch_style(underline_color(Color::Red)),
                                     );
-                                    let widened = widen(selection);
-                                    let parens = highlight_parens(widened, range, &mut marks);
+                                    let parens = highlight_parens(selection, range, &mut marks);
                                     Vec::from(parens).into()
                                 },
                             )
@@ -6065,8 +6064,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                             line,
                                             current_line == Some(number),
                                         );
-                                        let widened = widen(colorized);
-                                        let parens = highlight_parens(widened, range, &mut marks);
+                                        let parens = highlight_parens(colorized, range, &mut marks);
                                         Vec::from(parens).into()
                                     },
                                 )
@@ -6092,10 +6090,8 @@ impl StatefulWidget for BufferWidget<'_> {
                                                 current_line == Some(number),
                                             );
 
-                                            let widened = widen(colorized);
-
                                             let parens = highlight_parens(
-                                                widened,
+                                                colorized,
                                                 range.clone(),
                                                 &mut marks,
                                             );
