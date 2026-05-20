@@ -6091,16 +6091,23 @@ impl StatefulWidget for BufferWidget<'_> {
                                                 line,
                                                 current_line == Some(number),
                                             );
-                                            let selection = highlight_selection(
-                                                colorized,
+
+                                            let widened = widen(colorized);
+
+                                            let parens = highlight_parens(
+                                                widened,
                                                 range.clone(),
+                                                &mut marks,
+                                            );
+
+                                            let selection = highlight_selection(
+                                                parens,
+                                                range,
                                                 (selection_start, selection_end),
                                                 |span| span.style(EDITING),
                                             );
-                                            let widened = widen(selection);
-                                            let parens =
-                                                highlight_parens(widened, range, &mut marks);
-                                            Vec::from(parens).into()
+
+                                            Vec::from(selection).into()
                                         },
                                     )
                                     .map(|line| widen_tabs(line))
