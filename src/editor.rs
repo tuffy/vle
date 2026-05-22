@@ -2587,19 +2587,12 @@ fn process_multi_cursor(
                             .as_str(),
                     ),
                 }
-            }
-            match copied.len() {
-                0 => { /* do nothing */ }
-                1 => {
-                    buffer.set_message("Copied 1 Item");
-                    *highlight = false;
-                    *cut_buffer = Some(EditorCutBuffer::Multiple(copied));
-                }
-                n => {
-                    buffer.set_message(format!("Copied {n} Items"));
-                    *highlight = false;
-                    *cut_buffer = Some(EditorCutBuffer::Multiple(copied));
-                }
+                buffer.set_message(match copied.len() {
+                    1 => std::borrow::Cow::from("Copied 1 Item"),
+                    n => std::borrow::Cow::from(format!("Copied {n} Items")),
+                });
+                *highlight = false;
+                *cut_buffer = Some(EditorCutBuffer::Multiple(copied));
             }
             None
         }
@@ -2615,19 +2608,12 @@ fn process_multi_cursor(
                             .as_str(),
                     ),
                 }
-            }
-            match cut.len() {
-                0 => { /* do nothing */ }
-                1 => {
-                    buffer.set_message("Cut 1 Item");
-                    *highlight = false;
-                    *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
-                }
-                n => {
-                    buffer.set_message(format!("Cut {n} Items"));
-                    *highlight = false;
-                    *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
-                }
+                buffer.set_message(match cut.len() {
+                    1 => std::borrow::Cow::from("Cut 1 Item"),
+                    n => std::borrow::Cow::from(format!("Cut {n} Items")),
+                });
+                *highlight = false;
+                *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
             }
             None
         }
