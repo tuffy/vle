@@ -29,7 +29,7 @@ underline-color = []
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
-crossterm = "0.29"
+crossterm = { version = "0.29", features = ["osc52"]}
 imara-diff = "0.2"
 logos = "0.16"
 ratatui = { version = "0.30", features = ["underline-color"] }

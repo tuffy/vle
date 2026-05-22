@@ -547,12 +547,14 @@ impl Editor {
 
     fn perform_cut(&mut self) {
         if let Some(Some(selection)) = self.layout.on_current_at(|b, a| b.take_selection(a)) {
+            copy_to_system_clipboard(selection.as_str());
             self.cut_buffer = Some(EditorCutBuffer::Single(selection));
         }
     }
 
     fn perform_copy(&mut self) {
         if let Some(Some(selection)) = self.layout.on_current(|b| b.get_selection()) {
+            copy_to_system_clipboard(selection.as_str());
             self.cut_buffer = Some(EditorCutBuffer::Single(selection));
         }
     }
@@ -2573,24 +2575,47 @@ fn process_multi_cursor(
             }
         },
         ctrl_keybind!(Copy) => {
-            let cut = buffer.multi_cursor_copy(matches);
-            match cut.len() {
+            let copied = buffer.multi_cursor_copy(matches);
+            if !copied.is_empty() {
+                match same(copied.iter().map(|b| b.as_str())) {
+                    Some(copied) => copy_to_system_clipboard(copied),
+                    None => copy_to_system_clipboard(
+                        copied
+                            .iter()
+                            .map(|b| b.as_str().to_string() + "\n")
+                            .collect::<String>()
+                            .as_str(),
+                    ),
+                }
+            }
+            match copied.len() {
                 0 => { /* do nothing */ }
                 1 => {
                     buffer.set_message("Copied 1 Item");
                     *highlight = false;
-                    *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
+                    *cut_buffer = Some(EditorCutBuffer::Multiple(copied));
                 }
                 n => {
                     buffer.set_message(format!("Copied {n} Items"));
                     *highlight = false;
-                    *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
+                    *cut_buffer = Some(EditorCutBuffer::Multiple(copied));
                 }
             }
             None
         }
         ctrl_keybind!(Cut) => {
             let cut = buffer.multi_cursor_cut(alt, matches);
+            if !cut.is_empty() {
+                match same(cut.iter().map(|b| b.as_str())) {
+                    Some(cut) => copy_to_system_clipboard(cut),
+                    None => copy_to_system_clipboard(
+                        cut.iter()
+                            .map(|b| b.as_str().to_string() + "\n")
+                            .collect::<String>()
+                            .as_str(),
+                    ),
+                }
+            }
             match cut.len() {
                 0 => { /* do nothing */ }
                 1 => {
@@ -4914,4 +4939,22 @@ fn concat_vec<T>(mut a: Vec<T>, b: Vec<T>) -> Vec<T> {
         a.extend(b);
         a
     }
+}
+
+fn copy_to_system_clipboard(selection: &str) {
+    use crossterm::{clipboard::CopyToClipboard, execute};
+
+    // ok if copying to system clipboard unsuccessful
+    let _ = execute!(
+        std::io::stdout(),
+        CopyToClipboard::to_clipboard_from(selection)
+    );
+}
+
+/// If all items are identical, returns first item
+/// otherwise returns None
+fn same<T: Eq>(iter: impl IntoIterator<Item = T>) -> Option<T> {
+    let mut iter = iter.into_iter();
+    let first = iter.next()?;
+    iter.all(|i| i == first).then_some(first)
 }
