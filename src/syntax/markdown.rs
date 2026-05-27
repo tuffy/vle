@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// use crate::highlighter;
 use crate::syntax::{Highlight, Highlighter};
 use logos::Logos;
 use ratatui::style::Color;

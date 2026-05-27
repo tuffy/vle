@@ -18,6 +18,7 @@ mod cue;
 mod fish;
 mod flac;
 mod go;
+mod git;
 mod html;
 mod ini;
 mod java;
@@ -286,6 +287,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         None => match source.file_name() {
             Some(file_name) => match file_name.as_ref() {
                 "Makefile" | "makefile" => Box::new(makefile::Makefile),
+                "COMMIT_EDITMSG" => Box::new(git::Git),
                 _ => Box::new(DefaultHighlighter),
             },
             None => Box::new(DefaultHighlighter),
