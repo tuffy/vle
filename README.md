@@ -74,7 +74,7 @@ certain choices are more optimal than others.
   for its own functions. Alternatives are to use the <kbd>F</kbd> keybindings
   for our own purposes, use <kbd>Ctrl</kbd>-<kbd>G</kbd> to lock the editor's pane
   and make all the <kbd>Ctrl</kbd> keybindings available, or to update
-  Zellij's configuration and rebind keys as needed.
+  ZelliJ's configuration and rebind keys as needed.
 
 - [tmux](https://github.com/tmux/tmux/wiki)
 

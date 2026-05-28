@@ -531,6 +531,11 @@ mod private {
     // will appear to "drift" because the text it had been pointing
     // to is shifted ahead while its position remains fixed.
     //
+    // ┌─────────────────┐   ┌──────────────────┐
+    // │ BufferContext A │   │ BufferContext B  │
+    // │ cursor = 200    │   │ cursor = 100     │ += 1
+    // └─────────────────┘   └──────────────────┘
+    //
     // By providing a reference from BufferContext A to BufferContext B
     // and updating their cursor positions simultaneously
     // (so long as A's cursor is ahead of B's)
