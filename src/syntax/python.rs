@@ -42,6 +42,8 @@ enum PythonToken {
     #[token("finally")]
     #[token("for")]
     #[token("if")]
+    #[token("match")]
+    #[token("case")]
     #[token("pass")]
     #[token("try")]
     #[token("raise")]
