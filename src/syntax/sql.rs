@@ -18,6 +18,7 @@ enum SqlToken {
     #[token("ALL")]
     #[token("ALTER")]
     #[token("COLUMN")]
+    #[token("COMMIT")]
     #[token("TABLE")]
     #[token("AND")]
     #[token("ANY")]
