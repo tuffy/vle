@@ -23,6 +23,8 @@ enum XmlToken {
     TagEnd,
     #[regex("[[:alpha:]][[:alpha:][:digit:]_]*=")]
     FieldName,
+    #[regex("&[^;[:space:]]*;")]
+    CharRef,
     #[regex(r#"\"[^\"]*\""#)]
     String,
     #[token("<!--")]
@@ -37,6 +39,7 @@ impl TryFrom<XmlToken> for Highlight {
     fn try_from(t: XmlToken) -> Result<Highlight, ()> {
         match t {
             XmlToken::TagStart | XmlToken::TagEnd => Ok(Color::Cyan.into()),
+            XmlToken::CharRef => Ok(Color::Red.into()),
             XmlToken::FieldName => Ok(Color::Blue.into()),
             XmlToken::String => Ok(color::STRING),
             XmlToken::StartComment | XmlToken::EndComment => Ok(color::COMMENT),
