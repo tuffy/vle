@@ -54,7 +54,7 @@ impl ScrollbarState {
             // convert u to subpixels (8 subpixels per pixel)
             u *= (track_height as f64) * 8.0;
             // convert to a subpixels struct
-            (u.round() as u32).into()
+            Subpixel::subpixels(u.round() as u32)
         }
     }
 }
@@ -74,7 +74,7 @@ impl StatefulWidget for Scrollbar {
 
         // determining max thumb position also checks whether
         // the track area is at least 1 pixel high
-        let Some(max_thumb) = track.height.checked_sub(1).map(Subpixel::from) else {
+        let Some(max_thumb) = track.height.checked_sub(1).map(Subpixel::pixels) else {
             return;
         };
 
@@ -84,7 +84,7 @@ impl StatefulWidget for Scrollbar {
         // and to be at least 1 full pixel tall
         let thumb = Range::from(Thumb {
             start: thumb.start.min(max_thumb),
-            length: thumb.length.max(1u16.into()),
+            length: thumb.length.max(Subpixel::pixels(1)),
         });
 
         // paint start of the thumb in subpixels
@@ -135,23 +135,15 @@ struct Subpixel {
     subpixel: u16,
 }
 
-/// Given total subpixels, returns Subpixel struct
-/// (This should probably be a TryFrom)
-impl From<u32> for Subpixel {
-    fn from(total_subpixels: u32) -> Self {
-        Self {
-            pixel: (total_subpixels / 8) as u16,
-            subpixel: (total_subpixels % 8) as u16,
-        }
+impl Subpixel {
+    fn pixels(pixel: u16) -> Self {
+        Self { pixel, subpixel: 0 }
     }
-}
 
-/// Given total pixels, returns Subpixel struct
-impl From<u16> for Subpixel {
-    fn from(pixels: u16) -> Self {
+    fn subpixels(subpixels: u32) -> Self {
         Self {
-            pixel: pixels,
-            subpixel: 0,
+            pixel: (subpixels / 8) as u16,
+            subpixel: (subpixels % 8) as u16,
         }
     }
 }
