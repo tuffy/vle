@@ -4744,7 +4744,6 @@ impl StatefulWidget for BufferWidget<'_> {
                 ColorizedLine {
                     spans: colorize(syntax, state, self.line, current_line == Some(self.number)),
                     range: self.range,
-                    number: self.number,
                 }
             }
         }
@@ -4752,7 +4751,6 @@ impl StatefulWidget for BufferWidget<'_> {
         struct ColorizedLine<'s> {
             spans: VecDeque<Span<'s>>,
             range: RangeInclusive<usize>,
-            number: usize,
         }
 
         impl<'s> ColorizedLine<'s> {
@@ -4760,7 +4758,6 @@ impl StatefulWidget for BufferWidget<'_> {
                 Self {
                     spans: widen(self.spans),
                     range: self.range,
-                    number: self.number,
                 }
             }
 
@@ -4772,7 +4769,6 @@ impl StatefulWidget for BufferWidget<'_> {
                 Self {
                     spans: highlight_matches(self.spans, self.range.clone(), matches, apply),
                     range: self.range,
-                    number: self.number,
                 }
             }
 
@@ -4784,7 +4780,6 @@ impl StatefulWidget for BufferWidget<'_> {
                 Self {
                     spans: highlight_selection(self.spans, self.range.clone(), selection, apply),
                     range: self.range,
-                    number: self.number,
                 }
             }
 
@@ -4792,7 +4787,6 @@ impl StatefulWidget for BufferWidget<'_> {
                 Self {
                     spans: highlight_parens(self.spans, self.range.clone(), parens),
                     range: self.range,
-                    number: self.number,
                 }
             }
         }
