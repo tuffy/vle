@@ -4726,6 +4726,81 @@ impl StatefulWidget for BufferWidget<'_> {
                     })
                 })
             }
+
+            fn widen_range(self) -> Self {
+                Self {
+                    line: self.line,
+                    range: widen_range(self.range),
+                    number: self.number,
+                }
+            }
+
+            fn colorize<S: Highlighter>(
+                self,
+                syntax: &S,
+                state: &mut HighlightState,
+                current_line: Option<usize>,
+            ) -> ColorizedLine<'s> {
+                ColorizedLine {
+                    spans: colorize(syntax, state, self.line, current_line == Some(self.number)),
+                    range: self.range,
+                    number: self.number,
+                }
+            }
+        }
+
+        struct ColorizedLine<'s> {
+            spans: VecDeque<Span<'s>>,
+            range: RangeInclusive<usize>,
+            number: usize,
+        }
+
+        impl<'s> ColorizedLine<'s> {
+            fn widen(self) -> Self {
+                Self {
+                    spans: widen(self.spans),
+                    range: self.range,
+                    number: self.number,
+                }
+            }
+
+            fn highlight_matches(
+                self,
+                matches: &mut VecDeque<Range<usize>>,
+                apply: impl Fn(Span<'s>) -> Span<'s> + Copy,
+            ) -> Self {
+                Self {
+                    spans: highlight_matches(self.spans, self.range.clone(), matches, apply),
+                    range: self.range,
+                    number: self.number,
+                }
+            }
+
+            fn highlight_selection(
+                self,
+                selection: (usize, usize),
+                apply: impl Fn(Span<'s>) -> Span<'s> + Copy,
+            ) -> Self {
+                Self {
+                    spans: highlight_selection(self.spans, self.range.clone(), selection, apply),
+                    range: self.range,
+                    number: self.number,
+                }
+            }
+
+            fn highlight_parens(self, parens: &mut VecDeque<(usize, Color)>) -> Self {
+                Self {
+                    spans: highlight_parens(self.spans, self.range.clone(), parens),
+                    range: self.range,
+                    number: self.number,
+                }
+            }
+        }
+
+        impl<'s> From<ColorizedLine<'s>> for Line<'s> {
+            fn from(line: ColorizedLine<'s>) -> Self {
+                Line::from(Vec::from(line.spans))
+            }
         }
 
         fn widen_tabs<'l>(mut input: Line<'l>) -> Line<'l> {
@@ -5628,33 +5703,14 @@ impl StatefulWidget for BufferWidget<'_> {
                         let mut matches = sub_match_ranges(matches);
 
                         EditorLine::iter(rope, viewport_line)
-                            .map(
-                                |EditorLine {
-                                     line,
-                                     range,
-                                     number,
-                                 }| {
-                                    let colorized = colorize(
-                                        syntax,
-                                        &mut hlstate,
-                                        line,
-                                        current_line == Some(number),
-                                    );
-                                    let matches = highlight_matches(
-                                        colorized,
-                                        range.clone(),
-                                        &mut matches,
-                                        |span| span.style(HIGHLIGHTED),
-                                    );
-                                    let selection = highlight_selection(
-                                        matches,
-                                        range.clone(),
-                                        (selection_start, selection_end),
-                                        |span| span.style(HIGHLIGHT_MATCH),
-                                    );
-                                    Vec::from(selection).into()
-                                },
-                            )
+                            .map(|line| {
+                                line.colorize(syntax, &mut hlstate, current_line)
+                                    .highlight_matches(&mut matches, |span| span.style(HIGHLIGHTED))
+                                    .highlight_selection((selection_start, selection_end), |span| {
+                                        span.style(HIGHLIGHT_MATCH)
+                                    })
+                                    .into()
+                            })
                             .map(|line| widen_tabs(line))
                             .take(area.height.into())
                             .collect()
@@ -5689,47 +5745,23 @@ impl StatefulWidget for BufferWidget<'_> {
                         let mut selections = selections.into();
 
                         EditorLine::iter(rope, viewport_line)
-                            .map(
-                                |EditorLine {
-                                     line,
-                                     range,
-                                     number,
-                                 }| {
-                                    let whole_range = widen_range(range);
-                                    let colorized = colorize(
-                                        syntax,
-                                        &mut hlstate,
-                                        line,
-                                        current_line == Some(number),
-                                    );
-                                    let widened = widen(colorized);
-                                    let underlined = highlight_matches(
-                                        widened,
-                                        whole_range.clone(),
-                                        &mut ranges,
-                                        |span| span.patch_style(underline_color(Color::Blue)),
-                                    );
-                                    let selections = highlight_matches(
-                                        underlined,
-                                        whole_range.clone(),
-                                        &mut selections,
-                                        |span| span.style(EDITING),
-                                    );
-                                    let cursors = highlight_matches(
-                                        selections,
-                                        whole_range,
-                                        &mut cursors,
-                                        |span| {
-                                            span.style(
-                                                Style::new()
-                                                    .fg(Color::Blue)
-                                                    .add_modifier(Modifier::REVERSED),
-                                            )
-                                        },
-                                    );
-                                    Vec::from(cursors).into()
-                                },
-                            )
+                            .map(|line| {
+                                line.widen_range()
+                                    .colorize(syntax, &mut hlstate, current_line)
+                                    .widen()
+                                    .highlight_matches(&mut ranges, |span| {
+                                        span.patch_style(underline_color(Color::Blue))
+                                    })
+                                    .highlight_matches(&mut selections, |span| span.style(EDITING))
+                                    .highlight_matches(&mut cursors, |span| {
+                                        span.style(
+                                            Style::new()
+                                                .fg(Color::Blue)
+                                                .add_modifier(Modifier::REVERSED),
+                                        )
+                                    })
+                                    .into()
+                            })
                             .map(|line| widen_tabs(line))
                             .take(area.height.into())
                             .collect()
@@ -5751,33 +5783,14 @@ impl StatefulWidget for BufferWidget<'_> {
                         let mut matches = sub_match_ranges(matches);
 
                         EditorLine::iter(rope, viewport_line)
-                            .map(
-                                |EditorLine {
-                                     line,
-                                     range,
-                                     number,
-                                 }| {
-                                    let colorized = colorize(
-                                        syntax,
-                                        &mut hlstate,
-                                        line,
-                                        current_line == Some(number),
-                                    );
-                                    let matches = highlight_matches(
-                                        colorized,
-                                        range.clone(),
-                                        &mut matches,
-                                        |span| span.style(HIGHLIGHTED),
-                                    );
-                                    let selection = highlight_selection(
-                                        matches,
-                                        range.clone(),
-                                        (selection_start, selection_end),
-                                        |span| span.style(HIGHLIGHT_MATCH),
-                                    );
-                                    Vec::from(selection).into()
-                                },
-                            )
+                            .map(|line| {
+                                line.colorize(syntax, &mut hlstate, current_line)
+                                    .highlight_matches(&mut matches, |span| span.style(HIGHLIGHTED))
+                                    .highlight_selection((selection_start, selection_end), |span| {
+                                        span.style(HIGHLIGHT_MATCH)
+                                    })
+                                    .into()
+                            })
                             .map(|line| widen_tabs(line))
                             .take(area.height.into())
                             .collect()
@@ -5811,48 +5824,23 @@ impl StatefulWidget for BufferWidget<'_> {
                         let mut selections = selections.into();
 
                         EditorLine::iter(rope, viewport_line)
-                            .map(
-                                |EditorLine {
-                                     line,
-                                     range,
-                                     number,
-                                 }| {
-                                    let whole_range = widen_range(range);
-
-                                    let colorized = colorize(
-                                        syntax,
-                                        &mut hlstate,
-                                        line,
-                                        current_line == Some(number),
-                                    );
-                                    let widened = widen(colorized);
-                                    let ranges = highlight_matches(
-                                        widened,
-                                        whole_range.clone(),
-                                        &mut ranges,
-                                        |span| span.patch_style(underline_color(Color::Blue)),
-                                    );
-                                    let selections = highlight_matches(
-                                        ranges,
-                                        whole_range.clone(),
-                                        &mut selections,
-                                        |span| span.style(EDITING),
-                                    );
-                                    let cursor = highlight_matches(
-                                        selections,
-                                        whole_range,
-                                        &mut cursors,
-                                        |span| {
-                                            span.style(
-                                                Style::new()
-                                                    .fg(Color::Blue)
-                                                    .add_modifier(Modifier::REVERSED),
-                                            )
-                                        },
-                                    );
-                                    Vec::from(cursor).into()
-                                },
-                            )
+                            .map(|line| {
+                                line.widen_range()
+                                    .colorize(syntax, &mut hlstate, current_line)
+                                    .widen()
+                                    .highlight_matches(&mut ranges, |span| {
+                                        span.patch_style(underline_color(Color::Blue))
+                                    })
+                                    .highlight_matches(&mut selections, |span| span.style(EDITING))
+                                    .highlight_matches(&mut cursors, |span| {
+                                        span.style(
+                                            Style::new()
+                                                .fg(Color::Blue)
+                                                .add_modifier(Modifier::REVERSED),
+                                        )
+                                    })
+                                    .into()
+                            })
                             .map(|line| widen_tabs(line))
                             .take(area.height.into())
                             .collect()
@@ -5891,48 +5879,25 @@ impl StatefulWidget for BufferWidget<'_> {
                         cursors.retain(|r| r.start != state.cursor);
 
                         EditorLine::iter(rope, viewport_line)
-                            .map(
-                                |EditorLine {
-                                     line,
-                                     range,
-                                     number,
-                                 }| {
-                                    let whole_range = widen_range(range);
-
-                                    let colorized = colorize(
-                                        syntax,
-                                        &mut hlstate,
-                                        line,
-                                        current_line == Some(number),
-                                    );
-                                    let widened = widen(colorized);
-                                    let ranges = highlight_matches(
-                                        widened,
-                                        whole_range.clone(),
-                                        &mut ranges,
-                                        |span| span.patch_style(underline_color(Color::Blue)),
-                                    );
-                                    let replacements = highlight_matches(
-                                        ranges,
-                                        whole_range.clone(),
-                                        &mut replacements,
-                                        |span| span.patch_style(underline_color(Color::Red)),
-                                    );
-                                    let cursors = highlight_matches(
-                                        replacements,
-                                        whole_range,
-                                        &mut cursors,
-                                        |span| {
-                                            span.style(
-                                                Style::new()
-                                                    .fg(Color::Blue)
-                                                    .add_modifier(Modifier::REVERSED),
-                                            )
-                                        },
-                                    );
-                                    Vec::from(cursors).into()
-                                },
-                            )
+                            .map(|line| {
+                                line.widen_range()
+                                    .colorize(syntax, &mut hlstate, current_line)
+                                    .widen()
+                                    .highlight_matches(&mut ranges, |span| {
+                                        span.patch_style(underline_color(Color::Blue))
+                                    })
+                                    .highlight_matches(&mut replacements, |span| {
+                                        span.patch_style(underline_color(Color::Red))
+                                    })
+                                    .highlight_matches(&mut cursors, |span| {
+                                        span.style(
+                                            Style::new()
+                                                .fg(Color::Blue)
+                                                .add_modifier(Modifier::REVERSED),
+                                        )
+                                    })
+                                    .into()
+                            })
                             .map(|line| widen_tabs(line))
                             .take(area.height.into())
                             .collect()
@@ -5972,48 +5937,25 @@ impl StatefulWidget for BufferWidget<'_> {
                         cursors.retain(|r| r.start != state.cursor);
 
                         EditorLine::iter(rope, viewport_line)
-                            .map(
-                                |EditorLine {
-                                     line,
-                                     range,
-                                     number,
-                                 }| {
-                                    let whole_range = widen_range(range);
-
-                                    let colorized = colorize(
-                                        syntax,
-                                        &mut hlstate,
-                                        line,
-                                        current_line == Some(number),
-                                    );
-                                    let widened = widen(colorized);
-                                    let ranges = highlight_matches(
-                                        widened,
-                                        whole_range.clone(),
-                                        &mut ranges,
-                                        |span| span.patch_style(underline_color(Color::Blue)),
-                                    );
-                                    let replacements = highlight_matches(
-                                        ranges,
-                                        whole_range.clone(),
-                                        &mut replacements,
-                                        |span| span.patch_style(underline_color(Color::Red)),
-                                    );
-                                    let cursors = highlight_matches(
-                                        replacements,
-                                        whole_range,
-                                        &mut cursors,
-                                        |span| {
-                                            span.style(
-                                                Style::new()
-                                                    .fg(Color::Blue)
-                                                    .add_modifier(Modifier::REVERSED),
-                                            )
-                                        },
-                                    );
-                                    Vec::from(cursors).into()
-                                },
-                            )
+                            .map(|line| {
+                                line.widen_range()
+                                    .colorize(syntax, &mut hlstate, current_line)
+                                    .widen()
+                                    .highlight_matches(&mut ranges, |span| {
+                                        span.patch_style(underline_color(Color::Blue))
+                                    })
+                                    .highlight_matches(&mut replacements, |span| {
+                                        span.patch_style(underline_color(Color::Red))
+                                    })
+                                    .highlight_matches(&mut cursors, |span| {
+                                        span.style(
+                                            Style::new()
+                                                .fg(Color::Blue)
+                                                .add_modifier(Modifier::REVERSED),
+                                        )
+                                    })
+                                    .into()
+                            })
                             .map(|line| widen_tabs(line))
                             .take(area.height.into())
                             .collect()
@@ -6027,29 +5969,16 @@ impl StatefulWidget for BufferWidget<'_> {
                         let completion_end = *offset + completions[*index].chars().count();
 
                         EditorLine::iter(rope, viewport_line)
-                            .map(
-                                |EditorLine {
-                                     line,
-                                     range,
-                                     number,
-                                 }| {
-                                    let colorized = colorize(
-                                        syntax,
-                                        &mut hlstate,
-                                        line,
-                                        current_line == Some(number),
-                                    );
-                                    let selection = highlight_selection(
-                                        colorized,
-                                        range.clone(),
+                            .map(|line| {
+                                line.colorize(syntax, &mut hlstate, current_line)
+                                    .highlight_selection(
                                         (completion_start, completion_end),
                                         |span| span.patch_style(underline_color(Color::Red)),
-                                    );
-                                    let parens =
-                                        highlight_parens(widen(selection), range, &mut marks);
-                                    Vec::from(parens).into()
-                                },
-                            )
+                                    )
+                                    .widen()
+                                    .highlight_parens(&mut marks)
+                                    .into()
+                            })
                             .map(|line| widen_tabs(line))
                             .take(area.height.into())
                             .collect()
@@ -6058,23 +5987,12 @@ impl StatefulWidget for BufferWidget<'_> {
                         match state.selection {
                             // no selection, so nothing to highlight
                             None => EditorLine::iter(rope, viewport_line)
-                                .map(
-                                    |EditorLine {
-                                         line,
-                                         range,
-                                         number,
-                                     }| {
-                                        let colorized = colorize(
-                                            syntax,
-                                            &mut hlstate,
-                                            line,
-                                            current_line == Some(number),
-                                        );
-                                        let parens =
-                                            highlight_parens(widen(colorized), range, &mut marks);
-                                        Vec::from(parens).into()
-                                    },
-                                )
+                                .map(|line| {
+                                    line.colorize(syntax, &mut hlstate, current_line)
+                                        .widen()
+                                        .highlight_parens(&mut marks)
+                                        .into()
+                                })
                                 .map(|line| widen_tabs(line))
                                 .take(area.height.into())
                                 .collect(),
@@ -6084,35 +6002,16 @@ impl StatefulWidget for BufferWidget<'_> {
                                     reorder(state.cursor, selection);
 
                                 EditorLine::iter(rope, viewport_line)
-                                    .map(
-                                        |EditorLine {
-                                             line,
-                                             range,
-                                             number,
-                                         }| {
-                                            let colorized = colorize(
-                                                syntax,
-                                                &mut hlstate,
-                                                line,
-                                                current_line == Some(number),
-                                            );
-
-                                            let parens = highlight_parens(
-                                                widen(colorized),
-                                                range.clone(),
-                                                &mut marks,
-                                            );
-
-                                            let selection = highlight_selection(
-                                                parens,
-                                                range,
+                                    .map(|line| {
+                                        line.colorize(syntax, &mut hlstate, current_line)
+                                            .widen()
+                                            .highlight_parens(&mut marks)
+                                            .highlight_selection(
                                                 (selection_start, selection_end),
                                                 |span| span.style(EDITING),
-                                            );
-
-                                            Vec::from(selection).into()
-                                        },
-                                    )
+                                            )
+                                            .into()
+                                    })
                                     .map(|line| widen_tabs(line))
                                     .take(area.height.into())
                                     .collect()
