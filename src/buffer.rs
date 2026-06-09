@@ -4766,6 +4766,119 @@ impl StatefulWidget for BufferWidget<'_> {
                 matches: &mut VecDeque<Range<usize>>,
                 apply: impl Fn(Span<'s>) -> Span<'s> + Copy,
             ) -> Self {
+                // Takes syntaxed-colorized line of text along with
+                // highlighted match ranges (in ascending order)
+                // and returns text in those ranges highlighted in some style
+                fn highlight_matches<'s>(
+                    mut colorized: VecDeque<Span<'s>>,
+                    line_range: RangeInclusive<usize>,
+                    matches: &mut VecDeque<Range<usize>>,
+                    apply: impl Fn(Span<'s>) -> Span<'s> + Copy,
+                ) -> VecDeque<Span<'s>> {
+                    // A trivial abstraction to make working
+                    // simultaneously with both line and match ranges
+                    // more intuitive.
+                    struct IntRange {
+                        start: usize,
+                        end: usize,
+                    }
+
+                    impl From<Range<usize>> for IntRange {
+                        #[inline]
+                        fn from(r: Range<usize>) -> Self {
+                            Self {
+                                start: r.start,
+                                end: r.end,
+                            }
+                        }
+                    }
+
+                    impl From<IntRange> for Range<usize> {
+                        #[inline]
+                        fn from(IntRange { start, end }: IntRange) -> Self {
+                            start..end
+                        }
+                    }
+
+                    impl IntRange {
+                        #[inline]
+                        fn is_empty(&self) -> bool {
+                            self.start == self.end
+                        }
+
+                        #[inline]
+                        fn remaining(&self) -> usize {
+                            self.end.saturating_sub(self.start)
+                        }
+
+                        #[inline]
+                        fn take(&mut self, requested: usize) -> usize {
+                            let to_extract = requested.min(self.remaining());
+                            self.start += to_extract;
+                            to_extract
+                        }
+
+                        #[inline]
+                        fn take_both(&mut self, other: &mut Self, requested: usize) -> usize {
+                            let to_extract = requested.min(self.remaining().min(other.remaining()));
+                            self.start += to_extract;
+                            other.start += to_extract;
+                            to_extract
+                        }
+                    }
+
+                    let (line_start, line_end) = line_range.into_inner();
+                    let mut highlighted = VecDeque::with_capacity(colorized.len());
+                    let mut line_range = IntRange {
+                        start: line_start,
+                        end: line_end,
+                    };
+
+                    while !line_range.is_empty() {
+                        let Some(match_range) = matches.pop_front() else {
+                            // if there's no remaining matches,
+                            // there's nothing left to highlight
+                            highlighted.extend(colorized);
+                            return highlighted;
+                        };
+                        let mut match_range = IntRange::from(match_range);
+
+                        // if match ending is before start of line, just drop it
+                        if match_range.end < line_range.start {
+                            continue;
+                        }
+                        // if match starts before start of line,
+                        // bump match range start up accordingly
+                        if match_range.start < line_range.start {
+                            match_range.start = line_range.start;
+                        }
+
+                        // output line_start to match_start verbatim
+                        extract(
+                            &mut colorized,
+                            line_range.take(match_range.start - line_range.start),
+                            &mut highlighted,
+                            |span| span,
+                        );
+
+                        // output as much of highlighted match as possible
+                        extract(
+                            &mut colorized,
+                            match_range.take_both(&mut line_range, match_range.remaining()),
+                            &mut highlighted,
+                            apply,
+                        );
+
+                        // push any remaining partial match back into VecDeque
+                        if !match_range.is_empty() {
+                            matches.push_front(match_range.into());
+                        }
+                    }
+
+                    highlighted.extend(colorized);
+                    highlighted
+                }
+
                 Self {
                     spans: highlight_matches(self.spans, self.range.clone(), matches, apply),
                     range: self.range,
@@ -4777,6 +4890,43 @@ impl StatefulWidget for BufferWidget<'_> {
                 selection: (usize, usize),
                 apply: impl Fn(Span<'s>) -> Span<'s> + Copy,
             ) -> Self {
+                // Takes syntax-colorized line of text and returns
+                // portion highlighted, if necessary
+                fn highlight_selection<'s>(
+                    mut colorized: VecDeque<Span<'s>>,
+                    line_range: RangeInclusive<usize>,
+                    (selection_start, selection_end): (usize, usize),
+                    highlight: impl Fn(Span<'s>) -> Span<'s>,
+                ) -> VecDeque<Span<'s>> {
+                    let (line_start, line_end) = line_range.into_inner();
+                    if selection_end <= line_start || selection_start >= line_end {
+                        colorized
+                    } else {
+                        let mut highlighted = VecDeque::with_capacity(colorized.len());
+
+                        // output line_start to selection_start characters verbatim
+                        extract(
+                            &mut colorized,
+                            selection_start.saturating_sub(line_start),
+                            &mut highlighted,
+                            |span| span,
+                        );
+
+                        // output selection_start to selection_end characters highlighted
+                        extract(
+                            &mut colorized,
+                            selection_end - selection_start.max(line_start),
+                            &mut highlighted,
+                            highlight,
+                        );
+
+                        // output any remaining characters verbatim
+                        highlighted.extend(colorized);
+
+                        highlighted
+                    }
+                }
+
                 Self {
                     spans: highlight_selection(self.spans, self.range.clone(), selection, apply),
                     range: self.range,
@@ -4784,6 +4934,33 @@ impl StatefulWidget for BufferWidget<'_> {
             }
 
             fn highlight_parens(self, parens: &mut VecDeque<(usize, Color)>) -> Self {
+                fn highlight_parens<'s>(
+                    mut colorized: VecDeque<Span<'s>>,
+                    line_range: RangeInclusive<usize>,
+                    parens: &mut VecDeque<(usize, Color)>,
+                ) -> VecDeque<Span<'s>> {
+                    let (line_start, line_end) = line_range.into_inner();
+                    let mut highlighted = VecDeque::with_capacity(colorized.len());
+                    let mut offset = line_start;
+                    while parens
+                        .pop_front_if(|(position, _)| *position < offset)
+                        .is_some()
+                    {
+                        // drain unwanted preceding elements
+                    }
+                    while let Some((position, color)) = parens
+                        .pop_front_if(|(position, _)| *position >= offset && *position <= line_end)
+                    {
+                        extract(&mut colorized, position - offset, &mut highlighted, |s| s);
+                        extract(&mut colorized, 1, &mut highlighted, |s| {
+                            s.style(Style::new().bg(color).fg(Color::Black))
+                        });
+                        offset = position + 1;
+                    }
+                    highlighted.extend(colorized);
+                    highlighted
+                }
+
                 Self {
                     spans: highlight_parens(self.spans, self.range.clone(), parens),
                     range: self.range,
@@ -5068,183 +5245,6 @@ impl StatefulWidget for BufferWidget<'_> {
                     return;
                 }
             }
-        }
-
-        // Takes syntaxed-colorized line of text along with
-        // highlighted match ranges (in ascending order)
-        // and returns text in those ranges highlighted in some style
-        fn highlight_matches<'s>(
-            mut colorized: VecDeque<Span<'s>>,
-            line_range: RangeInclusive<usize>,
-            matches: &mut VecDeque<Range<usize>>,
-            apply: impl Fn(Span<'s>) -> Span<'s> + Copy,
-        ) -> VecDeque<Span<'s>> {
-            // A trivial abstraction to make working
-            // simultaneously with both line and match ranges
-            // more intuitive.
-            struct IntRange {
-                start: usize,
-                end: usize,
-            }
-
-            impl From<Range<usize>> for IntRange {
-                #[inline]
-                fn from(r: Range<usize>) -> Self {
-                    Self {
-                        start: r.start,
-                        end: r.end,
-                    }
-                }
-            }
-
-            impl From<IntRange> for Range<usize> {
-                #[inline]
-                fn from(IntRange { start, end }: IntRange) -> Self {
-                    start..end
-                }
-            }
-
-            impl IntRange {
-                #[inline]
-                fn is_empty(&self) -> bool {
-                    self.start == self.end
-                }
-
-                #[inline]
-                fn remaining(&self) -> usize {
-                    self.end.saturating_sub(self.start)
-                }
-
-                #[inline]
-                fn take(&mut self, requested: usize) -> usize {
-                    let to_extract = requested.min(self.remaining());
-                    self.start += to_extract;
-                    to_extract
-                }
-
-                #[inline]
-                fn take_both(&mut self, other: &mut Self, requested: usize) -> usize {
-                    let to_extract = requested.min(self.remaining().min(other.remaining()));
-                    self.start += to_extract;
-                    other.start += to_extract;
-                    to_extract
-                }
-            }
-
-            let (line_start, line_end) = line_range.into_inner();
-            let mut highlighted = VecDeque::with_capacity(colorized.len());
-            let mut line_range = IntRange {
-                start: line_start,
-                end: line_end,
-            };
-
-            while !line_range.is_empty() {
-                let Some(match_range) = matches.pop_front() else {
-                    // if there's no remaining matches,
-                    // there's nothing left to highlight
-                    highlighted.extend(colorized);
-                    return highlighted;
-                };
-                let mut match_range = IntRange::from(match_range);
-
-                // if match ending is before start of line, just drop it
-                if match_range.end < line_range.start {
-                    continue;
-                }
-                // if match starts before start of line,
-                // bump match range start up accordingly
-                if match_range.start < line_range.start {
-                    match_range.start = line_range.start;
-                }
-
-                // output line_start to match_start verbatim
-                extract(
-                    &mut colorized,
-                    line_range.take(match_range.start - line_range.start),
-                    &mut highlighted,
-                    |span| span,
-                );
-
-                // output as much of highlighted match as possible
-                extract(
-                    &mut colorized,
-                    match_range.take_both(&mut line_range, match_range.remaining()),
-                    &mut highlighted,
-                    apply,
-                );
-
-                // push any remaining partial match back into VecDeque
-                if !match_range.is_empty() {
-                    matches.push_front(match_range.into());
-                }
-            }
-
-            highlighted.extend(colorized);
-            highlighted
-        }
-
-        // Takes syntax-colorized line of text and returns
-        // portion highlighted, if necessary
-        fn highlight_selection<'s>(
-            mut colorized: VecDeque<Span<'s>>,
-            line_range: RangeInclusive<usize>,
-            (selection_start, selection_end): (usize, usize),
-            highlight: impl Fn(Span<'s>) -> Span<'s>,
-        ) -> VecDeque<Span<'s>> {
-            let (line_start, line_end) = line_range.into_inner();
-            if selection_end <= line_start || selection_start >= line_end {
-                colorized
-            } else {
-                let mut highlighted = VecDeque::with_capacity(colorized.len());
-
-                // output line_start to selection_start characters verbatim
-                extract(
-                    &mut colorized,
-                    selection_start.saturating_sub(line_start),
-                    &mut highlighted,
-                    |span| span,
-                );
-
-                // output selection_start to selection_end characters highlighted
-                extract(
-                    &mut colorized,
-                    selection_end - selection_start.max(line_start),
-                    &mut highlighted,
-                    highlight,
-                );
-
-                // output any remaining characters verbatim
-                highlighted.extend(colorized);
-
-                highlighted
-            }
-        }
-
-        fn highlight_parens<'s>(
-            mut colorized: VecDeque<Span<'s>>,
-            line_range: RangeInclusive<usize>,
-            parens: &mut VecDeque<(usize, Color)>,
-        ) -> VecDeque<Span<'s>> {
-            let (line_start, line_end) = line_range.into_inner();
-            let mut highlighted = VecDeque::with_capacity(colorized.len());
-            let mut offset = line_start;
-            while parens
-                .pop_front_if(|(position, _)| *position < offset)
-                .is_some()
-            {
-                // drain unwanted preceding elements
-            }
-            while let Some((position, color)) =
-                parens.pop_front_if(|(position, _)| *position >= offset && *position <= line_end)
-            {
-                extract(&mut colorized, position - offset, &mut highlighted, |s| s);
-                extract(&mut colorized, 1, &mut highlighted, |s| {
-                    s.style(Style::new().bg(color).fg(Color::Black))
-                });
-                offset = position + 1;
-            }
-            highlighted.extend(colorized);
-            highlighted
         }
 
         fn border_title(title: String, active: bool) -> Line<'static> {
