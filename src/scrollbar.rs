@@ -88,8 +88,7 @@ impl StatefulWidget for Scrollbar {
         });
 
         // paint start of the thumb in subpixels
-        buf[(track.x, track.y + thumb.start.pixel)]
-            .set_char(subpixels_char_top(thumb.start.subpixel));
+        buf[(track.x, track.y + thumb.start.pixel)].set_char(subpixels_char(thumb.start.subpixel));
 
         // paint whole blocks between start and end of thumb
         for i in (thumb.start.pixel + 1)..thumb.end.pixel {
@@ -98,8 +97,7 @@ impl StatefulWidget for Scrollbar {
 
         // paint end of thumb in inverted subpixels
         if thumb.end.subpixel > 0 {
-            buf[(track.x, track.y + thumb.end.pixel)]
-                .set_char(subpixels_char_bottom(thumb.end.subpixel));
+            buf[(track.x, track.y + thumb.end.pixel)].set_char(subpixels_char(thumb.end.subpixel));
             buf[(track.x, track.y + thumb.end.pixel)].set_style(Style::default().reversed());
         }
     }
@@ -160,21 +158,7 @@ impl std::ops::Add for Subpixel {
     }
 }
 
-fn subpixels_char_top(subpixels: u16) -> char {
-    match subpixels {
-        0 => '\u{2588}',
-        1 => '\u{2587}',
-        2 => '\u{2586}',
-        3 => '\u{2585}',
-        4 => '\u{2584}',
-        5 => '\u{2583}',
-        6 => '\u{2582}',
-        7 => '\u{2581}',
-        _ => '?',
-    }
-}
-
-fn subpixels_char_bottom(subpixels: u16) -> char {
+fn subpixels_char(subpixels: u16) -> char {
     match subpixels {
         0 => '\u{2588}',
         1 => '\u{2587}',
