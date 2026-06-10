@@ -4762,7 +4762,7 @@ impl StatefulWidget for BufferWidget<'_> {
             }
 
             fn highlight_matches(
-                self,
+                mut self,
                 matches: &mut VecDeque<Range<usize>>,
                 apply: impl Fn(Span<'s>) -> Span<'s> + Copy,
             ) -> Self {
@@ -4770,11 +4770,11 @@ impl StatefulWidget for BufferWidget<'_> {
                 // highlighted match ranges (in ascending order)
                 // and returns text in those ranges highlighted in some style
                 fn highlight_matches<'s>(
-                    mut colorized: VecDeque<Span<'s>>,
+                    spans: &mut VecDeque<Span<'s>>,
                     line_range: RangeInclusive<usize>,
                     matches: &mut VecDeque<Range<usize>>,
                     apply: impl Fn(Span<'s>) -> Span<'s> + Copy,
-                ) -> VecDeque<Span<'s>> {
+                ) {
                     // A trivial abstraction to make working
                     // simultaneously with both line and match ranges
                     // more intuitive.
@@ -4828,7 +4828,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     }
 
                     let (line_start, line_end) = line_range.into_inner();
-                    let mut highlighted = VecDeque::with_capacity(colorized.len());
+                    let mut spans = SpanDeque::new(spans);
                     let mut line_range = IntRange {
                         start: line_start,
                         end: line_end,
@@ -4838,8 +4838,9 @@ impl StatefulWidget for BufferWidget<'_> {
                         let Some(match_range) = matches.pop_front() else {
                             // if there's no remaining matches,
                             // there's nothing left to highlight
-                            highlighted.extend(colorized);
-                            return highlighted;
+                            // highlighted.extend(colorized);
+                            // return highlighted;
+                            return;
                         };
                         let mut match_range = IntRange::from(match_range);
 
@@ -4854,18 +4855,14 @@ impl StatefulWidget for BufferWidget<'_> {
                         }
 
                         // output line_start to match_start verbatim
-                        extract(
-                            &mut colorized,
+                        spans.extract(
                             line_range.take(match_range.start - line_range.start),
-                            &mut highlighted,
                             |span| span,
                         );
 
                         // output as much of highlighted match as possible
-                        extract(
-                            &mut colorized,
+                        spans.extract(
                             match_range.take_both(&mut line_range, match_range.remaining()),
-                            &mut highlighted,
                             apply,
                         );
 
@@ -4874,73 +4871,49 @@ impl StatefulWidget for BufferWidget<'_> {
                             matches.push_front(match_range.into());
                         }
                     }
-
-                    highlighted.extend(colorized);
-                    highlighted
                 }
 
-                Self {
-                    spans: highlight_matches(self.spans, self.range.clone(), matches, apply),
-                    range: self.range,
-                }
+                highlight_matches(&mut self.spans, self.range.clone(), matches, apply);
+                self
             }
 
             fn highlight_selection(
-                self,
+                mut self,
                 selection: (usize, usize),
                 apply: impl Fn(Span<'s>) -> Span<'s> + Copy,
             ) -> Self {
                 // Takes syntax-colorized line of text and returns
                 // portion highlighted, if necessary
                 fn highlight_selection<'s>(
-                    mut colorized: VecDeque<Span<'s>>,
+                    spans: &mut VecDeque<Span<'s>>,
                     line_range: RangeInclusive<usize>,
                     (selection_start, selection_end): (usize, usize),
                     highlight: impl Fn(Span<'s>) -> Span<'s>,
-                ) -> VecDeque<Span<'s>> {
+                ) {
                     let (line_start, line_end) = line_range.into_inner();
-                    if selection_end <= line_start || selection_start >= line_end {
-                        colorized
-                    } else {
-                        let mut highlighted = VecDeque::with_capacity(colorized.len());
+                    if selection_end > line_start && selection_start < line_end {
+                        let mut spans = SpanDeque::new(spans);
 
                         // output line_start to selection_start characters verbatim
-                        extract(
-                            &mut colorized,
-                            selection_start.saturating_sub(line_start),
-                            &mut highlighted,
-                            |span| span,
-                        );
+                        spans.extract(selection_start.saturating_sub(line_start), |span| span);
 
                         // output selection_start to selection_end characters highlighted
-                        extract(
-                            &mut colorized,
-                            selection_end - selection_start.max(line_start),
-                            &mut highlighted,
-                            highlight,
-                        );
-
-                        // output any remaining characters verbatim
-                        highlighted.extend(colorized);
-
-                        highlighted
+                        spans.extract(selection_end - selection_start.max(line_start), highlight);
                     }
                 }
 
-                Self {
-                    spans: highlight_selection(self.spans, self.range.clone(), selection, apply),
-                    range: self.range,
-                }
+                highlight_selection(&mut self.spans, self.range.clone(), selection, apply);
+                self
             }
 
-            fn highlight_parens(self, parens: &mut VecDeque<(usize, Color)>) -> Self {
+            fn highlight_parens(mut self, parens: &mut VecDeque<(usize, Color)>) -> Self {
                 fn highlight_parens<'s>(
-                    mut colorized: VecDeque<Span<'s>>,
+                    spans: &mut VecDeque<Span<'s>>,
                     line_range: RangeInclusive<usize>,
                     parens: &mut VecDeque<(usize, Color)>,
-                ) -> VecDeque<Span<'s>> {
+                ) {
                     let (line_start, line_end) = line_range.into_inner();
-                    let mut highlighted = VecDeque::with_capacity(colorized.len());
+                    let mut spans = SpanDeque::new(spans);
                     let mut offset = line_start;
                     while parens
                         .pop_front_if(|(position, _)| *position < offset)
@@ -4951,26 +4924,141 @@ impl StatefulWidget for BufferWidget<'_> {
                     while let Some((position, color)) = parens
                         .pop_front_if(|(position, _)| *position >= offset && *position <= line_end)
                     {
-                        extract(&mut colorized, position - offset, &mut highlighted, |s| s);
-                        extract(&mut colorized, 1, &mut highlighted, |s| {
-                            s.style(Style::new().bg(color).fg(Color::Black))
-                        });
+                        spans.extract(position - offset, |s| s);
+                        spans.extract(1, |s| s.style(Style::new().bg(color).fg(Color::Black)));
                         offset = position + 1;
                     }
-                    highlighted.extend(colorized);
-                    highlighted
                 }
 
-                Self {
-                    spans: highlight_parens(self.spans, self.range.clone(), parens),
-                    range: self.range,
-                }
+                highlight_parens(&mut self.spans, self.range.clone(), parens);
+                self
             }
         }
 
         impl<'s> From<ColorizedLine<'s>> for Line<'s> {
             fn from(line: ColorizedLine<'s>) -> Self {
                 Line::from(Vec::from(line.spans))
+            }
+        }
+
+        struct SpanDeque<'q, 's> {
+            spans: &'q mut VecDeque<Span<'s>>,
+            queued: usize,
+        }
+
+        impl<'q, 's> SpanDeque<'q, 's> {
+            fn new(spans: &'q mut VecDeque<Span<'s>>) -> Self {
+                Self {
+                    queued: spans.len(),
+                    spans,
+                }
+            }
+
+            fn pop_front(&mut self) -> Option<Span<'s>> {
+                let queued = self.queued.checked_sub(1)?;
+                let span = self.spans.pop_front()?;
+                self.queued = queued;
+                Some(span)
+            }
+
+            fn push_front(&mut self, span: Span<'s>) {
+                self.queued += 1;
+                self.spans.push_front(span);
+            }
+
+            fn push_back(&mut self, span: Span<'s>) {
+                self.spans.push_back(span);
+            }
+
+            fn extract(&mut self, mut characters: usize, map: impl Fn(Span<'s>) -> Span<'s>) {
+                fn split_cow(s: Cow<'_, str>, chars: usize) -> (Cow<'_, str>, Cow<'_, str>) {
+                    let Some((split_point, _)) = s.char_indices().nth(chars) else {
+                        return (s, "".into());
+                    };
+
+                    match s {
+                        Cow::Borrowed(slice) => {
+                            let (start, end) = slice.split_at(split_point);
+                            (Cow::Borrowed(start), Cow::Borrowed(end))
+                        }
+                        Cow::Owned(mut string) => {
+                            let suffix = string.split_off(split_point);
+                            (Cow::Owned(string), Cow::Owned(suffix))
+                        }
+                    }
+                }
+
+                while characters > 0 {
+                    let Some(span) = self.pop_front() else {
+                        return;
+                    };
+                    let span_width = span.content.chars().count();
+                    if span_width <= characters {
+                        characters -= span_width;
+                        self.push_back(map(span));
+                    } else {
+                        let (prefix, suffix) = split_cow(span.content, characters);
+                        self.push_front(Span {
+                            style: span.style,
+                            content: suffix,
+                        });
+                        self.push_back(map(Span {
+                            style: span.style,
+                            content: prefix,
+                        }));
+                        return;
+                    }
+                }
+            }
+
+            fn extract_bytes(&mut self, mut bytes: usize, map: impl Fn(Span<'s>) -> Span<'s>) {
+                fn split_cow(s: Cow<'_, str>, bytes: usize) -> (Cow<'_, str>, Cow<'_, str>) {
+                    let split_point = if bytes < s.len() {
+                        bytes
+                    } else {
+                        return (s, "".into());
+                    };
+
+                    match s {
+                        Cow::Borrowed(slice) => {
+                            let (start, end) = slice.split_at(split_point);
+                            (Cow::Borrowed(start), Cow::Borrowed(end))
+                        }
+                        Cow::Owned(mut string) => {
+                            let suffix = string.split_off(split_point);
+                            (Cow::Owned(string), Cow::Owned(suffix))
+                        }
+                    }
+                }
+
+                while bytes > 0 {
+                    let Some(span) = self.pop_front() else {
+                        return;
+                    };
+                    let span_width = span.content.len();
+                    if span_width <= bytes {
+                        bytes -= span_width;
+                        self.push_back(map(span));
+                    } else {
+                        let (prefix, suffix) = split_cow(span.content, bytes);
+                        self.push_front(Span {
+                            style: span.style,
+                            content: suffix,
+                        });
+                        self.push_back(map(Span {
+                            style: span.style,
+                            content: prefix,
+                        }));
+                        return;
+                    }
+                }
+            }
+        }
+
+        impl<'q, 's> Drop for SpanDeque<'q, 's> {
+            fn drop(&mut self) {
+                // rotate any leftover queued items to the back
+                self.spans.rotate_left(self.queued);
             }
         }
 
@@ -5073,20 +5161,18 @@ impl StatefulWidget for BufferWidget<'_> {
                     return input;
                 }
 
-                let mut output = VecDeque::with_capacity(input.len());
+                let mut spans = SpanDeque::new(&mut input);
                 let mut idx = 0;
                 for underline in underlines {
-                    extract_bytes(&mut input, underline.start - idx, &mut output, |span| span);
-                    extract_bytes(
-                        &mut input,
+                    spans.extract_bytes(underline.start - idx, |span| span);
+                    spans.extract_bytes(
                         underline.end - underline.start,
-                        &mut output,
                         |span| span.patch_style(underline_color(Color::DarkGray)),
                     );
                     idx = underline.end;
                 }
-                output.extend(input);
-                output
+                drop(spans);
+                input
             }
 
             fn highlight_trailing_whitespace(
@@ -5151,100 +5237,6 @@ impl StatefulWidget for BufferWidget<'_> {
         fn widen_range(range: std::ops::RangeInclusive<usize>) -> std::ops::RangeInclusive<usize> {
             let (s, e) = range.into_inner();
             s..=e + 1
-        }
-
-        fn extract<'s>(
-            input: &mut VecDeque<Span<'s>>,
-            mut characters: usize,
-            output: &mut VecDeque<Span<'s>>,
-            map: impl Fn(Span<'s>) -> Span<'s>,
-        ) {
-            fn split_cow(s: Cow<'_, str>, chars: usize) -> (Cow<'_, str>, Cow<'_, str>) {
-                let Some((split_point, _)) = s.char_indices().nth(chars) else {
-                    return (s, "".into());
-                };
-
-                match s {
-                    Cow::Borrowed(slice) => {
-                        let (start, end) = slice.split_at(split_point);
-                        (Cow::Borrowed(start), Cow::Borrowed(end))
-                    }
-                    Cow::Owned(mut string) => {
-                        let suffix = string.split_off(split_point);
-                        (Cow::Owned(string), Cow::Owned(suffix))
-                    }
-                }
-            }
-
-            while characters > 0 {
-                let Some(span) = input.pop_front() else {
-                    return;
-                };
-                let span_width = span.content.chars().count();
-                if span_width <= characters {
-                    characters -= span_width;
-                    output.push_back(map(span));
-                } else {
-                    let (prefix, suffix) = split_cow(span.content, characters);
-                    input.push_front(Span {
-                        style: span.style,
-                        content: suffix,
-                    });
-                    output.push_back(map(Span {
-                        style: span.style,
-                        content: prefix,
-                    }));
-                    return;
-                }
-            }
-        }
-
-        fn extract_bytes<'s>(
-            input: &mut VecDeque<Span<'s>>,
-            mut bytes: usize,
-            output: &mut VecDeque<Span<'s>>,
-            map: impl Fn(Span<'s>) -> Span<'s>,
-        ) {
-            fn split_cow(s: Cow<'_, str>, bytes: usize) -> (Cow<'_, str>, Cow<'_, str>) {
-                let split_point = if bytes < s.len() {
-                    bytes
-                } else {
-                    return (s, "".into());
-                };
-
-                match s {
-                    Cow::Borrowed(slice) => {
-                        let (start, end) = slice.split_at(split_point);
-                        (Cow::Borrowed(start), Cow::Borrowed(end))
-                    }
-                    Cow::Owned(mut string) => {
-                        let suffix = string.split_off(split_point);
-                        (Cow::Owned(string), Cow::Owned(suffix))
-                    }
-                }
-            }
-
-            while bytes > 0 {
-                let Some(span) = input.pop_front() else {
-                    return;
-                };
-                let span_width = span.content.len();
-                if span_width <= bytes {
-                    bytes -= span_width;
-                    output.push_back(map(span));
-                } else {
-                    let (prefix, suffix) = split_cow(span.content, bytes);
-                    input.push_front(Span {
-                        style: span.style,
-                        content: suffix,
-                    });
-                    output.push_back(map(Span {
-                        style: span.style,
-                        content: prefix,
-                    }));
-                    return;
-                }
-            }
         }
 
         fn border_title(title: String, active: bool) -> Line<'static> {
@@ -6245,24 +6237,21 @@ impl StatefulWidget for BufferWidget<'_> {
                     text_area,
                     buf,
                     prompt,
-                    |mut colorized| {
-                        let mut highlighted = VecDeque::with_capacity(colorized.len());
+                    |mut spans| {
+                        let mut highlighted = SpanDeque::new(&mut spans);
 
                         // output everything to offset verbatim
-                        extract(&mut colorized, *offset, &mut highlighted, |span| span);
+                        highlighted.extract(*offset, |span| span);
 
                         // output autcompleted text underlined
-                        extract(
-                            &mut colorized,
-                            completions[*index].chars().count(),
-                            &mut highlighted,
-                            |span| span.patch_style(underline_color(Color::Red)),
-                        );
+                        highlighted.extract(completions[*index].chars().count(), |span| {
+                            span.patch_style(underline_color(Color::Red))
+                        });
 
-                        // output the rest verbatim
-                        highlighted.extend(colorized);
+                        drop(highlighted);
 
-                        highlighted
+                        // output remainder verbatim
+                        spans
                     },
                     |b| {
                         let title_top = if matches!(&self.mode, Some(EditorMode::SearchAll { .. }))
