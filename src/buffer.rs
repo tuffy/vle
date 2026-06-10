@@ -4728,6 +4728,14 @@ impl StatefulWidget for BufferWidget<'_> {
             }
 
             fn widen_range(self) -> Self {
+                /// Widens range by 1, for appending something at the end
+                fn widen_range(
+                    range: std::ops::RangeInclusive<usize>,
+                ) -> std::ops::RangeInclusive<usize> {
+                    let (s, e) = range.into_inner();
+                    s..=e + 1
+                }
+
                 Self {
                     line: self.line,
                     range: widen_range(self.range),
@@ -4754,11 +4762,10 @@ impl StatefulWidget for BufferWidget<'_> {
         }
 
         impl<'s> ColorizedLine<'s> {
-            fn widen(self) -> Self {
-                Self {
-                    spans: widen(self.spans),
-                    range: self.range,
-                }
+            /// Widens line of spans by 1, for appending something at the end
+            fn widen(mut self) -> Self {
+                self.spans.push_back(Span::raw(" "));
+                self
             }
 
             fn highlight_matches(
@@ -4838,8 +4845,6 @@ impl StatefulWidget for BufferWidget<'_> {
                         let Some(match_range) = matches.pop_front() else {
                             // if there's no remaining matches,
                             // there's nothing left to highlight
-                            // highlighted.extend(colorized);
-                            // return highlighted;
                             return;
                         };
                         let mut match_range = IntRange::from(match_range);
@@ -5165,10 +5170,9 @@ impl StatefulWidget for BufferWidget<'_> {
                 let mut idx = 0;
                 for underline in underlines {
                     spans.extract_bytes(underline.start - idx, |span| span);
-                    spans.extract_bytes(
-                        underline.end - underline.start,
-                        |span| span.patch_style(underline_color(Color::DarkGray)),
-                    );
+                    spans.extract_bytes(underline.end - underline.start, |span| {
+                        span.patch_style(underline_color(Color::DarkGray))
+                    });
                     idx = underline.end;
                 }
                 drop(spans);
@@ -5225,18 +5229,6 @@ impl StatefulWidget for BufferWidget<'_> {
                     Cow::Owned(s) => colorize(syntax, state, trim_string_matches(s, '\n')),
                 })
             }
-        }
-
-        /// Widens line of spans by 1, for appending something at the end
-        fn widen<'s>(mut line: VecDeque<Span<'s>>) -> VecDeque<Span<'s>> {
-            line.push_back(Span::raw(" "));
-            line
-        }
-
-        /// Widens range by 1, for appending something at the end
-        fn widen_range(range: std::ops::RangeInclusive<usize>) -> std::ops::RangeInclusive<usize> {
-            let (s, e) = range.into_inner();
-            s..=e + 1
         }
 
         fn border_title(title: String, active: bool) -> Line<'static> {
