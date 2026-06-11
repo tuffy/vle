@@ -4980,11 +4980,18 @@ impl StatefulWidget for BufferWidget<'_> {
             }
 
             fn extract(&mut self, mut characters: usize, map: impl Fn(Span<'s>) -> Span<'s>) {
-                fn split_cow(s: Cow<'_, str>, chars: usize) -> (Cow<'_, str>, Cow<'_, str>) {
-                    let Some((split_point, _)) = s.char_indices().nth(chars) else {
-                        return (s, "".into());
-                    };
+                fn nth_or<T, I>(mut iter: I, mut n: usize) -> Result<T, usize>
+                where
+                    I: Iterator<Item = T>,
+                {
+                    while n > 0 {
+                        iter.next().ok_or(n)?;
+                        n -= 1;
+                    }
+                    iter.next().ok_or(0)
+                }
 
+                fn split_cow(s: Cow<'_, str>, split_point: usize) -> (Cow<'_, str>, Cow<'_, str>) {
                     match s {
                         Cow::Borrowed(slice) => {
                             let (start, end) = slice.split_at(split_point);
@@ -5001,21 +5008,27 @@ impl StatefulWidget for BufferWidget<'_> {
                     let Some(span) = self.pop_front() else {
                         return;
                     };
-                    let span_width = span.content.chars().count();
-                    if span_width <= characters {
-                        characters -= span_width;
-                        self.push_back(map(span));
-                    } else {
-                        let (prefix, suffix) = split_cow(span.content, characters);
-                        self.push_front(Span {
-                            style: span.style,
-                            content: suffix,
-                        });
-                        self.push_back(map(Span {
-                            style: span.style,
-                            content: prefix,
-                        }));
-                        return;
+                    match nth_or(span.content.char_indices(), characters) {
+                        Ok((split_point, _)) => {
+                            // character count < whole span length
+                            // which cuts it into two pieces
+                            let (prefix, suffix) = split_cow(span.content, split_point);
+                            self.push_front(Span {
+                                style: span.style,
+                                content: suffix,
+                            });
+                            self.push_back(map(Span {
+                                style: span.style,
+                                content: prefix,
+                            }));
+                            return;
+                        }
+                        Err(c) => {
+                            // character count >= whole span length
+                            // so process whole span
+                            self.push_back(map(span));
+                            characters = c;
+                        }
                     }
                 }
             }
