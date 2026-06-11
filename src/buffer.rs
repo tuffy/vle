@@ -4768,6 +4768,10 @@ impl StatefulWidget for BufferWidget<'_> {
                 self
             }
 
+            fn widen_if(self, f: impl FnOnce(&Self) -> bool) -> Self {
+                if f(&self) { self.widen() } else { self }
+            }
+
             fn highlight_matches(
                 mut self,
                 matches: &mut VecDeque<Range<usize>>,
@@ -5982,7 +5986,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                 EditorLine::iter(rope, viewport_line)
                                     .map(|line| {
                                         line.colorize(syntax, &mut hlstate, current_line)
-                                            .widen()
+                                            .widen_if(|line| *line.range.end() >= selection_end)
                                             .highlight_parens(&mut marks)
                                             .highlight_selection(
                                                 (selection_start, selection_end),
