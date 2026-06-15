@@ -49,23 +49,11 @@ pub enum Source {
     Test,
 }
 
-#[cfg(not(feature = "ssh"))]
 impl PartialEq for Source {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Local(x), Self::Local(y)) => x == y,
-            (Self::Tutorial, Self::Tutorial) => true,
-            (Self::Test, Self::Test) => true,
-            _ => false,
-        }
-    }
-}
-
-#[cfg(feature = "ssh")]
-impl PartialEq for Source {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Local(x), Self::Local(y)) => x == y,
+            #[cfg(feature = "ssh")]
             (Self::Ssh { sftp: s1, path: x }, Self::Ssh { sftp: s2, path: y }) => {
                 Rc::ptr_eq(s1, s2) && x == y
             }
