@@ -5044,24 +5044,18 @@ impl StatefulWidget for BufferWidget<'_> {
                 self
             }
 
-            fn highlight_parens(mut self, parens: &mut VecDeque<(usize, Color)>) -> Self {
+            fn highlight_parens(mut self, parens: &mut BTreeMap<usize, Color>) -> Self {
                 fn highlight_parens<'s>(
                     spans: &mut VecDeque<Span<'s>>,
                     line_range: RangeInclusive<usize>,
-                    parens: &mut VecDeque<(usize, Color)>,
+                    parens: &mut BTreeMap<usize, Color>,
                 ) {
                     let (line_start, line_end) = line_range.into_inner();
                     let mut spans = SpanDeque::new(spans);
                     let mut offset = line_start;
-                    while parens
-                        .pop_front_if(|(position, _)| *position < offset)
-                        .is_some()
-                    {
-                        // drain unwanted preceding elements
-                    }
-                    while let Some((position, color)) = parens
-                        .pop_front_if(|(position, _)| *position >= offset && *position <= line_end)
-                    {
+                    // cull any parens before line's start
+                    let _ = parens.extract_if(0..offset, |_, _| true);
+                    for (position, color) in parens.extract_if(offset..=line_end, |_, _| true) {
                         spans.extract(position - offset, |s| s);
                         spans.extract(1, |s| s.style(Style::new().bg(color).fg(Color::Black)));
                         offset = position + 1;
@@ -5663,8 +5657,6 @@ impl StatefulWidget for BufferWidget<'_> {
         {
             *mark = Color::LightYellow;
         }
-
-        let mut marks = marks.into_iter().collect();
 
         ////////////////////////////////////////////////////////////
         // Generate and render the actual buffer text as a Paragraph
