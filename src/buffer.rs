@@ -5636,18 +5636,14 @@ impl StatefulWidget for BufferWidget<'_> {
                 None => BTreeMap::default(),
             };
 
-        for bookmark in buffer.bookmarks.iter().filter(|p| *p >= viewport_start) {
-            use std::collections::btree_map::Entry;
-
-            match marks.entry(bookmark) {
-                Entry::Occupied(o) => {
-                    *o.into_mut() = BOOKMARK;
-                }
-                Entry::Vacant(v) => {
-                    v.insert(BOOKMARK);
-                }
-            }
-        }
+        // bookmarks take precedence over highlighted parentheses
+        marks.extend(
+            buffer
+                .bookmarks
+                .iter()
+                .filter(|p| *p >= viewport_start)
+                .map(|bookmark| (bookmark, BOOKMARK)),
+        );
 
         // re-color current mark in yellow when cycling bookmarks
         if let Some(EditorMode::SelectLine { .. }) = self.mode
