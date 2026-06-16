@@ -5044,20 +5044,18 @@ impl StatefulWidget for BufferWidget<'_> {
                 self
             }
 
-            fn highlight_parens(mut self, parens: &mut BTreeMap<usize, Color>) -> Self {
+            fn highlight_parens(mut self, parens: &BTreeMap<usize, Color>) -> Self {
                 fn highlight_parens<'s>(
                     spans: &mut VecDeque<Span<'s>>,
                     line_range: RangeInclusive<usize>,
-                    parens: &mut BTreeMap<usize, Color>,
+                    parens: &BTreeMap<usize, Color>,
                 ) {
                     let (line_start, line_end) = line_range.into_inner();
                     let mut spans = SpanDeque::new(spans);
                     let mut offset = line_start;
-                    // cull any parens before line's start
-                    let _ = parens.extract_if(0..offset, |_, _| true);
-                    for (position, color) in parens.extract_if(offset..=line_end, |_, _| true) {
+                    for (position, color) in parens.range(offset..=line_end) {
                         spans.extract(position - offset, |s| s);
-                        spans.extract(1, |s| s.style(Style::new().bg(color).fg(Color::Black)));
+                        spans.extract(1, |s| s.style(Style::new().bg(*color).fg(Color::Black)));
                         offset = position + 1;
                     }
                 }
@@ -5958,7 +5956,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                         |span| span.patch_style(underline_color(Color::Red)),
                                     )
                                     .widen()
-                                    .highlight_parens(&mut marks)
+                                    .highlight_parens(&marks)
                                     .into()
                             })
                             .map(|line| widen_tabs(line))
@@ -5972,7 +5970,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                 .map(|line| {
                                     line.colorize(syntax, &mut hlstate, current_line)
                                         .widen()
-                                        .highlight_parens(&mut marks)
+                                        .highlight_parens(&marks)
                                         .into()
                                 })
                                 .map(|line| widen_tabs(line))
@@ -5987,7 +5985,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                     .map(|line| {
                                         line.colorize(syntax, &mut hlstate, current_line)
                                             .widen_if(|line| *line.range.end() >= selection_end)
-                                            .highlight_parens(&mut marks)
+                                            .highlight_parens(&marks)
                                             .highlight_selection(
                                                 (selection_start, selection_end),
                                                 |span| span.style(EDITING),
