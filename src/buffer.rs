@@ -239,8 +239,10 @@ impl Source {
 
 mod private {
     use crate::buffer::{AltCursor, Buffer, MainCursor, Toggle};
+    use ratatui::text::Span;
+    use std::borrow::Cow;
     use std::cell::{Ref, RefCell, RefMut};
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, VecDeque};
     use std::ops::{Deref, DerefMut};
     use std::rc::Rc;
 
@@ -662,6 +664,143 @@ mod private {
             self.update(|c| {
                 *c -= rhs;
             })
+        }
+    }
+
+    /// For colorizing spans by dividing larger spans into smaller ones.
+    /// Processed spans are pushed to the back and anything un-processed
+    /// is rotated into position at drop-time.
+    pub struct SpanDeque<'q, 's> {
+        spans: &'q mut VecDeque<Span<'s>>,
+        queued: usize,
+    }
+
+    impl<'q, 's> SpanDeque<'q, 's> {
+        pub fn new(spans: &'q mut VecDeque<Span<'s>>) -> Self {
+            Self {
+                queued: spans.len(),
+                spans,
+            }
+        }
+
+        fn pop_front(&mut self) -> Option<Span<'s>> {
+            let queued = self.queued.checked_sub(1)?;
+            let span = self.spans.pop_front()?;
+            self.queued = queued;
+            Some(span)
+        }
+
+        fn push_front(&mut self, span: Span<'s>) {
+            self.queued += 1;
+            self.spans.push_front(span);
+        }
+
+        fn push_back(&mut self, span: Span<'s>) {
+            self.spans.push_back(span);
+        }
+
+        pub fn extract(&mut self, mut characters: usize, map: impl Fn(Span<'s>) -> Span<'s>) {
+            fn nth_or<T, I>(mut iter: I, mut n: usize) -> Result<T, usize>
+            where
+                I: Iterator<Item = T>,
+            {
+                while n > 0 {
+                    iter.next().ok_or(n)?;
+                    n -= 1;
+                }
+                iter.next().ok_or(0)
+            }
+
+            fn split_cow(s: Cow<'_, str>, split_point: usize) -> (Cow<'_, str>, Cow<'_, str>) {
+                match s {
+                    Cow::Borrowed(slice) => {
+                        let (start, end) = slice.split_at(split_point);
+                        (Cow::Borrowed(start), Cow::Borrowed(end))
+                    }
+                    Cow::Owned(mut string) => {
+                        let suffix = string.split_off(split_point);
+                        (Cow::Owned(string), Cow::Owned(suffix))
+                    }
+                }
+            }
+
+            while characters > 0 {
+                let Some(span) = self.pop_front() else {
+                    return;
+                };
+                match nth_or(span.content.char_indices(), characters) {
+                    Ok((split_point, _)) => {
+                        // character count < whole span length
+                        // which cuts it into two pieces
+                        let (prefix, suffix) = split_cow(span.content, split_point);
+                        self.push_front(Span {
+                            style: span.style,
+                            content: suffix,
+                        });
+                        self.push_back(map(Span {
+                            style: span.style,
+                            content: prefix,
+                        }));
+                        return;
+                    }
+                    Err(c) => {
+                        // character count >= whole span length
+                        // so process whole span
+                        self.push_back(map(span));
+                        characters = c;
+                    }
+                }
+            }
+        }
+
+        pub fn extract_bytes(&mut self, mut bytes: usize, map: impl Fn(Span<'s>) -> Span<'s>) {
+            fn split_cow(s: Cow<'_, str>, bytes: usize) -> (Cow<'_, str>, Cow<'_, str>) {
+                let split_point = if bytes < s.len() {
+                    bytes
+                } else {
+                    return (s, "".into());
+                };
+
+                match s {
+                    Cow::Borrowed(slice) => {
+                        let (start, end) = slice.split_at(split_point);
+                        (Cow::Borrowed(start), Cow::Borrowed(end))
+                    }
+                    Cow::Owned(mut string) => {
+                        let suffix = string.split_off(split_point);
+                        (Cow::Owned(string), Cow::Owned(suffix))
+                    }
+                }
+            }
+
+            while bytes > 0 {
+                let Some(span) = self.pop_front() else {
+                    return;
+                };
+                let span_width = span.content.len();
+                if span_width <= bytes {
+                    bytes -= span_width;
+                    self.push_back(map(span));
+                } else {
+                    let (prefix, suffix) = split_cow(span.content, bytes);
+                    self.push_front(Span {
+                        style: span.style,
+                        content: suffix,
+                    });
+                    self.push_back(map(Span {
+                        style: span.style,
+                        content: prefix,
+                    }));
+                    return;
+                }
+            }
+        }
+    }
+
+    impl<'q, 's> Drop for SpanDeque<'q, 's> {
+        fn drop(&mut self) {
+            // rotate any leftover queued items to the back
+            self.spans.rotate_left(self.queued);
         }
     }
 }
@@ -4658,6 +4797,7 @@ impl StatefulWidget for BufferWidget<'_> {
         use crate::prompt::TextField;
         use crate::scrollbar::{Scrollbar, ScrollbarState};
         use crate::syntax::{HighlightState, Highlighter, MultiComment, MultiCommentType};
+        use private::SpanDeque;
         use ratatui::{
             layout::{
                 Constraint::{Length, Min},
@@ -4756,6 +4896,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 self
             }
 
+            /// Conditionally widens line
             fn widen_if(self, f: impl FnOnce(&Self) -> bool) -> Self {
                 if f(&self) { self.widen() } else { self }
             }
@@ -4935,140 +5076,6 @@ impl StatefulWidget for BufferWidget<'_> {
         impl<'s> From<ColorizedLine<'s>> for Line<'s> {
             fn from(line: ColorizedLine<'s>) -> Self {
                 Line::from(Vec::from(line.spans))
-            }
-        }
-
-        struct SpanDeque<'q, 's> {
-            spans: &'q mut VecDeque<Span<'s>>,
-            queued: usize,
-        }
-
-        impl<'q, 's> SpanDeque<'q, 's> {
-            fn new(spans: &'q mut VecDeque<Span<'s>>) -> Self {
-                Self {
-                    queued: spans.len(),
-                    spans,
-                }
-            }
-
-            fn pop_front(&mut self) -> Option<Span<'s>> {
-                let queued = self.queued.checked_sub(1)?;
-                let span = self.spans.pop_front()?;
-                self.queued = queued;
-                Some(span)
-            }
-
-            fn push_front(&mut self, span: Span<'s>) {
-                self.queued += 1;
-                self.spans.push_front(span);
-            }
-
-            fn push_back(&mut self, span: Span<'s>) {
-                self.spans.push_back(span);
-            }
-
-            fn extract(&mut self, mut characters: usize, map: impl Fn(Span<'s>) -> Span<'s>) {
-                fn nth_or<T, I>(mut iter: I, mut n: usize) -> Result<T, usize>
-                where
-                    I: Iterator<Item = T>,
-                {
-                    while n > 0 {
-                        iter.next().ok_or(n)?;
-                        n -= 1;
-                    }
-                    iter.next().ok_or(0)
-                }
-
-                fn split_cow(s: Cow<'_, str>, split_point: usize) -> (Cow<'_, str>, Cow<'_, str>) {
-                    match s {
-                        Cow::Borrowed(slice) => {
-                            let (start, end) = slice.split_at(split_point);
-                            (Cow::Borrowed(start), Cow::Borrowed(end))
-                        }
-                        Cow::Owned(mut string) => {
-                            let suffix = string.split_off(split_point);
-                            (Cow::Owned(string), Cow::Owned(suffix))
-                        }
-                    }
-                }
-
-                while characters > 0 {
-                    let Some(span) = self.pop_front() else {
-                        return;
-                    };
-                    match nth_or(span.content.char_indices(), characters) {
-                        Ok((split_point, _)) => {
-                            // character count < whole span length
-                            // which cuts it into two pieces
-                            let (prefix, suffix) = split_cow(span.content, split_point);
-                            self.push_front(Span {
-                                style: span.style,
-                                content: suffix,
-                            });
-                            self.push_back(map(Span {
-                                style: span.style,
-                                content: prefix,
-                            }));
-                            return;
-                        }
-                        Err(c) => {
-                            // character count >= whole span length
-                            // so process whole span
-                            self.push_back(map(span));
-                            characters = c;
-                        }
-                    }
-                }
-            }
-
-            fn extract_bytes(&mut self, mut bytes: usize, map: impl Fn(Span<'s>) -> Span<'s>) {
-                fn split_cow(s: Cow<'_, str>, bytes: usize) -> (Cow<'_, str>, Cow<'_, str>) {
-                    let split_point = if bytes < s.len() {
-                        bytes
-                    } else {
-                        return (s, "".into());
-                    };
-
-                    match s {
-                        Cow::Borrowed(slice) => {
-                            let (start, end) = slice.split_at(split_point);
-                            (Cow::Borrowed(start), Cow::Borrowed(end))
-                        }
-                        Cow::Owned(mut string) => {
-                            let suffix = string.split_off(split_point);
-                            (Cow::Owned(string), Cow::Owned(suffix))
-                        }
-                    }
-                }
-
-                while bytes > 0 {
-                    let Some(span) = self.pop_front() else {
-                        return;
-                    };
-                    let span_width = span.content.len();
-                    if span_width <= bytes {
-                        bytes -= span_width;
-                        self.push_back(map(span));
-                    } else {
-                        let (prefix, suffix) = split_cow(span.content, bytes);
-                        self.push_front(Span {
-                            style: span.style,
-                            content: suffix,
-                        });
-                        self.push_back(map(Span {
-                            style: span.style,
-                            content: prefix,
-                        }));
-                        return;
-                    }
-                }
-            }
-        }
-
-        impl<'q, 's> Drop for SpanDeque<'q, 's> {
-            fn drop(&mut self) {
-                // rotate any leftover queued items to the back
-                self.spans.rotate_left(self.queued);
             }
         }
 
