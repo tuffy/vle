@@ -203,6 +203,15 @@ pub enum SearchType {
     Regex,
 }
 
+impl SearchType {
+    fn toggle_search(self) -> Self {
+        match self {
+            Self::Plain => Self::Regex,
+            Self::Regex => Self::Plain,
+        }
+    }
+}
+
 impl std::fmt::Display for SearchType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -2170,10 +2179,7 @@ fn process_search(
         key!(Tab) => {
             if prompt.is_empty() {
                 prompt.reset();
-                *type_ = match *type_ {
-                    SearchType::Plain => SearchType::Regex,
-                    SearchType::Regex => SearchType::Plain,
-                };
+                *type_ = type_.toggle_search();
                 None
             } else {
                 let (offset, search) = prompt.autocomplete_word()?;
@@ -2197,10 +2203,7 @@ fn process_search(
         key!(SHIFT, BackTab) => {
             if prompt.is_empty() {
                 prompt.reset();
-                *type_ = match *type_ {
-                    SearchType::Plain => SearchType::Regex,
-                    SearchType::Regex => SearchType::Plain,
-                };
+                *type_ = type_.toggle_search();
                 None
             } else {
                 let (offset, search) = prompt.autocomplete_word()?;
@@ -2340,10 +2343,7 @@ fn process_search_all(
         key!(Tab) => {
             if prompt.is_empty() {
                 prompt.reset();
-                *type_ = match *type_ {
-                    SearchType::Plain => SearchType::Regex,
-                    SearchType::Regex => SearchType::Plain,
-                };
+                *type_ = type_.toggle_search();
                 None
             } else {
                 let (offset, search) = prompt.autocomplete_word()?;
@@ -2367,10 +2367,7 @@ fn process_search_all(
         key!(SHIFT, BackTab) => {
             if prompt.is_empty() {
                 prompt.reset();
-                *type_ = match *type_ {
-                    SearchType::Plain => SearchType::Regex,
-                    SearchType::Regex => SearchType::Plain,
-                };
+                *type_ = type_.toggle_search();
                 None
             } else {
                 let (offset, search) = prompt.autocomplete_word()?;
