@@ -4834,7 +4834,7 @@ impl StatefulWidget for BufferWidget<'_> {
             fn iter(rope: &'s ropey::Rope, start_line: usize) -> impl Iterator<Item = Self> {
                 let mut lines = rope.lines_at(start_line);
                 let mut line_numbers = start_line..;
-                let mut line_start_numbers = start_line..;
+                let mut line_start_numbers = start_line..rope.len_lines();
                 let mut line_starts = std::iter::from_fn(move || {
                     line_start_numbers
                         .next()
