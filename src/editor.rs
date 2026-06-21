@@ -919,25 +919,14 @@ impl Editor {
                 }
                 EditorMode::SingleBuffer {
                     cursors:
-                        MultiCursors {
-                            matches,
-                            match_idx,
-                            highlight,
+                        cursors @ MultiCursors {
                             mode: MultiCursorMode::Editing,
+                            ..
                         },
                     range,
                 } => {
                     if let Some(Some(new_mode)) = self.layout.on_current_at(|b, a| {
-                        process_multi_cursor(
-                            b,
-                            &mut self.cut_buffer,
-                            matches,
-                            range,
-                            match_idx,
-                            highlight,
-                            event,
-                            a,
-                        )
+                        process_multi_cursor(b, &mut self.cut_buffer, cursors, range, event, a)
                     }) {
                         self.mode = new_mode;
                     }
@@ -2446,15 +2435,16 @@ fn process_search_all(
     }
 }
 
-// Yes, I know this has a lot of arguments
-#[allow(clippy::too_many_arguments)]
 fn process_multi_cursor(
     buffer: &mut BufferContext,
     cut_buffer: &mut Option<EditorCutBuffer>,
-    matches: &mut Vec<MultiCursor>,
+    MultiCursors {
+        matches,
+        match_idx,
+        highlight,
+        ..
+    }: &mut MultiCursors<Vec<MultiCursor>, Vec<usize>>,
     range: &mut Option<SelectionRange>,
-    match_idx: &mut usize,
-    highlight: &mut bool,
     event: Event,
     alt: Vec<AltCursor<'_>>,
 ) -> Option<EditorMode> {
