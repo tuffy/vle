@@ -1740,6 +1740,12 @@ impl BufferContext {
         ))
     }
 
+    pub fn set_selection(&mut self, start: usize, end: usize) {
+        self.selection = Some(start);
+        self.cursor = end;
+        self.cursor_column = cursor_column(&self.buffer.borrow_move().rope, self.cursor);
+    }
+
     pub fn take_selection(&mut self, mut alt: Vec<AltCursor<'_>>) -> Option<CutBuffer> {
         let selection = self.selection.take()?;
         let (selection_start, selection_end) = reorder(self.cursor, selection);
@@ -3031,6 +3037,14 @@ pub struct MultiCursor {
 impl MultiCursor {
     pub fn cursor(&self) -> usize {
         self.cursor
+    }
+
+    pub fn start(&self) -> usize {
+        self.range.start
+    }
+
+    pub fn end(&self) -> usize {
+        self.range.end
     }
 
     /// Widens select to whole multi-cursor area
@@ -4788,7 +4802,7 @@ impl StatefulWidget for BufferWidget<'_> {
     type State = BufferContext;
 
     fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer, state: &mut BufferContext) {
-        use crate::editor::SearchType;
+        use crate::editor::{SearchType, SingleBufferRange};
         use crate::help::{
             CONFIRM_CLOSE, MARK_SET, MULTICURSOR_MARK_SET, PASTE_GROUP, REPLACE_MATCHES,
             SELECT_BUFFER, SELECT_INSIDE, SELECT_LINE, SELECT_LINE_BOOKMARKED, SPLIT_PANE,
@@ -6270,7 +6284,7 @@ impl StatefulWidget for BufferWidget<'_> {
                             mode: MultiCursorMode::Editing | MultiCursorMode::Autocomplete { .. },
                             ..
                         },
-                    ..
+                    range: SingleBufferRange::WholeFile | SingleBufferRange::Lines(_),
                 }
                 | EditorMode::AllBuffers {
                     cursors:
@@ -6281,6 +6295,21 @@ impl StatefulWidget for BufferWidget<'_> {
                 },
             ) => {
                 show_sub_help(text_area, buf, REPLACE_MATCHES);
+            }
+            Some(EditorMode::SingleBuffer {
+                cursors:
+                    MultiCursors {
+                        mode: MultiCursorMode::Editing | MultiCursorMode::Autocomplete { .. },
+                        ..
+                    },
+                range: SingleBufferRange::UpdateLines,
+            }) => {
+                use crate::help::keybind;
+                use crate::key;
+
+                let mut help = Vec::from(REPLACE_MATCHES);
+                help.insert(3, keybind::<key::UpdateLines>("To Selection"));
+                show_sub_help(text_area, buf, &help);
             }
             Some(
                 EditorMode::SingleBuffer {

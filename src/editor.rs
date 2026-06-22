@@ -95,7 +95,7 @@ pub enum EditorMode {
     /// Multi-cursor operation on single buffer
     SingleBuffer {
         cursors: MultiCursors<Vec<MultiCursor>, Vec<usize>>,
-        range: Option<SelectionRange>,
+        range: SingleBufferRange,
     },
     /// Multi-cursor operation on multiple buffers
     AllBuffers {
@@ -139,6 +139,33 @@ pub enum SearchMode {
         /// The current candidate
         index: usize,
     },
+}
+
+/// Range of lines for a single buffer, multi-cursor operation
+#[derive(Default)]
+pub enum SingleBufferRange {
+    #[default]
+    WholeFile,
+    UpdateLines,
+    Lines(SelectionRange),
+}
+
+impl From<SingleBufferRange> for Option<SelectionRange> {
+    fn from(range: SingleBufferRange) -> Self {
+        match range {
+            SingleBufferRange::WholeFile | SingleBufferRange::UpdateLines => None,
+            SingleBufferRange::Lines(lines) => Some(lines),
+        }
+    }
+}
+
+impl From<Option<SelectionRange>> for SingleBufferRange {
+    fn from(range: Option<SelectionRange>) -> Self {
+        match range {
+            None => Self::WholeFile,
+            Some(lines) => Self::Lines(lines),
+        }
+    }
 }
 
 pub struct BufferListItem {
@@ -844,7 +871,7 @@ impl Editor {
                                         highlight: true,
                                         mode: MultiCursorMode::Editing,
                                     },
-                                    range: range.take(),
+                                    range: std::mem::take(range).into(),
                                 }
                             }
                             NextModeIncremental::Autocomplete {
@@ -1401,7 +1428,7 @@ impl Editor {
                                     highlight: true,
                                     mode: MultiCursorMode::Editing,
                                 },
-                                range: None,
+                                range: SingleBufferRange::WholeFile,
                             }
                         })
                     }
@@ -1490,7 +1517,7 @@ impl Editor {
                             highlight: false,
                             mode: MultiCursorMode::Editing,
                         },
-                        range: None,
+                        range: SingleBufferRange::UpdateLines,
                     };
                 }
             }
@@ -2444,7 +2471,7 @@ fn process_multi_cursor(
         highlight,
         ..
     }: &mut MultiCursors<Vec<MultiCursor>, Vec<usize>>,
-    range: &mut Option<SelectionRange>,
+    range: &mut SingleBufferRange,
     event: Event,
     alt: Vec<AltCursor<'_>>,
 ) -> Option<EditorMode> {
@@ -2496,7 +2523,7 @@ fn process_multi_cursor(
                 type_: SearchType::default(),
                 mode: SearchMode::Editing,
             },
-            range: range.take(),
+            range: std::mem::take(range).into(),
         }),
         keybind!(SelectInside) => {
             *highlight = false;
@@ -2552,7 +2579,7 @@ fn process_multi_cursor(
                     highlight: std::mem::take(highlight),
                     mode: MultiCursorMode::PasteGroup { total: total.get() },
                 },
-                range: range.take(),
+                range: std::mem::take(range),
             }),
             _ => {
                 if let Some(cut) = cut_buffer {
@@ -2710,6 +2737,14 @@ fn process_multi_cursor(
             },
             range: std::mem::take(range),
         }),
+        keybind!(UpdateLines)
+            if matches!(range, SingleBufferRange::UpdateLines)
+                && let Some(start) = matches.first()
+                && let Some(end) = matches.last() =>
+        {
+            buffer.set_selection(start.start(), end.end());
+            Some(EditorMode::default())
+        }
         _ => None,
     }
 }
