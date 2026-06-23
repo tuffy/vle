@@ -33,11 +33,6 @@ pub trait ChooserSource: Clone + std::fmt::Display {
 
     fn target(&self) -> DirTarget;
 
-    /// Returns whether target can be toggled
-    fn toggleable(&self) -> bool {
-        false
-    }
-
     /// Returns new target, if any
     fn toggle_source(&mut self) -> DirTarget {
         // nothing else to switch to by default
@@ -426,10 +421,6 @@ impl ChooserSource for MultiSource {
         }
     }
 
-    fn toggleable(&self) -> bool {
-        true
-    }
-
     fn toggle_source(&mut self) -> DirTarget {
         match self {
             Self::Local { active, .. } => active.toggle().into(),
@@ -461,7 +452,7 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
         state: &mut FileChooserState<S>,
     ) {
         use crate::buffer::{BufferMessage, render_message};
-        use crate::help::{CREATE_FILE, OPEN_FILE, OPEN_FILE_TOGGLEABLE, render_help};
+        use crate::help::{CREATE_FILE, OPEN_FILE_TOGGLEABLE, render_help};
         use crate::scrollbar::{Scrollbar, ScrollbarState};
         use ratatui::{
             layout::{
@@ -567,13 +558,7 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
             list_area,
             buf,
             match &state.chosen {
-                Chosen::Default | Chosen::Selected(_) => {
-                    if state.source.toggleable() {
-                        OPEN_FILE_TOGGLEABLE
-                    } else {
-                        OPEN_FILE
-                    }
-                }
+                Chosen::Default | Chosen::Selected(_) => OPEN_FILE_TOGGLEABLE,
                 Chosen::New(_) => CREATE_FILE,
             },
             |b| {
@@ -857,11 +842,9 @@ impl<S: ChooserSource> FileChooserState<S> {
         self.source.target()
     }
 
-    pub fn toggle_source(&mut self, open_dir: &mut crate::editor::OpenDir) -> Result<(), S::Error> {
-        if self.source.toggleable() {
-            let target = self.source.toggle_source();
-            *self = Self::new(self.source.clone(), open_dir[target].clone())?;
-        }
+    pub fn toggle_source(&mut self, open_dir: &crate::editor::OpenDir) -> Result<(), S::Error> {
+        let target = self.source.toggle_source();
+        *self = Self::new(self.source.clone(), open_dir[target].clone())?;
         Ok(())
     }
 }
