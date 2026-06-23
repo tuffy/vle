@@ -6,10 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[cfg(not(feature = "ssh"))]
-use crate::files::LocalSource;
 #[cfg(feature = "ssh")]
-use crate::files::{EitherSource, SshSource};
+use crate::files::SshSource;
+use crate::files::{MultiSource, ScratchSource};
 use crate::key;
 use crate::{
     buffer::{
@@ -103,10 +102,7 @@ pub enum EditorMode {
     },
     /// Opening a new file
     Open {
-        #[cfg(not(feature = "ssh"))]
-        chooser: Box<FileChooserState<LocalSource>>,
-        #[cfg(feature = "ssh")]
-        chooser: Box<FileChooserState<EitherSource>>,
+        chooser: Box<FileChooserState<MultiSource>>,
     },
     /// Performing autocomplete on a partial word
     Autocomplete {
@@ -390,27 +386,25 @@ impl std::fmt::Display for Remote {
     }
 }
 
-#[cfg(feature = "ssh")]
 #[derive(Debug)]
 pub enum RemoteError {
     Io(std::io::Error),
+    #[cfg(feature = "ssh")]
     Ssh(ssh2::Error),
 }
 
-#[cfg(feature = "ssh")]
 impl std::fmt::Display for RemoteError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::Io(i) => i.fmt(f),
+            #[cfg(feature = "ssh")]
             Self::Ssh(s) => s.fmt(f),
         }
     }
 }
 
-#[cfg(feature = "ssh")]
 impl std::error::Error for RemoteError {}
 
-#[cfg(feature = "ssh")]
 impl From<std::io::Error> for RemoteError {
     fn from(err: std::io::Error) -> Self {
         Self::Io(err)
@@ -427,6 +421,7 @@ impl From<ssh2::Error> for RemoteError {
 #[derive(Default)]
 pub struct OpenDir {
     local: Option<PathBuf>,
+    scratch: Option<PathBuf>,
     #[cfg(feature = "ssh")]
     ssh: Option<PathBuf>,
     last: Option<DirTarget>,
@@ -438,6 +433,7 @@ impl std::ops::Index<DirTarget> for OpenDir {
     fn index(&self, index: DirTarget) -> &Option<PathBuf> {
         match index {
             DirTarget::Local => &self.local,
+            DirTarget::Scratch => &self.scratch,
             #[cfg(feature = "ssh")]
             DirTarget::Ssh => &self.ssh,
         }
@@ -448,6 +444,7 @@ impl std::ops::IndexMut<DirTarget> for OpenDir {
     fn index_mut(&mut self, index: DirTarget) -> &mut Option<PathBuf> {
         match index {
             DirTarget::Local => &mut self.local,
+            DirTarget::Scratch => &mut self.scratch,
             #[cfg(feature = "ssh")]
             DirTarget::Ssh => &mut self.ssh,
         }
@@ -457,8 +454,30 @@ impl std::ops::IndexMut<DirTarget> for OpenDir {
 #[derive(Copy, Clone)]
 pub enum DirTarget {
     Local,
+    Scratch,
     #[cfg(feature = "ssh")]
     Ssh,
+}
+
+impl DirTarget {
+    #[cfg(feature = "ssh")]
+    /// Toggles state and returns new state
+    pub fn toggle(&mut self) -> Self {
+        match self {
+            Self::Ssh => {
+                *self = Self::Local;
+                Self::Local
+            }
+            Self::Local => {
+                *self = Self::Scratch;
+                Self::Scratch
+            }
+            Self::Scratch => {
+                *self = Self::Ssh;
+                Self::Ssh
+            }
+        }
+    }
 }
 
 pub struct Editor {
@@ -470,6 +489,7 @@ pub struct Editor {
     show_help: bool,                     // whether to show keybindinings
     show_sub_help: bool,                 // whether to show sub-mode help
     open_dir: OpenDir,                   // currently open directory
+    scratch: ScratchSource,              // any open scratch buffers
     #[cfg(feature = "ssh")]
     remote: Option<Remote>, // remote SSH session
 }
@@ -485,6 +505,7 @@ impl Editor {
             show_help: false,
             show_sub_help: true,
             open_dir: OpenDir::default(),
+            scratch: ScratchSource::default(),
             #[cfg(feature = "ssh")]
             remote: None,
         })
@@ -498,11 +519,13 @@ impl Editor {
         hostname: String,
     ) -> Result<Self, RemoteError> {
         let remote = Remote::open(username, hostname, remote)?;
+        let scratch = ScratchSource::default();
 
         Ok(Self {
             mode: EditorMode::Open {
                 chooser: Box::new(FileChooserState::new(
-                    EitherSource::ssh(
+                    MultiSource::ssh(
+                        scratch.clone(),
                         SshSource::open(remote.to_string(), remote.sftp()),
                         DirTarget::Ssh,
                     ),
@@ -510,6 +533,7 @@ impl Editor {
                 )?),
             },
             remote: Some(remote),
+            scratch,
             ..Self::new(buffers)?
         })
     }
@@ -1454,7 +1478,10 @@ impl Editor {
             }
             #[cfg(not(feature = "ssh"))]
             keybind!(Open) => {
-                match FileChooserState::new(LocalSource, self.open_dir[DirTarget::Local].clone()) {
+                match FileChooserState::new(
+                    MultiSource::local(self.scratch.clone()),
+                    self.open_dir[DirTarget::Local].clone(),
+                ) {
                     Ok(chooser) => {
                         self.mode = EditorMode::Open {
                             chooser: Box::new(chooser),
@@ -1468,7 +1495,7 @@ impl Editor {
             #[cfg(feature = "ssh")]
             keybind!(Open) => match self.remote.as_ref() {
                 None => match FileChooserState::new(
-                    EitherSource::local(),
+                    MultiSource::local(self.scratch.clone()),
                     self.open_dir[DirTarget::Local].clone(),
                 ) {
                     Ok(chooser) => {
@@ -1481,7 +1508,8 @@ impl Editor {
                     }
                 },
                 Some(remote) => match FileChooserState::new(
-                    EitherSource::ssh(
+                    MultiSource::ssh(
+                        self.scratch.clone(),
                         SshSource::open(remote.to_string(), remote.sftp()),
                         self.open_dir.last.unwrap_or(DirTarget::Ssh),
                     ),

@@ -40,6 +40,10 @@ static ALWAYS_TAB: LazyLock<bool> = LazyLock::new(|| std::env::var("VLE_ALWAYS_T
 /// A buffer's source file
 pub enum Source {
     Local(PathBuf),
+    Scratch {
+        path: PathBuf,
+        data: Rc<RefCell<String>>,
+    },
     #[cfg(feature = "ssh")]
     Ssh {
         sftp: Rc<ssh2::Sftp>,
@@ -53,6 +57,9 @@ impl PartialEq for Source {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Local(x), Self::Local(y)) => x == y,
+            (Self::Scratch { path: p1, data: d1 }, Self::Scratch { path: p2, data: d2 }) => {
+                Rc::ptr_eq(d1, d2) && p1 == p2
+            }
             #[cfg(feature = "ssh")]
             (Self::Ssh { sftp: s1, path: x }, Self::Ssh { sftp: s2, path: y }) => {
                 Rc::ptr_eq(s1, s2) && x == y
@@ -76,7 +83,7 @@ impl Source {
     /// Used to display in the title
     fn name(&self) -> Cow<'_, str> {
         match self {
-            Self::Local(path) => path.to_string_lossy(),
+            Self::Local(path) | Self::Scratch { path, .. } => path.to_string_lossy(),
             #[cfg(feature = "ssh")]
             Self::Ssh { path, .. } => path.to_string_lossy(),
             Self::Tutorial => "Welcome!".into(),
@@ -87,7 +94,7 @@ impl Source {
     /// Used to display in the tab bar
     fn short_name(&self) -> Cow<'_, str> {
         match self {
-            Self::Local(path) => path
+            Self::Local(path) | Self::Scratch { path, .. } => path
                 .file_prefix()
                 .map(|s| s.to_string_lossy())
                 .unwrap_or_else(|| "???".into()),
@@ -104,7 +111,9 @@ impl Source {
     /// Used to determine syntax highlighting
     pub fn file_name(&self) -> Option<Cow<'_, str>> {
         match self {
-            Self::Local(path) => path.file_name().map(|s| s.to_string_lossy()),
+            Self::Local(path) | Self::Scratch { path, .. } => {
+                path.file_name().map(|s| s.to_string_lossy())
+            }
             #[cfg(feature = "ssh")]
             Self::Ssh { path, .. } => path.file_name().map(|s| s.to_string_lossy()),
             Self::Tutorial => None,
@@ -115,7 +124,9 @@ impl Source {
     /// Also used to determine syntax highlighting
     pub fn extension(&self) -> Option<&str> {
         match self {
-            Self::Local(path) => path.extension().and_then(|s| s.to_str()),
+            Self::Local(path) | Self::Scratch { path, .. } => {
+                path.extension().and_then(|s| s.to_str())
+            }
             #[cfg(feature = "ssh")]
             Self::Ssh { path, .. } => path.extension().and_then(|s| s.to_str()),
             Self::Tutorial => None,
@@ -130,6 +141,7 @@ impl Source {
                 let s = std::fs::File::open(path).and_then(|f| endings.reader_to_string(f))?;
                 Ok((path.metadata().and_then(|m| m.modified()).ok(), s))
             }
+            Self::Scratch { data, .. } => Ok((None, data.borrow().clone())),
             #[cfg(feature = "ssh")]
             Self::Ssh { sftp, path } => match sftp.open(path) {
                 Ok(mut f) => {
@@ -183,7 +195,7 @@ impl Source {
                 }
                 Err(e) => Err(e.into()),
             },
-            Self::Tutorial | Self::Test => self
+            Self::Tutorial | Self::Test | Self::Scratch { .. } => self
                 .read_string(LineEndings::default())
                 .map(|(t, s)| (t, ropey::Rope::from(s), LineEndings::default())),
         }
@@ -204,6 +216,10 @@ impl Source {
                 f.flush()?;
                 Ok(f.get_mut().metadata().and_then(|m| m.modified()).ok())
             }),
+            Self::Scratch { data: scratch, .. } => {
+                *scratch.borrow_mut() = data.clone().into();
+                Ok(None)
+            }
             #[cfg(feature = "ssh")]
             Self::Ssh { sftp, path } => match sftp.create(path) {
                 Ok(mut f) => {
@@ -232,7 +248,7 @@ impl Source {
                         SystemTime::UNIX_EPOCH.checked_add(std::time::Duration::from_secs(secs))
                     })
             }
-            Self::Tutorial | Self::Test => None,
+            Self::Tutorial | Self::Test | Self::Scratch { .. } => None,
         }
     }
 }
@@ -5447,11 +5463,15 @@ impl StatefulWidget for BufferWidget<'_> {
             block.border_style(Style::default().dim())
         };
 
-        #[cfg(feature = "ssh")]
-        let block = if matches!(buffer.source, Source::Ssh { .. }) {
-            block.title_bottom(border_title("SSH".to_string(), focused).right_aligned())
-        } else {
-            block
+        let block = match buffer.source {
+            Source::Local(_) | Source::Tutorial | Source::Test => block,
+            Source::Scratch { .. } => {
+                block.title_bottom(border_title("Scratch".to_string(), focused).right_aligned())
+            }
+            #[cfg(feature = "ssh")]
+            Source::Ssh { .. } => {
+                block.title_bottom(border_title("SSH".to_string(), focused).right_aligned())
+            }
         };
 
         let block = match buffer.endings.name() {

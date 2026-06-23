@@ -326,7 +326,7 @@ pub static OPEN_FILE_TOGGLEABLE: &[Keybinding] = &[
     none(&[RIGHT], "Down Directory"),
     none(&["Tab"], "Toggle File to Open"),
     ctrl(&["H"], "Toggle Show Hidden Files"),
-    keybind::<key::Open>("Toggle Local/SSH Files"),
+    keybind::<key::Open>("Toggle File Source"),
     none(&["Enter"], "Select File(s)"),
     none(&["Esc"], "Cancel"),
 ];

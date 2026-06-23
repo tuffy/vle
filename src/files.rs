@@ -8,12 +8,13 @@
 
 use crate::buffer::Source;
 use crate::editor::DirTarget;
-#[cfg(feature = "ssh")]
 use crate::editor::RemoteError;
 use crate::prompt::TextField;
 use ratatui::widgets::StatefulWidget;
-use std::collections::BTreeSet;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 /// Width of text box, in characters
 const TEXT_WIDTH: u16 = 30;
@@ -28,7 +29,7 @@ pub trait ChooserSource: Clone + std::fmt::Display {
 
     fn read_dir(&self, dir: &Path, show_hidden: bool) -> Result<Vec<Entry>, Self::Error>;
 
-    fn open(&self, path: PathBuf) -> Source;
+    fn open(&mut self, path: PathBuf) -> Source;
 
     fn target(&self) -> DirTarget;
 
@@ -86,12 +87,64 @@ impl ChooserSource for LocalSource {
             })
     }
 
-    fn open(&self, path: PathBuf) -> Source {
+    fn open(&mut self, path: PathBuf) -> Source {
         Source::Local(path)
     }
 
     fn target(&self) -> DirTarget {
         DirTarget::Local
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct ScratchSource(Rc<RefCell<BTreeMap<PathBuf, Rc<RefCell<String>>>>>);
+
+impl std::fmt::Display for ScratchSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        "Scratch Files".fmt(f)
+    }
+}
+
+impl ChooserSource for ScratchSource {
+    type Error = std::convert::Infallible;
+
+    fn current_dir(&self) -> Result<PathBuf, Self::Error> {
+        Ok(PathBuf::from("<SCRATCH>"))
+    }
+
+    fn read_dir(&self, _dir: &Path, _show_hidden: bool) -> Result<Vec<Entry>, Self::Error> {
+        Ok(self
+            .0
+            .borrow()
+            .keys()
+            .map(|pb| Entry {
+                name: pb.as_os_str().to_string_lossy().into_owned(),
+                path: pb.clone(),
+                is_dir: false,
+            })
+            .collect())
+    }
+
+    fn open(&mut self, path: PathBuf) -> Source {
+        use std::collections::btree_map::Entry;
+
+        match self.0.borrow_mut().entry(path) {
+            Entry::Occupied(o) => Source::Scratch {
+                path: o.key().clone(),
+                data: Rc::clone(o.get()),
+            },
+            Entry::Vacant(v) => {
+                let path = v.key().clone();
+                Source::Scratch {
+                    path,
+                    data: Rc::clone(v.insert(Rc::new(RefCell::new(String::default())))),
+                }
+            }
+        }
+    }
+
+    fn target(&self) -> DirTarget {
+        DirTarget::Scratch
     }
 }
 
@@ -147,7 +200,7 @@ impl ChooserSource for SshSource {
             })
     }
 
-    fn open(&self, path: PathBuf) -> Source {
+    fn open(&mut self, path: PathBuf) -> Source {
         Source::Ssh {
             sftp: std::rc::Rc::clone(&self.remote),
             path,
@@ -159,44 +212,101 @@ impl ChooserSource for SshSource {
     }
 }
 
-#[cfg(feature = "ssh")]
+#[derive(Copy, Clone)]
+pub enum LocalTarget {
+    Local,
+    Scratch,
+}
+
+impl LocalTarget {
+    /// Toggles state and returns new state
+    fn toggle(&mut self) -> Self {
+        match self {
+            Self::Local => {
+                *self = Self::Scratch;
+                Self::Scratch
+            }
+            Self::Scratch => {
+                *self = Self::Local;
+                Self::Local
+            }
+        }
+    }
+}
+
+impl From<LocalTarget> for DirTarget {
+    fn from(target: LocalTarget) -> Self {
+        match target {
+            LocalTarget::Local => DirTarget::Local,
+            LocalTarget::Scratch => DirTarget::Scratch,
+        }
+    }
+}
+
 #[derive(Clone)]
-pub enum EitherSource {
-    /// No SSH connection specified, only local files possible
-    Local(LocalSource),
-    /// Either remote or local files are possible
+pub enum MultiSource {
+    /// No SSH connection specified, only local or scratch files possible
+    Local {
+        local: LocalSource,
+        scratch: ScratchSource,
+        active: LocalTarget,
+    },
+    /// Remote, local or scratch files are all possible
+    #[cfg(feature = "ssh")]
     Ssh {
         local: LocalSource,
+        scratch: ScratchSource,
         ssh: SshSource,
         active: DirTarget,
     },
 }
 
-#[cfg(feature = "ssh")]
-impl EitherSource {
-    pub fn local() -> Self {
-        Self::Local(LocalSource)
+impl MultiSource {
+    pub fn local(scratch: ScratchSource) -> Self {
+        Self::Local {
+            local: LocalSource,
+            scratch,
+            active: LocalTarget::Local,
+        }
     }
 
-    pub fn ssh(ssh: SshSource, active: DirTarget) -> Self {
+    #[cfg(feature = "ssh")]
+    pub fn ssh(scratch: ScratchSource, ssh: SshSource, active: DirTarget) -> Self {
         Self::Ssh {
             local: LocalSource,
+            scratch,
             ssh,
             active,
         }
     }
 }
 
-#[cfg(feature = "ssh")]
-impl std::fmt::Display for EitherSource {
+impl std::fmt::Display for MultiSource {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::Local(local)
-            | Self::Ssh {
+            Self::Local {
+                local,
+                active: LocalTarget::Local,
+                ..
+            } => local.fmt(f),
+            Self::Local {
+                scratch,
+                active: LocalTarget::Scratch,
+                ..
+            } => scratch.fmt(f),
+            #[cfg(feature = "ssh")]
+            Self::Ssh {
                 local,
                 active: DirTarget::Local,
                 ..
             } => local.fmt(f),
+            #[cfg(feature = "ssh")]
+            Self::Ssh {
+                scratch,
+                active: DirTarget::Scratch,
+                ..
+            } => scratch.fmt(f),
+            #[cfg(feature = "ssh")]
             Self::Ssh {
                 ssh,
                 active: DirTarget::Ssh,
@@ -206,18 +316,34 @@ impl std::fmt::Display for EitherSource {
     }
 }
 
-#[cfg(feature = "ssh")]
-impl ChooserSource for EitherSource {
+impl ChooserSource for MultiSource {
     type Error = RemoteError;
 
     fn current_dir(&self) -> Result<PathBuf, Self::Error> {
         match self {
-            Self::Local(local)
-            | Self::Ssh {
+            Self::Local {
+                local,
+                active: LocalTarget::Local,
+                ..
+            } => local.current_dir().map_err(RemoteError::Io),
+            Self::Local {
+                scratch,
+                active: LocalTarget::Scratch,
+                ..
+            } => Ok(scratch.current_dir().unwrap()),
+            #[cfg(feature = "ssh")]
+            Self::Ssh {
                 local,
                 active: DirTarget::Local,
                 ..
             } => local.current_dir().map_err(RemoteError::Io),
+            #[cfg(feature = "ssh")]
+            Self::Ssh {
+                scratch,
+                active: DirTarget::Scratch,
+                ..
+            } => Ok(scratch.current_dir().unwrap()),
+            #[cfg(feature = "ssh")]
             Self::Ssh {
                 ssh,
                 active: DirTarget::Ssh,
@@ -228,12 +354,29 @@ impl ChooserSource for EitherSource {
 
     fn read_dir(&self, dir: &Path, show_hidden: bool) -> Result<Vec<Entry>, Self::Error> {
         match self {
-            Self::Local(local)
-            | Self::Ssh {
+            Self::Local {
+                local,
+                active: LocalTarget::Local,
+                ..
+            } => local.read_dir(dir, show_hidden).map_err(RemoteError::Io),
+            Self::Local {
+                scratch,
+                active: LocalTarget::Scratch,
+                ..
+            } => Ok(scratch.read_dir(dir, show_hidden).unwrap()),
+            #[cfg(feature = "ssh")]
+            Self::Ssh {
                 local,
                 active: DirTarget::Local,
                 ..
             } => local.read_dir(dir, show_hidden).map_err(RemoteError::Io),
+            #[cfg(feature = "ssh")]
+            Self::Ssh {
+                scratch,
+                active: DirTarget::Scratch,
+                ..
+            } => Ok(scratch.read_dir(dir, show_hidden).unwrap()),
+            #[cfg(feature = "ssh")]
             Self::Ssh {
                 ssh,
                 active: DirTarget::Ssh,
@@ -242,14 +385,31 @@ impl ChooserSource for EitherSource {
         }
     }
 
-    fn open(&self, path: PathBuf) -> Source {
+    fn open(&mut self, path: PathBuf) -> Source {
         match self {
-            Self::Local(local)
-            | Self::Ssh {
+            Self::Local {
+                local,
+                active: LocalTarget::Local,
+                ..
+            } => local.open(path),
+            Self::Local {
+                scratch,
+                active: LocalTarget::Scratch,
+                ..
+            } => scratch.open(path),
+            #[cfg(feature = "ssh")]
+            Self::Ssh {
                 local,
                 active: DirTarget::Local,
                 ..
             } => local.open(path),
+            #[cfg(feature = "ssh")]
+            Self::Ssh {
+                scratch,
+                active: DirTarget::Scratch,
+                ..
+            } => scratch.open(path),
+            #[cfg(feature = "ssh")]
             Self::Ssh {
                 ssh,
                 active: DirTarget::Ssh,
@@ -260,41 +420,21 @@ impl ChooserSource for EitherSource {
 
     fn target(&self) -> DirTarget {
         match self {
-            Self::Local(local)
-            | Self::Ssh {
-                local,
-                active: DirTarget::Local,
-                ..
-            } => local.target(),
-            Self::Ssh {
-                ssh,
-                active: DirTarget::Ssh,
-                ..
-            } => ssh.target(),
+            Self::Local { active, .. } => (*active).into(),
+            #[cfg(feature = "ssh")]
+            Self::Ssh { active, .. } => *active,
         }
     }
 
     fn toggleable(&self) -> bool {
-        matches!(self, Self::Ssh { .. })
+        true
     }
 
     fn toggle_source(&mut self) -> DirTarget {
         match self {
-            Self::Local(_) => DirTarget::Local,
-            Self::Ssh {
-                active: active @ DirTarget::Local,
-                ..
-            } => {
-                *active = DirTarget::Ssh;
-                DirTarget::Ssh
-            }
-            Self::Ssh {
-                active: active @ DirTarget::Ssh,
-                ..
-            } => {
-                *active = DirTarget::Local;
-                DirTarget::Local
-            }
+            Self::Local { active, .. } => active.toggle().into(),
+            #[cfg(feature = "ssh")]
+            Self::Ssh { active, .. } => active.toggle(),
         }
     }
 }
