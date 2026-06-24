@@ -92,7 +92,7 @@ impl ChooserSource for LocalSource {
 }
 
 #[derive(Clone, Default)]
-pub struct ScratchSource(Rc<RefCell<BTreeMap<PathBuf, Rc<RefCell<String>>>>>);
+pub struct ScratchSource(Rc<RefCell<BTreeMap<PathBuf, Rc<RefCell<ropey::Rope>>>>>);
 
 impl std::fmt::Display for ScratchSource {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -132,7 +132,7 @@ impl ChooserSource for ScratchSource {
                 let path = v.key().clone();
                 Source::Scratch {
                     path,
-                    data: Rc::clone(v.insert(Rc::new(RefCell::new(String::default())))),
+                    data: Rc::clone(v.insert(Rc::default())),
                 }
             }
         }

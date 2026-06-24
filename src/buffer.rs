@@ -42,7 +42,7 @@ pub enum Source {
     Local(PathBuf),
     Scratch {
         path: PathBuf,
-        data: Rc<RefCell<String>>,
+        data: Rc<RefCell<ropey::Rope>>,
     },
     #[cfg(feature = "ssh")]
     Ssh {
@@ -141,7 +141,7 @@ impl Source {
                 let s = std::fs::File::open(path).and_then(|f| endings.reader_to_string(f))?;
                 Ok((path.metadata().and_then(|m| m.modified()).ok(), s))
             }
-            Self::Scratch { data, .. } => Ok((None, data.borrow().clone())),
+            Self::Scratch { data, .. } => Ok((None, data.borrow().clone().into())),
             #[cfg(feature = "ssh")]
             Self::Ssh { sftp, path } => match sftp.open(path) {
                 Ok(mut f) => {
@@ -178,6 +178,7 @@ impl Source {
                 }
                 Err(e) => Err(e),
             },
+            Self::Scratch { data, .. } => Ok((None, data.borrow().clone(), LineEndings::default())),
             #[cfg(feature = "ssh")]
             Self::Ssh { sftp, path } => match sftp.open(path) {
                 Ok(mut f) => {
@@ -195,7 +196,7 @@ impl Source {
                 }
                 Err(e) => Err(e.into()),
             },
-            Self::Tutorial | Self::Test | Self::Scratch { .. } => self
+            Self::Tutorial | Self::Test => self
                 .read_string(LineEndings::default())
                 .map(|(t, s)| (t, ropey::Rope::from(s), LineEndings::default())),
         }
@@ -217,7 +218,7 @@ impl Source {
                 Ok(f.get_mut().metadata().and_then(|m| m.modified()).ok())
             }),
             Self::Scratch { data: scratch, .. } => {
-                *scratch.borrow_mut() = data.clone().into();
+                *scratch.borrow_mut() = data.clone();
                 Ok(None)
             }
             #[cfg(feature = "ssh")]
