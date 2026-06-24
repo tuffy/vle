@@ -2124,6 +2124,10 @@ fn process_open_file<S: ChooserSource>(
             chooser.backspace();
             None
         }
+        key!(Delete) => {
+            chooser.delete();
+            None
+        }
         key!(Tab) => {
             chooser.toggle_selected();
             None

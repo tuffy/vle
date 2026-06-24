@@ -769,6 +769,15 @@ impl<S: ChooserSource> FileChooserState<S> {
         }
     }
 
+    pub fn delete(&mut self) {
+        if let Chosen::New(prompt) = &mut self.chosen {
+            prompt.delete();
+            if prompt.is_empty() {
+                self.chosen = Chosen::Default;
+            }
+        }
+    }
+
     pub fn toggle_selected(&mut self) {
         if let Some(idx) = self.index
             && let Some(Entry {
