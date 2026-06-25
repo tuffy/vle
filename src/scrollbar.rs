@@ -35,16 +35,16 @@ impl ScrollbarState {
         Self { position, ..self }
     }
 
-    fn thumb(&self) -> Thumb<usize> {
+    fn thumb(&self) -> Option<Thumb<usize>> {
         // ensure start point of thumb doesn't push the thumb itself
         // outside of the scrollbar area
-        Thumb {
+        (self.content_length > 0).then_some(Thumb {
             start: self.position.min(
                 self.content_length
                     .saturating_sub(self.viewport_content_length),
             ),
             length: self.viewport_content_length.min(self.content_length),
-        }
+        })
     }
 
     fn to_subpixels(&self, track_height: u16) -> impl Fn(usize) -> Subpixel {
@@ -78,27 +78,39 @@ impl StatefulWidget for Scrollbar {
             return;
         };
 
-        let thumb = state.thumb().map(state.to_subpixels(track.height));
+        match state.thumb() {
+            Some(thumb) => {
+                let thumb = thumb.map(state.to_subpixels(track.height));
 
-        // constrain thumb to be at least 1 full pixel from the track's end
-        // and to be at least 1 full pixel tall
-        let thumb = Range::from(Thumb {
-            start: thumb.start.min(max_thumb),
-            length: thumb.length.max(Subpixel::pixels(1)),
-        });
+                // constrain thumb to be at least 1 full pixel from the track's end
+                // and to be at least 1 full pixel tall
+                let thumb = Range::from(Thumb {
+                    start: thumb.start.min(max_thumb),
+                    length: thumb.length.max(Subpixel::pixels(1)),
+                });
 
-        // paint start of the thumb in subpixels
-        buf[(track.x, track.y + thumb.start.pixel)].set_char(subpixels_char(thumb.start.subpixel));
+                // paint start of the thumb in subpixels
+                buf[(track.x, track.y + thumb.start.pixel)]
+                    .set_char(subpixels_char(thumb.start.subpixel));
 
-        // paint whole blocks between start and end of thumb
-        for i in (thumb.start.pixel + 1)..thumb.end.pixel {
-            buf[(track.x, track.y + i)].set_char('\u{2588}');
-        }
+                // paint whole blocks between start and end of thumb
+                for i in (thumb.start.pixel + 1)..thumb.end.pixel {
+                    buf[(track.x, track.y + i)].set_char('\u{2588}');
+                }
 
-        // paint end of thumb in inverted subpixels
-        if thumb.end.subpixel > 0 {
-            buf[(track.x, track.y + thumb.end.pixel)].set_char(subpixels_char(thumb.end.subpixel));
-            buf[(track.x, track.y + thumb.end.pixel)].set_style(Style::default().reversed());
+                // paint end of thumb in inverted subpixels
+                if thumb.end.subpixel > 0 {
+                    buf[(track.x, track.y + thumb.end.pixel)]
+                        .set_char(subpixels_char(thumb.end.subpixel));
+                    buf[(track.x, track.y + thumb.end.pixel)]
+                        .set_style(Style::default().reversed());
+                }
+            }
+            None => {
+                for i in 0..track.height {
+                    buf[(track.x, track.y + i)].set_char('\u{2588}');
+                }
+            }
         }
     }
 }
