@@ -42,7 +42,7 @@ pub enum Source {
     Local(PathBuf),
     Scratch {
         path: PathBuf,
-        data: Rc<RefCell<ropey::Rope>>,
+        data: ropey::Rope,
     },
     #[cfg(feature = "ssh")]
     Ssh {
@@ -56,10 +56,8 @@ pub enum Source {
 impl PartialEq for Source {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Local(x), Self::Local(y)) => x == y,
-            (Self::Scratch { path: p1, data: d1 }, Self::Scratch { path: p2, data: d2 }) => {
-                Rc::ptr_eq(d1, d2) && p1 == p2
-            }
+            (Self::Local(x), Self::Local(y))
+            | (Self::Scratch { path: x, .. }, Self::Scratch { path: y, .. }) => x == y,
             #[cfg(feature = "ssh")]
             (Self::Ssh { sftp: s1, path: x }, Self::Ssh { sftp: s2, path: y }) => {
                 Rc::ptr_eq(s1, s2) && x == y
@@ -141,7 +139,7 @@ impl Source {
                 let s = std::fs::File::open(path).and_then(|f| endings.reader_to_string(f))?;
                 Ok((path.metadata().and_then(|m| m.modified()).ok(), s))
             }
-            Self::Scratch { data, .. } => Ok((None, data.borrow().clone().into())),
+            Self::Scratch { data, .. } => Ok((None, data.clone().into())),
             #[cfg(feature = "ssh")]
             Self::Ssh { sftp, path } => match sftp.open(path) {
                 Ok(mut f) => {
@@ -178,7 +176,7 @@ impl Source {
                 }
                 Err(e) => Err(e),
             },
-            Self::Scratch { data, .. } => Ok((None, data.borrow().clone(), LineEndings::default())),
+            Self::Scratch { data, .. } => Ok((None, data.clone(), LineEndings::default())),
             #[cfg(feature = "ssh")]
             Self::Ssh { sftp, path } => match sftp.open(path) {
                 Ok(mut f) => {
@@ -204,7 +202,7 @@ impl Source {
 
     /// Used for file saving
     fn save_data(
-        &self,
+        &mut self,
         data: &ropey::Rope,
         endings: LineEndings,
     ) -> std::io::Result<Option<SystemTime>> {
@@ -218,7 +216,7 @@ impl Source {
                 Ok(f.get_mut().metadata().and_then(|m| m.modified()).ok())
             }),
             Self::Scratch { data: scratch, .. } => {
-                *scratch.borrow_mut() = data.clone();
+                *scratch = data.clone();
                 Ok(None)
             }
             #[cfg(feature = "ssh")]
@@ -4759,6 +4757,21 @@ impl BufferList {
         });
 
         Some((offsets, finalize_matches(matches, prefix)))
+    }
+
+    pub fn scratch_buffers(&self) -> Vec<PathBuf> {
+        let mut scratch = self
+            .buffers
+            .iter()
+            .filter_map(|b| match &b.buffer.borrow().source {
+                Source::Scratch { path, .. } => Some(path.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        scratch.sort_unstable();
+
+        scratch
     }
 }
 

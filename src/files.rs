@@ -11,10 +11,8 @@ use crate::editor::DirTarget;
 use crate::editor::RemoteError;
 use crate::prompt::TextField;
 use ratatui::widgets::StatefulWidget;
-use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 
 /// Width of text box, in characters
 const TEXT_WIDTH: u16 = 30;
@@ -27,7 +25,12 @@ pub trait ChooserSource: Clone + std::fmt::Display {
 
     fn current_dir(&self) -> Result<PathBuf, Self::Error>;
 
-    fn read_dir(&self, dir: &Path, show_hidden: bool) -> Result<Vec<Entry>, Self::Error>;
+    fn read_dir(
+        &self,
+        scratch_buffers: &[PathBuf],
+        dir: &Path,
+        show_hidden: bool,
+    ) -> Result<Vec<Entry>, Self::Error>;
 
     fn open(&mut self, path: PathBuf) -> Source;
 
@@ -56,7 +59,12 @@ impl ChooserSource for LocalSource {
         std::env::current_dir()
     }
 
-    fn read_dir(&self, dir: &Path, show_hidden: bool) -> std::io::Result<Vec<Entry>> {
+    fn read_dir(
+        &self,
+        _scratch_buffers: &[PathBuf],
+        dir: &Path,
+        show_hidden: bool,
+    ) -> Result<Vec<Entry>, Self::Error> {
         dir.read_dir()
             .and_then(|entries| {
                 entries
@@ -92,7 +100,7 @@ impl ChooserSource for LocalSource {
 }
 
 #[derive(Clone, Default)]
-pub struct ScratchSource(Rc<RefCell<BTreeMap<PathBuf, Rc<RefCell<ropey::Rope>>>>>);
+pub struct ScratchSource;
 
 impl std::fmt::Display for ScratchSource {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -107,13 +115,19 @@ impl ChooserSource for ScratchSource {
         Ok(PathBuf::from("<SCRATCH>"))
     }
 
-    fn read_dir(&self, _dir: &Path, _show_hidden: bool) -> Result<Vec<Entry>, Self::Error> {
-        Ok(self
-            .0
-            .borrow()
-            .keys()
+    fn read_dir(
+        &self,
+        scratch_buffers: &[PathBuf],
+        _dir: &Path,
+        _show_hidden: bool,
+    ) -> Result<Vec<Entry>, Self::Error> {
+        Ok(scratch_buffers
+            .iter()
             .map(|pb| Entry {
-                name: pb.as_os_str().to_string_lossy().into_owned(),
+                name: pb
+                    .file_name()
+                    .map(|n| n.display().to_string())
+                    .unwrap_or_default(),
                 path: pb.clone(),
                 is_dir: false,
             })
@@ -121,20 +135,9 @@ impl ChooserSource for ScratchSource {
     }
 
     fn open(&mut self, path: PathBuf) -> Source {
-        use std::collections::btree_map::Entry;
-
-        match self.0.borrow_mut().entry(path) {
-            Entry::Occupied(o) => Source::Scratch {
-                path: o.key().clone(),
-                data: Rc::clone(o.get()),
-            },
-            Entry::Vacant(v) => {
-                let path = v.key().clone();
-                Source::Scratch {
-                    path,
-                    data: Rc::clone(v.insert(Rc::default())),
-                }
-            }
+        Source::Scratch {
+            path,
+            data: ropey::Rope::default(),
         }
     }
 
@@ -172,7 +175,12 @@ impl ChooserSource for SshSource {
         self.remote.realpath(Path::new("."))
     }
 
-    fn read_dir(&self, dir: &Path, show_hidden: bool) -> Result<Vec<Entry>, Self::Error> {
+    fn read_dir(
+        &self,
+        _scratch_buffers: &[PathBuf],
+        dir: &Path,
+        show_hidden: bool,
+    ) -> Result<Vec<Entry>, Self::Error> {
         self.remote
             .readdir(dir)
             .map(|entries| {
@@ -257,19 +265,19 @@ pub enum MultiSource {
 }
 
 impl MultiSource {
-    pub fn local(scratch: ScratchSource) -> Self {
+    pub fn local() -> Self {
         Self::Local {
             local: LocalSource,
-            scratch,
+            scratch: ScratchSource,
             active: LocalTarget::Local,
         }
     }
 
     #[cfg(feature = "ssh")]
-    pub fn ssh(scratch: ScratchSource, ssh: SshSource, active: DirTarget) -> Self {
+    pub fn ssh(ssh: SshSource, active: DirTarget) -> Self {
         Self::Ssh {
             local: LocalSource,
-            scratch,
+            scratch: ScratchSource,
             ssh,
             active,
         }
@@ -347,36 +355,47 @@ impl ChooserSource for MultiSource {
         }
     }
 
-    fn read_dir(&self, dir: &Path, show_hidden: bool) -> Result<Vec<Entry>, Self::Error> {
+    fn read_dir(
+        &self,
+        scratch_buffers: &[PathBuf],
+        dir: &Path,
+        show_hidden: bool,
+    ) -> Result<Vec<Entry>, Self::Error> {
         match self {
             Self::Local {
                 local,
                 active: LocalTarget::Local,
                 ..
-            } => local.read_dir(dir, show_hidden).map_err(RemoteError::Io),
+            } => local
+                .read_dir(scratch_buffers, dir, show_hidden)
+                .map_err(RemoteError::Io),
             Self::Local {
                 scratch,
                 active: LocalTarget::Scratch,
                 ..
-            } => Ok(scratch.read_dir(dir, show_hidden).unwrap()),
+            } => Ok(scratch.read_dir(scratch_buffers, dir, show_hidden).unwrap()),
             #[cfg(feature = "ssh")]
             Self::Ssh {
                 local,
                 active: DirTarget::Local,
                 ..
-            } => local.read_dir(dir, show_hidden).map_err(RemoteError::Io),
+            } => local
+                .read_dir(scratch_buffers, dir, show_hidden)
+                .map_err(RemoteError::Io),
             #[cfg(feature = "ssh")]
             Self::Ssh {
                 scratch,
                 active: DirTarget::Scratch,
                 ..
-            } => Ok(scratch.read_dir(dir, show_hidden).unwrap()),
+            } => Ok(scratch.read_dir(scratch_buffers, dir, show_hidden).unwrap()),
             #[cfg(feature = "ssh")]
             Self::Ssh {
                 ssh,
                 active: DirTarget::Ssh,
                 ..
-            } => ssh.read_dir(dir, show_hidden).map_err(RemoteError::Ssh),
+            } => ssh
+                .read_dir(scratch_buffers, dir, show_hidden)
+                .map_err(RemoteError::Ssh),
         }
     }
 
@@ -586,16 +605,21 @@ pub struct FileChooserState<S: ChooserSource> {
     error: Option<String>, // error message
     source: S,             // file source
     show_hidden: bool,     // whether to display hidden files
+    scratch_buffers: Vec<PathBuf>,
 }
 
 impl<S: ChooserSource> FileChooserState<S> {
     /// May return an error if unable to get the current
     /// working directory or are unable to read it
-    pub fn new(source: S, dir: Option<PathBuf>) -> Result<Self, S::Error> {
+    pub fn new(
+        source: S,
+        scratch_buffers: Vec<PathBuf>,
+        dir: Option<PathBuf>,
+    ) -> Result<Self, S::Error> {
         let cwd = source.current_dir()?;
         let dir = dir.unwrap_or_else(|| cwd.clone());
 
-        let contents = source.read_dir(&dir, false)?;
+        let contents = source.read_dir(&scratch_buffers, &dir, false)?;
 
         Ok(Self {
             dir,
@@ -607,11 +631,15 @@ impl<S: ChooserSource> FileChooserState<S> {
             error: None,
             source,
             show_hidden: false,
+            scratch_buffers,
         })
     }
 
     pub fn update_dir(&mut self, new_dir: PathBuf) {
-        match self.source.read_dir(&new_dir, self.show_hidden) {
+        match self
+            .source
+            .read_dir(&self.scratch_buffers, &new_dir, self.show_hidden)
+        {
             Ok(contents) => {
                 self.dir_count = contents.iter().take_while(|e| e.is_dir).count();
                 self.contents = contents;
@@ -853,7 +881,11 @@ impl<S: ChooserSource> FileChooserState<S> {
 
     pub fn toggle_source(&mut self, open_dir: &crate::editor::OpenDir) -> Result<(), S::Error> {
         let target = self.source.toggle_source();
-        *self = Self::new(self.source.clone(), open_dir[target].clone())?;
+        *self = Self::new(
+            self.source.clone(),
+            std::mem::take(&mut self.scratch_buffers),
+            open_dir[target].clone(),
+        )?;
         Ok(())
     }
 }

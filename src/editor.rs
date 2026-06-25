@@ -6,9 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use crate::files::MultiSource;
 #[cfg(feature = "ssh")]
 use crate::files::SshSource;
-use crate::files::{MultiSource, ScratchSource};
 use crate::key;
 use crate::{
     buffer::{
@@ -489,7 +489,6 @@ pub struct Editor {
     show_help: bool,                     // whether to show keybindinings
     show_sub_help: bool,                 // whether to show sub-mode help
     open_dir: OpenDir,                   // currently open directory
-    scratch: ScratchSource,              // any open scratch buffers
     #[cfg(feature = "ssh")]
     remote: Option<Remote>, // remote SSH session
 }
@@ -505,7 +504,6 @@ impl Editor {
             show_help: false,
             show_sub_help: true,
             open_dir: OpenDir::default(),
-            scratch: ScratchSource::default(),
             #[cfg(feature = "ssh")]
             remote: None,
         })
@@ -519,21 +517,19 @@ impl Editor {
         hostname: String,
     ) -> Result<Self, RemoteError> {
         let remote = Remote::open(username, hostname, remote)?;
-        let scratch = ScratchSource::default();
 
         Ok(Self {
             mode: EditorMode::Open {
                 chooser: Box::new(FileChooserState::new(
                     MultiSource::ssh(
-                        scratch.clone(),
                         SshSource::open(remote.to_string(), remote.sftp()),
                         DirTarget::Ssh,
                     ),
+                    vec![], // no scratch buffers open yet
                     None,
                 )?),
             },
             remote: Some(remote),
-            scratch,
             ..Self::new(buffers)?
         })
     }
@@ -1479,7 +1475,8 @@ impl Editor {
             #[cfg(not(feature = "ssh"))]
             keybind!(Open) => {
                 match FileChooserState::new(
-                    MultiSource::local(self.scratch.clone()),
+                    MultiSource::local(),
+                    self.layout.selected_buffer_list().scratch_buffers(),
                     self.open_dir[DirTarget::Local].clone(),
                 ) {
                     Ok(chooser) => {
@@ -1495,7 +1492,8 @@ impl Editor {
             #[cfg(feature = "ssh")]
             keybind!(Open) => match self.remote.as_ref() {
                 None => match FileChooserState::new(
-                    MultiSource::local(self.scratch.clone()),
+                    MultiSource::local(),
+                    self.layout.selected_buffer_list().scratch_buffers(),
                     self.open_dir[DirTarget::Local].clone(),
                 ) {
                     Ok(chooser) => {
@@ -1509,10 +1507,10 @@ impl Editor {
                 },
                 Some(remote) => match FileChooserState::new(
                     MultiSource::ssh(
-                        self.scratch.clone(),
                         SshSource::open(remote.to_string(), remote.sftp()),
                         self.open_dir.last.unwrap_or(DirTarget::Ssh),
                     ),
+                    self.layout.selected_buffer_list().scratch_buffers(),
                     self.open_dir[self.open_dir.last.unwrap_or(DirTarget::Ssh)].clone(),
                 ) {
                     Ok(chooser) => {
