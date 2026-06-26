@@ -38,6 +38,7 @@ mod sql;
 mod swift;
 mod test;
 mod tex;
+mod todo;
 mod toml;
 mod ts;
 mod tutorial;
@@ -80,6 +81,7 @@ pub enum Modifier {
     Bold,
     Italic,
     Underlined,
+    Strikethrough,
 }
 
 #[derive(Copy, Clone)]
@@ -104,6 +106,7 @@ impl From<Highlight> for ratatui::style::Style {
             Modifier::Italic => Self::default().italic(),
             Modifier::Underlined => Self::default().underlined(),
             Modifier::Bold => Self::default().bold(),
+            Modifier::Strikethrough => Self::default().crossed_out(),
         };
         match highlight.color {
             Some(color) => style.fg(color),
@@ -321,6 +324,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("tex") => Box::new(tex::Tex),
         Some("ana") => Box::new(flac::Analysis),
         Some("cue" | "CUE") => Box::new(cue::Cuesheet),
+        Some("txt") if source.file_name().as_deref() == Some("todo.txt") => Box::new(todo::Todo),
         _ => Box::new(DefaultHighlighter),
     }
 }
