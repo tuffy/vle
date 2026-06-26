@@ -82,9 +82,9 @@ enum CToken {
     #[regex(r"'([^\\\']|\\.){0,1}'")]
     String,
 
-    #[regex(r"0[xX][0-9a-fA-F]+[uU]?(|ll|LL)?")]
-    #[regex(r"[0-9][0-9']*[uU]?(ll|LL)?")]
-    #[regex(r"0b[01]+")]
+    #[regex(r"-?0[xX][0-9a-fA-F]+[uU]?(|ll|LL)?")]
+    #[regex(r"-?[0-9][0-9']*[uU]?(ll|LL)?")]
+    #[regex(r"-?0b[01]+")]
     Integer,
 
     #[token("true")]

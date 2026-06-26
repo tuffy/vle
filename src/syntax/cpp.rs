@@ -120,8 +120,8 @@ enum CppToken {
     #[regex(r"'([^\\\']|\\.){0,1}'")]
     String,
 
-    #[regex(r"0x[0-9a-fA-F]+[uU]?(|ll|LL)?")]
-    #[regex(r"[0-9]+[uU]?(ll|LL)?")]
+    #[regex(r"-?0x[0-9a-fA-F]+[uU]?(|ll|LL)?")]
+    #[regex(r"-?[0-9]+[uU]?(ll|LL)?")]
     Integer,
 
     #[token("true")]
