@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::syntax::{Highlight, Syntax};
+use crate::syntax::{Highlight, Highlighter, Syntax};
 
 #[derive(Debug)]
 pub struct Git;
@@ -18,15 +18,31 @@ impl std::fmt::Display for Git {
 }
 
 impl Syntax for Git {
-    fn highlight<'s>(
+    fn initialize(
         &self,
-        s: &'s str,
-        _state: &'s mut crate::syntax::HighlightState,
+        _rope: &ropey::Rope,
+        _viewport_line: usize,
+        _viewport_height: u16,
+    ) -> Box<dyn Highlighter> {
+        Box::new(GitHighlighter)
+    }
+
+    fn initialize_find(&self) -> Box<dyn Highlighter> {
+        Box::new(GitHighlighter)
+    }
+}
+
+struct GitHighlighter;
+
+impl Highlighter for GitHighlighter {
+    fn highlight<'s>(
+        &'s mut self,
+        line: &'s str,
     ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
         use crate::syntax::color::COMMENT;
 
-        if s.starts_with('#') {
-            Box::new(std::iter::once((COMMENT, 0..s.len())))
+        if line.starts_with('#') {
+            Box::new(std::iter::once((COMMENT, 0..line.len())))
         } else {
             Box::new(std::iter::empty())
         }

@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::syntax::{Highlight, color};
+use crate::syntax::{Highlight, Highlighter, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -43,19 +43,35 @@ impl std::fmt::Display for Makefile {
 }
 
 impl crate::syntax::Syntax for Makefile {
-    fn highlight<'s>(
+    fn initialize(
         &self,
-        s: &'s str,
-        _state: &'s mut crate::syntax::HighlightState,
-    ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
-        Box::new(MakefileToken::lexer(s).spanned().filter_map(|(t, r)| {
-            t.ok()
-                .and_then(|t| Highlight::try_from(t).ok())
-                .map(|c| (c, r))
-        }))
+        _rope: &ropey::Rope,
+        _viewport_line: usize,
+        _viewport_height: u16,
+    ) -> Box<dyn Highlighter> {
+        Box::new(MakefileHighlighter)
+    }
+
+    fn initialize_find(&self) -> Box<dyn Highlighter> {
+        Box::new(MakefileHighlighter)
     }
 
     fn tabs_required(&self) -> bool {
         true
+    }
+}
+
+struct MakefileHighlighter;
+
+impl Highlighter for MakefileHighlighter {
+    fn highlight<'s>(
+        &'s mut self,
+        line: &'s str,
+    ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
+        Box::new(MakefileToken::lexer(line).spanned().filter_map(|(t, r)| {
+            t.ok()
+                .and_then(|t| Highlight::try_from(t).ok())
+                .map(|c| (c, r))
+        }))
     }
 }

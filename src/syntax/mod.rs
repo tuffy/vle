@@ -55,24 +55,6 @@ mod zig;
 // Boldface is also difficult to detect in a dark color scheme
 // and shouldn't be relied upon.
 
-#[derive(Default)]
-pub enum HighlightState {
-    #[default]
-    Normal,
-    Commenting,
-}
-
-/// A multi-line comment start or end
-pub enum MultiComment {
-    Start,
-    End,
-}
-
-pub enum MultiCommentType {
-    Bidirectional(fn(&str) -> Option<MultiComment>),
-    Unidirectional(fn(HighlightState, &str) -> HighlightState),
-}
-
 /// A subset of all of Ratatui's possible modifiers
 #[derive(Copy, Clone, Default)]
 pub enum Modifier {
@@ -115,59 +97,67 @@ impl From<Highlight> for ratatui::style::Style {
     }
 }
 
+pub trait Highlighter {
+    fn highlight<'s>(
+        &'s mut self,
+        line: &'s str,
+    ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's>;
+
+    /// Yields portions of the string to underline
+    fn underline(&self) -> Option<Underliner> {
+        None
+    }
+}
+
+impl Highlighter for Box<dyn Highlighter> {
+    fn highlight<'s>(
+        &'s mut self,
+        line: &'s str,
+    ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
+        Box::as_mut(self).highlight(line)
+    }
+
+    fn underline(&self) -> Option<Underliner> {
+        Box::as_ref(self).underline()
+    }
+}
+
 type Underliner = for<'s> fn(&'s str) -> Box<dyn Iterator<Item = std::ops::Range<usize>> + 's>;
 
 /// Implemented for different syntax highlighters
 pub trait Syntax: std::fmt::Debug + std::fmt::Display {
-    /// Yields portions of the string to highlight in a particular color
-    /// range is in bytes
-    fn highlight<'s>(
+    fn initialize(
         &self,
-        s: &'s str,
-        state: &'s mut HighlightState,
-    ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's>;
+        rope: &ropey::Rope,
+        viewport_line: usize,
+        viewport_height: u16,
+    ) -> Box<dyn Highlighter>;
 
-    /// Yields portions of the string to underline
-    /// range is in bytes
-    fn underline(&self) -> Option<Underliner> {
-        None
-    }
+    fn initialize_find(&self) -> Box<dyn Highlighter>;
 
     /// Returns true if the format requires actual tabs instead of spaces
     /// (pretty sure this only applies to Makefiles)
     fn tabs_required(&self) -> bool {
         false
     }
-
-    /// If format supports multi-line comments,
-    /// returns function which returns the first one that
-    /// exists in a line, if any
-    fn multicomment(&self) -> Option<MultiCommentType> {
-        None
-    }
 }
 
 impl Syntax for Box<dyn Syntax> {
-    fn highlight<'s>(
+    fn initialize(
         &self,
-        s: &'s str,
-        state: &'s mut HighlightState,
-    ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
-        Box::as_ref(self).highlight(s, state)
+        rope: &ropey::Rope,
+        viewport_line: usize,
+        viewport_height: u16,
+    ) -> Box<dyn Highlighter> {
+        Box::as_ref(self).initialize(rope, viewport_line, viewport_height)
     }
 
-    fn underline(
-        &self,
-    ) -> Option<for<'s> fn(&'s str) -> Box<dyn Iterator<Item = std::ops::Range<usize>> + 's>> {
-        Box::as_ref(self).underline()
+    fn initialize_find(&self) -> Box<dyn Highlighter> {
+        Box::as_ref(self).initialize_find()
     }
 
     fn tabs_required(&self) -> bool {
         Box::as_ref(self).tabs_required()
-    }
-
-    fn multicomment(&self) -> Option<MultiCommentType> {
-        Box::as_ref(self).multicomment()
     }
 }
 
@@ -175,10 +165,26 @@ impl Syntax for Box<dyn Syntax> {
 pub struct DefaultSyntax;
 
 impl Syntax for DefaultSyntax {
-    fn highlight<'s>(
+    fn initialize(
         &self,
-        _s: &'s str,
-        _state: &'s mut HighlightState,
+        _rope: &ropey::Rope,
+        _viewport_line: usize,
+        _viewport_height: u16,
+    ) -> Box<dyn Highlighter> {
+        Box::new(DefaultSyntaxHighlighter)
+    }
+
+    fn initialize_find(&self) -> Box<dyn Highlighter> {
+        Box::new(DefaultSyntaxHighlighter)
+    }
+}
+
+struct DefaultSyntaxHighlighter;
+
+impl Highlighter for DefaultSyntaxHighlighter {
+    fn highlight<'s>(
+        &'s mut self,
+        _line: &'s str,
     ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
         Box::new(std::iter::empty())
     }
@@ -212,11 +218,12 @@ where
     P: Logos<'s, Extras: Default>,
     C: Logos<'s, Source = P::Source, Extras = P::Extras>,
 {
-    pub fn new(state: &HighlightState, source: &'s <P as Logos<'s>>::Source) -> Self {
-        match state {
-            HighlightState::Normal => Self::Plain(Lexer::new(source)),
-            HighlightState::Commenting => Self::Commenting(Lexer::new(source)),
-        }
+    pub fn normal(source: &'s <P as Logos<'s>>::Source) -> Self {
+        Self::Plain(Lexer::new(source))
+    }
+
+    pub fn commenting(source: &'s <P as Logos<'s>>::Source) -> Self {
+        Self::Commenting(Lexer::new(source))
     }
 }
 
@@ -336,27 +343,50 @@ macro_rules! define_syntax {
     };
     ($syntax:ty, $token:ty, $underliner:expr) => {
         impl $crate::syntax::Syntax for $syntax {
-            fn highlight<'s>(
+            fn initialize(
                 &self,
-                s: &'s str,
-                _state: &'s mut $crate::syntax::HighlightState,
+                _rope: &ropey::Rope,
+                _viewport_line: usize,
+                _viewport_height: u16,
+            ) -> Box<dyn $crate::syntax::Highlighter> {
+                Box::new(SyntaxHighlighter)
+            }
+
+            fn initialize_find(&self) -> Box<dyn $crate::syntax::Highlighter> {
+                Box::new(SyntaxHighlighter)
+            }
+        }
+
+        struct SyntaxHighlighter;
+
+        impl $crate::syntax::Highlighter for SyntaxHighlighter {
+            fn highlight<'s>(
+                &'s mut self,
+                line: &'s str,
             ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
-                Box::new(<$token>::lexer(s).spanned().filter_map(|(t, r)| {
+                Box::new(<$token>::lexer(line).spanned().filter_map(|(t, r)| {
                     t.ok()
                         .and_then(|t| Highlight::try_from(t).ok())
                         .map(|c| (c, r))
                 }))
             }
 
-            fn underline(
-                &self,
-            ) -> Option<for<'s> fn(&'s str) -> Box<dyn Iterator<Item = std::ops::Range<usize>> + 's>> {
+            fn underline(&self) -> Option<$crate::syntax::Underliner> {
                 $underliner
             }
         }
     };
     ($syntax:ty, $token:ty, $comment_start:ident, $comment_end:ident, $start:literal, $end:literal, $comment_color:expr) => {
-        define_syntax!($syntax, $token, $comment_start, $comment_end, $start, $end, $comment_color, None);
+        define_syntax!(
+            $syntax,
+            $token,
+            $comment_start,
+            $comment_end,
+            $start,
+            $end,
+            $comment_color,
+            None
+        );
     };
     ($syntax:ty, $token:ty, $comment_start:ident, $comment_end:ident, $start:literal, $end:literal, $comment_color:expr, $underliner:expr) => {
         impl Plain for $token {
@@ -393,45 +423,13 @@ macro_rules! define_syntax {
         }
 
         impl $crate::syntax::Syntax for $syntax {
-            fn highlight<'s>(
+            fn initialize(
                 &self,
-                s: &'s str,
-                state: &'s mut $crate::syntax::HighlightState,
-            ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
-                use $crate::syntax::{EitherLexer, HighlightState};
-
-                let lexer: EitherLexer<$token, CommentEnd> = EitherLexer::new(&state, s);
-
-                Box::new(lexer.filter_map(move |(t, r)| {
-                    match state {
-                        HighlightState::Normal => t
-                            .ok()
-                            .inspect(|t| {
-                                if t.is_comment_start() {
-                                    *state = HighlightState::Commenting;
-                                }
-                            })
-                            .and_then(|t| Highlight::try_from(t).ok())
-                            .map(|c| (c, r)),
-                        HighlightState::Commenting => Some(match t {
-                            Ok(end) if end.is_comment_end() => {
-                                *state = HighlightState::default();
-                                (Highlight::try_from(end).ok()?, r)
-                            }
-                            _ => ($comment_color, r),
-                        }),
-                    }
-                }))
-            }
-
-            fn underline(
-                &self,
-            ) -> Option<for<'s> fn(&'s str) -> Box<dyn Iterator<Item = std::ops::Range<usize>> + 's>> {
-                $underliner
-            }
-
-            fn multicomment(&self) -> Option<$crate::syntax::MultiCommentType> {
-                use $crate::syntax::{MultiComment, MultiCommentType};
+                rope: &ropey::Rope,
+                viewport_line: usize,
+                viewport_height: u16,
+            ) -> Box<dyn $crate::syntax::Highlighter> {
+                use std::borrow::Cow;
 
                 #[derive(Logos, Debug)]
                 #[logos(skip r"[ \t\n]+")]
@@ -442,18 +440,73 @@ macro_rules! define_syntax {
                     End,
                 }
 
-                impl From<Comment> for MultiComment {
-                    fn from(c: Comment) -> MultiComment {
-                        match c {
-                            Comment::Start => MultiComment::Start,
-                            Comment::End => MultiComment::End,
+                impl From<Comment> for SyntaxHighlighter {
+                    fn from(comment: Comment) -> Self {
+                        match comment {
+                            Comment::Start => SyntaxHighlighter::Normal,
+                            Comment::End => SyntaxHighlighter::Commenting,
                         }
                     }
                 }
 
-                Some(MultiCommentType::Bidirectional(|s: &str| {
-                    Comment::lexer(s).find_map(|token| token.ok().map(|t| t.into()))
+                Box::new(
+                    rope.lines_at(viewport_line)
+                        .take(viewport_height.into())
+                        .find_map(|line| {
+                            Comment::lexer(&Cow::from(line))
+                                .find_map(|token| token.ok().map(|t| t.into()))
+                        })
+                        .unwrap_or(SyntaxHighlighter::Normal),
+                )
+            }
+
+            fn initialize_find(&self) -> Box<dyn $crate::syntax::Highlighter> {
+                Box::new(SyntaxHighlighter::Normal)
+            }
+        }
+
+        enum SyntaxHighlighter {
+            Normal,
+            Commenting,
+        }
+
+        impl $crate::syntax::Highlighter for SyntaxHighlighter {
+            fn highlight<'s>(
+                &'s mut self,
+                line: &'s str,
+            ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
+                use $crate::syntax::EitherLexer;
+
+                let lexer: EitherLexer<$token, CommentEnd> = match self {
+                    Self::Normal => EitherLexer::normal(line),
+                    Self::Commenting => EitherLexer::commenting(line),
+                };
+
+                Box::new(lexer.filter_map(move |(t, r)| {
+                    match self {
+                        Self::Normal => t
+                            .ok()
+                            .inspect(|t| {
+                                if t.is_comment_start() {
+                                    *self = Self::Commenting;
+                                }
+                            })
+                            .and_then(|t| Highlight::try_from(t).ok())
+                            .map(|c| (c, r)),
+                        Self::Commenting => Some(match t {
+                            Ok(end) if end.is_comment_end() => {
+                                *self = Self::Normal;
+                                (Highlight::try_from(end).ok()?, r)
+                            }
+                            _ => ($comment_color, r),
+                        }),
+                    }
                 }))
+            }
+
+            /// Yields portions of the string to underline
+            fn underline(&self) -> Option<$crate::syntax::Underliner> {
+                $underliner
             }
         }
     };

@@ -6,9 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::syntax::{
-    Commenting, Highlight, HighlightState, MultiCommentType, Plain, Syntax, color,
-};
+use crate::syntax::{Commenting, Highlight, Highlighter, Plain, Syntax, Underliner, color};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -137,29 +135,65 @@ enum PythonDef {
 }
 
 impl Syntax for Python {
-    fn highlight<'s>(
+    fn initialize(
         &self,
-        s: &'s str,
-        state: &'s mut crate::syntax::HighlightState,
+        rope: &ropey::Rope,
+        viewport_line: usize,
+        _viewport_height: u16,
+    ) -> Box<dyn Highlighter> {
+        use std::borrow::Cow;
+
+        Box::new(
+            rope.lines()
+                .take(viewport_line)
+                .fold(PythonHighlighter::Normal, |acc, line| {
+                    MultiLineString::lexer(&Cow::from(line)).fold(acc, |acc, s| match s {
+                        Ok(MultiLineString::StartEnd) => match acc {
+                            PythonHighlighter::Normal => PythonHighlighter::Commenting,
+                            PythonHighlighter::Commenting => PythonHighlighter::Normal,
+                        },
+                        Err(()) => acc,
+                    })
+                }),
+        )
+    }
+
+    fn initialize_find(&self) -> Box<dyn Highlighter> {
+        Box::new(PythonHighlighter::Normal)
+    }
+}
+
+enum PythonHighlighter {
+    Normal,
+    Commenting,
+}
+
+impl Highlighter for PythonHighlighter {
+    fn highlight<'s>(
+        &'s mut self,
+        line: &'s str,
     ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
         use crate::syntax::EitherLexer;
 
-        let lexer: EitherLexer<PythonToken, MultiLineString> = EitherLexer::new(state, s);
+        let lexer: EitherLexer<PythonToken, MultiLineString> = match self {
+            Self::Normal => EitherLexer::normal(line),
+            Self::Commenting => EitherLexer::commenting(line),
+        };
 
         Box::new(lexer.filter_map(move |(t, r)| {
-            match state {
-                HighlightState::Normal => t
+            match self {
+                PythonHighlighter::Normal => t
                     .ok()
                     .inspect(|t| {
                         if t.is_comment_start() {
-                            *state = HighlightState::Commenting;
+                            *self = PythonHighlighter::Commenting;
                         }
                     })
                     .and_then(|t| Highlight::try_from(t).ok())
                     .map(|c| (c, r)),
-                HighlightState::Commenting => Some(match t {
+                PythonHighlighter::Commenting => Some(match t {
                     Ok(end) if end.is_comment_end() => {
-                        *state = HighlightState::default();
+                        *self = PythonHighlighter::Normal;
                         (Highlight::try_from(end).ok()?, r)
                     }
                     _ => (color::STRING, r),
@@ -168,9 +202,7 @@ impl Syntax for Python {
         }))
     }
 
-    fn underline(
-        &self,
-    ) -> Option<for<'s> fn(&'s str) -> Box<dyn Iterator<Item = std::ops::Range<usize>> + 's>> {
+    fn underline(&self) -> Option<Underliner> {
         Some(|s| {
             Box::new(
                 PythonDef::lexer(s)
@@ -178,17 +210,5 @@ impl Syntax for Python {
                     .filter_map(|(t, r)| t.ok().map(|_| r)),
             )
         })
-    }
-
-    fn multicomment(&self) -> Option<MultiCommentType> {
-        Some(MultiCommentType::Unidirectional(|acc, s| {
-            MultiLineString::lexer(s).fold(acc, |acc, s| match s {
-                Ok(MultiLineString::StartEnd) => match acc {
-                    HighlightState::Normal => HighlightState::Commenting,
-                    HighlightState::Commenting => HighlightState::Normal,
-                },
-                Err(()) => acc,
-            })
-        }))
     }
 }

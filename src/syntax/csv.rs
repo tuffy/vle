@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::syntax::Highlight;
+use crate::syntax::{Highlight, Highlighter};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -31,10 +31,26 @@ impl std::fmt::Display for Csv {
 }
 
 impl crate::syntax::Syntax for Csv {
-    fn highlight<'s>(
+    fn initialize(
         &self,
-        s: &'s str,
-        _state: &'s mut crate::syntax::HighlightState,
+        _rope: &ropey::Rope,
+        _viewport_line: usize,
+        _viewport_height: u16,
+    ) -> Box<dyn Highlighter> {
+        Box::new(CsvHighlighter)
+    }
+
+    fn initialize_find(&self) -> Box<dyn Highlighter> {
+        Box::new(CsvHighlighter)
+    }
+}
+
+struct CsvHighlighter;
+
+impl Highlighter for CsvHighlighter {
+    fn highlight<'s>(
+        &'s mut self,
+        line: &'s str,
     ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
         let colors = &[
             Color::Blue,
@@ -53,7 +69,7 @@ impl crate::syntax::Syntax for Csv {
         let mut color = next_color.next().unwrap();
 
         Box::new(
-            CsvToken::lexer(s)
+            CsvToken::lexer(line)
                 .spanned()
                 .filter_map(move |(t, r)| match t {
                     Ok(CsvToken::Separator) => {

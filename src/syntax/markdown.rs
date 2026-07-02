@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::syntax::{Highlight, Syntax};
+use crate::syntax::{Highlight, Highlighter, Syntax};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -59,27 +59,43 @@ impl std::fmt::Display for Markdown {
 }
 
 impl Syntax for Markdown {
-    fn highlight<'s>(
+    fn initialize(
         &self,
-        s: &'s str,
-        _state: &'s mut crate::syntax::HighlightState,
+        _rope: &ropey::Rope,
+        _viewport_line: usize,
+        _viewport_height: u16,
+    ) -> Box<dyn Highlighter> {
+        Box::new(MarkdownHighlighter)
+    }
+
+    fn initialize_find(&self) -> Box<dyn Highlighter> {
+        Box::new(MarkdownHighlighter)
+    }
+}
+
+struct MarkdownHighlighter;
+
+impl Highlighter for MarkdownHighlighter {
+    fn highlight<'s>(
+        &'s mut self,
+        line: &'s str,
     ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
-        if s.starts_with('#') {
+        if line.starts_with('#') {
             Box::new(
                 Highlight::try_from(MarkdownToken::Heading)
                     .ok()
-                    .map(|h| (h, 0..s.len()))
+                    .map(|h| (h, 0..line.len()))
                     .into_iter(),
             )
-        } else if s.starts_with("    ") || s.starts_with('\t') {
+        } else if line.starts_with("    ") || line.starts_with('\t') {
             Box::new(
                 Highlight::try_from(MarkdownToken::Code)
                     .ok()
-                    .map(|h| (h, 0..s.len()))
+                    .map(|h| (h, 0..line.len()))
                     .into_iter(),
             )
         } else {
-            Box::new(MarkdownToken::lexer(s).spanned().filter_map(|(t, r)| {
+            Box::new(MarkdownToken::lexer(line).spanned().filter_map(|(t, r)| {
                 t.ok()
                     .and_then(|t| Highlight::try_from(t).ok())
                     .map(|c| (c, r))

@@ -4840,7 +4840,7 @@ impl StatefulWidget for BufferWidget<'_> {
         };
         use crate::prompt::TextField;
         use crate::scrollbar::{Scrollbar, ScrollbarState};
-        use crate::syntax::{HighlightState, MultiComment, MultiCommentType, Syntax};
+        use crate::syntax::{Highlighter, Syntax};
         use private::SpanDeque;
         use ratatui::{
             layout::{
@@ -4915,14 +4915,13 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
 
-            fn colorize<S: Syntax>(
+            fn colorize<H: Highlighter>(
                 self,
-                syntax: &S,
-                state: &mut HighlightState,
+                highlighter: &mut H,
                 current_line: Option<usize>,
             ) -> ColorizedLine<'s> {
                 ColorizedLine {
-                    spans: colorize(syntax, state, self.line, current_line == Some(self.number)),
+                    spans: colorize(highlighter, self.line, current_line == Some(self.number)),
                     range: self.range,
                 }
             }
@@ -5130,9 +5129,8 @@ impl StatefulWidget for BufferWidget<'_> {
         }
 
         // Colorize syntax of the given text
-        fn colorize<'s, S: Syntax>(
-            syntax: &S,
-            state: &mut HighlightState,
+        fn colorize<'s, H: Highlighter>(
+            highlighter: &mut H,
             text: Cow<'s, str>,
             current_line: bool,
         ) -> VecDeque<Span<'s>> {
@@ -5177,14 +5175,13 @@ impl StatefulWidget for BufferWidget<'_> {
             }
 
             /// Colorizes &str or String to spans based on syntax
-            fn colorize<'r, R: FromRange<'r>, S: Syntax>(
-                syntax: &S,
-                state: &mut HighlightState,
+            fn colorize<'r, R: FromRange<'r>, H: Highlighter>(
+                highlighter: &mut H,
                 text: R,
             ) -> VecDeque<Span<'r>> {
                 let mut elements = VecDeque::default();
                 let mut idx = 0;
-                for (highlight, range) in syntax.highlight(text.as_ref(), state) {
+                for (highlight, range) in highlighter.highlight(text.as_ref()) {
                     if idx < range.start {
                         elements.push_back(Span::raw(text.extract_range(idx..range.start)));
                     }
@@ -5198,7 +5195,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 if !last.as_ref().is_empty() {
                     elements.push_back(Span::raw(last));
                 }
-                match syntax.underline() {
+                match highlighter.underline() {
                     None => elements,
                     Some(underline) => add_underlines(underline(text.as_ref()), elements),
                 }
@@ -5268,13 +5265,13 @@ impl StatefulWidget for BufferWidget<'_> {
 
             if current_line {
                 match text {
-                    Cow::Borrowed(s) => colorize(syntax, state, s.trim_end_matches('\n')),
-                    Cow::Owned(s) => colorize(syntax, state, trim_string_matches(s, '\n')),
+                    Cow::Borrowed(s) => colorize(highlighter, s.trim_end_matches('\n')),
+                    Cow::Owned(s) => colorize(highlighter, trim_string_matches(s, '\n')),
                 }
             } else {
                 highlight_trailing_whitespace(match text {
-                    Cow::Borrowed(s) => colorize(syntax, state, s.trim_end_matches('\n')),
-                    Cow::Owned(s) => colorize(syntax, state, trim_string_matches(s, '\n')),
+                    Cow::Borrowed(s) => colorize(highlighter, s.trim_end_matches('\n')),
+                    Cow::Owned(s) => colorize(highlighter, trim_string_matches(s, '\n')),
                 })
             }
         }
@@ -5315,14 +5312,12 @@ impl StatefulWidget for BufferWidget<'_> {
             Paragraph::new(crate::truncate::line_start(
                 Vec::from(match syntax {
                     FindSyntax::Plain(syntax) => highlight(colorize(
-                        syntax,
-                        &mut HighlightState::default(),
+                        &mut syntax.initialize_find(),
                         prompt.chars().collect::<String>().into(),
                         true,
                     )),
                     FindSyntax::Regex => highlight(colorize(
-                        &crate::syntax::Regex,
-                        &mut HighlightState::default(),
+                        &mut crate::syntax::Regex.initialize_find(),
                         prompt.chars().collect::<String>().into(),
                         true,
                     )),
@@ -5637,28 +5632,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
         let viewport_start = rope.try_line_to_char(viewport_line).unwrap_or(0);
 
-        // Initial HighlightState varies according to whether
-        // we detect a multi-line comment is open or not.
-
-        let mut hlstate: HighlightState = match syntax.multicomment() {
-            Some(MultiCommentType::Bidirectional(f)) => rope
-                .lines_at(viewport_line)
-                .take(area.height.into())
-                .find_map(|line| {
-                    f(&Cow::from(line)).map(|multicomment| match multicomment {
-                        MultiComment::Start => HighlightState::Normal,
-                        MultiComment::End => HighlightState::Commenting,
-                    })
-                })
-                .unwrap_or_default(),
-            Some(MultiCommentType::Unidirectional(f)) => rope
-                .lines()
-                .take(viewport_line)
-                .fold(HighlightState::default(), |acc, line| {
-                    f(acc, &Cow::from(line))
-                }),
-            None => HighlightState::default(),
-        };
+        let mut highlighter = syntax.initialize(rope, viewport_line, area.height);
 
         // we're technically only viewing half of the viewport most of the time
         // but it's okay for the viewport_size to be a bit larger than necessary
@@ -5728,7 +5702,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
                         EditorLine::iter(rope, viewport_line)
                             .map(|line| {
-                                line.colorize(syntax, &mut hlstate, current_line)
+                                line.colorize(&mut highlighter, current_line)
                                     .highlight_matches(&mut matches, |span| span.style(HIGHLIGHTED))
                                     .highlight_selection((selection_start, selection_end), |span| {
                                         span.style(HIGHLIGHT_MATCH)
@@ -5771,7 +5745,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         EditorLine::iter(rope, viewport_line)
                             .map(|line| {
                                 line.widen_range()
-                                    .colorize(syntax, &mut hlstate, current_line)
+                                    .colorize(&mut highlighter, current_line)
                                     .widen()
                                     .highlight_matches(&mut ranges, |span| {
                                         span.patch_style(underline_color(Color::Blue))
@@ -5808,7 +5782,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
                         EditorLine::iter(rope, viewport_line)
                             .map(|line| {
-                                line.colorize(syntax, &mut hlstate, current_line)
+                                line.colorize(&mut highlighter, current_line)
                                     .highlight_matches(&mut matches, |span| span.style(HIGHLIGHTED))
                                     .highlight_selection((selection_start, selection_end), |span| {
                                         span.style(HIGHLIGHT_MATCH)
@@ -5850,7 +5824,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         EditorLine::iter(rope, viewport_line)
                             .map(|line| {
                                 line.widen_range()
-                                    .colorize(syntax, &mut hlstate, current_line)
+                                    .colorize(&mut highlighter, current_line)
                                     .widen()
                                     .highlight_matches(&mut ranges, |span| {
                                         span.patch_style(underline_color(Color::Blue))
@@ -5905,7 +5879,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         EditorLine::iter(rope, viewport_line)
                             .map(|line| {
                                 line.widen_range()
-                                    .colorize(syntax, &mut hlstate, current_line)
+                                    .colorize(&mut highlighter, current_line)
                                     .widen()
                                     .highlight_matches(&mut ranges, |span| {
                                         span.patch_style(underline_color(Color::Blue))
@@ -5963,7 +5937,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         EditorLine::iter(rope, viewport_line)
                             .map(|line| {
                                 line.widen_range()
-                                    .colorize(syntax, &mut hlstate, current_line)
+                                    .colorize(&mut highlighter, current_line)
                                     .widen()
                                     .highlight_matches(&mut ranges, |span| {
                                         span.patch_style(underline_color(Color::Blue))
@@ -5994,7 +5968,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
                         EditorLine::iter(rope, viewport_line)
                             .map(|line| {
-                                line.colorize(syntax, &mut hlstate, current_line)
+                                line.colorize(&mut highlighter, current_line)
                                     .highlight_selection(
                                         (completion_start, completion_end),
                                         |span| span.patch_style(underline_color(Color::Red)),
@@ -6012,7 +5986,7 @@ impl StatefulWidget for BufferWidget<'_> {
                             // no selection, so nothing to highlight
                             None => EditorLine::iter(rope, viewport_line)
                                 .map(|line| {
-                                    line.colorize(syntax, &mut hlstate, current_line)
+                                    line.colorize(&mut highlighter, current_line)
                                         .widen()
                                         .highlight_marks(&mut marks)
                                         .into()
@@ -6027,7 +6001,7 @@ impl StatefulWidget for BufferWidget<'_> {
 
                                 EditorLine::iter(rope, viewport_line)
                                     .map(|line| {
-                                        line.colorize(syntax, &mut hlstate, current_line)
+                                        line.colorize(&mut highlighter, current_line)
                                             .widen_if(|line| *line.range.end() >= selection_end)
                                             .highlight_marks(&mut marks)
                                             .highlight_selection(
