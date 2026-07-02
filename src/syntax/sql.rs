@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::highlighter;
+use crate::define_syntax;
 use crate::syntax::{Highlight, color};
 use logos::Logos;
 
@@ -141,4 +141,4 @@ impl std::fmt::Display for Sql {
     }
 }
 
-highlighter!(Sql, SqlToken);
+define_syntax!(Sql, SqlToken);

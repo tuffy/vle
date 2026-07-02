@@ -330,9 +330,9 @@ pub fn syntax(source: &Source) -> Box<dyn Syntax> {
 }
 
 #[macro_export]
-macro_rules! highlighter {
+macro_rules! define_syntax {
     ($syntax:ty, $token:ty) => {
-        highlighter!($syntax, $token, None);
+        define_syntax!($syntax, $token, None);
     };
     ($syntax:ty, $token:ty, $underliner:expr) => {
         impl $crate::syntax::Syntax for $syntax {
@@ -356,7 +356,7 @@ macro_rules! highlighter {
         }
     };
     ($syntax:ty, $token:ty, $comment_start:ident, $comment_end:ident, $start:literal, $end:literal, $comment_color:expr) => {
-        highlighter!($syntax, $token, $comment_start, $comment_end, $start, $end, $comment_color, None);
+        define_syntax!($syntax, $token, $comment_start, $comment_end, $start, $end, $comment_color, None);
     };
     ($syntax:ty, $token:ty, $comment_start:ident, $comment_end:ident, $start:literal, $end:literal, $comment_color:expr, $underliner:expr) => {
         impl Plain for $token {

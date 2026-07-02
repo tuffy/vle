@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::syntax::{Commenting, Highlight, Plain, color};
-use crate::{highlighter, underliner};
+use crate::{define_syntax, underliner};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -138,7 +138,7 @@ impl std::fmt::Display for Php {
     }
 }
 
-highlighter!(
+define_syntax!(
     Php,
     PhpToken,
     StartComment,

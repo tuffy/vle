@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::highlighter;
+use crate::define_syntax;
 use crate::syntax::{Highlight, Modifier};
 use logos::Logos;
 use ratatui::style::Color;
@@ -52,7 +52,7 @@ impl std::fmt::Display for Patch {
     }
 }
 
-highlighter!(
+define_syntax!(
     Patch,
     PatchToken,
     Some(|s| { Box::new(s.starts_with("diff ").then_some(0..s.len()).into_iter()) })

@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::highlighter;
+use crate::define_syntax;
 use crate::syntax::{Commenting, Highlight, Plain, color};
 use logos::Logos;
 
@@ -68,7 +68,7 @@ impl std::fmt::Display for Ron {
     }
 }
 
-highlighter!(
+define_syntax!(
     Ron,
     RonToken,
     StartComment,

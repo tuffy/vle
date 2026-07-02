@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::highlighter;
+use crate::define_syntax;
 use crate::syntax::{Commenting, Highlight, Plain, color};
 use logos::Logos;
 use ratatui::style::Color;
@@ -56,7 +56,7 @@ impl std::fmt::Display for Xml {
     }
 }
 
-highlighter!(
+define_syntax!(
     Xml,
     XmlToken,
     StartComment,

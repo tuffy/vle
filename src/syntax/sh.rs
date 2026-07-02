@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::highlighter;
+use crate::define_syntax;
 use crate::syntax::{Highlight, color};
 use logos::Logos;
 use ratatui::style::Color;
@@ -119,4 +119,4 @@ impl std::fmt::Display for Shell {
     }
 }
 
-highlighter!(Shell, ShellToken);
+define_syntax!(Shell, ShellToken);

@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::syntax::{Highlight, color};
-use crate::{highlighter, underliner};
+use crate::{define_syntax, underliner};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -148,4 +148,4 @@ impl std::fmt::Display for Zig {
     }
 }
 
-highlighter!(Zig, ZigToken, underliner!(s, ZigDef));
+define_syntax!(Zig, ZigToken, underliner!(s, ZigDef));

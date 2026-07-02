@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::syntax::{Commenting, Highlight, Plain, color};
-use crate::{highlighter, underliner};
+use crate::{define_syntax, underliner};
 use logos::Logos;
 
 #[derive(Logos, Debug)]
@@ -117,7 +117,7 @@ impl std::fmt::Display for TypeScript {
     }
 }
 
-highlighter!(
+define_syntax!(
     TypeScript,
     TypeScriptToken,
     StartComment,
