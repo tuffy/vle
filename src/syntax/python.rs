@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::syntax::{
-    Commenting, Highlight, HighlightState, Highlighter, MultiCommentType, Plain, color,
+    Commenting, Highlight, HighlightState, MultiCommentType, Plain, Syntax, color,
 };
 use logos::Logos;
 use ratatui::style::Color;
@@ -136,7 +136,7 @@ enum PythonDef {
     Definition,
 }
 
-impl Highlighter for Python {
+impl Syntax for Python {
     fn highlight<'s>(
         &self,
         s: &'s str,

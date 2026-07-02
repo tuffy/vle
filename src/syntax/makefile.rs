@@ -42,7 +42,7 @@ impl std::fmt::Display for Makefile {
     }
 }
 
-impl crate::syntax::Highlighter for Makefile {
+impl crate::syntax::Syntax for Makefile {
     fn highlight<'s>(
         &self,
         s: &'s str,

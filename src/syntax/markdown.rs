@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::syntax::{Highlight, Highlighter};
+use crate::syntax::{Highlight, Syntax};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -58,7 +58,7 @@ impl std::fmt::Display for Markdown {
     }
 }
 
-impl Highlighter for Markdown {
+impl Syntax for Markdown {
     fn highlight<'s>(
         &self,
         s: &'s str,

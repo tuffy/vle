@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::syntax::{Highlight, Highlighter};
+use crate::syntax::{Highlight, Syntax};
 
 #[derive(Debug)]
 pub struct Git;
@@ -17,7 +17,7 @@ impl std::fmt::Display for Git {
     }
 }
 
-impl Highlighter for Git {
+impl Syntax for Git {
     fn highlight<'s>(
         &self,
         s: &'s str,

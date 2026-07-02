@@ -8,7 +8,7 @@
 
 use crate::editor::{EditorMode, MultiCursorMode, MultiCursors, Search, SearchMode};
 use crate::endings::LineEndings;
-use crate::syntax::Highlighter;
+use crate::syntax::Syntax;
 use radix_trie::Trie;
 use ratatui::{
     layout::{Position, Rect},
@@ -833,7 +833,7 @@ pub struct Buffer {
     undo: Vec<BufferState>,        // the undo stack
     undo_finished: bool,           // whether cursor moved since last undo
     redo: Vec<BufferState>,        // the redo stack
-    syntax: Box<dyn Highlighter>,  // the syntax highlighting to use
+    syntax: Box<dyn Syntax>,       // the syntax highlighting to use
     tabs_required: bool,           // whether the format demands actual tabs
     tab_substitution: String,      // spaces to substitute for tabs
     bookmarks: private::Bookmarks, // saved bookmark positions
@@ -4840,7 +4840,7 @@ impl StatefulWidget for BufferWidget<'_> {
         };
         use crate::prompt::TextField;
         use crate::scrollbar::{Scrollbar, ScrollbarState};
-        use crate::syntax::{HighlightState, Highlighter, MultiComment, MultiCommentType};
+        use crate::syntax::{HighlightState, MultiComment, MultiCommentType, Syntax};
         use private::SpanDeque;
         use ratatui::{
             layout::{
@@ -4915,7 +4915,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 }
             }
 
-            fn colorize<S: Highlighter>(
+            fn colorize<S: Syntax>(
                 self,
                 syntax: &S,
                 state: &mut HighlightState,
@@ -5130,7 +5130,7 @@ impl StatefulWidget for BufferWidget<'_> {
         }
 
         // Colorize syntax of the given text
-        fn colorize<'s, S: Highlighter>(
+        fn colorize<'s, S: Syntax>(
             syntax: &S,
             state: &mut HighlightState,
             text: Cow<'s, str>,
@@ -5177,7 +5177,7 @@ impl StatefulWidget for BufferWidget<'_> {
             }
 
             /// Colorizes &str or String to spans based on syntax
-            fn colorize<'r, R: FromRange<'r>, S: Highlighter>(
+            fn colorize<'r, R: FromRange<'r>, S: Syntax>(
                 syntax: &S,
                 state: &mut HighlightState,
                 text: R,
@@ -5300,7 +5300,7 @@ impl StatefulWidget for BufferWidget<'_> {
             Regex,
         }
 
-        fn render_find_prompt<'t, 's, S: Highlighter>(
+        fn render_find_prompt<'t, 's, S: Syntax>(
             syntax: FindSyntax<'t, S>,
             text_area: Rect,
             buf: &mut ratatui::buffer::Buffer,

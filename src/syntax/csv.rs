@@ -30,7 +30,7 @@ impl std::fmt::Display for Csv {
     }
 }
 
-impl crate::syntax::Highlighter for Csv {
+impl crate::syntax::Syntax for Csv {
     fn highlight<'s>(
         &self,
         s: &'s str,

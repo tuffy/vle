@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::syntax::{Highlight, Highlighter};
+use crate::syntax::{Highlight, Syntax};
 use logos::Logos;
 use ratatui::style::Color;
 
@@ -55,7 +55,7 @@ impl std::fmt::Display for Todo {
     }
 }
 
-impl Highlighter for Todo {
+impl Syntax for Todo {
     fn highlight<'s>(
         &self,
         s: &'s str,

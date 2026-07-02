@@ -118,7 +118,7 @@ impl From<Highlight> for ratatui::style::Style {
 type Underliner = for<'s> fn(&'s str) -> Box<dyn Iterator<Item = std::ops::Range<usize>> + 's>;
 
 /// Implemented for different syntax highlighters
-pub trait Highlighter: std::fmt::Debug + std::fmt::Display {
+pub trait Syntax: std::fmt::Debug + std::fmt::Display {
     /// Yields portions of the string to highlight in a particular color
     /// range is in bytes
     fn highlight<'s>(
@@ -147,7 +147,7 @@ pub trait Highlighter: std::fmt::Debug + std::fmt::Display {
     }
 }
 
-impl Highlighter for Box<dyn Highlighter> {
+impl Syntax for Box<dyn Syntax> {
     fn highlight<'s>(
         &self,
         s: &'s str,
@@ -172,9 +172,9 @@ impl Highlighter for Box<dyn Highlighter> {
 }
 
 #[derive(Debug)]
-pub struct DefaultHighlighter;
+pub struct DefaultSyntax;
 
-impl Highlighter for DefaultHighlighter {
+impl Syntax for DefaultSyntax {
     fn highlight<'s>(
         &self,
         _s: &'s str,
@@ -184,7 +184,7 @@ impl Highlighter for DefaultHighlighter {
     }
 }
 
-impl std::fmt::Display for DefaultHighlighter {
+impl std::fmt::Display for DefaultSyntax {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         "Plain".fmt(f)
     }
@@ -259,7 +259,7 @@ where
     }
 }
 
-pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
+pub fn syntax(source: &Source) -> Box<dyn Syntax> {
     use std::collections::HashMap;
     use std::sync::LazyLock;
 
@@ -291,9 +291,9 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
             Some(file_name) => match file_name.as_ref() {
                 "Makefile" | "makefile" => Box::new(makefile::Makefile),
                 "COMMIT_EDITMSG" => Box::new(git::Git),
-                _ => Box::new(DefaultHighlighter),
+                _ => Box::new(DefaultSyntax),
             },
-            None => Box::new(DefaultHighlighter),
+            None => Box::new(DefaultSyntax),
         },
         Some("rs") => Box::new(rust::Rust),
         Some("c" | "h" | "C" | "H") => Box::new(c::C),
@@ -325,7 +325,7 @@ pub fn syntax(source: &Source) -> Box<dyn Highlighter> {
         Some("ana") => Box::new(flac::Analysis),
         Some("cue" | "CUE") => Box::new(cue::Cuesheet),
         Some("txt") if source.file_name().as_deref() == Some("todo.txt") => Box::new(todo::Todo),
-        _ => Box::new(DefaultHighlighter),
+        _ => Box::new(DefaultSyntax),
     }
 }
 
@@ -335,7 +335,7 @@ macro_rules! highlighter {
         highlighter!($syntax, $token, None);
     };
     ($syntax:ty, $token:ty, $underliner:expr) => {
-        impl $crate::syntax::Highlighter for $syntax {
+        impl $crate::syntax::Syntax for $syntax {
             fn highlight<'s>(
                 &self,
                 s: &'s str,
@@ -392,7 +392,7 @@ macro_rules! highlighter {
             }
         }
 
-        impl $crate::syntax::Highlighter for $syntax {
+        impl $crate::syntax::Syntax for $syntax {
             fn highlight<'s>(
                 &self,
                 s: &'s str,
