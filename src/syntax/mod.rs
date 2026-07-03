@@ -431,30 +431,16 @@ macro_rules! define_syntax {
             ) -> Box<dyn $crate::syntax::Highlighter> {
                 use std::borrow::Cow;
 
-                #[derive(Logos, Debug)]
-                #[logos(skip r"[ \t\n]+")]
-                enum Comment {
-                    #[token($start)]
-                    Start,
-                    #[token($end)]
-                    End,
-                }
-
-                impl From<Comment> for SyntaxHighlighter {
-                    fn from(comment: Comment) -> Self {
-                        match comment {
-                            Comment::Start => SyntaxHighlighter::Normal,
-                            Comment::End => SyntaxHighlighter::Commenting,
-                        }
-                    }
-                }
-
                 Box::new(
                     rope.lines_at(viewport_line)
                         .take(viewport_height.into())
                         .find_map(|line| {
-                            Comment::lexer(&Cow::from(line))
-                                .find_map(|token| token.ok().map(|t| t.into()))
+                            <$token>::lexer(&Cow::from(line))
+                                .find_map(|token| match token {
+                                    Ok(<$token>::$comment_start) => Some(SyntaxHighlighter::Normal),
+                                    Ok(<$token>::$comment_end) => Some(SyntaxHighlighter::Commenting),
+                                    _ => None,
+                                })
                         })
                         .unwrap_or(SyntaxHighlighter::Normal),
                 )
