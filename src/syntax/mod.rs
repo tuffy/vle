@@ -435,12 +435,11 @@ macro_rules! define_syntax {
                     rope.lines_at(viewport_line)
                         .take(viewport_height.into())
                         .find_map(|line| {
-                            <$token>::lexer(&Cow::from(line))
-                                .find_map(|token| match token {
-                                    Ok(<$token>::$comment_start) => Some(SyntaxHighlighter::Normal),
-                                    Ok(<$token>::$comment_end) => Some(SyntaxHighlighter::Commenting),
-                                    _ => None,
-                                })
+                            <$token>::lexer(&Cow::from(line)).find_map(|token| match token {
+                                Ok(<$token>::$comment_start) => Some(SyntaxHighlighter::Normal),
+                                Ok(<$token>::$comment_end) => Some(SyntaxHighlighter::Commenting),
+                                _ => None,
+                            })
                         })
                         .unwrap_or(SyntaxHighlighter::Normal),
                 )

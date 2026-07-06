@@ -13,7 +13,7 @@ use ratatui::style::Color;
 
 #[derive(Logos, Debug)]
 #[logos(skip r"[ \t\n]+")]
-enum HtmlToken {
+pub enum HtmlToken {
     #[regex("<[[:alpha:]][[:alpha:][:digit:]_]*>?")]
     TagStart,
     #[regex("</[[:alpha:]][[:alpha:][:digit:]_]*>")]
@@ -30,6 +30,8 @@ enum HtmlToken {
     StartComment,
     #[token("-->")]
     EndComment,
+    #[token("<?php")]
+    PhpStart,
 }
 
 impl TryFrom<HtmlToken> for Highlight {
@@ -42,6 +44,7 @@ impl TryFrom<HtmlToken> for Highlight {
             HtmlToken::StartComment | HtmlToken::EndComment => Ok(color::COMMENT),
             HtmlToken::FieldName => Ok(Color::Blue.into()),
             HtmlToken::String => Ok(color::STRING),
+            HtmlToken::PhpStart => Err(()),
         }
     }
 }
