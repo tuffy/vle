@@ -22,7 +22,7 @@ enum TodoToken {
     Project,
     #[regex(r"@\S+")]
     Context,
-    #[regex(r"[^:\s]+:[^:\s]+")]
+    #[regex(r"[^:\s]+:[^\s]+")]
     KeyValue,
 }
 
