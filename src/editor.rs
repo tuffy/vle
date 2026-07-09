@@ -4730,7 +4730,7 @@ impl<I: std::iter::FusedIterator<Item = char>> StatefulWidget for LayoutWidget<'
                 if let Some(buffer) = single.current_mut() {
                     BufferWidget {
                         focused,
-                        mode: Some(mode).filter(|_| focused),
+                        mode: focused.then_some(mode),
                         show_help: show_help
                             .then(|| buffer.help_options(multiple_buffers, multiple_panes)),
                         show_sub_help,
