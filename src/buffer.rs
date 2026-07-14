@@ -3924,6 +3924,47 @@ impl SearchTerm for Normalizations {
     }
 }
 
+#[derive(Clone)]
+pub struct CaseInsensitiveNormalizations(Vec<fancy_regex::Regex>);
+
+impl From<Normalizations> for CaseInsensitiveNormalizations {
+    fn from(normalizations: Normalizations) -> Self {
+        Self(
+            normalizations
+                .0
+                .into_iter()
+                .filter_map(|s| {
+                    fancy_regex::RegexBuilder::new(&s)
+                        .case_insensitive(true)
+                        .build()
+                        .ok()
+                })
+                .collect(),
+        )
+    }
+}
+
+impl std::fmt::Display for CaseInsensitiveNormalizations {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self.0.iter().min_by_key(|s| s.to_string().len()) {
+            Some(s) => s.fmt(f),
+            None => "".fmt(f), // this shouldn't happen
+        }
+    }
+}
+
+impl SearchTerm for CaseInsensitiveNormalizations {
+    fn match_ranges(&self, s: &str) -> impl Iterator<Item = SearchMatch> {
+        let mut ranges = self
+            .0
+            .iter()
+            .flat_map(|regex| regex.match_ranges(s))
+            .collect::<Vec<_>>();
+        ranges.sort_unstable_by_key(|r| r.start);
+        ranges.into_iter()
+    }
+}
+
 /// Buffer has been modified since last save
 pub struct Modified;
 
@@ -5339,8 +5380,9 @@ impl StatefulWidget for BufferWidget<'_> {
                 vec![none(
                     &["Tab"],
                     match type_ {
-                        SearchType::Plain => "Regex Find",
-                        SearchType::Regex => "Plain Text Find",
+                        SearchType::CaseSensitive => "Case-Insensitive Find",
+                        SearchType::CaseInsensitive => "Regex Find",
+                        SearchType::Regex => "Case-Sensitive Find",
                     },
                 )]
             } else if prompt.can_autocomplete() {
@@ -6184,7 +6226,9 @@ impl StatefulWidget for BufferWidget<'_> {
                 show_sub_help(text_area, buf, &find_mode_help(prompt, *type_));
                 render_find_prompt(
                     match type_ {
-                        SearchType::Plain => FindSyntax::Plain(syntax),
+                        SearchType::CaseSensitive | SearchType::CaseInsensitive => {
+                            FindSyntax::Plain(syntax)
+                        }
                         SearchType::Regex => FindSyntax::Regex,
                     },
                     text_area,
@@ -6243,7 +6287,9 @@ impl StatefulWidget for BufferWidget<'_> {
                 show_sub_help(text_area, buf, &find_mode_help(prompt, *type_));
                 render_find_prompt(
                     match type_ {
-                        SearchType::Plain => FindSyntax::Plain(syntax),
+                        SearchType::CaseSensitive | SearchType::CaseInsensitive => {
+                            FindSyntax::Plain(syntax)
+                        }
                         SearchType::Regex => FindSyntax::Regex,
                     },
                     text_area,

@@ -222,15 +222,17 @@ pub enum MultiCursorMode<O> {
 #[derive(Copy, Clone, Default)]
 pub enum SearchType {
     #[default]
-    Plain,
+    CaseSensitive,
+    CaseInsensitive,
     Regex,
 }
 
 impl SearchType {
     fn toggle_search(self) -> Self {
         match self {
-            Self::Plain => Self::Regex,
-            Self::Regex => Self::Plain,
+            Self::CaseSensitive => Self::CaseInsensitive,
+            Self::CaseInsensitive => Self::Regex,
+            Self::Regex => Self::CaseSensitive,
         }
     }
 }
@@ -238,7 +240,8 @@ impl SearchType {
 impl std::fmt::Display for SearchType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::Plain => "Find".fmt(f),
+            Self::CaseSensitive => "Find".fmt(f),
+            Self::CaseInsensitive => "Find Case Insensitive".fmt(f),
             Self::Regex => "Find Regex".fmt(f),
         }
     }
@@ -327,7 +330,7 @@ impl std::ops::Index<SearchType> for LastSearch {
 
     fn index(&self, t: SearchType) -> &Option<TextField> {
         match t {
-            SearchType::Plain => &self.plain,
+            SearchType::CaseSensitive | SearchType::CaseInsensitive => &self.plain,
             SearchType::Regex => &self.regex,
         }
     }
@@ -336,7 +339,7 @@ impl std::ops::Index<SearchType> for LastSearch {
 impl std::ops::IndexMut<SearchType> for LastSearch {
     fn index_mut(&mut self, t: SearchType) -> &mut Option<TextField> {
         match t {
-            SearchType::Plain => &mut self.plain,
+            SearchType::CaseSensitive | SearchType::CaseInsensitive => &mut self.plain,
             SearchType::Regex => &mut self.regex,
         }
     }
@@ -2184,7 +2187,7 @@ fn process_search(
     range: Option<&SelectionRange>,
     event: Event,
 ) -> Option<NextModeIncremental> {
-    use crate::buffer::Normalizations;
+    use crate::buffer::{CaseInsensitiveNormalizations, Normalizations};
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
     static NOT_FOUND: &str = "Not Found";
@@ -2271,7 +2274,7 @@ fn process_search(
             }
         }
         key!(Enter) => match type_ {
-            SearchType::Plain => match Normalizations::try_from(prompt.value()?) {
+            SearchType::CaseSensitive => match Normalizations::try_from(prompt.value()?) {
                 Err(term) => match buffer.all_matches(range, term) {
                     Ok((match_idx, matches)) => {
                         *last_search = Some(std::mem::take(prompt));
@@ -2283,6 +2286,39 @@ fn process_search(
                     }
                 },
                 Ok(normalizations) => match buffer.all_matches(range, normalizations) {
+                    Ok((match_idx, matches)) => {
+                        *last_search = Some(std::mem::take(prompt));
+                        Some(NextModeIncremental::Browse { match_idx, matches })
+                    }
+                    Err(_) => {
+                        buffer.set_error(NOT_FOUND);
+                        None
+                    }
+                },
+            },
+            SearchType::CaseInsensitive => match Normalizations::try_from(prompt.value()?) {
+                Err(term) => match fancy_regex::RegexBuilder::new(&fancy_regex::escape(&term))
+                    .case_insensitive(true)
+                    .build()
+                {
+                    Ok(regex) => match buffer.all_matches(range, regex) {
+                        Ok((match_idx, matches)) => {
+                            *last_search = Some(std::mem::take(prompt));
+                            Some(NextModeIncremental::Browse { match_idx, matches })
+                        }
+                        Err(_) => {
+                            buffer.set_error(NOT_FOUND);
+                            None
+                        }
+                    },
+                    Err(err) => {
+                        buffer.set_error(err.to_string());
+                        None
+                    }
+                },
+                Ok(normalizations) => match buffer
+                    .all_matches(range, CaseInsensitiveNormalizations::from(normalizations))
+                {
                     Ok((match_idx, matches)) => {
                         *last_search = Some(std::mem::take(prompt));
                         Some(NextModeIncremental::Browse { match_idx, matches })
@@ -2349,7 +2385,7 @@ fn process_search_all(
     type_: &mut SearchType,
     event: Event,
 ) -> Option<NextModeIncrementalAll> {
-    use crate::buffer::Normalizations;
+    use crate::buffer::{CaseInsensitiveNormalizations, Normalizations};
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
     static NOT_FOUND: &str = "Not Found";
@@ -2435,7 +2471,7 @@ fn process_search_all(
             }
         }
         key!(Enter) => match type_ {
-            SearchType::Plain => match Normalizations::try_from(prompt.value()?) {
+            SearchType::CaseSensitive => match Normalizations::try_from(prompt.value()?) {
                 Err(term) => match buffer_list.all_matches(term) {
                     Ok((match_idx, matches)) => {
                         *last_search = Some(std::mem::take(prompt));
@@ -2453,6 +2489,39 @@ fn process_search_all(
                     }
                     Err(_) => {
                         buffer_list.current_mut()?.set_error(NOT_FOUND);
+                        None
+                    }
+                },
+            },
+            SearchType::CaseInsensitive => match Normalizations::try_from(prompt.value()?) {
+                Err(term) => match fancy_regex::RegexBuilder::new(&fancy_regex::escape(&term))
+                    .case_insensitive(true)
+                    .build()
+                {
+                    Ok(regex) => match buffer_list.all_matches(regex) {
+                        Ok((match_idx, matches)) => {
+                            *last_search = Some(std::mem::take(prompt));
+                            Some(NextModeIncrementalAll::Browse { match_idx, matches })
+                        }
+                        Err(_) => {
+                            buffer_list.current_mut()?.set_error(NOT_FOUND);
+                            None
+                        }
+                    },
+                    Err(err) => {
+                        buffer_list.current_mut()?.set_error(err.to_string());
+                        None
+                    }
+                },
+                Ok(normalizations) => match buffer_list
+                    .all_matches(CaseInsensitiveNormalizations::from(normalizations))
+                {
+                    Ok((match_idx, matches)) => {
+                        *last_search = Some(std::mem::take(prompt));
+                        Some(NextModeIncrementalAll::Browse { match_idx, matches })
+                    }
+                    Err(err) => {
+                        buffer_list.current_mut()?.set_error(err.to_string());
                         None
                     }
                 },
