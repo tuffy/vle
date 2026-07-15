@@ -1063,19 +1063,15 @@ impl Editor {
                 }
                 EditorMode::AllBuffers {
                     cursors:
-                        MultiCursors {
-                            matches,
-                            match_idx,
-                            highlight,
+                        cursors @ MultiCursors {
                             mode: MultiCursorMode::Editing,
+                            ..
                         },
                 } => {
                     if let Some(new_mode) = process_multi_cursor_all(
                         &mut self.layout,
                         &mut self.cut_buffer,
-                        matches,
-                        match_idx,
-                        highlight,
+                        cursors,
                         event,
                     ) {
                         self.mode = new_mode;
@@ -2705,9 +2701,12 @@ fn process_multi_cursor_mark_set<'a, M: MultiBuffer<'a>>(
 fn process_multi_cursor_all(
     layout: &mut Layout,
     cut_buffer: &mut Option<EditorCutBuffer>,
-    matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
-    match_idx: &mut usize,
-    highlight: &mut bool,
+    MultiCursors {
+        matches,
+        match_idx,
+        highlight,
+        ..
+    }: &mut MultiCursors<BTreeMap<usize, Vec<MultiCursor>>, BTreeMap<usize, Vec<usize>>>,
     event: Event,
 ) -> Option<EditorMode> {
     use crossterm::event::{
