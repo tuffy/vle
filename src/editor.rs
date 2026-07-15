@@ -12,7 +12,7 @@ use crate::files::SshSource;
 use crate::key;
 use crate::{
     buffer::{
-        AltCursor, BufferContext, BufferId, BufferList, EditorCutBuffer, MultiCursor,
+        AltCursor, BufferContext, BufferId, BufferList, EditorCutBuffer, MultiCursor, Searchable,
         SelectionRange, Source,
     },
     files::{ChooserSource, FileChooserState},
@@ -927,16 +927,17 @@ impl Editor {
                             mode: SearchMode::Editing,
                         },
                 } => {
-                    if let Some(new_mode) = process_search_all(
+                    if let Some(new_mode) = process_search(
                         self.layout.selected_buffer_list_mut(),
                         self.cut_buffer.as_mut(),
                         &mut self.last_search[*type_],
                         prompt,
                         type_,
+                        (),
                         event,
                     ) {
                         self.mode = match new_mode {
-                            NextModeIncrementalAll::Browse { match_idx, matches } => {
+                            NextModeIncremental::Browse { match_idx, matches } => {
                                 EditorMode::AllBuffers {
                                     cursors: MultiCursors {
                                         matches,
@@ -946,10 +947,10 @@ impl Editor {
                                     },
                                 }
                             }
-                            NextModeIncrementalAll::SelectLine => EditorMode::SelectLine {
+                            NextModeIncremental::SelectLine => EditorMode::SelectLine {
                                 prompt: LinePrompt::default(),
                             },
-                            NextModeIncrementalAll::Autocomplete {
+                            NextModeIncremental::Autocomplete {
                                 offset,
                                 completions,
                                 index,
@@ -2164,11 +2165,10 @@ fn process_open_file<S: ChooserSource>(
     }
 }
 
-// which mode to switch to next
-enum NextModeIncremental {
+enum NextModeIncremental<M> {
     Browse {
         match_idx: usize,
-        matches: Vec<MultiCursor>,
+        matches: M,
     },
     SelectLine,
     Autocomplete {
@@ -2178,15 +2178,15 @@ enum NextModeIncremental {
     },
 }
 
-fn process_search(
-    buffer: &mut BufferContext,
+fn process_search<'s, S: Searchable<'s>>(
+    source: &mut S,
     cut_buffer: Option<&mut EditorCutBuffer>,
     last_search: &mut Option<TextField>,
     prompt: &mut TextField,
     type_: &mut SearchType,
-    range: Option<&SelectionRange>,
+    range: S::Range,
     event: Event,
-) -> Option<NextModeIncremental> {
+) -> Option<NextModeIncremental<S::Output>> {
     use crate::buffer::{CaseInsensitiveNormalizations, Normalizations};
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
@@ -2198,24 +2198,24 @@ fn process_search(
             let b = c.paste_and_rotate();
             if b.multi_line() {
                 match Normalizations::try_from(b.as_str().to_string()) {
-                    Err(term) => match buffer.all_multiline_matches(range, term) {
+                    Err(term) => match source.all_multiline_matches(range, term) {
                         Ok((match_idx, matches)) => {
                             *last_search = Some(std::mem::take(prompt));
                             Some(NextModeIncremental::Browse { match_idx, matches })
                         }
                         Err(_) => {
-                            buffer.set_error(NOT_FOUND);
+                            source.set_error(NOT_FOUND);
                             None
                         }
                     },
-                    Ok(normalizations) => match buffer.all_multiline_matches(range, normalizations)
+                    Ok(normalizations) => match source.all_multiline_matches(range, normalizations)
                     {
                         Ok((match_idx, matches)) => {
                             *last_search = Some(std::mem::take(prompt));
                             Some(NextModeIncremental::Browse { match_idx, matches })
                         }
                         Err(_) => {
-                            buffer.set_error(NOT_FOUND);
+                            source.set_error(NOT_FOUND);
                             None
                         }
                     },
@@ -2232,7 +2232,7 @@ fn process_search(
                 None
             } else {
                 let (offset, search) = prompt.autocomplete_word()?;
-                let completions = buffer.search_autocomplete_matches(search);
+                let completions = source.search_autocomplete_matches(search);
                 match init_complete_forward(&completions) {
                     Some((index, original, replacement)) => {
                         prompt.autocomplete(offset, original, replacement);
@@ -2243,7 +2243,7 @@ fn process_search(
                         })
                     }
                     None => {
-                        buffer.set_error("No Completions Found");
+                        source.set_error("No Completions Found");
                         None
                     }
                 }
@@ -2256,7 +2256,7 @@ fn process_search(
                 None
             } else {
                 let (offset, search) = prompt.autocomplete_word()?;
-                let completions = buffer.search_autocomplete_matches(search);
+                let completions = source.search_autocomplete_matches(search);
                 match init_complete_backward(&completions) {
                     Some((index, original, replacement)) => {
                         prompt.autocomplete(offset, original, replacement);
@@ -2267,7 +2267,7 @@ fn process_search(
                         })
                     }
                     None => {
-                        buffer.set_error("No Completions Found");
+                        source.set_error("No Completions Found");
                         None
                     }
                 }
@@ -2275,23 +2275,23 @@ fn process_search(
         }
         key!(Enter) => match type_ {
             SearchType::CaseSensitive => match Normalizations::try_from(prompt.value()?) {
-                Err(term) => match buffer.all_matches(range, term) {
+                Err(term) => match source.all_matches(range, term) {
                     Ok((match_idx, matches)) => {
                         *last_search = Some(std::mem::take(prompt));
                         Some(NextModeIncremental::Browse { match_idx, matches })
                     }
                     Err(_) => {
-                        buffer.set_error(NOT_FOUND);
+                        source.set_error(NOT_FOUND);
                         None
                     }
                 },
-                Ok(normalizations) => match buffer.all_matches(range, normalizations) {
+                Ok(normalizations) => match source.all_matches(range, normalizations) {
                     Ok((match_idx, matches)) => {
                         *last_search = Some(std::mem::take(prompt));
                         Some(NextModeIncremental::Browse { match_idx, matches })
                     }
                     Err(_) => {
-                        buffer.set_error(NOT_FOUND);
+                        source.set_error(NOT_FOUND);
                         None
                     }
                 },
@@ -2301,22 +2301,22 @@ fn process_search(
                     .case_insensitive(true)
                     .build()
                 {
-                    Ok(regex) => match buffer.all_matches(range, regex) {
+                    Ok(regex) => match source.all_matches(range, regex) {
                         Ok((match_idx, matches)) => {
                             *last_search = Some(std::mem::take(prompt));
                             Some(NextModeIncremental::Browse { match_idx, matches })
                         }
                         Err(_) => {
-                            buffer.set_error(NOT_FOUND);
+                            source.set_error(NOT_FOUND);
                             None
                         }
                     },
                     Err(err) => {
-                        buffer.set_error(err.to_string());
+                        source.set_error(err.to_string());
                         None
                     }
                 },
-                Ok(normalizations) => match buffer
+                Ok(normalizations) => match source
                     .all_matches(range, CaseInsensitiveNormalizations::from(normalizations))
                 {
                     Ok((match_idx, matches)) => {
@@ -2324,226 +2324,29 @@ fn process_search(
                         Some(NextModeIncremental::Browse { match_idx, matches })
                     }
                     Err(_) => {
-                        buffer.set_error(NOT_FOUND);
+                        source.set_error(NOT_FOUND);
                         None
                     }
                 },
             },
             SearchType::Regex => match prompt.value()?.parse::<fancy_regex::Regex>() {
-                Ok(regex) => match buffer.all_matches(range, regex) {
+                Ok(regex) => match source.all_matches(range, regex) {
                     Ok((match_idx, matches)) => {
                         *last_search = Some(std::mem::take(prompt));
                         Some(NextModeIncremental::Browse { match_idx, matches })
                     }
                     Err(_) => {
-                        buffer.set_error(NOT_FOUND);
+                        source.set_error(NOT_FOUND);
                         None
                     }
                 },
                 Err(err) => {
-                    buffer.set_error(err.to_string());
+                    source.set_error(err.to_string());
                     None
                 }
             },
         },
         keybind!(GotoLine) => Some(NextModeIncremental::SelectLine),
-        keybind!(Find) => {
-            if prompt.is_empty()
-                && let Some(last) = last_search
-            {
-                *prompt = last.clone();
-            } else {
-                prompt.reset();
-            }
-            None
-        }
-        event => {
-            prompt.process_event(event);
-            None
-        }
-    }
-}
-
-enum NextModeIncrementalAll {
-    Browse {
-        match_idx: usize,
-        matches: BTreeMap<usize, Vec<MultiCursor>>,
-    },
-    SelectLine,
-    Autocomplete {
-        offset: usize,
-        completions: Vec<String>,
-        index: usize,
-    },
-}
-
-fn process_search_all(
-    buffer_list: &mut BufferList,
-    cut_buffer: Option<&mut EditorCutBuffer>,
-    last_search: &mut Option<TextField>,
-    prompt: &mut TextField,
-    type_: &mut SearchType,
-    event: Event,
-) -> Option<NextModeIncrementalAll> {
-    use crate::buffer::{CaseInsensitiveNormalizations, Normalizations};
-    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-
-    static NOT_FOUND: &str = "Not Found";
-
-    match event {
-        ctrl_keybind!(Paste) => {
-            let c = cut_buffer?;
-            let b = c.paste_and_rotate();
-            if b.multi_line() {
-                match Normalizations::try_from(b.as_str().to_string()) {
-                    Err(term) => match buffer_list.all_multiline_matches(term) {
-                        Ok((match_idx, matches)) => {
-                            *last_search = Some(std::mem::take(prompt));
-                            Some(NextModeIncrementalAll::Browse { match_idx, matches })
-                        }
-                        Err(_) => {
-                            buffer_list.current_mut()?.set_error(NOT_FOUND);
-                            None
-                        }
-                    },
-                    Ok(normalizations) => match buffer_list.all_multiline_matches(normalizations) {
-                        Ok((match_idx, matches)) => {
-                            *last_search = Some(std::mem::take(prompt));
-                            Some(NextModeIncrementalAll::Browse { match_idx, matches })
-                        }
-                        Err(_) => {
-                            buffer_list.current_mut()?.set_error(NOT_FOUND);
-                            None
-                        }
-                    },
-                }
-            } else {
-                prompt.paste(c.paste_and_rotate().as_str());
-                None
-            }
-        }
-        key!(Tab) => {
-            if prompt.is_empty() {
-                prompt.reset();
-                *type_ = type_.toggle_search();
-                None
-            } else {
-                let (offset, search) = prompt.autocomplete_word()?;
-                let completions = buffer_list.search_autocomplete_matches(search);
-                match init_complete_forward(&completions) {
-                    Some((index, original, replacement)) => {
-                        prompt.autocomplete(offset, original, replacement);
-                        Some(NextModeIncrementalAll::Autocomplete {
-                            offset,
-                            completions,
-                            index,
-                        })
-                    }
-                    None => {
-                        buffer_list.current_mut()?.set_error("No Completions Found");
-                        None
-                    }
-                }
-            }
-        }
-        key!(SHIFT, BackTab) => {
-            if prompt.is_empty() {
-                prompt.reset();
-                *type_ = type_.toggle_search();
-                None
-            } else {
-                let (offset, search) = prompt.autocomplete_word()?;
-                let completions = buffer_list.search_autocomplete_matches(search);
-                match init_complete_backward(&completions) {
-                    Some((index, original, replacement)) => {
-                        prompt.autocomplete(offset, original, replacement);
-                        Some(NextModeIncrementalAll::Autocomplete {
-                            offset,
-                            completions,
-                            index,
-                        })
-                    }
-                    None => {
-                        buffer_list.current_mut()?.set_error("No Completions Found");
-                        None
-                    }
-                }
-            }
-        }
-        key!(Enter) => match type_ {
-            SearchType::CaseSensitive => match Normalizations::try_from(prompt.value()?) {
-                Err(term) => match buffer_list.all_matches(term) {
-                    Ok((match_idx, matches)) => {
-                        *last_search = Some(std::mem::take(prompt));
-                        Some(NextModeIncrementalAll::Browse { match_idx, matches })
-                    }
-                    Err(_) => {
-                        buffer_list.current_mut()?.set_error(NOT_FOUND);
-                        None
-                    }
-                },
-                Ok(normalizations) => match buffer_list.all_matches(normalizations) {
-                    Ok((match_idx, matches)) => {
-                        *last_search = Some(std::mem::take(prompt));
-                        Some(NextModeIncrementalAll::Browse { match_idx, matches })
-                    }
-                    Err(_) => {
-                        buffer_list.current_mut()?.set_error(NOT_FOUND);
-                        None
-                    }
-                },
-            },
-            SearchType::CaseInsensitive => match Normalizations::try_from(prompt.value()?) {
-                Err(term) => match fancy_regex::RegexBuilder::new(&fancy_regex::escape(&term))
-                    .case_insensitive(true)
-                    .build()
-                {
-                    Ok(regex) => match buffer_list.all_matches(regex) {
-                        Ok((match_idx, matches)) => {
-                            *last_search = Some(std::mem::take(prompt));
-                            Some(NextModeIncrementalAll::Browse { match_idx, matches })
-                        }
-                        Err(_) => {
-                            buffer_list.current_mut()?.set_error(NOT_FOUND);
-                            None
-                        }
-                    },
-                    Err(err) => {
-                        buffer_list.current_mut()?.set_error(err.to_string());
-                        None
-                    }
-                },
-                Ok(normalizations) => match buffer_list
-                    .all_matches(CaseInsensitiveNormalizations::from(normalizations))
-                {
-                    Ok((match_idx, matches)) => {
-                        *last_search = Some(std::mem::take(prompt));
-                        Some(NextModeIncrementalAll::Browse { match_idx, matches })
-                    }
-                    Err(err) => {
-                        buffer_list.current_mut()?.set_error(err.to_string());
-                        None
-                    }
-                },
-            },
-            SearchType::Regex => match prompt.value()?.parse::<fancy_regex::Regex>() {
-                Ok(regex) => match buffer_list.all_matches(regex) {
-                    Ok((match_idx, matches)) => {
-                        *last_search = Some(std::mem::take(prompt));
-                        Some(NextModeIncrementalAll::Browse { match_idx, matches })
-                    }
-                    Err(_) => {
-                        buffer_list.current_mut()?.set_error(NOT_FOUND);
-                        None
-                    }
-                },
-                Err(err) => {
-                    buffer_list.current_mut()?.set_error(err.to_string());
-                    None
-                }
-            },
-        },
-        keybind!(GotoLine) => Some(NextModeIncrementalAll::SelectLine),
         keybind!(Find) => {
             if prompt.is_empty()
                 && let Some(last) = last_search

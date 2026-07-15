@@ -1799,113 +1799,6 @@ impl BufferContext {
             })
     }
 
-    /// Returns Ok((current_idx, matches)) on success
-    /// Returns Err(term) if no matches found
-    pub fn all_matches<S: SearchTerm>(
-        &mut self,
-        range: Option<&SelectionRange>,
-        term: S,
-    ) -> Result<(usize, Vec<MultiCursor>), S> {
-        let buf = self.buffer.borrow_move();
-        let rope = &buf.rope;
-
-        let matches = search_area(rope, range)
-            .flat_map(|(line, offset)| {
-                term.match_ranges(&line)
-                    .map(|m| m + offset)
-                    .collect::<Vec<_>>()
-            })
-            .filter_map(|SearchMatch { start, end, groups }| {
-                // convert ranges in bytes (from SearchTerm)
-                // to ranges in characters (for Ropey)
-                let start_char = rope.try_byte_to_char(start).ok()?;
-                let end_char = rope.try_byte_to_char(end).ok()?;
-                Some(MultiCursor {
-                    cursor: end_char,
-                    selection: Some(start_char),
-                    range: start_char..end_char,
-                    groups,
-                })
-            })
-            .collect::<Vec<_>>();
-
-        let start = match self.selection {
-            Some(selection) => selection.min(self.cursor),
-            None => self.cursor,
-        };
-
-        let (idx, next_match) = matches
-            .iter()
-            .enumerate()
-            .find(|(_, m)| m.range.start >= start)
-            .or_else(|| matches.first().map(|m| (0, m)))
-            .ok_or(term)?;
-        self.cursor = next_match.range.end;
-        self.selection = None;
-        Ok((idx, matches))
-    }
-
-    pub fn all_multiline_matches<S: SearchTerm>(
-        &mut self,
-        range: Option<&SelectionRange>,
-        term: S,
-    ) -> Result<(usize, Vec<MultiCursor>), S> {
-        let buf = self.buffer.borrow_move();
-        let rope = &buf.rope;
-
-        let (whole_rope, offset) = match range {
-            None => (
-                rope.chunks()
-                    .fold(String::with_capacity(rope.len_bytes()), |mut acc, s| {
-                        acc.push_str(s);
-                        acc
-                    }),
-                0,
-            ),
-            Some(SelectionRange { start, lines }) => (
-                rope.lines_at(*start)
-                    .take(lines.get())
-                    .fold(String::new(), |mut acc, l| {
-                        acc.push_str(&Cow::from(l));
-                        acc
-                    }),
-                rope.line_to_byte(*start),
-            ),
-        };
-
-        let matches = term
-            .match_ranges(&whole_rope)
-            .map(|m| m + offset)
-            .filter_map(|SearchMatch { start, end, groups }| {
-                // convert ranges in bytes (from SearchTerm)
-                // to ranges in characters (for Ropey)
-                let start_char = rope.try_byte_to_char(start).ok()?;
-                let end_char = rope.try_byte_to_char(end).ok()?;
-                Some(MultiCursor {
-                    cursor: end_char,
-                    selection: Some(start_char),
-                    range: start_char..end_char,
-                    groups,
-                })
-            })
-            .collect::<Vec<_>>();
-
-        let start = match self.selection {
-            Some(selection) => selection.min(self.cursor),
-            None => self.cursor,
-        };
-
-        let (idx, next_match) = matches
-            .iter()
-            .enumerate()
-            .find(|(_, m)| m.range.start >= start)
-            .or_else(|| matches.first().map(|m| (0, m)))
-            .ok_or(term)?;
-        self.cursor = next_match.range.end;
-        self.selection = None;
-        Ok((idx, matches))
-    }
-
     /// Performs undo on the active BufferContext, returns Ok(()) on success
     pub fn perform_undo_active(&mut self) -> Result<(), ()> {
         let mut buf = self.buffer.borrow_mut();
@@ -2368,11 +2261,6 @@ impl BufferContext {
             prefix_start,
             autocomplete_matches(rope, prefix_chars.into_iter().rev().collect()),
         ))
-    }
-
-    /// Returns autocomplete matches for a Find prompt
-    pub fn search_autocomplete_matches(&self, prefix: String) -> Vec<String> {
-        autocomplete_matches(&self.buffer.borrow().rope, prefix)
     }
 
     /// Given a set of cursors, attempts to find a common search prefix.
@@ -2952,6 +2840,124 @@ impl BufferContext {
 impl std::fmt::Display for BufferContext {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         self.buffer.borrow().source().name().fmt(f)
+    }
+}
+
+impl<'r> Searchable<'r> for BufferContext {
+    type Output = Vec<MultiCursor>;
+    type Range = Option<&'r SelectionRange>;
+
+    fn all_matches<S: SearchTerm>(
+        &mut self,
+        range: Self::Range,
+        term: S,
+    ) -> Result<(usize, Self::Output), S> {
+        let buf = self.buffer.borrow_move();
+        let rope = &buf.rope;
+
+        let matches = search_area(rope, range)
+            .flat_map(|(line, offset)| {
+                term.match_ranges(&line)
+                    .map(|m| m + offset)
+                    .collect::<Vec<_>>()
+            })
+            .filter_map(|SearchMatch { start, end, groups }| {
+                // convert ranges in bytes (from SearchTerm)
+                // to ranges in characters (for Ropey)
+                let start_char = rope.try_byte_to_char(start).ok()?;
+                let end_char = rope.try_byte_to_char(end).ok()?;
+                Some(MultiCursor {
+                    cursor: end_char,
+                    selection: Some(start_char),
+                    range: start_char..end_char,
+                    groups,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let start = match self.selection {
+            Some(selection) => selection.min(self.cursor),
+            None => self.cursor,
+        };
+
+        let (idx, next_match) = matches
+            .iter()
+            .enumerate()
+            .find(|(_, m)| m.range.start >= start)
+            .or_else(|| matches.first().map(|m| (0, m)))
+            .ok_or(term)?;
+        self.cursor = next_match.range.end;
+        self.selection = None;
+        Ok((idx, matches))
+    }
+
+    fn all_multiline_matches<S: SearchTerm>(
+        &mut self,
+        range: Self::Range,
+        term: S,
+    ) -> Result<(usize, Self::Output), S> {
+        let buf = self.buffer.borrow_move();
+        let rope = &buf.rope;
+
+        let (whole_rope, offset) = match range {
+            None => (
+                rope.chunks()
+                    .fold(String::with_capacity(rope.len_bytes()), |mut acc, s| {
+                        acc.push_str(s);
+                        acc
+                    }),
+                0,
+            ),
+            Some(SelectionRange { start, lines }) => (
+                rope.lines_at(*start)
+                    .take(lines.get())
+                    .fold(String::new(), |mut acc, l| {
+                        acc.push_str(&Cow::from(l));
+                        acc
+                    }),
+                rope.line_to_byte(*start),
+            ),
+        };
+
+        let matches = term
+            .match_ranges(&whole_rope)
+            .map(|m| m + offset)
+            .filter_map(|SearchMatch { start, end, groups }| {
+                // convert ranges in bytes (from SearchTerm)
+                // to ranges in characters (for Ropey)
+                let start_char = rope.try_byte_to_char(start).ok()?;
+                let end_char = rope.try_byte_to_char(end).ok()?;
+                Some(MultiCursor {
+                    cursor: end_char,
+                    selection: Some(start_char),
+                    range: start_char..end_char,
+                    groups,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let start = match self.selection {
+            Some(selection) => selection.min(self.cursor),
+            None => self.cursor,
+        };
+
+        let (idx, next_match) = matches
+            .iter()
+            .enumerate()
+            .find(|(_, m)| m.range.start >= start)
+            .or_else(|| matches.first().map(|m| (0, m)))
+            .ok_or(term)?;
+        self.cursor = next_match.range.end;
+        self.selection = None;
+        Ok((idx, matches))
+    }
+
+    fn search_autocomplete_matches(&self, prefix: String) -> Vec<String> {
+        autocomplete_matches(&self.buffer.borrow().rope, prefix)
+    }
+
+    fn set_error<S: Into<Cow<'static, str>>>(&mut self, err: S) {
+        BufferContext::set_error(self, err)
     }
 }
 
@@ -4690,73 +4696,6 @@ impl BufferList {
         Ok(Ok(count))
     }
 
-    /// Returns autocomplete matches for a Find prompt
-    pub fn search_autocomplete_matches(&self, prefix: String) -> Vec<String> {
-        let matches = self.buffers.iter().fold(Trie::default(), |acc, buf| {
-            accumulate_matches(acc, &buf.buffer.borrow().rope, &prefix)
-        });
-
-        finalize_matches(matches, prefix)
-    }
-
-    pub fn all_matches<S: SearchTerm>(
-        &mut self,
-        term: S,
-    ) -> Result<(usize, BTreeMap<usize, Vec<MultiCursor>>), S> {
-        let (mut current_indexes, matches): (
-            BTreeMap<usize, usize>,
-            BTreeMap<usize, Vec<MultiCursor>>,
-        ) = self
-            .buffers_mut()
-            .enumerate()
-            .filter_map(|(buf_idx, b)| {
-                let (match_idx, matches) = b.all_matches(None, term.clone()).ok()?;
-                Some(((buf_idx, match_idx), (buf_idx, matches)))
-            })
-            .unzip();
-
-        let Some((buffer_idx, match_idx)) = current_indexes
-            .extract_if(self.current.., |_, _| true)
-            .next()
-            .or_else(|| current_indexes.pop_first())
-        else {
-            return Err(term);
-        };
-
-        self.current = buffer_idx;
-
-        Ok((match_idx, matches))
-    }
-
-    pub fn all_multiline_matches<S: SearchTerm>(
-        &mut self,
-        term: S,
-    ) -> Result<(usize, BTreeMap<usize, Vec<MultiCursor>>), S> {
-        let (mut current_indexes, matches): (
-            BTreeMap<usize, usize>,
-            BTreeMap<usize, Vec<MultiCursor>>,
-        ) = self
-            .buffers_mut()
-            .enumerate()
-            .filter_map(|(buf_idx, b)| {
-                let (match_idx, matches) = b.all_multiline_matches(None, term.clone()).ok()?;
-                Some(((buf_idx, match_idx), (buf_idx, matches)))
-            })
-            .unzip();
-
-        let Some((buffer_idx, match_idx)) = current_indexes
-            .extract_if(self.current.., |_, _| true)
-            .next()
-            .or_else(|| current_indexes.pop_first())
-        else {
-            return Err(term);
-        };
-
-        self.current = buffer_idx;
-
-        Ok((match_idx, matches))
-    }
-
     /// Given set of cursors, attempts to find common search prefix
     /// If found, returns offsets by buffer index and completions.
     pub fn multi_autocomplete_matches(
@@ -4813,6 +4752,85 @@ impl BufferList {
         scratch.sort_unstable();
 
         scratch
+    }
+}
+
+impl<'r> Searchable<'r> for BufferList {
+    type Output = BTreeMap<usize, Vec<MultiCursor>>;
+    type Range = ();
+
+    fn all_matches<S: SearchTerm>(
+        &mut self,
+        _range: Self::Range,
+        term: S,
+    ) -> Result<(usize, Self::Output), S> {
+        let (mut current_indexes, matches): (
+            BTreeMap<usize, usize>,
+            BTreeMap<usize, Vec<MultiCursor>>,
+        ) = self
+            .buffers_mut()
+            .enumerate()
+            .filter_map(|(buf_idx, b)| {
+                let (match_idx, matches) = b.all_matches(None, term.clone()).ok()?;
+                Some(((buf_idx, match_idx), (buf_idx, matches)))
+            })
+            .unzip();
+
+        let Some((buffer_idx, match_idx)) = current_indexes
+            .extract_if(self.current.., |_, _| true)
+            .next()
+            .or_else(|| current_indexes.pop_first())
+        else {
+            return Err(term);
+        };
+
+        self.current = buffer_idx;
+
+        Ok((match_idx, matches))
+    }
+
+    fn all_multiline_matches<S: SearchTerm>(
+        &mut self,
+        _range: Self::Range,
+        term: S,
+    ) -> Result<(usize, Self::Output), S> {
+        let (mut current_indexes, matches): (
+            BTreeMap<usize, usize>,
+            BTreeMap<usize, Vec<MultiCursor>>,
+        ) = self
+            .buffers_mut()
+            .enumerate()
+            .filter_map(|(buf_idx, b)| {
+                let (match_idx, matches) = b.all_multiline_matches(None, term.clone()).ok()?;
+                Some(((buf_idx, match_idx), (buf_idx, matches)))
+            })
+            .unzip();
+
+        let Some((buffer_idx, match_idx)) = current_indexes
+            .extract_if(self.current.., |_, _| true)
+            .next()
+            .or_else(|| current_indexes.pop_first())
+        else {
+            return Err(term);
+        };
+
+        self.current = buffer_idx;
+
+        Ok((match_idx, matches))
+    }
+
+    fn search_autocomplete_matches(&self, prefix: String) -> Vec<String> {
+        let matches = self.buffers.iter().fold(Trie::default(), |acc, buf| {
+            accumulate_matches(acc, &buf.buffer.borrow().rope, &prefix)
+        });
+
+        finalize_matches(matches, prefix)
+    }
+
+    fn set_error<S: Into<Cow<'static, str>>>(&mut self, err: S) {
+        if let Some(buffer) = self.current_mut() {
+            buffer.set_error(err);
+        }
     }
 }
 
@@ -6804,6 +6822,27 @@ fn patch_rope(
             source.insert(inserted_pos, &to_insert);
         }
     }
+}
+
+pub trait Searchable<'r> {
+    type Output;
+    type Range;
+
+    fn all_matches<S: SearchTerm>(
+        &mut self,
+        range: Self::Range,
+        term: S,
+    ) -> Result<(usize, Self::Output), S>;
+
+    fn all_multiline_matches<S: SearchTerm>(
+        &mut self,
+        range: Self::Range,
+        term: S,
+    ) -> Result<(usize, Self::Output), S>;
+
+    fn search_autocomplete_matches(&self, prefix: String) -> Vec<String>;
+
+    fn set_error<S: Into<Cow<'static, str>>>(&mut self, err: S);
 }
 
 /// Returns Ok if successful
