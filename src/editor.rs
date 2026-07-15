@@ -12,8 +12,8 @@ use crate::files::SshSource;
 use crate::key;
 use crate::{
     buffer::{
-        AltCursor, BufferContext, BufferId, BufferList, EditorCutBuffer, MultiCursor, Searchable,
-        SelectionRange, Source,
+        AltCursor, BufferContext, BufferId, BufferList, EditorCutBuffer, MultiBuffer, MultiCursor,
+        Searchable, SelectionRange, Source,
     },
     files::{ChooserSource, FileChooserState},
     key::{Binding, CtrlBinding},
@@ -1118,11 +1118,12 @@ impl Editor {
                             mode: MultiCursorMode::PasteGroup { .. },
                         },
                 } => {
-                    process_paste_group_all(
+                    process_paste_group(
                         &mut self.layout,
                         matches,
                         self.cut_buffer.as_mut(),
                         event,
+                        (),
                     );
 
                     self.mode = EditorMode::AllBuffers {
@@ -3168,12 +3169,12 @@ fn process_multi_cursor_mark_set_all(
     }
 }
 
-fn process_paste_group(
-    buf: &mut BufferContext,
-    matches: &mut [MultiCursor],
+fn process_paste_group<'a, M: MultiBuffer<'a>>(
+    source: &mut M,
+    matches: &mut M::Matches,
     cut_buffer: Option<&mut EditorCutBuffer>,
     event: Event,
-    alt: Vec<AltCursor<'_>>,
+    alt: M::Alt,
 ) {
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
@@ -3198,55 +3199,11 @@ fn process_paste_group(
                 _ => unreachable!(),
             };
 
-            buf.multi_insert_group(alt, matches, group);
+            source.multi_insert_group(alt, matches, group);
         }
         ctrl_keybind!(Paste) => {
             if let Some(cut) = cut_buffer {
-                buf.multi_paste(alt, matches, cut);
-            }
-        }
-        _ => { /* ignore other events */ }
-    }
-}
-
-fn process_paste_group_all(
-    layout: &mut Layout,
-    matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
-    cut_buffer: Option<&mut EditorCutBuffer>,
-    event: Event,
-) {
-    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-
-    match event {
-        Event::Key(KeyEvent {
-            code: KeyCode::Char(c @ '0'..='9'),
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            let group = match c {
-                '0' => 0,
-                '1' => 1,
-                '2' => 2,
-                '3' => 3,
-                '4' => 4,
-                '5' => 5,
-                '6' => 6,
-                '7' => 7,
-                '8' => 8,
-                '9' => 9,
-                _ => unreachable!(),
-            };
-
-            layout.on_global_at(matches, |buf, alt, matches| {
-                buf.multi_insert_group(alt, matches, group);
-            });
-        }
-        ctrl_keybind!(Paste) => {
-            if let Some(cut) = cut_buffer {
-                layout.on_global_at(matches, |buf, alt, matches| {
-                    buf.multi_paste(alt, matches, cut);
-                });
+                source.multi_paste(alt, matches, cut);
             }
         }
         _ => { /* ignore other events */ }
@@ -4460,6 +4417,33 @@ impl Layout {
                 }
             }
         }
+    }
+}
+
+impl MultiBuffer<'_> for Layout {
+    type Matches = BTreeMap<usize, Vec<MultiCursor>>;
+    type Alt = ();
+
+    fn multi_paste(
+        &mut self,
+        _alt: Self::Alt,
+        matches: &mut Self::Matches,
+        cut: &mut EditorCutBuffer,
+    ) {
+        self.on_global_at(matches, |buf, alt, matches| {
+            buf.multi_paste(alt, matches, cut);
+        });
+    }
+
+    fn multi_insert_group(
+        &mut self,
+        _alt: Self::Alt,
+        matches: &mut Self::Matches,
+        group_num: usize,
+    ) {
+        self.on_global_at(matches, |buf, alt, matches| {
+            buf.multi_insert_group(alt, matches, group_num);
+        });
     }
 }
 

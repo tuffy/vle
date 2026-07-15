@@ -2843,6 +2843,29 @@ impl std::fmt::Display for BufferContext {
     }
 }
 
+impl<'a> MultiBuffer<'a> for BufferContext {
+    type Matches = Vec<MultiCursor>;
+    type Alt = Vec<AltCursor<'a>>;
+
+    fn multi_paste(
+        &mut self,
+        alt: Self::Alt,
+        matches: &mut Self::Matches,
+        cut: &mut EditorCutBuffer,
+    ) {
+        BufferContext::multi_paste(self, alt, matches, cut);
+    }
+
+    fn multi_insert_group(
+        &mut self,
+        alt: Self::Alt,
+        matches: &mut Self::Matches,
+        group_num: usize,
+    ) {
+        BufferContext::multi_insert_group(self, alt, matches, group_num);
+    }
+}
+
 impl<'r> Searchable<'r> for BufferContext {
     type Output = Vec<MultiCursor>;
     type Range = Option<&'r SelectionRange>;
@@ -6822,6 +6845,20 @@ fn patch_rope(
             source.insert(inserted_pos, &to_insert);
         }
     }
+}
+
+pub trait MultiBuffer<'a> {
+    type Matches;
+    type Alt;
+
+    fn multi_paste(
+        &mut self,
+        alt: Self::Alt,
+        matches: &mut Self::Matches,
+        cut: &mut EditorCutBuffer,
+    );
+
+    fn multi_insert_group(&mut self, alt: Self::Alt, matches: &mut Self::Matches, group_num: usize);
 }
 
 pub trait Searchable<'r> {
