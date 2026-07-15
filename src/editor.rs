@@ -1033,12 +1033,8 @@ impl Editor {
                             mode: MultiCursorMode::MarkSet,
                         },
                 } => {
-                    match process_multi_cursor_mark_set_all(
-                        &mut self.layout,
-                        matches,
-                        highlight,
-                        event,
-                    ) {
+                    match process_multi_cursor_mark_set(&mut self.layout, matches, highlight, event)
+                    {
                         Ok(Some(event)) => {
                             // end mark set
                             self.mode = EditorMode::AllBuffers {
@@ -2652,9 +2648,9 @@ fn process_multi_cursor(
     }
 }
 
-fn process_multi_cursor_mark_set(
-    buffer: &mut BufferContext,
-    matches: &mut [MultiCursor],
+fn process_multi_cursor_mark_set<'a, M: MultiBuffer<'a>>(
+    source: &mut M,
+    matches: &mut M::Matches,
     highlight: &mut bool,
     event: Event,
 ) -> Result<Option<Event>, ()> {
@@ -2668,7 +2664,7 @@ fn process_multi_cursor_mark_set(
             ..
         }) => {
             *highlight = false;
-            buffer.multi_cursor_back(matches, true);
+            source.multi_cursor_back(matches, true);
             Ok(None)
         }
         Event::Key(KeyEvent {
@@ -2678,7 +2674,7 @@ fn process_multi_cursor_mark_set(
             ..
         }) => {
             *highlight = false;
-            buffer.multi_cursor_forward(matches, true);
+            source.multi_cursor_forward(matches, true);
             Ok(None)
         }
         Event::Key(KeyEvent {
@@ -2688,7 +2684,7 @@ fn process_multi_cursor_mark_set(
             ..
         }) => {
             *highlight = false;
-            buffer.multi_cursor_home(matches, true);
+            source.multi_cursor_home(matches, true);
             Ok(None)
         }
         Event::Key(KeyEvent {
@@ -2698,7 +2694,7 @@ fn process_multi_cursor_mark_set(
             ..
         }) => {
             *highlight = false;
-            buffer.multi_cursor_end(matches, true);
+            source.multi_cursor_end(matches, true);
             Ok(None)
         }
         ctrl_keybind!(Mark) => Err(()),
@@ -3104,68 +3100,6 @@ fn process_multi_cursor_all(
             },
         }),
         _ => None,
-    }
-}
-
-fn process_multi_cursor_mark_set_all(
-    layout: &mut Layout,
-    matches: &mut BTreeMap<usize, Vec<MultiCursor>>,
-    highlight: &mut bool,
-    event: Event,
-) -> Result<Option<Event>, ()> {
-    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-
-    match event {
-        Event::Key(KeyEvent {
-            code: KeyCode::Left,
-            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            *highlight = false;
-            layout.on_global(matches, |buffer, matches| {
-                buffer.multi_cursor_back(matches, true);
-            });
-            Ok(None)
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::Right,
-            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            *highlight = false;
-            layout.on_global(matches, |buffer, matches| {
-                buffer.multi_cursor_forward(matches, true);
-            });
-            Ok(None)
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::Home,
-            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            *highlight = false;
-            layout.on_global(matches, |buffer, matches| {
-                buffer.multi_cursor_home(matches, true);
-            });
-            Ok(None)
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::End,
-            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            *highlight = false;
-            layout.on_global(matches, |buffer, matches| {
-                buffer.multi_cursor_end(matches, true);
-            });
-            Ok(None)
-        }
-        ctrl_keybind!(Mark) => Err(()),
-        event => Ok(Some(event)),
     }
 }
 
@@ -4423,6 +4357,30 @@ impl Layout {
 impl MultiBuffer<'_> for Layout {
     type Matches = BTreeMap<usize, Vec<MultiCursor>>;
     type Alt = ();
+
+    fn multi_cursor_back(&mut self, matches: &mut Self::Matches, selecting: bool) {
+        self.on_global(matches, |buffer, matches| {
+            buffer.multi_cursor_back(matches, selecting);
+        });
+    }
+
+    fn multi_cursor_forward(&mut self, matches: &mut Self::Matches, selecting: bool) {
+        self.on_global(matches, |buffer, matches| {
+            buffer.multi_cursor_forward(matches, selecting);
+        });
+    }
+
+    fn multi_cursor_home(&mut self, matches: &mut Self::Matches, selecting: bool) {
+        self.on_global(matches, |buffer, matches| {
+            buffer.multi_cursor_home(matches, selecting);
+        });
+    }
+
+    fn multi_cursor_end(&mut self, matches: &mut Self::Matches, selecting: bool) {
+        self.on_global(matches, |buffer, matches| {
+            buffer.multi_cursor_end(matches, selecting);
+        });
+    }
 
     fn multi_paste(
         &mut self,

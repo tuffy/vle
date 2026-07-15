@@ -2844,8 +2844,24 @@ impl std::fmt::Display for BufferContext {
 }
 
 impl<'a> MultiBuffer<'a> for BufferContext {
-    type Matches = Vec<MultiCursor>;
+    type Matches = [MultiCursor];
     type Alt = Vec<AltCursor<'a>>;
+
+    fn multi_cursor_back(&mut self, matches: &mut Self::Matches, selecting: bool) {
+        BufferContext::multi_cursor_back(self, matches, selecting)
+    }
+
+    fn multi_cursor_forward(&mut self, matches: &mut Self::Matches, selecting: bool) {
+        BufferContext::multi_cursor_forward(self, matches, selecting)
+    }
+
+    fn multi_cursor_home(&mut self, matches: &mut Self::Matches, selecting: bool) {
+        BufferContext::multi_cursor_home(self, matches, selecting)
+    }
+
+    fn multi_cursor_end(&mut self, matches: &mut Self::Matches, selecting: bool) {
+        BufferContext::multi_cursor_end(self, matches, selecting)
+    }
 
     fn multi_paste(
         &mut self,
@@ -6848,8 +6864,16 @@ fn patch_rope(
 }
 
 pub trait MultiBuffer<'a> {
-    type Matches;
+    type Matches: ?Sized;
     type Alt;
+
+    fn multi_cursor_back(&mut self, matches: &mut Self::Matches, selecting: bool);
+
+    fn multi_cursor_forward(&mut self, matches: &mut Self::Matches, selecting: bool);
+
+    fn multi_cursor_home(&mut self, matches: &mut Self::Matches, selecting: bool);
+
+    fn multi_cursor_end(&mut self, matches: &mut Self::Matches, selecting: bool);
 
     fn multi_paste(
         &mut self,
