@@ -2844,8 +2844,47 @@ impl std::fmt::Display for BufferContext {
 }
 
 impl<'a> MultiBuffer<'a> for BufferContext {
-    type Matches = [MultiCursor];
+    type Matches = Vec<MultiCursor>;
+    type Offsets = Vec<usize>;
     type Alt = Vec<AltCursor<'a>>;
+
+    fn multi_insert_char(&mut self, alt: Self::Alt, matches: &mut Self::Matches, c: char) {
+        BufferContext::multi_insert_char(self, alt, matches, c)
+    }
+
+    fn multi_insert_string(&mut self, alt: Self::Alt, matches: &mut Self::Matches, s: &str) {
+        BufferContext::multi_insert_string(self, alt, matches, s)
+    }
+
+    fn multi_backspace(&mut self, alt: Self::Alt, matches: &mut Self::Matches) {
+        BufferContext::multi_backspace(self, alt, matches)
+    }
+
+    fn multi_delete(&mut self, alt: Self::Alt, matches: &mut Self::Matches) {
+        BufferContext::multi_delete(self, alt, matches)
+    }
+
+    fn delete_buffer(
+        &mut self,
+        matches: &mut Self::Matches,
+        match_idx: &mut usize,
+    ) -> BufferDeleted {
+        matches.remove(*match_idx);
+        match matches.len().checked_sub(1) {
+            Some(max) => {
+                *match_idx = (*match_idx).min(max);
+                if let Some(m) = matches.get(*match_idx) {
+                    self.set_cursor(m.cursor());
+                }
+                BufferDeleted::BuffersRemain
+            }
+            None => BufferDeleted::NoBuffers,
+        }
+    }
+
+    fn multi_select_inside(&mut self, matches: &mut Self::Matches, selected: usize) {
+        BufferContext::multi_select_inside(self, matches, selected)
+    }
 
     fn multi_cursor_back(&mut self, matches: &mut Self::Matches, selecting: bool) {
         BufferContext::multi_cursor_back(self, matches, selecting)
@@ -2863,6 +2902,14 @@ impl<'a> MultiBuffer<'a> for BufferContext {
         BufferContext::multi_cursor_end(self, matches, selecting)
     }
 
+    fn paste_group_count(matches: &Self::Matches) -> Option<NonZero<usize>> {
+        matches
+            .iter()
+            .map(|m| m.paste_group_count())
+            .max()
+            .flatten()
+    }
+
     fn multi_paste(
         &mut self,
         alt: Self::Alt,
@@ -2872,6 +2919,14 @@ impl<'a> MultiBuffer<'a> for BufferContext {
         BufferContext::multi_paste(self, alt, matches, cut);
     }
 
+    fn multi_cursor_copy(&mut self, matches: &mut Self::Matches) -> Vec<CutBuffer> {
+        BufferContext::multi_cursor_copy(self, matches)
+    }
+
+    fn multi_cursor_cut(&mut self, alt: Self::Alt, matches: &mut Self::Matches) -> Vec<CutBuffer> {
+        BufferContext::multi_cursor_cut(self, alt, matches)
+    }
+
     fn multi_insert_group(
         &mut self,
         alt: Self::Alt,
@@ -2879,6 +2934,58 @@ impl<'a> MultiBuffer<'a> for BufferContext {
         group_num: usize,
     ) {
         BufferContext::multi_insert_group(self, alt, matches, group_num);
+    }
+
+    fn previous_match(&mut self, matches: &mut Self::Matches, match_idx: &mut usize) {
+        *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
+        if let Some(r) = matches.get(*match_idx) {
+            self.set_cursor(r.cursor());
+        }
+    }
+
+    fn next_match(&mut self, matches: &mut Self::Matches, match_idx: &mut usize) {
+        *match_idx = (*match_idx + 1) % matches.len();
+        if let Some(r) = matches.get(*match_idx) {
+            self.set_cursor(r.cursor());
+        }
+    }
+
+    fn multi_cursor_widen(&mut self, matches: &mut Self::Matches) {
+        BufferContext::multi_cursor_widen(self, matches)
+    }
+
+    fn toggle_bookmarks(&mut self, matches: &mut Self::Matches) -> ToggledBookmarks {
+        BufferContext::toggle_bookmarks(self, matches.iter().map(|m| m.cursor()))
+    }
+
+    fn multi_autocomplete_matches(
+        &self,
+        matches: &mut Self::Matches,
+    ) -> Option<(Self::Offsets, Vec<String>)> {
+        BufferContext::multi_autocomplete_matches(self, matches)
+    }
+
+    fn multi_autocomplete(
+        &mut self,
+        alt: Self::Alt,
+        matches: &mut Self::Matches,
+        offsets: &Self::Offsets,
+        original: &str,
+        replacement: &str,
+    ) {
+        BufferContext::multi_autocomplete(self, alt, matches, offsets, original, replacement)
+    }
+
+    fn set_buffer_message(&mut self, message: BufferMessage) {
+        BufferContext::set_buffer_message(self, message)
+    }
+
+    fn set_message<S: Into<Cow<'static, str>>>(&mut self, msg: S) {
+        BufferContext::set_message(self, msg)
+    }
+
+    fn set_error<S: Into<Cow<'static, str>>>(&mut self, msg: S) {
+        BufferContext::set_error(self, msg)
     }
 }
 
@@ -6863,9 +6970,31 @@ fn patch_rope(
     }
 }
 
+pub enum BufferDeleted {
+    BuffersRemain,
+    NoBuffers,
+}
+
 pub trait MultiBuffer<'a> {
-    type Matches: ?Sized;
+    type Matches;
+    type Offsets;
     type Alt;
+
+    fn multi_insert_char(&mut self, alt: Self::Alt, matches: &mut Self::Matches, c: char);
+
+    fn multi_insert_string(&mut self, alt: Self::Alt, matches: &mut Self::Matches, s: &str);
+
+    fn multi_backspace(&mut self, alt: Self::Alt, matches: &mut Self::Matches);
+
+    fn multi_delete(&mut self, alt: Self::Alt, matches: &mut Self::Matches);
+
+    fn delete_buffer(
+        &mut self,
+        matches: &mut Self::Matches,
+        match_idx: &mut usize,
+    ) -> BufferDeleted;
+
+    fn multi_select_inside(&mut self, matches: &mut Self::Matches, selected: usize);
 
     fn multi_cursor_back(&mut self, matches: &mut Self::Matches, selecting: bool);
 
@@ -6875,6 +7004,8 @@ pub trait MultiBuffer<'a> {
 
     fn multi_cursor_end(&mut self, matches: &mut Self::Matches, selecting: bool);
 
+    fn paste_group_count(matches: &Self::Matches) -> Option<NonZero<usize>>;
+
     fn multi_paste(
         &mut self,
         alt: Self::Alt,
@@ -6882,7 +7013,40 @@ pub trait MultiBuffer<'a> {
         cut: &mut EditorCutBuffer,
     );
 
+    fn multi_cursor_copy(&mut self, matches: &mut Self::Matches) -> Vec<CutBuffer>;
+
+    fn multi_cursor_cut(&mut self, alt: Self::Alt, matches: &mut Self::Matches) -> Vec<CutBuffer>;
+
     fn multi_insert_group(&mut self, alt: Self::Alt, matches: &mut Self::Matches, group_num: usize);
+
+    fn previous_match(&mut self, matches: &mut Self::Matches, match_idx: &mut usize);
+
+    fn next_match(&mut self, matches: &mut Self::Matches, match_idx: &mut usize);
+
+    fn multi_cursor_widen(&mut self, matches: &mut Self::Matches);
+
+    #[must_use]
+    fn toggle_bookmarks(&mut self, matches: &mut Self::Matches) -> ToggledBookmarks;
+
+    fn multi_autocomplete_matches(
+        &self,
+        matches: &mut Self::Matches,
+    ) -> Option<(Self::Offsets, Vec<String>)>;
+
+    fn multi_autocomplete(
+        &mut self,
+        alt: Self::Alt,
+        matches: &mut Self::Matches,
+        offsets: &Self::Offsets,
+        original: &str,
+        replacement: &str,
+    );
+
+    fn set_buffer_message(&mut self, message: BufferMessage);
+
+    fn set_message<S: Into<Cow<'static, str>>>(&mut self, msg: S);
+
+    fn set_error<S: Into<Cow<'static, str>>>(&mut self, msg: S);
 }
 
 pub trait Searchable<'r> {

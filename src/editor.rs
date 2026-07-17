@@ -12,8 +12,9 @@ use crate::files::SshSource;
 use crate::key;
 use crate::{
     buffer::{
-        AltCursor, BufferContext, BufferId, BufferList, EditorCutBuffer, MultiBuffer, MultiCursor,
-        Searchable, SelectionRange, Source,
+        AltCursor, BufferContext, BufferDeleted, BufferId, BufferList, BufferMessage, CutBuffer,
+        EditorCutBuffer, MultiBuffer, MultiCursor, Searchable, SelectionRange, Source,
+        ToggledBookmarks,
     },
     files::{ChooserSource, FileChooserState},
     key::{Binding, CtrlBinding},
@@ -24,7 +25,9 @@ use ratatui::{
     layout::{Position, Rect},
     widgets::StatefulWidget,
 };
+use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::num::NonZero;
 use std::path::PathBuf;
 #[cfg(feature = "ssh")]
 use std::rc::Rc;
@@ -977,7 +980,8 @@ impl Editor {
                     range,
                 } => {
                     if let Some(Some(new_mode)) = self.layout.on_current_at(|b, a| {
-                        process_multi_cursor(b, &mut self.cut_buffer, cursors, range, event, a)
+                        process_multi_cursor(b, &mut self.cut_buffer, cursors, event, a)
+                            .and_then(|new_mode| new_mode.into_mode(cursors, b, range))
                     }) {
                         self.mode = new_mode;
                     }
@@ -1068,12 +1072,14 @@ impl Editor {
                             ..
                         },
                 } => {
-                    if let Some(new_mode) = process_multi_cursor_all(
+                    if let Some(new_mode) = process_multi_cursor(
                         &mut self.layout,
                         &mut self.cut_buffer,
                         cursors,
                         event,
-                    ) {
+                        (),
+                    ) && let Some(new_mode) = new_mode.into_mode(cursors)
+                    {
                         self.mode = new_mode;
                     }
                 }
@@ -2357,19 +2363,162 @@ fn process_search<'s, S: Searchable<'s>>(
     }
 }
 
-fn process_multi_cursor(
-    buffer: &mut BufferContext,
+enum NextMultiCursorMode<O> {
+    Default,
+    Find,
+    Mark,
+    PasteGroup {
+        total: usize,
+    },
+    Autocomplete {
+        offsets: O,
+        completions: Vec<String>,
+        index: usize,
+    },
+    SingleSelection,
+}
+
+impl NextMultiCursorMode<Vec<usize>> {
+    fn into_mode(
+        self,
+        MultiCursors {
+            matches,
+            match_idx,
+            highlight,
+            ..
+        }: &mut MultiCursors<Vec<MultiCursor>, Vec<usize>>,
+        buffer: &mut BufferContext,
+        range: &mut SingleBufferRange,
+    ) -> Option<EditorMode> {
+        match self {
+            Self::Default => Some(EditorMode::default()),
+            Self::Find => Some(EditorMode::Search {
+                search: Search {
+                    prompt: TextField::default(),
+                    type_: SearchType::default(),
+                    mode: SearchMode::Editing,
+                },
+                range: std::mem::take(range).into(),
+            }),
+            Self::Mark => Some(EditorMode::SingleBuffer {
+                cursors: MultiCursors {
+                    matches: std::mem::take(matches),
+                    match_idx: std::mem::take(match_idx),
+                    highlight: std::mem::take(highlight),
+                    mode: MultiCursorMode::MarkSet,
+                },
+                range: std::mem::take(range),
+            }),
+            Self::PasteGroup { total } => Some(EditorMode::SingleBuffer {
+                cursors: MultiCursors {
+                    matches: std::mem::take(matches),
+                    match_idx: std::mem::take(match_idx),
+                    highlight: std::mem::take(highlight),
+                    mode: MultiCursorMode::PasteGroup { total },
+                },
+                range: std::mem::take(range),
+            }),
+            Self::Autocomplete {
+                offsets,
+                completions,
+                index,
+            } => Some(EditorMode::SingleBuffer {
+                cursors: MultiCursors {
+                    matches: std::mem::take(matches),
+                    match_idx: std::mem::take(match_idx),
+                    highlight: false,
+                    mode: MultiCursorMode::Autocomplete {
+                        offsets,
+                        completions,
+                        index,
+                    },
+                },
+                range: std::mem::take(range),
+            }),
+            Self::SingleSelection => if matches!(range, SingleBufferRange::UpdateLines)
+              && let Some(start) = matches.first()
+              && let Some(end) = matches.last()
+            {
+                buffer.set_selection(start.start(), end.end());
+                Some(EditorMode::default())
+            } else {
+                None
+            }
+        }
+    }
+}
+
+impl NextMultiCursorMode<BTreeMap<usize, Vec<usize>>> {
+    fn into_mode(
+        self,
+        MultiCursors {
+            matches,
+            match_idx,
+            highlight,
+            ..
+        }: &mut MultiCursors<
+            BTreeMap<usize, Vec<MultiCursor>>,
+            BTreeMap<usize, Vec<usize>>,
+        >,
+    ) -> Option<EditorMode> {
+        match self {
+            Self::Default => Some(EditorMode::default()),
+            Self::Find => Some(EditorMode::SearchAll {
+                search: Search {
+                    prompt: TextField::default(),
+                    type_: SearchType::default(),
+                    mode: SearchMode::Editing,
+                },
+            }),
+            Self::Mark => Some(EditorMode::AllBuffers {
+                cursors: MultiCursors {
+                    matches: std::mem::take(matches),
+                    match_idx: std::mem::take(match_idx),
+                    highlight: std::mem::take(highlight),
+                    mode: MultiCursorMode::MarkSet,
+                },
+            }),
+            Self::PasteGroup { total } => Some(EditorMode::AllBuffers {
+                cursors: MultiCursors {
+                    matches: std::mem::take(matches),
+                    match_idx: std::mem::take(match_idx),
+                    highlight: std::mem::take(highlight),
+                    mode: MultiCursorMode::PasteGroup { total },
+                },
+            }),
+            Self::Autocomplete {
+                offsets,
+                completions,
+                index,
+            } => Some(EditorMode::AllBuffers {
+                cursors: MultiCursors {
+                    matches: std::mem::take(matches),
+                    match_idx: std::mem::take(match_idx),
+                    highlight: std::mem::take(highlight),
+                    mode: MultiCursorMode::Autocomplete {
+                        offsets,
+                        completions,
+                        index,
+                    },
+                },
+            }),
+            Self::SingleSelection => None, // not supported in multi-buffer mode
+        }
+    }
+}
+
+fn process_multi_cursor<'a, M: MultiBuffer<'a>>(
+    buffer: &mut M,
     cut_buffer: &mut Option<EditorCutBuffer>,
     MultiCursors {
         matches,
         match_idx,
         highlight,
         ..
-    }: &mut MultiCursors<Vec<MultiCursor>, Vec<usize>>,
-    range: &mut SingleBufferRange,
+    }: &mut MultiCursors<M::Matches, M::Offsets>,
     event: Event,
-    alt: Vec<AltCursor<'_>>,
-) -> Option<EditorMode> {
+    alt: M::Alt,
+) -> Option<NextMultiCursorMode<M::Offsets>> {
     use crossterm::event::{
         Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
     };
@@ -2402,30 +2551,18 @@ fn process_multi_cursor(
         }
         key!(CONTROL, Delete) => {
             *highlight = true;
-            matches.remove(*match_idx);
-            match matches.len().checked_sub(1) {
-                Some(max) => {
-                    *match_idx = (*match_idx).min(max);
-                    buffer.set_cursor(matches.get(*match_idx)?.cursor());
-                    None
-                }
-                None => Some(EditorMode::default()),
+            match buffer.delete_buffer(matches, match_idx) {
+                BufferDeleted::BuffersRemain => None,
+                BufferDeleted::NoBuffers => Some(NextMultiCursorMode::Default),
             }
         }
-        keybind!(Find) => Some(EditorMode::Search {
-            search: Search {
-                prompt: TextField::default(),
-                type_: SearchType::default(),
-                mode: SearchMode::Editing,
-            },
-            range: std::mem::take(range).into(),
-        }),
+        keybind!(Find) => Some(NextMultiCursorMode::Find),
         keybind!(SelectInside) => {
             *highlight = false;
             buffer.multi_select_inside(matches, *match_idx);
             None
         }
-        key!(Enter) => Some(EditorMode::default()),
+        key!(Enter) => Some(NextMultiCursorMode::Default),
         Event::Key(KeyEvent {
             code: KeyCode::Left,
             modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
@@ -2466,17 +2603,9 @@ fn process_multi_cursor(
             buffer.multi_cursor_end(matches, modifiers.contains(KeyModifiers::SHIFT));
             None
         }
-        ctrl_keybind!(Paste) => match matches.iter().map(|m| m.paste_group_count()).max() {
-            Some(Some(total)) => Some(EditorMode::SingleBuffer {
-                cursors: MultiCursors {
-                    matches: std::mem::take(matches),
-                    match_idx: std::mem::take(match_idx),
-                    highlight: std::mem::take(highlight),
-                    mode: MultiCursorMode::PasteGroup { total: total.get() },
-                },
-                range: std::mem::take(range),
-            }),
-            _ => {
+        ctrl_keybind!(Paste) => match M::paste_group_count(matches) {
+            Some(total) => Some(NextMultiCursorMode::PasteGroup { total: total.get() }),
+            None => {
                 if let Some(cut) = cut_buffer {
                     buffer.multi_paste(alt, matches, cut);
                 }
@@ -2533,7 +2662,7 @@ fn process_multi_cursor(
         }
         keybind!(Bookmark) => {
             *highlight = false;
-            let toggled = buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));
+            let toggled = buffer.toggle_bookmarks(matches);
             if let Ok(msg) = toggled.try_into() {
                 buffer.set_buffer_message(msg);
             }
@@ -2544,18 +2673,10 @@ fn process_multi_cursor(
             match init_complete_forward(&completions) {
                 Some((index, original, replacement)) => {
                     buffer.multi_autocomplete(alt, matches, &offsets, original, replacement);
-                    Some(EditorMode::SingleBuffer {
-                        cursors: MultiCursors {
-                            matches: std::mem::take(matches),
-                            match_idx: std::mem::take(match_idx),
-                            highlight: false,
-                            mode: MultiCursorMode::Autocomplete {
-                                offsets,
-                                completions,
-                                index,
-                            },
-                        },
-                        range: std::mem::take(range),
+                    Some(NextMultiCursorMode::Autocomplete {
+                        offsets,
+                        completions,
+                        index,
                     })
                 }
                 None => {
@@ -2569,18 +2690,10 @@ fn process_multi_cursor(
             match init_complete_backward(&completions) {
                 Some((index, original, replacement)) => {
                     buffer.multi_autocomplete(alt, matches, &offsets, original, replacement);
-                    Some(EditorMode::SingleBuffer {
-                        cursors: MultiCursors {
-                            matches: std::mem::take(matches),
-                            match_idx: std::mem::take(match_idx),
-                            highlight: false,
-                            mode: MultiCursorMode::Autocomplete {
-                                offsets,
-                                completions,
-                                index,
-                            },
-                        },
-                        range: std::mem::take(range),
+                    Some(NextMultiCursorMode::Autocomplete {
+                        offsets,
+                        completions,
+                        index,
                     })
                 }
                 None => {
@@ -2600,10 +2713,7 @@ fn process_multi_cursor(
             ..
         }) => {
             *highlight = true;
-            *match_idx = match_idx.checked_sub(1).unwrap_or(matches.len() - 1);
-            if let Some(r) = matches.get(*match_idx) {
-                buffer.set_cursor(r.cursor());
-            }
+            buffer.previous_match(matches, match_idx);
             None
         }
         Event::Key(KeyEvent {
@@ -2617,29 +2727,11 @@ fn process_multi_cursor(
             ..
         }) => {
             *highlight = true;
-            *match_idx = (*match_idx + 1) % matches.len();
-            if let Some(r) = matches.get(*match_idx) {
-                buffer.set_cursor(r.cursor());
-            }
+            buffer.next_match(matches, match_idx);
             None
         }
-        ctrl_keybind!(Mark) => Some(EditorMode::SingleBuffer {
-            cursors: MultiCursors {
-                matches: std::mem::take(matches),
-                match_idx: std::mem::take(match_idx),
-                highlight: std::mem::take(highlight),
-                mode: MultiCursorMode::MarkSet,
-            },
-            range: std::mem::take(range),
-        }),
-        keybind!(UpdateLines)
-            if matches!(range, SingleBufferRange::UpdateLines)
-                && let Some(start) = matches.first()
-                && let Some(end) = matches.last() =>
-        {
-            buffer.set_selection(start.start(), end.end());
-            Some(EditorMode::default())
-        }
+        ctrl_keybind!(Mark) => Some(NextMultiCursorMode::Mark),
+        keybind!(UpdateLines) => Some(NextMultiCursorMode::SingleSelection),
         _ => None,
     }
 }
@@ -2695,394 +2787,6 @@ fn process_multi_cursor_mark_set<'a, M: MultiBuffer<'a>>(
         }
         ctrl_keybind!(Mark) => Err(()),
         event => Ok(Some(event)),
-    }
-}
-
-fn process_multi_cursor_all(
-    layout: &mut Layout,
-    cut_buffer: &mut Option<EditorCutBuffer>,
-    MultiCursors {
-        matches,
-        match_idx,
-        highlight,
-        ..
-    }: &mut MultiCursors<BTreeMap<usize, Vec<MultiCursor>>, BTreeMap<usize, Vec<usize>>>,
-    event: Event,
-) -> Option<EditorMode> {
-    use crossterm::event::{
-        Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
-    };
-
-    match event {
-        Event::Key(KeyEvent {
-            code: KeyCode::Char(c),
-            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            *highlight = false;
-            layout.on_global_at(matches, |buffer, alt, matches| {
-                buffer.multi_insert_char(alt, matches, c);
-            });
-            None
-        }
-        Event::Paste(pasted) => {
-            *highlight = false;
-            layout.on_global_at(matches, |buffer, alt, matches| {
-                buffer.multi_insert_string(alt, matches, &pasted);
-            });
-            None
-        }
-        key!(Backspace) => {
-            *highlight = false;
-            layout.on_global_at(matches, |buffer, alt, matches| {
-                buffer.multi_backspace(alt, matches);
-            });
-            None
-        }
-        key!(Delete) => {
-            *highlight = false;
-            layout.on_global_at(matches, |buffer, alt, matches| {
-                buffer.multi_delete(alt, matches);
-            });
-            None
-        }
-        key!(CONTROL, Delete) => {
-            use std::collections::btree_map::Entry;
-
-            *highlight = true;
-            let buffer_list = layout.selected_buffer_list_mut();
-            let buffer_index = buffer_list.current_index();
-            let Entry::Occupied(mut buffer_matches) = matches.entry(buffer_index) else {
-                return None;
-            };
-            buffer_matches.get_mut().remove(*match_idx);
-            match buffer_matches.get().len().checked_sub(1) {
-                Some(max) => {
-                    *match_idx = (*match_idx).min(max);
-                    buffer_list
-                        .get_mut(buffer_index)?
-                        .set_cursor(buffer_matches.get().get(*match_idx)?.cursor());
-                    None
-                }
-                None => {
-                    use core::ops::Bound;
-
-                    buffer_matches.remove();
-                    if let Some((next_idx, next_cursors)) = matches
-                        .range((Bound::Excluded(buffer_index), Bound::Unbounded))
-                        .next()
-                        .or_else(|| matches.first_key_value())
-                        && let Some(r) = next_cursors.first()
-                        && let Ok(buffer) = buffer_list.select_buffer(*next_idx)
-                    {
-                        *match_idx = 0;
-                        buffer.set_cursor(r.cursor());
-                        None
-                    } else {
-                        // no next buffer to switch to
-                        Some(EditorMode::default())
-                    }
-                }
-            }
-        }
-        keybind!(Find) => Some(EditorMode::SearchAll {
-            search: Search {
-                prompt: TextField::default(),
-                type_: SearchType::default(),
-                mode: SearchMode::Editing,
-            },
-        }),
-        keybind!(SelectInside) => {
-            *highlight = false;
-            layout.on_global(matches, |buffer, matches| {
-                buffer.multi_select_inside(matches, *match_idx);
-            });
-            None
-        }
-        key!(Enter) => Some(EditorMode::default()),
-        Event::Key(KeyEvent {
-            code: KeyCode::Left,
-            modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            *highlight = false;
-            layout.on_global(matches, |buffer, matches| {
-                buffer.multi_cursor_back(matches, modifiers.contains(KeyModifiers::SHIFT));
-            });
-            None
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::Right,
-            modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            *highlight = false;
-            layout.on_global(matches, |buffer, matches| {
-                buffer.multi_cursor_forward(matches, modifiers.contains(KeyModifiers::SHIFT));
-            });
-            None
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::Home,
-            modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            *highlight = false;
-            layout.on_global(matches, |buffer, matches| {
-                buffer.multi_cursor_home(matches, modifiers.contains(KeyModifiers::SHIFT));
-            });
-            None
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::End,
-            modifiers: modifiers @ KeyModifiers::NONE | modifiers @ KeyModifiers::SHIFT,
-            kind: KeyEventKind::Press,
-            ..
-        }) => {
-            *highlight = false;
-            layout.on_global(matches, |buffer, matches| {
-                buffer.multi_cursor_end(matches, modifiers.contains(KeyModifiers::SHIFT));
-            });
-            None
-        }
-        ctrl_keybind!(Paste) => match matches
-            .values()
-            .flat_map(|m| m.iter().map(|m| m.paste_group_count()))
-            .max()
-        {
-            Some(Some(total)) => Some(EditorMode::AllBuffers {
-                cursors: MultiCursors {
-                    matches: std::mem::take(matches),
-                    match_idx: std::mem::take(match_idx),
-                    highlight: std::mem::take(highlight),
-                    mode: MultiCursorMode::PasteGroup { total: total.get() },
-                },
-            }),
-            _ => {
-                if let Some(cut) = cut_buffer {
-                    layout.on_global_at(matches, |buffer, alt, matches| {
-                        buffer.multi_paste(alt, matches, cut);
-                    });
-                }
-                None
-            }
-        },
-        ctrl_keybind!(Copy) => {
-            let mut copied = vec![];
-            layout.on_global(matches, |buffer, matches| {
-                copied.extend(buffer.multi_cursor_copy(matches));
-            });
-            if !copied.is_empty() {
-                layout
-                    .selected_buffer_list_mut()
-                    .current_mut()?
-                    .set_message(match copied.len() {
-                        1 => std::borrow::Cow::from("Copied 1 Item"),
-                        n => std::borrow::Cow::from(format!("Copied {n} Items")),
-                    });
-                *highlight = false;
-                *cut_buffer = Some(EditorCutBuffer::Multiple(copied));
-            }
-            None
-        }
-        ctrl_keybind!(Cut) => {
-            let mut cut = vec![];
-            layout.on_global_at(matches, |buffer, alt, matches| {
-                cut.extend(buffer.multi_cursor_cut(alt, matches));
-            });
-            if !cut.is_empty() {
-                layout
-                    .selected_buffer_list_mut()
-                    .current_mut()?
-                    .set_message(match cut.len() {
-                        1 => std::borrow::Cow::from("Cut 1 Item"),
-                        n => std::borrow::Cow::from(format!("Cut {n} Items")),
-                    });
-                *highlight = false;
-                *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
-            }
-            None
-        }
-        keybind!(WidenSelection) => {
-            *highlight = false;
-            layout.on_global(matches, |buffer, matches| {
-                buffer.multi_cursor_widen(matches);
-            });
-            None
-        }
-        keybind!(Bookmark) => {
-            use crate::buffer::ToggledBookmarks;
-
-            *highlight = false;
-            let mut toggled = ToggledBookmarks::default();
-            layout.on_global(matches, |buffer, matches| {
-                toggled += buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));
-            });
-            if let Some(buf) = layout.selected_buffer_list_mut().current_mut()
-                && let Ok(msg) = toggled.try_into()
-            {
-                buf.set_buffer_message(msg);
-            }
-            None
-        }
-        key!(Tab) => {
-            let buffer_list = layout.selected_buffer_list_mut();
-            let (offsets, completions) = buffer_list.multi_autocomplete_matches(matches)?;
-            match init_complete_forward(&completions) {
-                Some((index, original, replacement)) => {
-                    layout.on_global_offset_at(
-                        matches,
-                        &offsets,
-                        |buffer, alt, matches, offsets| {
-                            buffer.multi_autocomplete(alt, matches, offsets, original, replacement);
-                        },
-                    );
-                    Some(EditorMode::AllBuffers {
-                        cursors: MultiCursors {
-                            matches: std::mem::take(matches),
-                            match_idx: std::mem::take(match_idx),
-                            highlight: false,
-                            mode: MultiCursorMode::Autocomplete {
-                                offsets,
-                                completions,
-                                index,
-                            },
-                        },
-                    })
-                }
-                None => {
-                    buffer_list.current_mut()?.set_error("No Completions Found");
-                    None
-                }
-            }
-        }
-        key!(SHIFT, BackTab) => {
-            let buffer_list = layout.selected_buffer_list_mut();
-            let (offsets, completions) = buffer_list.multi_autocomplete_matches(matches)?;
-            match init_complete_backward(&completions) {
-                Some((index, original, replacement)) => {
-                    layout.on_global_offset_at(
-                        matches,
-                        &offsets,
-                        |buffer, alt, matches, offsets| {
-                            buffer.multi_autocomplete(alt, matches, offsets, original, replacement);
-                        },
-                    );
-                    Some(EditorMode::AllBuffers {
-                        cursors: MultiCursors {
-                            matches: std::mem::take(matches),
-                            match_idx: std::mem::take(match_idx),
-                            highlight: false,
-                            mode: MultiCursorMode::Autocomplete {
-                                offsets,
-                                completions,
-                                index,
-                            },
-                        },
-                    })
-                }
-                None => {
-                    buffer_list.current_mut()?.set_error("No Completions Found");
-                    None
-                }
-            }
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::Up,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        })
-        | Event::Mouse(MouseEvent {
-            kind: MouseEventKind::ScrollUp,
-            ..
-        }) => {
-            let buffer_list = layout.selected_buffer_list_mut();
-            let buffer_index = buffer_list.current_index();
-            if let Some(buffer_cursors) = matches.get(&buffer_index) {
-                *highlight = true;
-                match match_idx.checked_sub(1) {
-                    Some(new_idx) => {
-                        // move on to previous index in the set of matches
-                        *match_idx = new_idx;
-                        if let Some(r) = buffer_cursors.get(new_idx)
-                            && let Some(buffer) = buffer_list.get_mut(buffer_index)
-                        {
-                            buffer.set_cursor(r.cursor());
-                        }
-                    }
-                    None => {
-                        use core::ops::Bound;
-
-                        // move on to the last index of the previous buffer's matches
-                        if let Some((prev_idx, prev_cursors)) = matches
-                            .range((Bound::Unbounded, Bound::Excluded(buffer_index)))
-                            .next_back()
-                            .or_else(|| matches.last_key_value())
-                            && let Some(r) = prev_cursors.last()
-                            && let Ok(buffer) = buffer_list.select_buffer(*prev_idx)
-                        {
-                            *match_idx = prev_cursors.len() - 1;
-                            buffer.set_cursor(r.cursor());
-                        }
-                    }
-                }
-            }
-            None
-        }
-        Event::Key(KeyEvent {
-            code: KeyCode::Down,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            ..
-        })
-        | Event::Mouse(MouseEvent {
-            kind: MouseEventKind::ScrollDown,
-            ..
-        }) => {
-            let buffer_list = layout.selected_buffer_list_mut();
-            let buffer_index = buffer_list.current_index();
-            if let Some(buffer_cursors) = matches.get(&buffer_index) {
-                *highlight = true;
-                if (*match_idx + 1) < buffer_cursors.len() {
-                    // move on to the next index in the set of matches
-                    *match_idx += 1;
-                    if let Some(r) = buffer_cursors.get(*match_idx)
-                        && let Some(buffer) = buffer_list.get_mut(buffer_index)
-                    {
-                        buffer.set_cursor(r.cursor());
-                    }
-                } else {
-                    use core::ops::Bound;
-
-                    // move to the first index of the next buffer's matches
-                    if let Some((next_idx, next_cursors)) = matches
-                        .range((Bound::Excluded(buffer_index), Bound::Unbounded))
-                        .next()
-                        .or_else(|| matches.first_key_value())
-                        && let Some(r) = next_cursors.first()
-                        && let Ok(buffer) = buffer_list.select_buffer(*next_idx)
-                    {
-                        *match_idx = 0;
-                        buffer.set_cursor(r.cursor());
-                    }
-                }
-            }
-            None
-        }
-        ctrl_keybind!(Mark) => Some(EditorMode::AllBuffers {
-            cursors: MultiCursors {
-                matches: std::mem::take(matches),
-                match_idx: std::mem::take(match_idx),
-                highlight: std::mem::take(highlight),
-                mode: MultiCursorMode::MarkSet,
-            },
-        }),
-        _ => None,
     }
 }
 
@@ -4339,7 +4043,83 @@ impl Layout {
 
 impl MultiBuffer<'_> for Layout {
     type Matches = BTreeMap<usize, Vec<MultiCursor>>;
+    type Offsets = BTreeMap<usize, Vec<usize>>;
     type Alt = ();
+
+    fn multi_insert_char(&mut self, _alt: Self::Alt, matches: &mut Self::Matches, c: char) {
+        self.on_global_at(matches, |buffer, alt, matches| {
+            buffer.multi_insert_char(alt, matches, c);
+        });
+    }
+
+    fn multi_insert_string(&mut self, _alt: Self::Alt, matches: &mut Self::Matches, s: &str) {
+        self.on_global_at(matches, |buffer, alt, matches| {
+            buffer.multi_insert_string(alt, matches, s);
+        });
+    }
+
+    fn multi_backspace(&mut self, _alt: Self::Alt, matches: &mut Self::Matches) {
+        self.on_global_at(matches, |buffer, alt, matches| {
+            buffer.multi_backspace(alt, matches);
+        })
+    }
+
+    fn multi_delete(&mut self, _alt: Self::Alt, matches: &mut Self::Matches) {
+        self.on_global_at(matches, |buffer, alt, matches| {
+            buffer.multi_delete(alt, matches);
+        });
+    }
+
+    fn delete_buffer(
+        &mut self,
+        matches: &mut Self::Matches,
+        match_idx: &mut usize,
+    ) -> BufferDeleted {
+        use std::collections::btree_map::Entry;
+
+        let buffer_list = self.selected_buffer_list_mut();
+        let buffer_index = buffer_list.current_index();
+        let Entry::Occupied(mut buffer_matches) = matches.entry(buffer_index) else {
+            return BufferDeleted::BuffersRemain;
+        };
+        buffer_matches.get_mut().remove(*match_idx);
+        match buffer_matches.get().len().checked_sub(1) {
+            Some(max) => {
+                *match_idx = (*match_idx).min(max);
+                if let Some(buf) = buffer_list.get_mut(buffer_index)
+                    && let Some(m) = buffer_matches.get().get(*match_idx)
+                {
+                    buf.set_cursor(m.cursor());
+                }
+                BufferDeleted::BuffersRemain
+            }
+            None => {
+                use core::ops::Bound;
+
+                buffer_matches.remove();
+                if let Some((next_idx, next_cursors)) = matches
+                    .range((Bound::Excluded(buffer_index), Bound::Unbounded))
+                    .next()
+                    .or_else(|| matches.first_key_value())
+                    && let Some(r) = next_cursors.first()
+                    && let Ok(buffer) = buffer_list.select_buffer(*next_idx)
+                {
+                    *match_idx = 0;
+                    buffer.set_cursor(r.cursor());
+                    BufferDeleted::BuffersRemain
+                } else {
+                    // no next buffer to switch to
+                    BufferDeleted::NoBuffers
+                }
+            }
+        }
+    }
+
+    fn multi_select_inside(&mut self, matches: &mut Self::Matches, selected: usize) {
+        self.on_global(matches, |buffer, matches| {
+            buffer.multi_select_inside(matches, selected);
+        })
+    }
 
     fn multi_cursor_back(&mut self, matches: &mut Self::Matches, selecting: bool) {
         self.on_global(matches, |buffer, matches| {
@@ -4365,6 +4145,14 @@ impl MultiBuffer<'_> for Layout {
         });
     }
 
+    fn paste_group_count(matches: &Self::Matches) -> Option<NonZero<usize>> {
+        matches
+            .values()
+            .flat_map(|m| m.iter().map(|m| m.paste_group_count()))
+            .max()
+            .flatten()
+    }
+
     fn multi_paste(
         &mut self,
         _alt: Self::Alt,
@@ -4376,6 +4164,22 @@ impl MultiBuffer<'_> for Layout {
         });
     }
 
+    fn multi_cursor_copy(&mut self, matches: &mut Self::Matches) -> Vec<CutBuffer> {
+        let mut copied = vec![];
+        self.on_global(matches, |buffer, matches| {
+            copied.extend(BufferContext::multi_cursor_copy(buffer, matches));
+        });
+        copied
+    }
+
+    fn multi_cursor_cut(&mut self, _alt: Self::Alt, matches: &mut Self::Matches) -> Vec<CutBuffer> {
+        let mut cut = vec![];
+        self.on_global_at(matches, |buffer, alt, matches| {
+            cut.extend(BufferContext::multi_cursor_cut(buffer, alt, matches));
+        });
+        cut
+    }
+
     fn multi_insert_group(
         &mut self,
         _alt: Self::Alt,
@@ -4385,6 +4189,122 @@ impl MultiBuffer<'_> for Layout {
         self.on_global_at(matches, |buf, alt, matches| {
             buf.multi_insert_group(alt, matches, group_num);
         });
+    }
+
+    fn previous_match(&mut self, matches: &mut Self::Matches, match_idx: &mut usize) {
+        let buffer_list = self.selected_buffer_list_mut();
+        let buffer_index = buffer_list.current_index();
+        if let Some(buffer_cursors) = matches.get(&buffer_index) {
+            match match_idx.checked_sub(1) {
+                Some(new_idx) => {
+                    // move on to previous index in the set of matches
+                    *match_idx = new_idx;
+                    if let Some(r) = buffer_cursors.get(new_idx)
+                        && let Some(buffer) = buffer_list.get_mut(buffer_index)
+                    {
+                        buffer.set_cursor(r.cursor());
+                    }
+                }
+                None => {
+                    use core::ops::Bound;
+
+                    // move on to the last index of the previous buffer's matches
+                    if let Some((prev_idx, prev_cursors)) = matches
+                        .range((Bound::Unbounded, Bound::Excluded(buffer_index)))
+                        .next_back()
+                        .or_else(|| matches.last_key_value())
+                        && let Some(r) = prev_cursors.last()
+                        && let Ok(buffer) = buffer_list.select_buffer(*prev_idx)
+                    {
+                        *match_idx = prev_cursors.len() - 1;
+                        buffer.set_cursor(r.cursor());
+                    }
+                }
+            }
+        }
+    }
+
+    fn next_match(&mut self, matches: &mut Self::Matches, match_idx: &mut usize) {
+        let buffer_list = self.selected_buffer_list_mut();
+        let buffer_index = buffer_list.current_index();
+        if let Some(buffer_cursors) = matches.get(&buffer_index) {
+            if (*match_idx + 1) < buffer_cursors.len() {
+                // move on to the next index in the set of matches
+                *match_idx += 1;
+                if let Some(r) = buffer_cursors.get(*match_idx)
+                    && let Some(buffer) = buffer_list.get_mut(buffer_index)
+                {
+                    buffer.set_cursor(r.cursor());
+                }
+            } else {
+                use core::ops::Bound;
+
+                // move to the first index of the next buffer's matches
+                if let Some((next_idx, next_cursors)) = matches
+                    .range((Bound::Excluded(buffer_index), Bound::Unbounded))
+                    .next()
+                    .or_else(|| matches.first_key_value())
+                    && let Some(r) = next_cursors.first()
+                    && let Ok(buffer) = buffer_list.select_buffer(*next_idx)
+                {
+                    *match_idx = 0;
+                    buffer.set_cursor(r.cursor());
+                }
+            }
+        }
+    }
+
+    fn multi_cursor_widen(&mut self, matches: &mut Self::Matches) {
+        self.on_global(matches, |buffer, matches| {
+            buffer.multi_cursor_widen(matches);
+        });
+    }
+
+    fn toggle_bookmarks(&mut self, matches: &mut Self::Matches) -> ToggledBookmarks {
+        let mut toggled = ToggledBookmarks::default();
+        self.on_global(matches, |buffer, matches| {
+            toggled += buffer.toggle_bookmarks(matches.iter().map(|m| m.cursor()));
+        });
+        toggled
+    }
+
+    fn multi_autocomplete_matches(
+        &self,
+        matches: &mut Self::Matches,
+    ) -> Option<(Self::Offsets, Vec<String>)> {
+        self.selected_buffer_list()
+            .multi_autocomplete_matches(matches)
+    }
+
+    fn multi_autocomplete(
+        &mut self,
+        _alt: Self::Alt,
+        matches: &mut Self::Matches,
+        offsets: &Self::Offsets,
+        original: &str,
+        replacement: &str,
+    ) {
+        self.on_global_offset_at(matches, offsets, |buffer, alt, matches, offsets| {
+            buffer.multi_autocomplete(alt, matches, offsets, original, replacement);
+        });
+    }
+
+    fn set_buffer_message(&mut self, message: BufferMessage) {
+        if let Some(buf) = self.selected_buffer_list_mut().current_mut() {
+            buf.set_buffer_message(message);
+        }
+    }
+
+    fn set_message<S: Into<Cow<'static, str>>>(&mut self, msg: S) {
+        if let Some(buf) = self.selected_buffer_list_mut().current_mut() {
+            buf.set_message(msg)
+        }
+    }
+
+    fn set_error<S: Into<Cow<'static, str>>>(&mut self, msg: S) {
+        if let Some(buf) = self.selected_buffer_list_mut().current_mut() {
+            buf.set_error(msg)
+        }
     }
 }
 
