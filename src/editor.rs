@@ -2872,28 +2872,20 @@ fn process_multi_cursor_all(
             }
         },
         ctrl_keybind!(Copy) => {
-            let mut cut = vec![];
+            let mut copied = vec![];
             layout.on_global(matches, |buffer, matches| {
-                cut.extend(buffer.multi_cursor_copy(matches));
+                copied.extend(buffer.multi_cursor_copy(matches));
             });
-            match cut.len() {
-                0 => { /* do nothing */ }
-                1 => {
-                    *highlight = false;
-                    *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
-                    layout
-                        .selected_buffer_list_mut()
-                        .current_mut()?
-                        .set_message("Copied 1 Item");
-                }
-                n => {
-                    *highlight = false;
-                    *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
-                    layout
-                        .selected_buffer_list_mut()
-                        .current_mut()?
-                        .set_message(format!("Copied {n} Items"));
-                }
+            if !copied.is_empty() {
+                layout
+                    .selected_buffer_list_mut()
+                    .current_mut()?
+                    .set_message(match copied.len() {
+                        1 => std::borrow::Cow::from("Copied 1 Item"),
+                        n => std::borrow::Cow::from(format!("Copied {n} Items")),
+                    });
+                *highlight = false;
+                *cut_buffer = Some(EditorCutBuffer::Multiple(copied));
             }
             None
         }
@@ -2902,24 +2894,16 @@ fn process_multi_cursor_all(
             layout.on_global_at(matches, |buffer, alt, matches| {
                 cut.extend(buffer.multi_cursor_cut(alt, matches));
             });
-            match cut.len() {
-                0 => { /* do nothing */ }
-                1 => {
-                    *highlight = false;
-                    *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
-                    layout
-                        .selected_buffer_list_mut()
-                        .current_mut()?
-                        .set_message("Cut 1 Item");
-                }
-                n => {
-                    *highlight = false;
-                    *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
-                    layout
-                        .selected_buffer_list_mut()
-                        .current_mut()?
-                        .set_message(format!("Cut {n} Items"));
-                }
+            if !cut.is_empty() {
+                layout
+                    .selected_buffer_list_mut()
+                    .current_mut()?
+                    .set_message(match cut.len() {
+                        1 => std::borrow::Cow::from("Cut 1 Item"),
+                        n => std::borrow::Cow::from(format!("Cut {n} Items")),
+                    });
+                *highlight = false;
+                *cut_buffer = Some(EditorCutBuffer::Multiple(cut));
             }
             None
         }
