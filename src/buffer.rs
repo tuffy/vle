@@ -5141,7 +5141,7 @@ impl StatefulWidget for BufferWidget<'_> {
             ) -> Self {
                 // Takes syntaxed-colorized line of text along with
                 // highlighted match ranges (in ascending order)
-                // and returns text in those ranges highlighted in some style
+                // and highlights text in those ranges in some style
                 fn highlight_matches<'s>(
                     spans: &mut VecDeque<Span<'s>>,
                     line_range: RangeInclusive<usize>,
@@ -5288,7 +5288,6 @@ impl StatefulWidget for BufferWidget<'_> {
                     let mut offset = line_start;
                     for (position, style) in marks.extract_if(offset..=line_end, |_, _| true) {
                         spans.extract(position - offset, |s| s);
-                        // spans.extract(1, |s| s.style(Style::new().bg(color).fg(Color::Black)));
                         spans.extract(1, |s| s.patch_style(style));
                         offset = position + 1;
                     }
