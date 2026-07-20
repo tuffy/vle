@@ -2435,14 +2435,16 @@ impl NextMultiCursorMode<Vec<usize>> {
                 },
                 range: std::mem::take(range),
             }),
-            Self::SingleSelection => if matches!(range, SingleBufferRange::UpdateLines)
-              && let Some(start) = matches.first()
-              && let Some(end) = matches.last()
-            {
-                buffer.set_selection(start.start(), end.end());
-                Some(EditorMode::default())
-            } else {
-                None
+            Self::SingleSelection => {
+                if matches!(range, SingleBufferRange::UpdateLines)
+                    && let Some(start) = matches.first()
+                    && let Some(end) = matches.last()
+                {
+                    buffer.set_selection(start.start(), end.end());
+                    Some(EditorMode::default())
+                } else {
+                    None
+                }
             }
         }
     }

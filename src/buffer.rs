@@ -5068,6 +5068,9 @@ impl StatefulWidget for BufferWidget<'_> {
         const HIGHLIGHT_MATCH: Style = underline_color(Color::Blue)
             .bg(Color::LightYellow)
             .fg(Color::Black);
+        const CURSOR: Style = Style::new()
+            .fg(Color::Blue)
+            .add_modifier(Modifier::REVERSED);
 
         fn sub_match_ranges(matches: &[MultiCursor]) -> VecDeque<Range<usize>> {
             matches.iter().map(|m| m.range.start..m.range.end).collect()
@@ -5959,13 +5962,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                         span.patch_style(underline_color(Color::Blue))
                                     })
                                     .highlight_matches(&mut selections, |span| span.style(EDITING))
-                                    .highlight_matches(&mut cursors, |span| {
-                                        span.style(
-                                            Style::new()
-                                                .fg(Color::Blue)
-                                                .add_modifier(Modifier::REVERSED),
-                                        )
-                                    })
+                                    .highlight_matches(&mut cursors, |span| span.style(CURSOR))
                                     .into()
                             })
                             .map(|line| widen_tabs(line))
@@ -6040,13 +6037,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                         span.patch_style(underline_color(Color::Blue))
                                     })
                                     .highlight_matches(&mut selections, |span| span.style(EDITING))
-                                    .highlight_matches(&mut cursors, |span| {
-                                        span.style(
-                                            Style::new()
-                                                .fg(Color::Blue)
-                                                .add_modifier(Modifier::REVERSED),
-                                        )
-                                    })
+                                    .highlight_matches(&mut cursors, |span| span.style(CURSOR))
                                     .into()
                             })
                             .map(|line| widen_tabs(line))
@@ -6098,13 +6089,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                     .highlight_matches(&mut replacements, |span| {
                                         span.patch_style(underline_color(Color::Red))
                                     })
-                                    .highlight_matches(&mut cursors, |span| {
-                                        span.style(
-                                            Style::new()
-                                                .fg(Color::Blue)
-                                                .add_modifier(Modifier::REVERSED),
-                                        )
-                                    })
+                                    .highlight_matches(&mut cursors, |span| span.style(CURSOR))
                                     .into()
                             })
                             .map(|line| widen_tabs(line))
@@ -6157,13 +6142,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                     .highlight_matches(&mut replacements, |span| {
                                         span.patch_style(underline_color(Color::Red))
                                     })
-                                    .highlight_matches(&mut cursors, |span| {
-                                        span.style(
-                                            Style::new()
-                                                .fg(Color::Blue)
-                                                .add_modifier(Modifier::REVERSED),
-                                        )
-                                    })
+                                    .highlight_matches(&mut cursors, |span| span.style(CURSOR))
                                     .into()
                             })
                             .map(|line| widen_tabs(line))
