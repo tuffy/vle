@@ -5909,6 +5909,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         EditorLine::iter(rope, viewport_line)
                             .map(|line| {
                                 line.colorize(&mut highlighter, current_line)
+                                    .highlight_marks(&mut marks)
                                     .highlight_matches(&mut matches, |span| span.style(HIGHLIGHTED))
                                     .highlight_selection((selection_start, selection_end), |span| {
                                         span.style(HIGHLIGHT_MATCH)
@@ -5953,6 +5954,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                 line.widen_range()
                                     .colorize(&mut highlighter, current_line)
                                     .widen()
+                                    .highlight_marks(&mut marks)
                                     .highlight_matches(&mut ranges, |span| {
                                         span.patch_style(underline_color(Color::Blue))
                                     })
@@ -5989,6 +5991,7 @@ impl StatefulWidget for BufferWidget<'_> {
                         EditorLine::iter(rope, viewport_line)
                             .map(|line| {
                                 line.colorize(&mut highlighter, current_line)
+                                    .highlight_marks(&mut marks)
                                     .highlight_matches(&mut matches, |span| span.style(HIGHLIGHTED))
                                     .highlight_selection((selection_start, selection_end), |span| {
                                         span.style(HIGHLIGHT_MATCH)
@@ -6032,6 +6035,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                 line.widen_range()
                                     .colorize(&mut highlighter, current_line)
                                     .widen()
+                                    .highlight_marks(&mut marks)
                                     .highlight_matches(&mut ranges, |span| {
                                         span.patch_style(underline_color(Color::Blue))
                                     })
@@ -6087,6 +6091,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                 line.widen_range()
                                     .colorize(&mut highlighter, current_line)
                                     .widen()
+                                    .highlight_marks(&mut marks)
                                     .highlight_matches(&mut ranges, |span| {
                                         span.patch_style(underline_color(Color::Blue))
                                     })
@@ -6145,6 +6150,7 @@ impl StatefulWidget for BufferWidget<'_> {
                                 line.widen_range()
                                     .colorize(&mut highlighter, current_line)
                                     .widen()
+                                    .highlight_marks(&mut marks)
                                     .highlight_matches(&mut ranges, |span| {
                                         span.patch_style(underline_color(Color::Blue))
                                     })
