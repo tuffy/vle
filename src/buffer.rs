@@ -3931,12 +3931,13 @@ fn backspace_or_un_pair(
         '[' if rope.get_char(cursor) == Some(']') => remove_pair(rope, alt, prev, cursor),
         '{' if rope.get_char(cursor) == Some('}') => remove_pair(rope, alt, prev, cursor),
         c if is_grapheme_part(c) => {
-            let removed = rope
+            let removed = (rope
                 .chars_at(cursor)
                 .reversed()
                 .take_while(|c| is_grapheme_part(*c))
                 .count()
-                + 1;
+                + 1)
+            .min(cursor);
 
             rope.try_remove(alt.remove(cursor.saturating_sub(removed)..cursor))
                 .map_err(|_| ())?;
