@@ -2057,8 +2057,7 @@ impl BufferContext {
                 (start != end).then_some(MultiCursor {
                     range: start..end,
                     cursor: start,
-                    selection: None,
-                    groups: vec![],
+                    ..MultiCursor::default()
                 })
             })
             .collect::<Vec<_>>();
@@ -3190,6 +3189,7 @@ impl AltCursor<'_> {
     }
 }
 
+#[derive(Default)]
 pub struct MultiCursor {
     /// cursor's range within rope, in characters
     range: Range<usize>,
@@ -3793,8 +3793,7 @@ impl From<usize> for MultiCursor {
         Self {
             range: cursor..cursor,
             cursor,
-            selection: None,
-            groups: vec![],
+            ..MultiCursor::default()
         }
     }
 }
@@ -3805,7 +3804,7 @@ impl From<Range<usize>> for MultiCursor {
             cursor: range.end,
             selection: Some(range.start),
             range,
-            groups: vec![],
+            ..MultiCursor::default()
         }
     }
 }
@@ -3815,8 +3814,7 @@ impl From<SelectedLine> for MultiCursor {
         Self {
             cursor: line.start,
             range: line.start..line.end,
-            selection: None,
-            groups: vec![],
+            ..MultiCursor::default()
         }
     }
 }
