@@ -2734,6 +2734,16 @@ fn process_multi_cursor<'a, M: MultiBuffer<'a>>(
         }
         ctrl_keybind!(Mark) => Some(NextMultiCursorMode::Mark),
         keybind!(UpdateLines) => Some(NextMultiCursorMode::SingleSelection),
+        ctrl_keybind!(Undo) => {
+            *highlight = false;
+            buffer.perform_undo(alt, matches);
+            None
+        }
+        ctrl_keybind!(Redo) => {
+            *highlight = false;
+            buffer.perform_redo(alt, matches);
+            None
+        }
         _ => None,
     }
 }
@@ -4288,6 +4298,18 @@ impl MultiBuffer<'_> for Layout {
     ) {
         self.on_global_offset_at(matches, offsets, |buffer, alt, matches, offsets| {
             buffer.multi_autocomplete(alt, matches, offsets, original, replacement);
+        });
+    }
+
+    fn perform_undo(&mut self, _alt: Self::Alt, matches: &mut Self::Matches) {
+        self.on_global_at(matches, |buf, alt, matches| {
+            BufferContext::perform_multi_undo(buf, alt, matches);
+        });
+    }
+
+    fn perform_redo(&mut self, _alt: Self::Alt, matches: &mut Self::Matches) {
+        self.on_global_at(matches, |buf, alt, matches| {
+            BufferContext::perform_multi_undo(buf, alt, matches);
         });
     }
 

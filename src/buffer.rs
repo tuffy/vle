@@ -253,7 +253,7 @@ impl Source {
 }
 
 mod private {
-    use crate::buffer::{AltCursor, Buffer, MainCursor, Toggle};
+    use crate::buffer::{AltCursor, Buffer, MainCursor, MultiCursor, Toggle};
     use ratatui::text::Span;
     use std::borrow::Cow;
     use std::cell::{Ref, RefCell, RefMut};
@@ -364,6 +364,21 @@ mod private {
             if buf.perform_update() {
                 main.perform_update();
                 alt.iter_mut().for_each(|a| a.perform_update());
+            }
+            buf
+        }
+
+        pub fn borrow_multi_update(
+            &self,
+            main: MainCursor<'_>,
+            alt: &mut [AltCursor<'_>],
+            cursors: &mut [MultiCursor],
+        ) -> RefMut<'_, Buffer> {
+            let mut buf = self.0.borrow_mut();
+            if buf.perform_update() {
+                main.perform_update();
+                alt.iter_mut().for_each(|a| a.perform_update());
+                cursors.iter_mut().for_each(|m| m.perform_update());
             }
             buf
         }
@@ -2338,7 +2353,7 @@ impl BufferContext {
         let original_chars = original.chars().count();
         let replacement_chars = replacement.chars().count();
 
-        let mut buf = self.buffer.borrow_update(
+        let mut buf = self.buffer.borrow_multi_update(
             MainCursor {
                 cursor: self.cursor,
                 cursor_column: self.cursor_column,
@@ -2347,6 +2362,7 @@ impl BufferContext {
                 redo: &mut self.redo,
             },
             &mut alt,
+            matches,
         );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
@@ -2381,7 +2397,7 @@ impl BufferContext {
     ) {
         use std::convert::Infallible;
 
-        let mut buf = self.buffer.borrow_update(
+        let mut buf = self.buffer.borrow_multi_update(
             MainCursor {
                 cursor: self.cursor,
                 cursor_column: self.cursor_column,
@@ -2390,6 +2406,7 @@ impl BufferContext {
                 redo: &mut self.redo,
             },
             &mut alt,
+            matches,
         );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
@@ -2410,7 +2427,7 @@ impl BufferContext {
         matches: &mut [MultiCursor],
         group_num: usize,
     ) {
-        let mut buf = self.buffer.borrow_update(
+        let mut buf = self.buffer.borrow_multi_update(
             MainCursor {
                 cursor: self.cursor,
                 cursor_column: self.cursor_column,
@@ -2419,6 +2436,7 @@ impl BufferContext {
                 redo: &mut self.redo,
             },
             &mut alt,
+            matches,
         );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
@@ -2451,7 +2469,7 @@ impl BufferContext {
         matches: &mut [MultiCursor],
         cut: &mut EditorCutBuffer,
     ) {
-        let mut buf = self.buffer.borrow_update(
+        let mut buf = self.buffer.borrow_multi_update(
             MainCursor {
                 cursor: self.cursor,
                 cursor_column: self.cursor_column,
@@ -2460,6 +2478,7 @@ impl BufferContext {
                 redo: &mut self.redo,
             },
             &mut alt,
+            matches,
         );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
@@ -2510,7 +2529,7 @@ impl BufferContext {
         matches: &mut [MultiCursor],
         mut strings: impl std::iter::FusedIterator<Item = (usize, &'s str)>,
     ) {
-        let mut buf = self.buffer.borrow_update(
+        let mut buf = self.buffer.borrow_multi_update(
             MainCursor {
                 cursor: self.cursor,
                 cursor_column: self.cursor_column,
@@ -2519,6 +2538,7 @@ impl BufferContext {
                 redo: &mut self.redo,
             },
             &mut alt,
+            matches,
         );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
@@ -2538,7 +2558,7 @@ impl BufferContext {
     }
 
     pub fn multi_backspace(&mut self, mut alt: Vec<AltCursor<'_>>, matches: &mut [MultiCursor]) {
-        let mut buf = self.buffer.borrow_update(
+        let mut buf = self.buffer.borrow_multi_update(
             MainCursor {
                 cursor: self.cursor,
                 cursor_column: self.cursor_column,
@@ -2547,6 +2567,7 @@ impl BufferContext {
                 redo: &mut self.redo,
             },
             &mut alt,
+            matches,
         );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
@@ -2561,7 +2582,7 @@ impl BufferContext {
     }
 
     pub fn multi_delete(&mut self, mut alt: Vec<AltCursor<'_>>, matches: &mut [MultiCursor]) {
-        let mut buf = self.buffer.borrow_update(
+        let mut buf = self.buffer.borrow_multi_update(
             MainCursor {
                 cursor: self.cursor,
                 cursor_column: self.cursor_column,
@@ -2570,6 +2591,7 @@ impl BufferContext {
                 redo: &mut self.redo,
             },
             &mut alt,
+            matches,
         );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
@@ -2654,7 +2676,7 @@ impl BufferContext {
         mut alt: Vec<AltCursor<'_>>,
         matches: &mut [MultiCursor],
     ) -> Vec<CutBuffer> {
-        let mut buf = self.buffer.borrow_update(
+        let mut buf = self.buffer.borrow_multi_update(
             MainCursor {
                 cursor: self.cursor,
                 cursor_column: self.cursor_column,
@@ -2663,6 +2685,7 @@ impl BufferContext {
                 redo: &mut self.redo,
             },
             &mut alt,
+            matches,
         );
         let (mut rope, bookmarks) = buf.rope_bookmarks_mut();
         let mut alt = Secondary::new(alt, bookmarks);
@@ -2690,6 +2713,20 @@ impl BufferContext {
         matches
             .iter_mut()
             .for_each(|m| m.widen_selection(&mut self.cursor));
+    }
+
+    pub fn perform_multi_undo(&mut self, alt: Vec<AltCursor<'_>>, matches: &mut [MultiCursor]) {
+        if self.perform_undo_active().is_ok() {
+            alt.into_iter().for_each(|mut a| a.perform_undo());
+            matches.iter_mut().for_each(|m| m.perform_undo());
+        }
+    }
+
+    pub fn perform_multi_redo(&mut self, alt: Vec<AltCursor<'_>>, matches: &mut [MultiCursor]) {
+        if self.perform_redo_active().is_ok() {
+            alt.into_iter().for_each(|mut a| a.perform_redo());
+            matches.iter_mut().for_each(|m| m.perform_redo());
+        }
     }
 
     pub fn set_buffer_message(&mut self, message: BufferMessage) {
@@ -2975,6 +3012,14 @@ impl<'a> MultiBuffer<'a> for BufferContext {
         BufferContext::multi_autocomplete(self, alt, matches, offsets, original, replacement)
     }
 
+    fn perform_undo(&mut self, alt: Self::Alt, matches: &mut Self::Matches) {
+        BufferContext::perform_multi_undo(self, alt, matches);
+    }
+
+    fn perform_redo(&mut self, alt: Self::Alt, matches: &mut Self::Matches) {
+        BufferContext::perform_multi_redo(self, alt, matches);
+    }
+
     fn set_buffer_message(&mut self, message: BufferMessage) {
         BufferContext::set_buffer_message(self, message)
     }
@@ -3016,6 +3061,7 @@ impl<'r> Searchable<'r> for BufferContext {
                     selection: Some(start_char),
                     range: start_char..end_char,
                     groups,
+                    ..MultiCursor::default()
                 })
             })
             .collect::<Vec<_>>();
@@ -3077,6 +3123,7 @@ impl<'r> Searchable<'r> for BufferContext {
                     selection: Some(start_char),
                     range: start_char..end_char,
                     groups,
+                    ..MultiCursor::default()
                 })
             })
             .collect::<Vec<_>>();
@@ -3187,6 +3234,24 @@ impl AltCursor<'_> {
         });
         self.redo.clear();
     }
+
+    fn perform_undo(&mut self) {
+        if let Some(mut ctx_state) = self.undo.pop() {
+            std::mem::swap(self.cursor, &mut ctx_state.cursor);
+            std::mem::swap(&mut self.cursor_column, &mut ctx_state.cursor_column);
+            std::mem::swap(self.selection, &mut ctx_state.selection);
+            self.redo.push(ctx_state);
+        }
+    }
+
+    fn perform_redo(&mut self) {
+        if let Some(mut ctx_state) = self.redo.pop() {
+            std::mem::swap(self.cursor, &mut ctx_state.cursor);
+            std::mem::swap(&mut self.cursor_column, &mut ctx_state.cursor_column);
+            std::mem::swap(self.selection, &mut ctx_state.selection);
+            self.undo.push(ctx_state);
+        }
+    }
 }
 
 #[derive(Default)]
@@ -3199,6 +3264,10 @@ pub struct MultiCursor {
     selection: Option<usize>,
     /// regular expression capture groups
     groups: Vec<String>,
+    /// undo stack
+    undo: Vec<MultiCursorState>,
+    /// redo stack
+    redo: Vec<MultiCursorState>,
 }
 
 impl MultiCursor {
@@ -3786,6 +3855,33 @@ impl MultiCursor {
         let zapped = self.insert_str(rope, cursor, secondary, &s, s_chars);
         Some((zapped, s_chars))
     }
+
+    fn perform_update(&mut self) {
+        self.undo.push(MultiCursorState {
+            range: self.range.clone(),
+            cursor: self.cursor,
+            selection: self.selection,
+        });
+        self.redo.clear();
+    }
+
+    fn perform_undo(&mut self) {
+        if let Some(mut ctx_state) = self.undo.pop() {
+            std::mem::swap(&mut self.range, &mut ctx_state.range);
+            std::mem::swap(&mut self.cursor, &mut ctx_state.cursor);
+            std::mem::swap(&mut self.selection, &mut ctx_state.selection);
+            self.redo.push(ctx_state);
+        }
+    }
+
+    fn perform_redo(&mut self) {
+        if let Some(mut ctx_state) = self.redo.pop() {
+            std::mem::swap(&mut self.range, &mut ctx_state.range);
+            std::mem::swap(&mut self.cursor, &mut ctx_state.cursor);
+            std::mem::swap(&mut self.selection, &mut ctx_state.selection);
+            self.undo.push(ctx_state);
+        }
+    }
 }
 
 impl From<usize> for MultiCursor {
@@ -3861,6 +3957,12 @@ fn multicursor_update<T: Copy, E>(
             }
         }
     }
+}
+
+struct MultiCursorState {
+    range: Range<usize>,
+    cursor: usize,
+    selection: Option<usize>,
 }
 
 /// Returns number of characters inserted (1 or 2)
@@ -6994,6 +7096,10 @@ pub trait MultiBuffer<'a> {
         original: &str,
         replacement: &str,
     );
+
+    fn perform_undo(&mut self, alt: Self::Alt, matches: &mut Self::Matches);
+
+    fn perform_redo(&mut self, alt: Self::Alt, matches: &mut Self::Matches);
 
     fn set_buffer_message(&mut self, message: BufferMessage);
 
