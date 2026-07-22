@@ -109,5 +109,5 @@ define_syntax!(
     "/*",
     "*/",
     color::COMMENT,
-    underliner!(s, JavaScriptDef)
+    underliner!(JavaScriptDef)
 );

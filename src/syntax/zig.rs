@@ -148,4 +148,4 @@ impl std::fmt::Display for Zig {
     }
 }
 
-define_syntax!(Zig, ZigToken, underliner!(s, ZigDef));
+define_syntax!(Zig, ZigToken, underliner!(ZigDef));

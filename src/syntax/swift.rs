@@ -187,5 +187,5 @@ define_syntax!(
     "/*",
     "*/",
     color::COMMENT,
-    underliner!(s, SwiftDef)
+    underliner!(SwiftDef)
 );

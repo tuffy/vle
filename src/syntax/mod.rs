@@ -499,10 +499,10 @@ macro_rules! define_syntax {
 
 #[macro_export]
 macro_rules! underliner {
-    ($s:ident, $class:ty) => {
-        Some(|$s| {
+    ($class:ty) => {
+        Some(|s| {
             Box::new(
-                <$class>::lexer($s)
+                <$class>::lexer(s)
                     .spanned()
                     .filter_map(|(t, r)| t.ok().map(|_| r)),
             )

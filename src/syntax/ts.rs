@@ -125,5 +125,5 @@ define_syntax!(
     "/*",
     "*/",
     color::COMMENT,
-    underliner!(s, TypeScriptDef)
+    underliner!(TypeScriptDef)
 );

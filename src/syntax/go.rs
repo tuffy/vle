@@ -137,5 +137,5 @@ define_syntax!(
     "/*",
     "*/",
     color::COMMENT,
-    underliner!(s, GoDef)
+    underliner!(GoDef)
 );
