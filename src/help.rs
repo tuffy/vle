@@ -340,6 +340,7 @@ pub static REPLACE_MATCHES: &[Keybinding] = &[
         &[key::Cut::LABEL, key::Copy::LABEL, key::Paste::LABEL],
         "Cut / Copy / Paste",
     ),
+    ctrl(&[key::Undo::LABEL, key::Redo::LABEL], "Undo / Redo"),
     none(&["Enter"], "Finish"),
 ];
 
