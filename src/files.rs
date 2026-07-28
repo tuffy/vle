@@ -838,6 +838,39 @@ impl<S: ChooserSource> FileChooserState<S> {
         }
     }
 
+    pub fn toggle_all_selected(&mut self) {
+        match &mut self.chosen {
+            Chosen::Default => {
+                let chosen = self
+                    .contents
+                    .iter()
+                    .filter_map(|e| (!e.is_dir).then(|| (e.path.clone(), ())))
+                    .collect::<BTreeMap<_, _>>();
+                if !chosen.is_empty() {
+                    self.chosen = Chosen::Selected(chosen);
+                }
+            }
+            Chosen::Selected(selected) => {
+                use std::collections::btree_map::Entry;
+
+                for e in self.contents.iter().filter(|e| !e.is_dir) {
+                    match selected.entry(e.path.clone()) {
+                        Entry::Vacant(v) => {
+                            v.insert(());
+                        }
+                        Entry::Occupied(o) => {
+                            o.remove();
+                        }
+                    }
+                }
+                if selected.is_empty() {
+                    self.chosen = Chosen::Default;
+                }
+            }
+            Chosen::New(_) => { /* do nothing */ }
+        }
+    }
+
     pub fn select(&mut self) -> Option<Vec<Source>> {
         fn strip_cwd(cwd: &Path, path: &Path) -> PathBuf {
             match path.strip_prefix(cwd) {

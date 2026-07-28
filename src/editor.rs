@@ -2133,6 +2133,10 @@ fn process_open_file<S: ChooserSource>(
             chooser.toggle_selected();
             None
         }
+        key!(SHIFT, BackTab) => {
+            chooser.toggle_all_selected();
+            None
+        }
         key!(CONTROL, 'h') => {
             chooser.toggle_show_hidden();
             None

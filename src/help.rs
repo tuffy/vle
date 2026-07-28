@@ -315,6 +315,7 @@ pub static OPEN_FILE_TOGGLEABLE: &[Keybinding] = &[
     none(&[LEFT], "Up Directory"),
     none(&[RIGHT], "Down Directory"),
     none(&["Tab"], "Toggle File to Open"),
+    shift(&["Tab"], "Toggle Selected Files"),
     ctrl(&["H"], "Toggle Show Hidden Files"),
     keybind::<key::Open>("Toggle File Source"),
     none(&["Enter"], "Select File(s)"),
