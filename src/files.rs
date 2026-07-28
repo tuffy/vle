@@ -11,7 +11,7 @@ use crate::editor::DirTarget;
 use crate::editor::RemoteError;
 use crate::prompt::TextField;
 use ratatui::widgets::StatefulWidget;
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// Width of text box, in characters
@@ -540,7 +540,7 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
             (match &state.chosen {
                 Chosen::Default | Chosen::New(_) => List::new(state.dir_entries()),
                 Chosen::Selected(selected) => List::new(state.contents.iter().map(|e| {
-                    if selected.contains(&e.path) {
+                    if selected.contains_key(&e.path) {
                         format!("* {}", e.name)
                     } else {
                         format!("  {}", e.name)
@@ -816,14 +816,20 @@ impl<S: ChooserSource> FileChooserState<S> {
         {
             match &mut self.chosen {
                 Chosen::Default => {
-                    self.chosen = Chosen::Selected(BTreeSet::from([path.clone()]));
+                    self.chosen = Chosen::Selected(BTreeMap::from([(path.clone(), ())]));
                 }
-                // use Entry API in the future, whenever that stabilizes
                 Chosen::Selected(selected) => {
-                    if !selected.insert(path.clone()) {
-                        selected.remove(path);
-                        if selected.is_empty() {
-                            self.chosen = Chosen::Default;
+                    use std::collections::btree_map::Entry;
+
+                    match selected.entry(path.clone()) {
+                        Entry::Vacant(v) => {
+                            v.insert(());
+                        }
+                        Entry::Occupied(o) => {
+                            o.remove();
+                            if selected.is_empty() {
+                                self.chosen = Chosen::Default;
+                            }
                         }
                     }
                 }
@@ -860,7 +866,7 @@ impl<S: ChooserSource> FileChooserState<S> {
             ))]),
             Chosen::Selected(selected) => Some(
                 selected
-                    .into_iter()
+                    .into_keys()
                     .map(|path| self.source.open(strip_cwd(&self.cwd, &path)))
                     .collect(),
             ),
@@ -959,6 +965,6 @@ impl From<(bool, PathBuf)> for Entry {
 enum Chosen {
     #[default]
     Default, // nothing selected
-    New(TextField),              // new file
-    Selected(BTreeSet<PathBuf>), // selected existing file(s)
+    New(TextField),                  // new file
+    Selected(BTreeMap<PathBuf, ()>), // selected existing file(s)
 }
