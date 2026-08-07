@@ -4497,45 +4497,50 @@ impl<I: std::iter::FusedIterator<Item = char>> StatefulWidget for LayoutWidget<'
                 let [top_area, bottom_area] =
                     Layout::vertical(Constraint::from_fills([*top_fill, *bottom_fill])).areas(area);
 
-                (match which {
-                    HorizontalPos::Top => LayoutWidget {
-                        focused,
-                        mode,
-                        show_help,
-                        show_sub_help,
-                        multiple_panes,
-                        pane_indices,
-                    },
-                    HorizontalPos::Bottom => LayoutWidget {
-                        focused: false,
-                        mode,
-                        show_help: false,
-                        show_sub_help: false,
-                        multiple_panes: false,
-                        pane_indices,
-                    },
-                })
-                .render(top_area, buf, top);
+                match which {
+                    HorizontalPos::Top => {
+                        LayoutWidget {
+                            focused,
+                            mode,
+                            show_help,
+                            show_sub_help,
+                            multiple_panes,
+                            pane_indices,
+                        }
+                        .render(top_area, buf, top);
 
-                (match which {
-                    HorizontalPos::Top => LayoutWidget {
-                        focused: false,
-                        mode,
-                        show_help: false,
-                        show_sub_help: false,
-                        multiple_panes: false,
-                        pane_indices,
-                    },
-                    HorizontalPos::Bottom => LayoutWidget {
-                        focused,
-                        mode,
-                        show_help,
-                        show_sub_help,
-                        multiple_panes,
-                        pane_indices,
-                    },
-                })
-                .render(bottom_area, buf, bottom);
+                        LayoutWidget {
+                            focused: false,
+                            mode,
+                            show_help: false,
+                            show_sub_help: false,
+                            multiple_panes: false,
+                            pane_indices,
+                        }
+                        .render(bottom_area, buf, bottom);
+                    }
+                    HorizontalPos::Bottom => {
+                        LayoutWidget {
+                            focused: false,
+                            mode,
+                            show_help: false,
+                            show_sub_help: false,
+                            multiple_panes: false,
+                            pane_indices,
+                        }
+                        .render(top_area, buf, top);
+
+                        LayoutWidget {
+                            focused,
+                            mode,
+                            show_help,
+                            show_sub_help,
+                            multiple_panes,
+                            pane_indices,
+                        }
+                        .render(bottom_area, buf, bottom);
+                    }
+                }
             }
             Layout::Vertical {
                 which,
@@ -4550,45 +4555,50 @@ impl<I: std::iter::FusedIterator<Item = char>> StatefulWidget for LayoutWidget<'
                     Layout::horizontal(Constraint::from_fills([*left_fill, *right_fill]))
                         .areas(area);
 
-                (match which {
-                    VerticalPos::Left => LayoutWidget {
-                        focused,
-                        mode,
-                        show_help,
-                        show_sub_help,
-                        multiple_panes,
-                        pane_indices,
-                    },
-                    VerticalPos::Right => LayoutWidget {
-                        focused: false,
-                        mode,
-                        show_help: false,
-                        show_sub_help: false,
-                        multiple_panes: false,
-                        pane_indices,
-                    },
-                })
-                .render(left_area, buf, left);
+                match which {
+                    VerticalPos::Left => {
+                        LayoutWidget {
+                            focused,
+                            mode,
+                            show_help,
+                            show_sub_help,
+                            multiple_panes,
+                            pane_indices,
+                        }
+                        .render(left_area, buf, left);
 
-                (match which {
-                    VerticalPos::Left => LayoutWidget {
-                        focused: false,
-                        mode,
-                        show_help: false,
-                        show_sub_help: false,
-                        multiple_panes: false,
-                        pane_indices,
-                    },
-                    VerticalPos::Right => LayoutWidget {
-                        focused,
-                        mode,
-                        show_help,
-                        show_sub_help,
-                        multiple_panes,
-                        pane_indices,
-                    },
-                })
-                .render(right_area, buf, right);
+                        LayoutWidget {
+                            focused: false,
+                            mode,
+                            show_help: false,
+                            show_sub_help: false,
+                            multiple_panes: false,
+                            pane_indices,
+                        }
+                        .render(right_area, buf, right);
+                    }
+                    VerticalPos::Right => {
+                        LayoutWidget {
+                            focused: false,
+                            mode,
+                            show_help: false,
+                            show_sub_help: false,
+                            multiple_panes: false,
+                            pane_indices,
+                        }
+                        .render(left_area, buf, left);
+
+                        LayoutWidget {
+                            focused,
+                            mode,
+                            show_help,
+                            show_sub_help,
+                            multiple_panes,
+                            pane_indices,
+                        }
+                        .render(right_area, buf, right);
+                    }
+                }
             }
         }
     }
