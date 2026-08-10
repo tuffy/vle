@@ -61,45 +61,116 @@ impl std::fmt::Display for Markdown {
 impl Syntax for Markdown {
     fn initialize(
         &self,
-        _rope: &ropey::Rope,
-        _viewport_line: usize,
+        rope: &ropey::Rope,
+        viewport_line: usize,
         _viewport_height: u16,
     ) -> Box<dyn Highlighter> {
-        Box::new(MarkdownHighlighter)
+        use std::borrow::Cow;
+
+        Box::new(
+            rope.lines()
+                .take(viewport_line)
+                .fold(MarkdownHighlighter::Normal, |acc, line| {
+                    if Cow::from(line).starts_with("```") {
+                        match acc {
+                            MarkdownHighlighter::Normal => MarkdownHighlighter::Code,
+                            MarkdownHighlighter::Code => MarkdownHighlighter::Normal,
+                        }
+                    } else {
+                        acc
+                    }
+                })
+        )
     }
 
     fn initialize_find(&self) -> Box<dyn Highlighter> {
-        Box::new(MarkdownHighlighter)
+        Box::new(MarkdownHighlighter::Normal)
     }
 }
 
-struct MarkdownHighlighter;
+enum MarkdownHighlighter {
+    Normal,
+    Code,
+}
 
 impl Highlighter for MarkdownHighlighter {
     fn highlight<'s>(
         &'s mut self,
         line: &'s str,
     ) -> Box<dyn Iterator<Item = (Highlight, std::ops::Range<usize>)> + 's> {
-        if line.starts_with('#') {
-            Box::new(
-                Highlight::try_from(MarkdownToken::Heading)
-                    .ok()
-                    .map(|h| (h, 0..line.len()))
-                    .into_iter(),
-            )
-        } else if line.starts_with("    ") || line.starts_with('\t') {
-            Box::new(
-                Highlight::try_from(MarkdownToken::Code)
-                    .ok()
-                    .map(|h| (h, 0..line.len()))
-                    .into_iter(),
-            )
-        } else {
-            Box::new(MarkdownToken::lexer(line).spanned().filter_map(|(t, r)| {
-                t.ok()
-                    .and_then(|t| Highlight::try_from(t).ok())
-                    .map(|c| (c, r))
-            }))
+        const CODE: Highlight = Highlight {
+            color: Some(Color::DarkGray),
+            modifier: crate::syntax::Modifier::Plain,
+        };
+
+        match self {
+            Self::Normal => {
+                if line.starts_with('#') {
+                    Box::new(
+                        Highlight::try_from(MarkdownToken::Heading)
+                            .ok()
+                            .map(|h| (h, 0..line.len()))
+                            .into_iter(),
+                    )
+                } else if line.starts_with("    ") || line.starts_with('\t') {
+                    Box::new(
+                        Highlight::try_from(MarkdownToken::Code)
+                            .ok()
+                            .map(|h| (h, 0..line.len()))
+                            .into_iter(),
+                    )
+                } else if line.starts_with("```") {
+                    *self = MarkdownHighlighter::Code;
+                    Box::new(std::iter::once((CODE, 0..line.len())))
+                } else if line.starts_with("|") {
+                    #[derive(Logos, Debug)]
+                    enum Separator {
+                        #[token("|")]
+                        Item,
+                    }
+
+                    let colors = &[
+                        Color::Blue,
+                        Color::Green,
+                        Color::Magenta,
+                        Color::Cyan,
+                        Color::Red,
+                        Color::LightBlue,
+                        Color::LightGreen,
+                        Color::LightMagenta,
+                        Color::LightCyan,
+                        Color::LightRed,
+                    ];
+
+                    let mut next_color = colors.iter().cycle();
+                    let mut color = next_color.next().unwrap();
+
+                    Box::new(
+                        Separator::lexer(line)
+                            .spanned()
+                            .filter_map(move |(t, r)| match t {
+                                Ok(Separator::Item) => {
+                                    color = next_color.next().unwrap();
+                                    None
+                                }
+                                Err(_) => Some(((*color).into(), r)),
+                            }),
+                    )
+                } else {
+                    Box::new(MarkdownToken::lexer(line).spanned().filter_map(|(t, r)| {
+                        t.ok()
+                            .and_then(|t| Highlight::try_from(t).ok())
+                            .map(|c| (c, r))
+                    }))
+                }
+            }
+            Self::Code => {
+                let highlight = Box::new(std::iter::once((CODE, 0..line.len())));
+                if line.starts_with("```") {
+                    *self = MarkdownHighlighter::Normal;
+                }
+                highlight
+            }
         }
     }
 }
