@@ -5453,19 +5453,21 @@ impl StatefulWidget for BufferWidget<'_> {
 
             Clear.render(dialog_area, buf);
             Paragraph::new(crate::truncate::line_start(
-                Vec::from(match syntax {
-                    FindSyntax::Plain(syntax) => highlight(colorize(
-                        &mut syntax.initialize_find(),
-                        prompt.chars().collect::<String>().into(),
-                        true,
-                    )),
-                    FindSyntax::Regex => highlight(colorize(
-                        &mut crate::syntax::Regex.initialize_find(),
-                        prompt.chars().collect::<String>().into(),
-                        true,
-                    )),
-                })
-                .into(),
+                widen_tabs(
+                    Vec::from(match syntax {
+                        FindSyntax::Plain(syntax) => highlight(colorize(
+                            &mut syntax.initialize_find(),
+                            prompt.chars().collect::<String>().into(),
+                            true,
+                        )),
+                        FindSyntax::Regex => highlight(colorize(
+                            &mut crate::syntax::Regex.initialize_find(),
+                            prompt.chars().collect::<String>().into(),
+                            true,
+                        )),
+                    })
+                    .into(),
+                ),
                 prompt
                     .cursor_column()
                     .saturating_sub(dialog_area.width.saturating_sub(2).into()),
