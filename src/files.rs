@@ -844,7 +844,8 @@ impl<S: ChooserSource> FileChooserState<S> {
                 let chosen = self
                     .contents
                     .iter()
-                    .filter_map(|e| (!e.is_dir).then(|| (e.path.clone(), ())))
+                    .filter(|e| !e.is_dir)
+                    .map(|e| (e.path.clone(), ()))
                     .collect::<BTreeMap<_, _>>();
                 if !chosen.is_empty() {
                     self.chosen = Chosen::Selected(chosen);

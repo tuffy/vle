@@ -79,7 +79,7 @@ impl Syntax for Markdown {
                     } else {
                         acc
                     }
-                })
+                }),
         )
     }
 
