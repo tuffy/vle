@@ -20,7 +20,11 @@ enum MarkdownToken {
     Heading,
     #[regex(r"\[[^]]+\]\([^)]+\)")]
     Url,
-    #[regex(r"\[[^]]+\]")]
+    #[regex(r"- \[ \] .+", allow_greedy = true )]
+    UnfinishedTask,
+    #[regex(r"- \[(x|X)\] .+", allow_greedy = true)]
+    FinishedTask,
+    #[regex(r"\[[^]]+\]\s?\[[^]]+\]")]
     Link,
 }
 
@@ -45,6 +49,14 @@ impl TryFrom<MarkdownToken> for Highlight {
             }),
             MarkdownToken::Url => Ok(Color::Blue.into()),
             MarkdownToken::Link => Ok(Color::Magenta.into()),
+            MarkdownToken::UnfinishedTask => Ok(Highlight {
+                color: None,
+                modifier: Modifier::Bold,
+            }),
+            MarkdownToken::FinishedTask => Ok(Highlight {
+                color: None,
+                modifier: Modifier::Strikethrough,
+            }),
         }
     }
 }
