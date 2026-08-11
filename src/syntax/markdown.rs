@@ -112,13 +112,6 @@ impl Highlighter for MarkdownHighlighter {
                             .map(|h| (h, 0..line.len()))
                             .into_iter(),
                     )
-                } else if line.starts_with("    ") || line.starts_with('\t') {
-                    Box::new(
-                        Highlight::try_from(MarkdownToken::Code)
-                            .ok()
-                            .map(|h| (h, 0..line.len()))
-                            .into_iter(),
-                    )
                 } else if line.starts_with("```") {
                     *self = MarkdownHighlighter::Code;
                     Box::new(std::iter::once((CODE, 0..line.len())))
