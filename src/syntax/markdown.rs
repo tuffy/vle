@@ -20,7 +20,7 @@ enum MarkdownToken {
     Heading,
     #[regex(r"\[[^]]+\]\([^)]+\)")]
     Url,
-    #[regex(r"- \[ \] .+", allow_greedy = true )]
+    #[token(r"- [ ]")]
     UnfinishedTask,
     #[regex(r"- \[(x|X)\] .+", allow_greedy = true)]
     FinishedTask,
