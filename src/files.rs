@@ -137,7 +137,7 @@ impl ChooserSource for ScratchSource {
     fn open(&mut self, path: PathBuf) -> Source {
         Source::Scratch {
             path,
-            data: ropey::Rope::default(),
+            data: "\n".into(),
         }
     }
 

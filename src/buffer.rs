@@ -172,7 +172,7 @@ impl Source {
                     Ok((f.metadata().and_then(|m| m.modified()).ok(), rope, endings))
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                    Ok((None, ropey::Rope::default(), LineEndings::default()))
+                    Ok((None, "\n".into(), LineEndings::default()))
                 }
                 Err(e) => Err(e),
             },
@@ -190,7 +190,7 @@ impl Source {
                     ))
                 }
                 Err(e) if e.code() == ssh2::ErrorCode::SFTP(2) => {
-                    Ok((None, ropey::Rope::default(), LineEndings::default()))
+                    Ok((None, "\n".into(), LineEndings::default()))
                 }
                 Err(e) => Err(e.into()),
             },
