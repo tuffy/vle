@@ -154,6 +154,11 @@ captured groups can be pasted to all matches simultaneously.
 
 ![Regular Expression Replacement Demonstration](./images/regex-replace.gif)
 
+Find and replace can also be applied to all open buffers simultaneously
+via the switch buffers menu (<kbd>Ctrl</kbd>-<kbd>]</kbd>).
+
+![Multi Buffer Replacement Demonstration](./images/multi-buffer-replace.gif)
+
 ## Multi Cursor-Style Line Editing
 
 Similar to find-and-replace, you can simply highlight a selection of
