@@ -2994,10 +2994,14 @@ impl Default for Layout {
 
 impl Layout {
     fn has_open_buffers(&self) -> bool {
-        match self {
-            Self::Single(b) => !b.is_empty(),
-            Self::Horizontal { top: b, .. } | Self::Vertical { left: b, .. } => {
-                b.has_open_buffers()
+        let mut s = self;
+
+        loop {
+            match s {
+                Self::Single(b) => break !b.is_empty(),
+                Self::Horizontal { top: b, .. } | Self::Vertical { left: b, .. } => {
+                    s = b;
+                }
             }
         }
     }
@@ -4028,7 +4032,10 @@ impl Layout {
                 }
             }
             Self::Horizontal {
-                top, bottom, active, ..
+                top,
+                bottom,
+                active,
+                ..
             } => {
                 if top.select_by_index(index).is_ok() {
                     *active = HorizontalPos::Top;
@@ -4041,7 +4048,10 @@ impl Layout {
                 }
             }
             Self::Vertical {
-                left, right, active, ..
+                left,
+                right,
+                active,
+                ..
             } => {
                 if left.select_by_index(index).is_ok() {
                     *active = VerticalPos::Left;
