@@ -2975,14 +2975,14 @@ enum Layout {
         top_fill: u16,
         bottom: Box<Layout>,
         bottom_fill: u16,
-        which: HorizontalPos,
+        active: HorizontalPos,
     },
     Vertical {
         left: Box<Layout>,
         left_fill: u16,
         right: Box<Layout>,
         right_fill: u16,
-        which: VerticalPos,
+        active: VerticalPos,
     },
 }
 
@@ -3009,25 +3009,25 @@ impl Layout {
                     b.push(ctx, active);
                 }
                 Layout::Horizontal {
-                    which: HorizontalPos::Top,
+                    active: HorizontalPos::Top,
                     top: current,
                     bottom: inactive,
                     ..
                 }
                 | Layout::Horizontal {
-                    which: HorizontalPos::Bottom,
+                    active: HorizontalPos::Bottom,
                     bottom: current,
                     top: inactive,
                     ..
                 }
                 | Layout::Vertical {
-                    which: VerticalPos::Left,
+                    active: VerticalPos::Left,
                     left: current,
                     right: inactive,
                     ..
                 }
                 | Layout::Vertical {
-                    which: VerticalPos::Right,
+                    active: VerticalPos::Right,
                     right: current,
                     left: inactive,
                     ..
@@ -3102,22 +3102,22 @@ impl Layout {
                 Self::Single(buffer) => break buffer,
                 Self::Horizontal {
                     top: buffer,
-                    which: HorizontalPos::Top,
+                    active: HorizontalPos::Top,
                     ..
                 }
                 | Self::Horizontal {
                     bottom: buffer,
-                    which: HorizontalPos::Bottom,
+                    active: HorizontalPos::Bottom,
                     ..
                 }
                 | Self::Vertical {
                     left: buffer,
-                    which: VerticalPos::Left,
+                    active: VerticalPos::Left,
                     ..
                 }
                 | Self::Vertical {
                     right: buffer,
-                    which: VerticalPos::Right,
+                    active: VerticalPos::Right,
                     ..
                 } => {
                     current = buffer;
@@ -3134,22 +3134,22 @@ impl Layout {
                 Self::Single(buffer) => break buffer,
                 Self::Horizontal {
                     top: buffer,
-                    which: HorizontalPos::Top,
+                    active: HorizontalPos::Top,
                     ..
                 }
                 | Self::Horizontal {
                     bottom: buffer,
-                    which: HorizontalPos::Bottom,
+                    active: HorizontalPos::Bottom,
                     ..
                 }
                 | Self::Vertical {
                     left: buffer,
-                    which: VerticalPos::Left,
+                    active: VerticalPos::Left,
                     ..
                 }
                 | Self::Vertical {
                     right: buffer,
-                    which: VerticalPos::Right,
+                    active: VerticalPos::Right,
                     ..
                 } => {
                     current = buffer;
@@ -3167,25 +3167,25 @@ impl Layout {
         match self {
             Self::Single(buffer) => Some((buffer.current_index(), buffer.current_mut()?, vec![])),
             Self::Horizontal {
-                which: HorizontalPos::Top,
+                active: HorizontalPos::Top,
                 top: active,
                 bottom: inactive,
                 ..
             }
             | Self::Horizontal {
-                which: HorizontalPos::Bottom,
+                active: HorizontalPos::Bottom,
                 bottom: active,
                 top: inactive,
                 ..
             }
             | Self::Vertical {
-                which: VerticalPos::Left,
+                active: VerticalPos::Left,
                 left: active,
                 right: inactive,
                 ..
             }
             | Self::Vertical {
-                which: VerticalPos::Right,
+                active: VerticalPos::Right,
                 right: active,
                 left: inactive,
                 ..
@@ -3256,25 +3256,25 @@ impl Layout {
                 on_active(b.get_mut(index).ok_or(())?).map(|()| index)
             }
             Self::Horizontal {
-                which: HorizontalPos::Top,
+                active: HorizontalPos::Top,
                 top: active,
                 bottom: inactive,
                 ..
             }
             | Self::Horizontal {
-                which: HorizontalPos::Bottom,
+                active: HorizontalPos::Bottom,
                 bottom: active,
                 top: inactive,
                 ..
             }
             | Self::Vertical {
-                which: VerticalPos::Left,
+                active: VerticalPos::Left,
                 left: active,
                 right: inactive,
                 ..
             }
             | Self::Vertical {
-                which: VerticalPos::Right,
+                active: VerticalPos::Right,
                 right: active,
                 left: inactive,
                 ..
@@ -3376,25 +3376,25 @@ impl Layout {
         match self {
             Self::Single(buffer_list) => (buffer_list, vec![]),
             Self::Horizontal {
-                which: HorizontalPos::Top,
+                active: HorizontalPos::Top,
                 top: active,
                 bottom: inactive,
                 ..
             }
             | Self::Horizontal {
-                which: HorizontalPos::Bottom,
+                active: HorizontalPos::Bottom,
                 bottom: active,
                 top: inactive,
                 ..
             }
             | Self::Vertical {
-                which: VerticalPos::Left,
+                active: VerticalPos::Left,
                 left: active,
                 right: inactive,
                 ..
             }
             | Self::Vertical {
-                which: VerticalPos::Right,
+                active: VerticalPos::Right,
                 right: active,
                 left: inactive,
                 ..
@@ -3447,70 +3447,70 @@ impl Layout {
             (Self::Single(_), direction) => Err(direction),
             (
                 Self::Horizontal {
-                    which: which @ HorizontalPos::Bottom,
+                    active: active @ HorizontalPos::Bottom,
                     bottom,
                     top,
                     ..
                 },
                 direction @ Direction::Up,
             ) => bottom.change_pane(direction).or_else(|_| {
-                *which = HorizontalPos::Top;
+                *active = HorizontalPos::Top;
                 Ok(top.selected_buffer_list().current())
             }),
             (
                 Self::Horizontal {
-                    which: which @ HorizontalPos::Top,
+                    active: active @ HorizontalPos::Top,
                     top,
                     bottom,
                     ..
                 },
                 direction @ Direction::Down,
             ) => top.change_pane(direction).or_else(|_| {
-                *which = HorizontalPos::Bottom;
+                *active = HorizontalPos::Bottom;
                 Ok(bottom.selected_buffer_list().current())
             }),
             (
                 Self::Vertical {
-                    which: which @ VerticalPos::Left,
+                    active: active @ VerticalPos::Left,
                     left,
                     right,
                     ..
                 },
                 direction @ Direction::Right,
             ) => left.change_pane(direction).or_else(|_| {
-                *which = VerticalPos::Right;
+                *active = VerticalPos::Right;
                 Ok(right.selected_buffer_list().current())
             }),
             (
                 Self::Vertical {
-                    which: which @ VerticalPos::Right,
+                    active: active @ VerticalPos::Right,
                     right,
                     left,
                     ..
                 },
                 direction @ Direction::Left,
             ) => right.change_pane(direction).or_else(|_| {
-                *which = VerticalPos::Left;
+                *active = VerticalPos::Left;
                 Ok(left.selected_buffer_list().current())
             }),
             (
                 Self::Horizontal {
-                    which: HorizontalPos::Bottom,
+                    active: HorizontalPos::Bottom,
                     bottom: active,
                     ..
                 }
                 | Self::Horizontal {
-                    which: HorizontalPos::Top,
+                    active: HorizontalPos::Top,
                     top: active,
                     ..
                 }
                 | Self::Vertical {
-                    which: VerticalPos::Left,
+                    active: VerticalPos::Left,
                     left: active,
                     ..
                 }
                 | Self::Vertical {
-                    which: VerticalPos::Right,
+                    active: VerticalPos::Right,
                     right: active,
                     ..
                 },
@@ -3524,74 +3524,74 @@ impl Layout {
             (Self::Single(buflist), _) => Err(buflist),
             (
                 Self::Horizontal {
-                    which: which @ HorizontalPos::Bottom,
+                    active: active @ HorizontalPos::Bottom,
                     bottom,
                     top,
                     ..
                 },
                 direction @ Direction::Up,
             ) => bottom.swap_pane(direction).or_else(|buflist| {
-                *which = HorizontalPos::Top;
+                *active = HorizontalPos::Top;
                 std::mem::swap(top.selected_buffer_list_mut(), buflist);
                 Ok(())
             }),
             (
                 Self::Horizontal {
-                    which: which @ HorizontalPos::Top,
+                    active: active @ HorizontalPos::Top,
                     top,
                     bottom,
                     ..
                 },
                 direction @ Direction::Down,
             ) => top.swap_pane(direction).or_else(|buflist| {
-                *which = HorizontalPos::Bottom;
+                *active = HorizontalPos::Bottom;
                 std::mem::swap(bottom.selected_buffer_list_mut(), buflist);
                 Ok(())
             }),
             (
                 Self::Vertical {
-                    which: which @ VerticalPos::Left,
+                    active: active @ VerticalPos::Left,
                     left,
                     right,
                     ..
                 },
                 direction @ Direction::Right,
             ) => left.swap_pane(direction).or_else(|buflist| {
-                *which = VerticalPos::Right;
+                *active = VerticalPos::Right;
                 std::mem::swap(right.selected_buffer_list_mut(), buflist);
                 Ok(())
             }),
             (
                 Self::Vertical {
-                    which: which @ VerticalPos::Right,
+                    active: active @ VerticalPos::Right,
                     right,
                     left,
                     ..
                 },
                 direction @ Direction::Left,
             ) => right.swap_pane(direction).or_else(|buflist| {
-                *which = VerticalPos::Left;
+                *active = VerticalPos::Left;
                 std::mem::swap(left.selected_buffer_list_mut(), buflist);
                 Ok(())
             }),
             (
                 Self::Horizontal {
-                    which: HorizontalPos::Bottom,
+                    active: HorizontalPos::Bottom,
                     bottom: active,
                     ..
                 }
                 | Self::Horizontal {
-                    which: HorizontalPos::Top,
+                    active: HorizontalPos::Top,
                     top: active,
                     ..
                 }
                 | Self::Vertical {
-                    which: VerticalPos::Left,
+                    active: VerticalPos::Left,
                     left: active,
                     ..
                 }
                 | Self::Vertical {
-                    which: VerticalPos::Right,
+                    active: VerticalPos::Right,
                     right: active,
                     ..
                 },
@@ -3610,7 +3610,7 @@ impl Layout {
                         *current = Self::Horizontal {
                             top: Box::new(Self::Single(buffer.clone())),
                             bottom: Box::new(Self::Single(std::mem::take(buffer))),
-                            which: HorizontalPos::Top,
+                            active: HorizontalPos::Top,
                             top_fill: 1,
                             bottom_fill: 1,
                         };
@@ -3620,7 +3620,7 @@ impl Layout {
                         *current = Self::Horizontal {
                             top: Box::new(Self::Single(buffer.clone())),
                             bottom: Box::new(Self::Single(std::mem::take(buffer))),
-                            which: HorizontalPos::Bottom,
+                            active: HorizontalPos::Bottom,
                             top_fill: 1,
                             bottom_fill: 1,
                         };
@@ -3630,7 +3630,7 @@ impl Layout {
                         *current = Self::Vertical {
                             left: Box::new(Self::Single(buffer.clone())),
                             right: Box::new(Self::Single(std::mem::take(buffer))),
-                            which: VerticalPos::Left,
+                            active: VerticalPos::Left,
                             left_fill: 1,
                             right_fill: 1,
                         };
@@ -3640,7 +3640,7 @@ impl Layout {
                         *current = Self::Vertical {
                             left: Box::new(Self::Single(buffer.clone())),
                             right: Box::new(Self::Single(std::mem::take(buffer))),
-                            which: VerticalPos::Right,
+                            active: VerticalPos::Right,
                             left_fill: 1,
                             right_fill: 1,
                         };
@@ -3648,22 +3648,22 @@ impl Layout {
                     }
                 },
                 Self::Horizontal {
-                    which: HorizontalPos::Top,
+                    active: HorizontalPos::Top,
                     top: active,
                     ..
                 }
                 | Self::Horizontal {
-                    which: HorizontalPos::Bottom,
+                    active: HorizontalPos::Bottom,
                     bottom: active,
                     ..
                 }
                 | Self::Vertical {
-                    which: VerticalPos::Left,
+                    active: VerticalPos::Left,
                     left: active,
                     ..
                 }
                 | Self::Vertical {
-                    which: VerticalPos::Right,
+                    active: VerticalPos::Right,
                     right: active,
                     ..
                 } => {
@@ -3677,25 +3677,25 @@ impl Layout {
         match self {
             Self::Single(_) => { /* don't delete last pane */ }
             Self::Horizontal {
-                which: HorizontalPos::Top,
+                active: HorizontalPos::Top,
                 top: active,
                 bottom: remaining,
                 ..
             }
             | Self::Horizontal {
-                which: HorizontalPos::Bottom,
+                active: HorizontalPos::Bottom,
                 bottom: active,
                 top: remaining,
                 ..
             }
             | Self::Vertical {
-                which: VerticalPos::Left,
+                active: VerticalPos::Left,
                 left: active,
                 right: remaining,
                 ..
             }
             | Self::Vertical {
-                which: VerticalPos::Right,
+                active: VerticalPos::Right,
                 right: active,
                 left: remaining,
                 ..
@@ -3719,22 +3719,22 @@ impl Layout {
             Self::Single(buffer) => buffer,
             Self::Horizontal {
                 top: buffer,
-                which: HorizontalPos::Top,
+                active: HorizontalPos::Top,
                 ..
             }
             | Self::Horizontal {
                 bottom: buffer,
-                which: HorizontalPos::Bottom,
+                active: HorizontalPos::Bottom,
                 ..
             }
             | Self::Vertical {
                 left: buffer,
-                which: VerticalPos::Left,
+                active: VerticalPos::Left,
                 ..
             }
             | Self::Vertical {
                 right: buffer,
-                which: VerticalPos::Right,
+                active: VerticalPos::Right,
                 ..
             } => buffer.into_selected_buffer_list(),
         }
@@ -3830,7 +3830,7 @@ impl Layout {
                 .and_then(|pos| apply_position(area, pos, mode)),
             Self::Horizontal {
                 top,
-                which: HorizontalPos::Top,
+                active: HorizontalPos::Top,
                 top_fill,
                 bottom_fill,
                 ..
@@ -3842,7 +3842,7 @@ impl Layout {
             }
             Self::Horizontal {
                 bottom,
-                which: HorizontalPos::Bottom,
+                active: HorizontalPos::Bottom,
                 top_fill,
                 bottom_fill,
                 ..
@@ -3854,7 +3854,7 @@ impl Layout {
             }
             Self::Vertical {
                 left,
-                which: VerticalPos::Left,
+                active: VerticalPos::Left,
                 left_fill,
                 right_fill,
                 ..
@@ -3867,7 +3867,7 @@ impl Layout {
             }
             Self::Vertical {
                 right,
-                which: VerticalPos::Right,
+                active: VerticalPos::Right,
                 left_fill,
                 right_fill,
                 ..
@@ -3928,7 +3928,7 @@ impl Layout {
             Self::Horizontal {
                 top,
                 bottom,
-                which,
+                active,
                 top_fill,
                 bottom_fill,
             } => {
@@ -3936,17 +3936,17 @@ impl Layout {
                     Layout::vertical(Constraint::from_fills([*top_fill, *bottom_fill])).areas(area);
 
                 if top_area.contains(position) {
-                    *which = HorizontalPos::Top;
+                    *active = HorizontalPos::Top;
                     top.set_cursor_focus_inner(top_area, position);
                 } else if bottom_area.contains(position) {
-                    *which = HorizontalPos::Bottom;
+                    *active = HorizontalPos::Bottom;
                     bottom.set_cursor_focus_inner(bottom_area, position);
                 }
             }
             Self::Vertical {
                 left,
                 right,
-                which,
+                active,
                 left_fill,
                 right_fill,
             } => {
@@ -3955,10 +3955,10 @@ impl Layout {
                         .areas(area);
 
                 if left_area.contains(position) {
-                    *which = VerticalPos::Left;
+                    *active = VerticalPos::Left;
                     left.set_cursor_focus_inner(left_area, position);
                 } else if right_area.contains(position) {
-                    *which = VerticalPos::Right;
+                    *active = VerticalPos::Right;
                     right.set_cursor_focus_inner(right_area, position);
                 }
             }
@@ -3975,28 +3975,28 @@ impl Layout {
             match current {
                 Self::Single(_) => break,
                 Self::Horizontal {
-                    which: HorizontalPos::Top,
+                    active: HorizontalPos::Top,
                     top: selected,
                     top_fill: selected_fill,
                     bottom_fill: other_fill,
                     ..
                 }
                 | Self::Horizontal {
-                    which: HorizontalPos::Bottom,
+                    active: HorizontalPos::Bottom,
                     bottom: selected,
                     bottom_fill: selected_fill,
                     top_fill: other_fill,
                     ..
                 }
                 | Self::Vertical {
-                    which: VerticalPos::Left,
+                    active: VerticalPos::Left,
                     left: selected,
                     left_fill: selected_fill,
                     right_fill: other_fill,
                     ..
                 }
                 | Self::Vertical {
-                    which: VerticalPos::Right,
+                    active: VerticalPos::Right,
                     right: selected,
                     right_fill: selected_fill,
                     left_fill: other_fill,
@@ -4028,26 +4028,26 @@ impl Layout {
                 }
             }
             Self::Horizontal {
-                top, bottom, which, ..
+                top, bottom, active, ..
             } => {
                 if top.select_by_index(index).is_ok() {
-                    *which = HorizontalPos::Top;
+                    *active = HorizontalPos::Top;
                     Ok(())
                 } else if bottom.select_by_index(index).is_ok() {
-                    *which = HorizontalPos::Bottom;
+                    *active = HorizontalPos::Bottom;
                     Ok(())
                 } else {
                     Err(())
                 }
             }
             Self::Vertical {
-                left, right, which, ..
+                left, right, active, ..
             } => {
                 if left.select_by_index(index).is_ok() {
-                    *which = VerticalPos::Left;
+                    *active = VerticalPos::Left;
                     Ok(())
                 } else if right.select_by_index(index).is_ok() {
-                    *which = VerticalPos::Right;
+                    *active = VerticalPos::Right;
                     Ok(())
                 } else {
                     Err(())
@@ -4486,7 +4486,7 @@ impl<I: std::iter::FusedIterator<Item = char>> StatefulWidget for LayoutWidget<'
                 }
             }
             Layout::Horizontal {
-                which,
+                active,
                 top,
                 bottom,
                 top_fill,
@@ -4497,7 +4497,7 @@ impl<I: std::iter::FusedIterator<Item = char>> StatefulWidget for LayoutWidget<'
                 let [top_area, bottom_area] =
                     Layout::vertical(Constraint::from_fills([*top_fill, *bottom_fill])).areas(area);
 
-                match which {
+                match active {
                     HorizontalPos::Top => {
                         LayoutWidget {
                             focused,
@@ -4543,7 +4543,7 @@ impl<I: std::iter::FusedIterator<Item = char>> StatefulWidget for LayoutWidget<'
                 }
             }
             Layout::Vertical {
-                which,
+                active,
                 left,
                 right,
                 left_fill,
@@ -4555,7 +4555,7 @@ impl<I: std::iter::FusedIterator<Item = char>> StatefulWidget for LayoutWidget<'
                     Layout::horizontal(Constraint::from_fills([*left_fill, *right_fill]))
                         .areas(area);
 
-                match which {
+                match active {
                     VerticalPos::Left => {
                         LayoutWidget {
                             focused,
