@@ -15,8 +15,14 @@ use ratatui::style::Color;
 enum MarkdownToken {
     #[regex("`[^`]+`")]
     Code,
-    #[regex(r"\*[^*]+\*")]
-    Emphasis,
+    #[regex(r"[*_].+?[*_]")]
+    Italic,
+    #[regex(r"[*_]{2}.+?[*_]{2}")]
+    Bold,
+    #[regex(r"[*_]{3}.+?[*_]{3}")]
+    BoldAndItalic,
+    #[regex(r"~~.+?~~")]
+    Strikethrough,
     Heading,
     #[regex(r"\[[^]]+\]\([^)]+\)")]
     Url,
@@ -39,9 +45,21 @@ impl TryFrom<MarkdownToken> for Highlight {
                 color: None,
                 modifier: Modifier::Italic,
             }),
-            MarkdownToken::Emphasis => Ok(Highlight {
+            MarkdownToken::Bold => Ok(Highlight {
                 color: None,
                 modifier: Modifier::Bold,
+            }),
+            MarkdownToken::Italic => Ok(Highlight {
+                color: None,
+                modifier: Modifier::Italic,
+            }),
+            MarkdownToken::BoldAndItalic => Ok(Highlight {
+                color: None,
+                modifier: Modifier::BoldItalic,
+            }),
+            MarkdownToken::Strikethrough => Ok(Highlight {
+                color: None,
+                modifier: Modifier::Strikethrough,
             }),
             MarkdownToken::Heading => Ok(Highlight {
                 color: Some(Color::Blue),

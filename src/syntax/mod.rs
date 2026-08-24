@@ -62,6 +62,7 @@ pub enum Modifier {
     Plain,
     Bold,
     Italic,
+    BoldItalic,
     Underlined,
     Strikethrough,
 }
@@ -88,6 +89,7 @@ impl From<Highlight> for ratatui::style::Style {
             Modifier::Italic => Self::default().italic(),
             Modifier::Underlined => Self::default().underlined(),
             Modifier::Bold => Self::default().bold(),
+            Modifier::BoldItalic => Self::default().bold().italic(),
             Modifier::Strikethrough => Self::default().crossed_out(),
         };
         match highlight.color {
