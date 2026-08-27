@@ -6,9 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::buffer::Source;
-use crate::editor::DirTarget;
-use crate::editor::RemoteError;
+use crate::buffer::{CaseInsensitiveNormalizations, SearchTerm, Source};
+use crate::editor::{DirTarget, RemoteError, SearchType};
 use crate::prompt::TextField;
 use ratatui::widgets::StatefulWidget;
 use std::collections::BTreeMap;
@@ -471,7 +470,7 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
         state: &mut FileChooserState<S>,
     ) {
         use crate::buffer::{BufferMessage, render_message};
-        use crate::help::{CREATE_FILE, OPEN_FILE_TOGGLEABLE, render_help};
+        use crate::help::{CREATE_FILE, FIND_IN_FILES, OPEN_FILE_TOGGLEABLE, render_help};
         use crate::scrollbar::{Scrollbar, ScrollbarState};
         use ratatui::{
             layout::{
@@ -510,15 +509,15 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
 
         let [text_area, _] = Layout::horizontal([Length(TEXT_WIDTH + 2), Min(0)]).areas(top_area);
 
-        match &state.chosen {
-            Chosen::Default => Paragraph::new("")
+        match &state.mode {
+            Mode::Default => Paragraph::new("")
                 .block(
                     Block::bordered()
                         .border_type(BorderType::Rounded)
                         .title("Filename"),
                 )
                 .render(text_area, buf),
-            Chosen::New(filename) => Paragraph::new(crate::truncate::line_start(
+            Mode::New(filename) => Paragraph::new(crate::truncate::line_start(
                 filename.value().unwrap_or_default().into(),
                 filename.cursor_column().saturating_sub(TEXT_WIDTH.into()),
             ))
@@ -528,24 +527,29 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
                     .title("Filename"),
             )
             .render(text_area, buf),
-            Chosen::Selected(items) => Paragraph::new(match items.len() {
+            Mode::Selected(items) => Paragraph::new(match items.len() {
                 1 => Cow::Borrowed("1 File Selected"),
                 n => Cow::Owned(format!("{n} Files Selected")),
             })
             .block(Block::bordered().border_type(BorderType::Rounded))
             .render(text_area, buf),
+            Mode::Search { .. } => Paragraph::new("")
+                .block(Block::bordered().border_type(BorderType::Rounded))
+                .render(text_area, buf),
         }
 
         StatefulWidget::render(
-            (match &state.chosen {
-                Chosen::Default | Chosen::New(_) => List::new(state.dir_entries()),
-                Chosen::Selected(selected) => List::new(state.contents.iter().map(|e| {
-                    if selected.contains_key(&e.path) {
-                        format!("* {}", e.name)
-                    } else {
-                        format!("  {}", e.name)
-                    }
-                })),
+            (match &state.mode {
+                Mode::Default | Mode::New(_) => List::new(state.dir_entries()),
+                Mode::Selected(selected) | Mode::Search { selected, .. } => {
+                    List::new(state.contents.iter().map(|e| {
+                        if selected.contains_key(&e.path) {
+                            format!("* {}", e.name)
+                        } else {
+                            format!("  {}", e.name)
+                        }
+                    }))
+                }
             })
             .highlight_style(Style::default().add_modifier(Modifier::REVERSED)),
             list_area,
@@ -576,9 +580,10 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
         render_help(
             list_area,
             buf,
-            match &state.chosen {
-                Chosen::Default | Chosen::Selected(_) => OPEN_FILE_TOGGLEABLE,
-                Chosen::New(_) => CREATE_FILE,
+            match &state.mode {
+                Mode::Default | Mode::Selected(_) => OPEN_FILE_TOGGLEABLE,
+                Mode::New(_) => CREATE_FILE,
+                Mode::Search { .. } => FIND_IN_FILES,
             },
             |b| {
                 if state.show_hidden {
@@ -588,6 +593,28 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
                 }
             },
         );
+
+        if let Mode::Search { search, type_, .. } = &state.mode {
+            use crate::buffer::widen_tabs;
+            use ratatui::widgets::Clear;
+
+            let [_, dialog_area, _] =
+                Layout::vertical([Min(0), Length(3), Min(0)]).areas(list_area);
+
+            Clear.render(dialog_area, buf);
+            Paragraph::new(crate::truncate::line_start(
+                widen_tabs(search.chars().collect::<String>().into()),
+                search
+                    .cursor_column()
+                    .saturating_sub(dialog_area.width.saturating_sub(2).into()),
+            ))
+            .block(
+                Block::bordered()
+                    .border_type(BorderType::Rounded)
+                    .title_top(type_.to_string()),
+            )
+            .render(dialog_area, buf);
+        }
 
         if let Some(error) = state.error.take() {
             render_message(list_area, buf, BufferMessage::Error(error.into()));
@@ -601,7 +628,7 @@ pub struct FileChooserState<S: ChooserSource> {
     contents: Vec<Entry>,  // directory entry
     dir_count: usize,      // number of directories in contents
     index: Option<usize>,  // index in directory entries
-    chosen: Chosen,        // either new file or chosen entries
+    mode: Mode,            // either new file or chosen entries
     error: Option<String>, // error message
     source: S,             // file source
     show_hidden: bool,     // whether to display hidden files
@@ -627,7 +654,7 @@ impl<S: ChooserSource> FileChooserState<S> {
             contents,
             cwd,
             index: None,
-            chosen: Chosen::default(),
+            mode: Mode::default(),
             error: None,
             source,
             show_hidden: false,
@@ -671,39 +698,39 @@ impl<S: ChooserSource> FileChooserState<S> {
     }
 
     pub fn arrow_up(&mut self) {
-        if matches!(self.chosen, Chosen::Default | Chosen::Selected(_)) {
+        if matches!(self.mode, Mode::Default | Mode::Selected(_)) {
             self.index = match self.index {
-                None => max_index(&self.chosen, &self.contents, self.dir_count).checked_sub(1),
+                None => max_index(&self.mode, &self.contents, self.dir_count).checked_sub(1),
                 Some(i) => i.checked_sub(1).or_else(|| {
-                    max_index(&self.chosen, &self.contents, self.dir_count).checked_sub(1)
+                    max_index(&self.mode, &self.contents, self.dir_count).checked_sub(1)
                 }),
             }
         }
     }
 
     pub fn arrow_down(&mut self) {
-        if matches!(self.chosen, Chosen::Default | Chosen::Selected(_)) {
+        if matches!(self.mode, Mode::Default | Mode::Selected(_)) {
             self.index = (match self.index {
                 None => Some(0),
                 Some(i) => Some(i + 1),
             })
-            .and_then(|i| i.checked_rem(max_index(&self.chosen, &self.contents, self.dir_count)));
+            .and_then(|i| i.checked_rem(max_index(&self.mode, &self.contents, self.dir_count)));
         }
     }
 
     pub fn page_up(&mut self) {
-        if matches!(self.chosen, Chosen::Default | Chosen::Selected(_)) {
+        if matches!(self.mode, Mode::Default | Mode::Selected(_)) {
             self.index = (match self.index {
                 None => Some(0),
                 Some(idx) => Some(idx.saturating_sub(PAGE_SIZE)),
             })
-            .filter(|i| *i < max_index(&self.chosen, &self.contents, self.dir_count))
+            .filter(|i| *i < max_index(&self.mode, &self.contents, self.dir_count))
         }
     }
 
     pub fn page_down(&mut self) {
-        if matches!(self.chosen, Chosen::Default | Chosen::Selected(_)) {
-            self.index = match max_index(&self.chosen, &self.contents, self.dir_count) {
+        if matches!(self.mode, Mode::Default | Mode::Selected(_)) {
+            self.index = match max_index(&self.mode, &self.contents, self.dir_count) {
                 0 => None,
                 max => match self.index {
                     None => Some(PAGE_SIZE.min(max - 1)),
@@ -714,12 +741,10 @@ impl<S: ChooserSource> FileChooserState<S> {
     }
 
     pub fn home(&mut self) {
-        match &mut self.chosen {
-            Chosen::New(filename) => {
-                filename.cursor_home();
-            }
-            _ => {
-                self.index = match max_index(&self.chosen, &self.contents, self.dir_count) {
+        match &mut self.mode {
+            Mode::New(field) | Mode::Search { search: field, .. } => field.cursor_home(),
+            Mode::Default | Mode::Selected(_) => {
+                self.index = match max_index(&self.mode, &self.contents, self.dir_count) {
                     0 => None,
                     _ => Some(0),
                 }
@@ -728,22 +753,18 @@ impl<S: ChooserSource> FileChooserState<S> {
     }
 
     pub fn end(&mut self) {
-        match &mut self.chosen {
-            Chosen::New(filename) => {
-                filename.cursor_end();
-            }
-            _ => {
-                self.index = max_index(&self.chosen, &self.contents, self.dir_count).checked_sub(1);
+        match &mut self.mode {
+            Mode::New(field) | Mode::Search { search: field, .. } => field.cursor_end(),
+            Mode::Default | Mode::Selected(_) => {
+                self.index = max_index(&self.mode, &self.contents, self.dir_count).checked_sub(1);
             }
         }
     }
 
     pub fn arrow_right(&mut self) {
-        match &mut self.chosen {
-            Chosen::New(filename) => {
-                filename.cursor_forward();
-            }
-            _ => {
+        match &mut self.mode {
+            Mode::New(field) | Mode::Search { search: field, .. } => field.cursor_forward(),
+            Mode::Default | Mode::Selected(_) => {
                 if let Some(idx) = self.index
                     && let Some(Entry {
                         path, is_dir: true, ..
@@ -756,11 +777,9 @@ impl<S: ChooserSource> FileChooserState<S> {
     }
 
     pub fn arrow_left(&mut self) {
-        match &mut self.chosen {
-            Chosen::New(filename) => {
-                filename.cursor_back();
-            }
-            _ => {
+        match &mut self.mode {
+            Mode::New(field) | Mode::Search { search: field, .. } => field.cursor_back(),
+            Mode::Default | Mode::Selected(_) => {
                 if let Some(parent) = self.dir.parent()
                     && parent != Path::new("")
                 {
@@ -771,54 +790,72 @@ impl<S: ChooserSource> FileChooserState<S> {
     }
 
     pub fn insert_char(&mut self, c: char) {
-        match &mut self.chosen {
-            Chosen::Default => {
-                self.chosen = Chosen::New({
+        match &mut self.mode {
+            Mode::Default => {
+                self.mode = Mode::New({
                     let mut filename = TextField::default();
                     filename.insert_char(c);
                     filename
                 });
                 self.index = None;
             }
-            Chosen::New(prompt) => {
+            Mode::New(prompt) => {
                 prompt.insert_char(c);
                 self.index = None;
             }
-            Chosen::Selected(_) => { /* do nothing */ }
+            Mode::Search { search, .. } => search.insert_char(c),
+            Mode::Selected(_) => { /* do nothing */ }
         }
     }
 
     pub fn backspace(&mut self) {
-        if let Chosen::New(prompt) = &mut self.chosen {
-            prompt.backspace();
-            if prompt.is_empty() {
-                self.chosen = Chosen::Default;
+        match &mut self.mode {
+            Mode::New(prompt) => {
+                prompt.backspace();
+                if prompt.is_empty() {
+                    self.mode = Mode::Default;
+                }
             }
+            Mode::Search { search, .. } => search.backspace(),
+            Mode::Default | Mode::Selected(_) => { /* do nothing */ }
         }
     }
 
     pub fn delete(&mut self) {
-        if let Chosen::New(prompt) = &mut self.chosen {
-            prompt.delete();
-            if prompt.is_empty() {
-                self.chosen = Chosen::Default;
+        match &mut self.mode {
+            Mode::New(prompt) => {
+                prompt.delete();
+                if prompt.is_empty() {
+                    self.mode = Mode::Default;
+                }
             }
+            Mode::Search { search, .. } => search.delete(),
+            Mode::Default | Mode::Selected(_) => { /* do nothing */ }
         }
     }
 
     pub fn toggle_selected(&mut self) {
-        if let Some(idx) = self.index
-            && let Some(Entry {
-                path,
-                is_dir: false,
-                ..
-            }) = self.contents.get(idx)
-        {
-            match &mut self.chosen {
-                Chosen::Default => {
-                    self.chosen = Chosen::Selected(BTreeMap::from([(path.clone(), ())]));
+        match &mut self.mode {
+            Mode::New(_) => { /* do nothing*/ }
+            Mode::Default => {
+                if let Some(idx) = self.index
+                    && let Some(Entry {
+                        path,
+                        is_dir: false,
+                        ..
+                    }) = self.contents.get(idx)
+                {
+                    self.mode = Mode::Selected(BTreeMap::from([(path.clone(), ())]));
                 }
-                Chosen::Selected(selected) => {
+            }
+            Mode::Selected(selected) => {
+                if let Some(idx) = self.index
+                    && let Some(Entry {
+                        path,
+                        is_dir: false,
+                        ..
+                    }) = self.contents.get(idx)
+                {
                     use std::collections::btree_map::Entry;
 
                     match selected.entry(path.clone()) {
@@ -828,19 +865,21 @@ impl<S: ChooserSource> FileChooserState<S> {
                         Entry::Occupied(o) => {
                             o.remove();
                             if selected.is_empty() {
-                                self.chosen = Chosen::Default;
+                                self.mode = Mode::Default;
                             }
                         }
                     }
                 }
-                Chosen::New(_) => { /* this shouldn't be possible */ }
+            }
+            Mode::Search { type_, .. } => {
+                *type_ = type_.toggle_search();
             }
         }
     }
 
     pub fn toggle_all_selected(&mut self) {
-        match &mut self.chosen {
-            Chosen::Default => {
+        match &mut self.mode {
+            Mode::Default => {
                 let chosen = self
                     .contents
                     .iter()
@@ -848,10 +887,10 @@ impl<S: ChooserSource> FileChooserState<S> {
                     .map(|e| (e.path.clone(), ()))
                     .collect::<BTreeMap<_, _>>();
                 if !chosen.is_empty() {
-                    self.chosen = Chosen::Selected(chosen);
+                    self.mode = Mode::Selected(chosen);
                 }
             }
-            Chosen::Selected(selected) => {
+            Mode::Selected(selected) => {
                 use std::collections::btree_map::Entry;
 
                 for e in self.contents.iter().filter(|e| !e.is_dir) {
@@ -865,14 +904,39 @@ impl<S: ChooserSource> FileChooserState<S> {
                     }
                 }
                 if selected.is_empty() {
-                    self.chosen = Chosen::Default;
+                    self.mode = Mode::Default;
                 }
             }
-            Chosen::New(_) => { /* do nothing */ }
+            Mode::New(_) | Mode::Search { .. } => { /* do nothing */ }
+        }
+    }
+
+    pub fn toggle_search(&mut self) {
+        match &mut self.mode {
+            Mode::Default => {
+                self.mode = Mode::Search {
+                    search: TextField::default(),
+                    type_: SearchType::default(),
+                    selected: BTreeMap::default(),
+                };
+            }
+            Mode::Selected(selected) => {
+                self.mode = Mode::Search {
+                    search: TextField::default(),
+                    type_: SearchType::default(),
+                    selected: std::mem::take(selected),
+                };
+            }
+            Mode::Search { .. } => {
+                self.mode = Mode::Default;
+            }
+            Mode::New(_) => { /* creating new file, so do nothing */ }
         }
     }
 
     pub fn select(&mut self) -> Option<Vec<Source>> {
+        use crate::buffer::Normalizations;
+
         fn strip_cwd(cwd: &Path, path: &Path) -> PathBuf {
             match path.strip_prefix(cwd) {
                 Ok(stripped) => stripped.to_path_buf(),
@@ -880,8 +944,22 @@ impl<S: ChooserSource> FileChooserState<S> {
             }
         }
 
-        match std::mem::take(&mut self.chosen) {
-            Chosen::Default => match self.contents.get(self.index?)? {
+        fn append_matches<S: ChooserSource, T: SearchTerm>(
+            source: &mut S,
+            contents: &[Entry],
+            term: T,
+            matches: &mut BTreeMap<PathBuf, ()>,
+        ) {
+            matches.extend(contents.iter().filter_map(|e| {
+                source
+                    .open(e.path.clone())
+                    .contains(&term)
+                    .then_some((e.path.clone(), ()))
+            }));
+        }
+
+        match std::mem::take(&mut self.mode) {
+            Mode::Default => match self.contents.get(self.index?)? {
                 Entry {
                     is_dir: true, path, ..
                 } => {
@@ -894,24 +972,107 @@ impl<S: ChooserSource> FileChooserState<S> {
                     ..
                 } => Some(vec![self.source.open(strip_cwd(&self.cwd, path))]),
             },
-            Chosen::New(filename) => Some(vec![self.source.open(strip_cwd(
+            Mode::New(filename) => Some(vec![self.source.open(strip_cwd(
                 &self.cwd,
                 &self.dir.join(filename.value().expect("empty filename")),
             ))]),
-            Chosen::Selected(selected) => Some(
+            Mode::Selected(selected) => Some(
                 selected
                     .into_keys()
                     .map(|path| self.source.open(strip_cwd(&self.cwd, &path)))
                     .collect(),
             ),
+            Mode::Search {
+                search,
+                type_,
+                mut selected,
+            } => {
+                match type_ {
+                    SearchType::CaseSensitive => match Normalizations::try_from(search.value()?) {
+                        Err(term) => {
+                            append_matches(&mut self.source, &self.contents, term, &mut selected)
+                        }
+                        Ok(normalizations) => append_matches(
+                            &mut self.source,
+                            &self.contents,
+                            normalizations,
+                            &mut selected,
+                        ),
+                    },
+                    SearchType::CaseInsensitive => {
+                        match Normalizations::try_from(search.value()?) {
+                            Err(term) => {
+                                match fancy_regex::RegexBuilder::new(&fancy_regex::escape(&term))
+                                    .case_insensitive(true)
+                                    .build()
+                                {
+                                    Ok(regex) => append_matches(
+                                        &mut self.source,
+                                        &self.contents,
+                                        regex,
+                                        &mut selected,
+                                    ),
+                                    Err(err) => {
+                                        self.error = Some(err.to_string());
+                                    }
+                                }
+                            }
+                            Ok(normalizations) => append_matches(
+                                &mut self.source,
+                                &self.contents,
+                                CaseInsensitiveNormalizations::from(normalizations),
+                                &mut selected,
+                            ),
+                        }
+                    }
+                    SearchType::Regex => match search.value()?.parse::<fancy_regex::Regex>() {
+                        Ok(regex) => {
+                            append_matches(&mut self.source, &self.contents, regex, &mut selected)
+                        }
+                        Err(err) => {
+                            self.error = Some(err.to_string());
+                        }
+                    },
+                }
+
+                self.mode = if selected.is_empty() {
+                    Mode::Default
+                } else {
+                    Mode::Selected(selected)
+                };
+
+                None
+            }
         }
     }
 
-    pub fn cursor_position(&self) -> (u16, u16) {
-        match &self.chosen {
-            Chosen::Default => (1, 1),
-            Chosen::New(filename) => ((filename.cursor_column() as u16).min(TEXT_WIDTH) + 1, 1),
-            Chosen::Selected(_) => (1, 1),
+    pub fn cursor_position(&self, area: ratatui::layout::Rect) -> (u16, u16) {
+        match &self.mode {
+            Mode::Default => (area.x + 1, area.y + 1),
+            Mode::New(filename) => (
+                (area.x + filename.cursor_column() as u16).min(TEXT_WIDTH) + 1,
+                area.y + 1,
+            ),
+            Mode::Selected(_) => (area.x + 1, area.y + 1),
+            Mode::Search { search, .. } => {
+                use ratatui::{
+                    layout::{
+                        Constraint::{Length, Min},
+                        Layout,
+                    },
+                    widgets::Block,
+                };
+
+                let [_, list_area] = Layout::vertical([Length(3), Min(0)]).areas(area);
+                let [list_area, _] = Layout::horizontal([Min(0), Length(1)]).areas(list_area);
+                let [_, dialog_area, _] =
+                    Layout::vertical([Min(0), Length(3), Min(0)]).areas(list_area);
+                let dialog_area = Block::bordered().inner(dialog_area);
+                let col = dialog_area.x + (search.cursor_column() as u16).min(TEXT_WIDTH);
+                let row = dialog_area.y;
+
+                (col, row)
+            }
         }
     }
 
@@ -930,10 +1091,11 @@ impl<S: ChooserSource> FileChooserState<S> {
     }
 }
 
-fn max_index(chosen: &Chosen, contents: &[Entry], dir_count: usize) -> usize {
-    match chosen {
-        Chosen::Default | Chosen::Selected(_) => contents.len(),
-        Chosen::New(_) => dir_count,
+fn max_index(mode: &Mode, contents: &[Entry], dir_count: usize) -> usize {
+    // this should only be called in Default/Selected modes
+    match mode {
+        Mode::Default | Mode::Selected(_) => contents.len(),
+        Mode::New(_) | Mode::Search { .. } => dir_count,
     }
 }
 
@@ -996,9 +1158,14 @@ impl From<(bool, PathBuf)> for Entry {
 }
 
 #[derive(Default)]
-enum Chosen {
+enum Mode {
     #[default]
     Default, // nothing selected
     New(TextField),                  // new file
     Selected(BTreeMap<PathBuf, ()>), // selected existing file(s)
+    Search {
+        search: TextField,
+        type_: SearchType,
+        selected: BTreeMap<PathBuf, ()>,
+    },
 }

@@ -231,7 +231,7 @@ pub enum SearchType {
 }
 
 impl SearchType {
-    fn toggle_search(self) -> Self {
+    pub fn toggle_search(self) -> Self {
         match self {
             Self::CaseSensitive => Self::CaseInsensitive,
             Self::CaseInsensitive => Self::Regex,
@@ -489,7 +489,7 @@ impl DirTarget {
 pub struct Editor {
     layout: Layout,                      // the editor's pane layout
     focused: bool,                       // whether the editor has focus
-    mode: EditorMode,                    // what mode the editing is in
+    mode: EditorMode,                    // what mode the editor is in
     cut_buffer: Option<EditorCutBuffer>, // contents of cut buffer
     last_search: LastSearch,             // last searches performed
     show_help: bool,                     // whether to show keybindinings
@@ -2164,6 +2164,10 @@ fn process_open_file<S: ChooserSource>(
             }
             None
         }
+        keybind!(Find) => {
+            chooser.toggle_search();
+            None
+        }
         _ => None, // ignore other events
     }
 }
@@ -2969,7 +2973,9 @@ enum VerticalPos {
 }
 
 enum Layout {
+    /// Not split
     Single(BufferList),
+    /// Split into top and bottom panes
     Horizontal {
         top: Box<Layout>,
         top_fill: u16,
@@ -2977,6 +2983,7 @@ enum Layout {
         bottom_fill: u16,
         active: HorizontalPos,
     },
+    /// Split into left and right panes
     Vertical {
         left: Box<Layout>,
         left_fill: u16,
@@ -3802,11 +3809,8 @@ impl Layout {
                     })
                 }
                 Some(EditorMode::Open { chooser }) => {
-                    let (x, y) = chooser.cursor_position();
-                    Some(Position {
-                        x: text_area.x + x,
-                        y: text_area.y + y,
-                    })
+                    let (x, y) = chooser.cursor_position(text_area);
+                    Some(Position { x, y })
                 }
                 Some(EditorMode::SelectBuffer { .. }) => None,
                 _ => {

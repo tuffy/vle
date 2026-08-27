@@ -250,6 +250,38 @@ impl Source {
             Self::Tutorial | Self::Test | Self::Scratch { .. } => None,
         }
     }
+
+    pub fn contains<S: SearchTerm>(&self, term: S) -> bool {
+        use std::io::BufRead;
+
+        match self {
+            Self::Local(path) => match std::fs::File::open(path) {
+                Ok(f) => std::io::BufReader::new(f)
+                    .lines()
+                    .map_while(Result::ok)
+                    .any(|l| term.match_ranges(&l).next().is_some()),
+                Err(_) => false,
+            },
+            Self::Scratch { data, .. } => data
+                .lines()
+                .any(|l| term.match_ranges(&Cow::from(l)).next().is_some()),
+            #[cfg(feature = "ssh")]
+            Self::Ssh { sftp, path } => match sftp.open(path) {
+                Ok(f) => std::io::BufReader::new(f)
+                    .lines()
+                    .map_while(Result::ok)
+                    .any(|l| term.match_ranges(&l).next().is_some()),
+                Err(_) => false,
+            },
+            Self::Tutorial => include_str!("tutorial.txt")
+                .replacen("VERSION", env!("CARGO_PKG_VERSION"), 1)
+                .lines()
+                .any(|l| term.match_ranges(l).next().is_some()),
+            Self::Test => include_str!("test.txt")
+                .lines()
+                .any(|l| term.match_ranges(l).next().is_some()),
+        }
+    }
 }
 
 mod private {
@@ -3928,6 +3960,12 @@ pub trait SearchTerm: std::fmt::Display + Clone {
     fn match_ranges(&self, s: &str) -> impl Iterator<Item = SearchMatch>;
 }
 
+impl<T: SearchTerm> SearchTerm for &T {
+    fn match_ranges(&self, s: &str) -> impl Iterator<Item = SearchMatch> {
+        (**self).match_ranges(s)
+    }
+}
+
 pub struct SearchMatch {
     start: usize,
     end: usize,
@@ -5257,20 +5295,6 @@ impl StatefulWidget for BufferWidget<'_> {
             }
         }
 
-        fn widen_tabs<'l>(mut input: Line<'l>) -> Line<'l> {
-            fn tabs_to_spaces(s: &mut Cow<'_, str>) {
-                if s.as_ref().contains('\t') {
-                    *s = Cow::Owned(s.as_ref().replace('\t', &TAB_SUBSTITUTION));
-                }
-            }
-
-            input
-                .spans
-                .iter_mut()
-                .for_each(|s| tabs_to_spaces(&mut s.content));
-            input
-        }
-
         // Colorize syntax of the given text
         fn colorize<'s, H: Highlighter>(
             highlighter: &mut H,
@@ -6573,6 +6597,20 @@ impl StatefulWidget for BufferWidget<'_> {
             render_message(text_area, buf, message);
         }
     }
+}
+
+pub fn widen_tabs<'l>(mut input: ratatui::prelude::Line<'l>) -> ratatui::prelude::Line<'l> {
+    fn tabs_to_spaces(s: &mut Cow<'_, str>) {
+        if s.as_ref().contains('\t') {
+            *s = Cow::Owned(s.as_ref().replace('\t', &TAB_SUBSTITUTION));
+        }
+    }
+
+    input
+        .spans
+        .iter_mut()
+        .for_each(|s| tabs_to_spaces(&mut s.content));
+    input
 }
 
 pub fn render_message(area: Rect, buf: &mut ratatui::buffer::Buffer, message: BufferMessage) {

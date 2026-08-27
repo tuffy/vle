@@ -318,6 +318,7 @@ pub static OPEN_FILE_TOGGLEABLE: &[Keybinding] = &[
     shift(&["Tab"], "Toggle Selected Files"),
     ctrl(&["H"], "Toggle Show Hidden Files"),
     keybind::<key::Open>("Toggle File Source"),
+    keybind::<key::Find>("Toggle Files Containing Text"),
     none(&["Enter"], "Select File(s)"),
     none(&["Esc"], "Cancel"),
 ];
@@ -325,6 +326,12 @@ pub static OPEN_FILE_TOGGLEABLE: &[Keybinding] = &[
 pub static CREATE_FILE: &[Keybinding] = &[
     none(&["Enter"], "Create New File"),
     none(&["Esc"], "Cancel"),
+];
+
+pub static FIND_IN_FILES: &[Keybinding] = &[
+    none(&["Tab"], "Toggle Search Type"),
+    keybind::<crate::key::Find>("End Find"),
+    none(&["Enter"], "Select Matching Files"),
 ];
 
 pub static REPLACE_MATCHES: &[Keybinding] = &[
