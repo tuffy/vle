@@ -911,7 +911,7 @@ impl<S: ChooserSource> FileChooserState<S> {
         }
     }
 
-    pub fn toggle_search(&mut self) {
+    pub fn toggle_search(&mut self, last_search: &LastSearch) {
         match &mut self.mode {
             Mode::Default => {
                 self.mode = Mode::Search {
@@ -927,8 +927,14 @@ impl<S: ChooserSource> FileChooserState<S> {
                     selected: std::mem::take(selected),
                 };
             }
-            Mode::Search { .. } => {
-                self.mode = Mode::Default;
+            Mode::Search { search, type_, .. } => {
+                if search.is_empty()
+                    && let Some(last) = &last_search[*type_]
+                {
+                    *search = last.clone();
+                } else {
+                    search.reset();
+                }
             }
             Mode::New(_) => { /* creating new file, so do nothing */ }
         }

@@ -2191,7 +2191,7 @@ fn process_open_file<S: ChooserSource>(
             None
         }
         keybind!(Find) => {
-            chooser.toggle_search();
+            chooser.toggle_search(last_search);
             None
         }
         _ => None, // ignore other events
