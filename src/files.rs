@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::buffer::{CaseInsensitiveNormalizations, SearchTerm, Source};
-use crate::editor::{DirTarget, RemoteError, SearchType};
+use crate::editor::{DirTarget, LastSearch, RemoteError, SearchType};
 use crate::prompt::TextField;
 use ratatui::widgets::StatefulWidget;
 use std::collections::BTreeMap;
@@ -934,7 +934,7 @@ impl<S: ChooserSource> FileChooserState<S> {
         }
     }
 
-    pub fn select(&mut self) -> Option<Vec<Source>> {
+    pub fn select(&mut self, last_search: &mut LastSearch) -> Option<Vec<Source>> {
         use crate::buffer::Normalizations;
 
         fn strip_cwd(cwd: &Path, path: &Path) -> PathBuf {
@@ -1038,6 +1038,7 @@ impl<S: ChooserSource> FileChooserState<S> {
                 self.mode = if selected.is_empty() {
                     Mode::Default
                 } else {
+                    last_search[type_] = Some(search);
                     Mode::Selected(selected)
                 };
 

@@ -323,7 +323,7 @@ macro_rules! key {
 }
 
 #[derive(Default)]
-struct LastSearch {
+pub struct LastSearch {
     plain: Option<TextField>,
     regex: Option<TextField>,
 }
@@ -862,9 +862,13 @@ impl Editor {
                     }
                 }
                 EditorMode::Open { chooser } => {
-                    if let Some(new_mode) =
-                        process_open_file(&mut self.layout, chooser, &mut self.open_dir, event)
-                    {
+                    if let Some(new_mode) = process_open_file(
+                        &mut self.layout,
+                        chooser,
+                        &mut self.open_dir,
+                        &mut self.last_search,
+                        event,
+                    ) {
                         self.mode = new_mode;
                     }
                 }
@@ -2065,6 +2069,7 @@ fn process_open_file<S: ChooserSource>(
     layout: &mut Layout,
     chooser: &mut FileChooserState<S>,
     open_dir: &mut OpenDir,
+    last_search: &mut LastSearch,
     event: Event,
 ) -> Option<EditorMode> {
     use crossterm::event::{
@@ -2142,7 +2147,7 @@ fn process_open_file<S: ChooserSource>(
             None
         }
         key!(Enter) => {
-            for selected in chooser.select()? {
+            for selected in chooser.select(last_search)? {
                 if let Err(()) = layout.add(selected) {
                     open_dir[chooser.target()] = Some(chooser.selected_dir().to_path_buf());
                     open_dir.last = Some(chooser.target());
