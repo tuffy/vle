@@ -282,6 +282,13 @@ impl Source {
                 .any(|l| term.match_ranges(l).next().is_some()),
         }
     }
+
+    pub fn contains_multiline<S: SearchTerm>(&self, term: S) -> bool {
+        match self.read_data() {
+            Ok((_, rope, _)) => term.match_ranges(&String::from(rope)).next().is_some(),
+            Err(_) => false,
+        }
+    }
 }
 
 mod private {

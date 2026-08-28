@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::buffer::{CaseInsensitiveNormalizations, SearchTerm, Source};
-use crate::editor::{DirTarget, LastSearch, RemoteError, SearchType};
+use crate::editor::{DirTarget, LastSearch, PasteContents, RemoteError, SearchType};
 use crate::prompt::TextField;
 use ratatui::widgets::StatefulWidget;
 use std::collections::BTreeMap;
@@ -1089,6 +1089,59 @@ impl<S: ChooserSource> FileChooserState<S> {
             open_dir[target].clone(),
         )?;
         Ok(())
+    }
+
+    pub fn paste(&mut self, f: impl FnOnce() -> Option<PasteContents>) {
+        fn append_matches<S: ChooserSource, T: SearchTerm>(
+            source: &mut S,
+            contents: &[Entry],
+            term: T,
+            matches: &mut BTreeMap<PathBuf, ()>,
+        ) {
+            matches.extend(contents.iter().filter_map(|e| {
+                source
+                    .open(e.path.clone())
+                    .contains_multiline(&term)
+                    .then_some((e.path.clone(), ()))
+            }));
+        }
+
+        match &mut self.mode {
+            Mode::Default | Mode::Selected(_) => { /* do nothing */ }
+            Mode::New(filename) => {
+                // don't attempt to stick multiline pastes
+                // into the filename prompt
+                if let Some(PasteContents::SingleLine(text)) = f() {
+                    filename.paste(&text);
+                }
+            }
+            Mode::Search {
+                search, selected, ..
+            } => match f() {
+                Some(PasteContents::SingleLine(text)) => {
+                    search.paste(&text);
+                }
+                Some(PasteContents::MultiLine(text)) => {
+                    append_matches(&mut self.source, &self.contents, text, selected);
+
+                    self.mode = if selected.is_empty() {
+                        Mode::Default
+                    } else {
+                        Mode::Selected(std::mem::take(selected))
+                    };
+                }
+                Some(PasteContents::MultiLineNormalized(normalizations)) => {
+                    append_matches(&mut self.source, &self.contents, normalizations, selected);
+
+                    self.mode = if selected.is_empty() {
+                        Mode::Default
+                    } else {
+                        Mode::Selected(std::mem::take(selected))
+                    };
+                }
+                None => { /* nothing to paste */ }
+            },
+        }
     }
 }
 

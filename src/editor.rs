@@ -13,8 +13,8 @@ use crate::key;
 use crate::{
     buffer::{
         AltCursor, BufferContext, BufferDeleted, BufferId, BufferList, BufferMessage, CutBuffer,
-        EditorCutBuffer, MultiBuffer, MultiCursor, Searchable, SelectionRange, Source,
-        ToggledBookmarks,
+        EditorCutBuffer, MultiBuffer, MultiCursor, Normalizations, Searchable, SelectionRange,
+        Source, ToggledBookmarks,
     },
     files::{ChooserSource, FileChooserState},
     key::{Binding, CtrlBinding},
@@ -866,6 +866,7 @@ impl Editor {
                         &mut self.layout,
                         chooser,
                         &mut self.open_dir,
+                        self.cut_buffer.as_mut(),
                         &mut self.last_search,
                         event,
                     ) {
@@ -2069,6 +2070,7 @@ fn process_open_file<S: ChooserSource>(
     layout: &mut Layout,
     chooser: &mut FileChooserState<S>,
     open_dir: &mut OpenDir,
+    cut_buffer: Option<&mut EditorCutBuffer>,
     last_search: &mut LastSearch,
     event: Event,
 ) -> Option<EditorMode> {
@@ -2169,12 +2171,37 @@ fn process_open_file<S: ChooserSource>(
             }
             None
         }
+        ctrl_keybind!(Paste) => {
+            chooser.paste(|| {
+                let c = cut_buffer?;
+                let b = c.paste_and_rotate();
+                Some(if b.multi_line() {
+                    match Normalizations::try_from(b.as_str().to_string()) {
+                        Err(term) => PasteContents::MultiLine(term),
+                        Ok(normalized) => PasteContents::MultiLineNormalized(normalized),
+                    }
+                } else {
+                    PasteContents::SingleLine(b.as_str().to_string())
+                })
+            });
+            None
+        }
+        Event::Paste(pasted) => {
+            chooser.paste(|| Some(PasteContents::SingleLine(pasted)));
+            None
+        }
         keybind!(Find) => {
             chooser.toggle_search();
             None
         }
         _ => None, // ignore other events
     }
+}
+
+pub enum PasteContents {
+    SingleLine(String),
+    MultiLine(String),
+    MultiLineNormalized(Normalizations),
 }
 
 enum NextModeIncremental<M> {
@@ -2233,7 +2260,7 @@ fn process_search<'s, S: Searchable<'s>>(
                     },
                 }
             } else {
-                prompt.paste(c.paste_and_rotate().as_str());
+                prompt.paste(b.as_str());
                 None
             }
         }
