@@ -330,7 +330,8 @@ pub static CREATE_FILE: &[Keybinding] = &[
 
 pub static FIND_IN_FILES: &[Keybinding] = &[
     none(&["Tab"], "Toggle Search Type"),
-    keybind::<crate::key::Find>("End Find"),
+    ctrl(&["V"], "Paste From Cut Buffer"),
+    keybind::<crate::key::Find>("Redo Last Find"),
     none(&["Enter"], "Select Matching Files"),
 ];
 
