@@ -6340,23 +6340,36 @@ impl StatefulWidget for BufferWidget<'_> {
                     buf,
                     prompt,
                     |s| s,
-                    |b| {
-                        let title_top = if matches!(&self.mode, Some(EditorMode::SearchAll { .. }))
-                        {
-                            format!("{type_} All")
-                        } else {
-                            type_.to_string()
-                        };
-                        match state
-                            .message
-                            .take_if(|m| matches!(m, BufferMessage::Error(_)))
-                        {
-                            Some(BufferMessage::Error(err)) => b
-                                .title_top(title_top)
-                                .title_bottom(Line::from(err.to_string()).centered())
-                                .border_style(Style::default().fg(Color::Red)),
-                            _ => b.title_top(title_top),
-                        }
+                    |b| match state
+                        .message
+                        .take_if(|m| matches!(m, BufferMessage::Error(_)))
+                    {
+                        Some(BufferMessage::Error(err)) => b
+                            .title_top(
+                                Line::from(
+                                    if matches!(&self.mode, Some(EditorMode::SearchAll { .. })) {
+                                        "Find All"
+                                    } else {
+                                        "Find"
+                                    },
+                                )
+                                .left_aligned(),
+                            )
+                            .title_top(Line::from(type_.to_string()).right_aligned())
+                            .title_bottom(Line::from(err.to_string()).centered())
+                            .border_style(Style::default().fg(Color::Red)),
+                        _ => b
+                            .title_top(
+                                Line::from(
+                                    if matches!(&self.mode, Some(EditorMode::SearchAll { .. })) {
+                                        "Find All"
+                                    } else {
+                                        "Find"
+                                    },
+                                )
+                                .left_aligned(),
+                            )
+                            .title_top(Line::from(type_.to_string()).right_aligned()),
                     },
                 );
             }
@@ -6416,23 +6429,36 @@ impl StatefulWidget for BufferWidget<'_> {
                         // output remainder verbatim
                         spans
                     },
-                    |b| {
-                        let title_top = if matches!(&self.mode, Some(EditorMode::SearchAll { .. }))
-                        {
-                            format!("{type_} All")
-                        } else {
-                            type_.to_string()
-                        };
-                        match state
-                            .message
-                            .take_if(|m| matches!(m, BufferMessage::Error(_)))
-                        {
-                            Some(BufferMessage::Error(err)) => b
-                                .title_top(title_top)
-                                .title_bottom(Line::from(err.to_string()).centered())
-                                .border_style(Style::default().fg(Color::Red)),
-                            _ => b.title_top(title_top),
-                        }
+                    |b| match state
+                        .message
+                        .take_if(|m| matches!(m, BufferMessage::Error(_)))
+                    {
+                        Some(BufferMessage::Error(err)) => b
+                            .title_top(
+                                Line::from(
+                                    if matches!(&self.mode, Some(EditorMode::SearchAll { .. })) {
+                                        "Find All"
+                                    } else {
+                                        "Find"
+                                    },
+                                )
+                                .left_aligned(),
+                            )
+                            .title_top(Line::from(type_.to_string()).right_aligned())
+                            .title_bottom(Line::from(err.to_string()).centered())
+                            .border_style(Style::default().fg(Color::Red)),
+                        _ => b
+                            .title_top(
+                                Line::from(
+                                    if matches!(&self.mode, Some(EditorMode::SearchAll { .. })) {
+                                        "Find All"
+                                    } else {
+                                        "Find"
+                                    },
+                                )
+                                .left_aligned(),
+                            )
+                            .title_top(Line::from(type_.to_string()).right_aligned()),
                     },
                 );
             }

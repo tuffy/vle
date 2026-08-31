@@ -611,7 +611,8 @@ impl<S: ChooserSource> StatefulWidget for FileChooser<S> {
             .block(
                 Block::bordered()
                     .border_type(BorderType::Rounded)
-                    .title_top(type_.to_string()),
+                    .title_top(Line::from("Select Files Containing").left_aligned())
+                    .title_top(Line::from(type_.to_string()).right_aligned()),
             )
             .render(dialog_area, buf);
         }

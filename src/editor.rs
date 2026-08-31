@@ -243,9 +243,9 @@ impl SearchType {
 impl std::fmt::Display for SearchType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::CaseSensitive => "Find".fmt(f),
-            Self::CaseInsensitive => "Find Case Insensitive".fmt(f),
-            Self::Regex => "Find Regex".fmt(f),
+            Self::CaseSensitive => "Case Sensitive".fmt(f),
+            Self::CaseInsensitive => "Case Insensitive".fmt(f),
+            Self::Regex => "Regex".fmt(f),
         }
     }
 }
