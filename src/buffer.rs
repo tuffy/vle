@@ -1148,6 +1148,16 @@ impl BufferContext {
         self.buffer.borrow().modified()
     }
 
+    pub fn syntax(&self) -> String {
+        self.buffer.borrow().syntax.to_string()
+    }
+
+    pub fn set_syntax(&mut self, syntax: Box<dyn Syntax>) {
+        let mut buffer = self.buffer.borrow_mut();
+        buffer.tabs_required = *ALWAYS_TAB || syntax.tabs_required();
+        buffer.syntax = syntax;
+    }
+
     pub fn open(source: Source) -> std::io::Result<Self> {
         Buffer::open(source).map(|b| b.into())
     }
@@ -5038,8 +5048,8 @@ impl StatefulWidget for BufferWidget<'_> {
         use crate::editor::{SearchType, SingleBufferRange};
         use crate::help::{
             CONFIRM_CLOSE, MARK_SET, MULTICURSOR_MARK_SET, PASTE_GROUP, REPLACE_MATCHES,
-            SELECT_BUFFER, SELECT_INSIDE, SELECT_LINE, SELECT_LINE_BOOKMARKED, SPLIT_PANE,
-            VERIFY_RELOAD, VERIFY_SAVE, render_help,
+            SELECT_BUFFER, SELECT_INSIDE, SELECT_LINE, SELECT_LINE_BOOKMARKED, SELECT_SYNTAX,
+            SPLIT_PANE, VERIFY_RELOAD, VERIFY_SAVE, render_help,
         };
         use crate::prompt::TextField;
         use crate::scrollbar::{Scrollbar, ScrollbarState};
@@ -6250,6 +6260,7 @@ impl StatefulWidget for BufferWidget<'_> {
                     help.extend(
                         multiple_buffers.then_some(ctrl(&["]", "PgUp", "PgDn"], "Switch Buffer")),
                     );
+                    help.push(ctrl(&["\\"], "Switch Syntax"));
 
                     crate::help::render_main_help(text_area, buf, &help, |b| {
                         b.title_top("Keybindings").title_bottom(
@@ -6609,6 +6620,7 @@ impl StatefulWidget for BufferWidget<'_> {
                 let mut state = ratatui::widgets::TableState::default().with_selected(Some(*index));
 
                 render_list(
+                    "Buffer",
                     text_area,
                     buf,
                     table,
@@ -6617,6 +6629,45 @@ impl StatefulWidget for BufferWidget<'_> {
                     table_width,
                 );
                 show_sub_help(text_area, buf, SELECT_BUFFER);
+            }
+            Some(EditorMode::SelectSyntax { syntaxes, index }) => {
+                use ratatui::{layout::Constraint, widgets::Row};
+
+                let table_rows = syntaxes.len() as u16;
+                let mut table_width = None;
+                let rows = syntaxes
+                    .iter()
+                    .map(|s| s.to_string())
+                    .inspect(|s| match &mut table_width {
+                        w @ None => {
+                            *w = Some(s.len());
+                        }
+                        Some(w) => {
+                            *w = s.len().max(*w);
+                        }
+                    })
+                    .map(|s| Row::new([s]))
+                    .collect::<Vec<_>>();
+
+                if let Some(table_width) = table_width.and_then(|w| w.try_into().ok()) {
+                    // all syntax names should be ASCII
+
+                    let table =
+                        ratatui::widgets::Table::new(rows, vec![Constraint::Max(table_width)]);
+                    let mut state =
+                        ratatui::widgets::TableState::default().with_selected(Some(*index));
+
+                    render_list(
+                        "Syntax",
+                        text_area,
+                        buf,
+                        table,
+                        &mut state,
+                        table_rows,
+                        table_width,
+                    );
+                    show_sub_help(text_area, buf, SELECT_SYNTAX);
+                }
             }
         }
 
@@ -6699,6 +6750,7 @@ fn render_pane_index(area: Rect, buf: &mut ratatui::buffer::Buffer, index: char)
 }
 
 pub fn render_list(
+    title: &str,
     area: Rect,
     buf: &mut ratatui::buffer::Buffer,
     table: ratatui::widgets::Table,
@@ -6725,7 +6777,7 @@ pub fn render_list(
         table.row_highlight_style(Style::new().reversed()).block(
             Block::bordered()
                 .border_type(BorderType::Rounded)
-                .title_top(Line::from("Buffer").centered()),
+                .title_top(Line::from(title).centered()),
         ),
         dialog_area,
         buf,

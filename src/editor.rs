@@ -19,6 +19,7 @@ use crate::{
     files::{ChooserSource, FileChooserState},
     key::{Binding, CtrlBinding},
     prompt::{LinePrompt, TextField},
+    syntax::Syntax,
 };
 use crossterm::event::Event;
 use ratatui::{
@@ -117,6 +118,10 @@ pub enum EditorMode {
     SelectBuffer {
         buffer_list: Vec<BufferListItem>, // buffers
         index: usize,                     // buffer index to select
+    },
+    SelectSyntax {
+        syntaxes: Vec<Box<dyn Syntax>>, // available syntaxes
+        index: usize,                   // selected syntax index
     },
 }
 
@@ -1218,6 +1223,14 @@ impl Editor {
                         None => { /* do nothing */ }
                     }
                 }
+                EditorMode::SelectSyntax { syntaxes, index } => {
+                    if let Some(syntax) = process_select_syntax(syntaxes, index, event)
+                        && let Some(ctx) = self.layout.selected_buffer_list_mut().current_mut()
+                    {
+                        ctx.set_syntax(syntax);
+                        self.mode = EditorMode::default();
+                    }
+                }
             },
         }
     }
@@ -1563,6 +1576,24 @@ impl Editor {
                 let index = buffer_list.current_index();
                 let buffer_list = buffer_list.buffers().map(BufferListItem::new).collect();
                 self.mode = EditorMode::SelectBuffer { buffer_list, index };
+            }
+            key!(CONTROL, '4') => {
+                if let Some(ctx) = self.layout.selected_buffer_list().current() {
+                    let current_syntax = ctx.syntax();
+
+                    let mut syntaxes = crate::syntax::selectable().collect::<Vec<_>>();
+                    syntaxes.sort_unstable_by_key(|s| s.to_string());
+                    self.mode = EditorMode::SelectSyntax {
+                        index: syntaxes
+                            .binary_search_by_key(&current_syntax, |s| s.to_string())
+                            .or_else(|_| {
+                                syntaxes
+                                    .binary_search_by_key(&"Plain".to_string(), |s| s.to_string())
+                            })
+                            .unwrap_or(0),
+                        syntaxes,
+                    };
+                }
             }
             Event::Mouse(MouseEvent {
                 kind: MouseEventKind::ScrollDown,
@@ -2202,6 +2233,56 @@ pub enum PasteContents {
     SingleLine(String),
     MultiLine(String),
     MultiLineNormalized(Normalizations),
+}
+
+fn process_select_syntax(
+    syntaxes: &mut Vec<Box<dyn Syntax>>,
+    index: &mut usize,
+    event: Event,
+) -> Option<Box<dyn Syntax>> {
+    use crossterm::event::{
+        KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
+    };
+
+    match event {
+        key!(Up)
+        | Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            ..
+        }) => match index.checked_sub(1) {
+            Some(new_index) => {
+                *index = new_index;
+                None
+            }
+            None => {
+                if let Some(new_index) = syntaxes.len().checked_sub(1) {
+                    *index = new_index;
+                }
+                None
+            }
+        },
+        key!(Down)
+        | Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            ..
+        }) => {
+            *index = (*index + 1) % syntaxes.len();
+            None
+        }
+        key!(Home) => {
+            *index = 0;
+            None
+        }
+        key!(End) => {
+            if let Some(max) = syntaxes.len().checked_sub(1) {
+                *index = max;
+            }
+            None
+        }
+        // this could be replaced with try_remove, whenever that stabilizes
+        key!(Enter) => (*index < syntaxes.len()).then(|| syntaxes.remove(*index)),
+        _ => None, // ignore other events
+    }
 }
 
 enum NextModeIncremental<M> {

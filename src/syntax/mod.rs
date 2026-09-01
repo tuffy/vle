@@ -338,6 +338,46 @@ pub fn syntax(source: &Source) -> Box<dyn Syntax> {
     }
 }
 
+/// Iterates over all selectable syntax types in no particular order
+pub fn selectable() -> impl Iterator<Item = Box<dyn Syntax>> {
+    // Syntax types like the tutorial and test are deliberately omitted
+    // since those aren't intended to live on disk anywhere.
+    [
+        Box::new(DefaultSyntax) as Box<dyn Syntax>,
+        Box::new(c::C),
+        Box::new(cpp::Cpp),
+        Box::new(css::Css),
+        Box::new(csv::Csv),
+        Box::new(cue::Cuesheet),
+        Box::new(fish::Fish),
+        Box::new(go::Go),
+        Box::new(html::Html),
+        Box::new(ini::Ini),
+        Box::new(java::Java),
+        Box::new(js::JavaScript),
+        Box::new(json::Json),
+        Box::new(makefile::Makefile),
+        Box::new(markdown::Markdown),
+        Box::new(patch::Patch),
+        Box::new(perl::Perl),
+        Box::new(php::Php),
+        Box::new(python::Python),
+        Box::new(ron::Ron),
+        Box::new(rust::Rust),
+        Box::new(sh::Shell),
+        Box::new(sql::Sql),
+        Box::new(swift::Swift),
+        Box::new(tex::Tex),
+        Box::new(todo::Todo),
+        Box::new(toml::Toml),
+        Box::new(ts::TypeScript),
+        Box::new(xml::Xml),
+        Box::new(yaml::Yaml),
+        Box::new(zig::Zig),
+    ]
+    .into_iter()
+}
+
 #[macro_export]
 macro_rules! define_syntax {
     ($syntax:ty, $token:ty) => {

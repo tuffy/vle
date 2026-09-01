@@ -382,3 +382,8 @@ pub static SELECT_BUFFER: &[Keybinding] = &[
     keybind::<key::Reload>("Reload All Buffers"),
     keybind::<key::Quit>("Quit All Buffers"),
 ];
+
+pub static SELECT_SYNTAX: &[Keybinding] = &[
+    none(&[UP, DOWN], "Choose Syntax"),
+    none(&["Enter"], "Select Chosen Syntax"),
+];
