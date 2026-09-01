@@ -157,6 +157,7 @@ impl Syntax for Php {
         #[logos(skip r"[ \t\n]+")]
         enum PhpInit {
             #[token("<?php")]
+            #[token("<?PHP")]
             PhpStart,
             #[token("?>")]
             PhpEnd,
@@ -307,6 +308,7 @@ enum HtmlCommentEnd {
     #[token("-->")]
     EndComment,
     #[token("<?php")]
+    #[token("<?PHP")]
     EndHtml,
 }
 

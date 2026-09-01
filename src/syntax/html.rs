@@ -31,6 +31,7 @@ pub enum HtmlToken {
     #[token("-->")]
     EndComment,
     #[token("<?php")]
+    #[token("<?PHP")]
     PhpStart,
 }
 
