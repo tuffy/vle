@@ -1058,7 +1058,7 @@ impl<S: ChooserSource> FileChooserState<S> {
         match &self.mode {
             Mode::Default => (area.x + 1, area.y + 1),
             Mode::New(filename) => (
-                (area.x + filename.cursor_column() as u16).min(TEXT_WIDTH) + 1,
+                (area.x + (filename.cursor_column() as u16).min(TEXT_WIDTH)) + 1,
                 area.y + 1,
             ),
             Mode::Selected(_) => (area.x + 1, area.y + 1),
