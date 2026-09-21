@@ -332,7 +332,7 @@ mod private {
         pub fn get_mut(&mut self) -> RopeHandle<'_> {
             RopeHandle {
                 rope: &mut self.rope,
-                saved: &mut self.saved,
+                saved: &self.saved,
                 modified: &mut self.modified,
             }
         }
@@ -350,7 +350,7 @@ mod private {
     /// A handle to guarantee the "modified buffer" flag is calculated correctly
     pub struct RopeHandle<'r> {
         rope: &'r mut ropey::Rope,
-        saved: &'r mut ropey::Rope,
+        saved: &'r ropey::Rope,
         modified: &'r mut bool,
     }
 
