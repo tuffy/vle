@@ -100,6 +100,7 @@ impl From<Highlight> for ratatui::style::Style {
 }
 
 pub trait Highlighter {
+    /// Yields byte ranges to highlight and how to highlight them
     fn highlight<'s>(
         &'s mut self,
         line: &'s str,
@@ -128,6 +129,7 @@ type Underliner = for<'s> fn(&'s str) -> Box<dyn Iterator<Item = std::ops::Range
 
 /// Implemented for different syntax highlighters
 pub trait Syntax: std::fmt::Debug + std::fmt::Display {
+    /// Initialize for a buffer window
     fn initialize(
         &self,
         rope: &ropey::Rope,
@@ -135,6 +137,7 @@ pub trait Syntax: std::fmt::Debug + std::fmt::Display {
         viewport_height: u16,
     ) -> Box<dyn Highlighter>;
 
+    /// Initialize for a text find box
     fn initialize_find(&self) -> Box<dyn Highlighter>;
 
     /// Returns true if the format requires actual tabs instead of spaces
@@ -240,14 +243,18 @@ where
         match self {
             Self::Plain(lexer) => {
                 let token = lexer.next()?;
-                let pair = (token, lexer.span());
-                if let (Ok(token), _) = &pair
-                    && token.is_comment_start()
-                {
-                    *self =
-                        EitherLexer::Commenting(std::mem::replace(lexer, Lexer::new("")).morph());
+                let span = lexer.span();
+                match token {
+                    Ok(token) => {
+                        if token.is_comment_start() {
+                            *self = EitherLexer::Commenting(
+                                std::mem::replace(lexer, Lexer::new("")).morph(),
+                            );
+                        }
+                        Some(((Ok(token)), span))
+                    }
+                    Err(err) => Some((Err(err), span)),
                 }
-                Some(pair)
             }
             Self::Commenting(lexer) => {
                 let token = lexer.next()?;

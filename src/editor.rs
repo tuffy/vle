@@ -1800,7 +1800,13 @@ impl Editor {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
         match event {
-            key!('y') => {
+            // key!('y') =>
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('y' | 'Y'),
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 // reload buffer anyway
                 self.update_buffer_at(|b, a| match b.reload(a) {
                     Ok(()) => {
