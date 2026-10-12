@@ -1089,6 +1089,7 @@ pub struct Help {
     multiple_panes: bool,
 }
 
+/// Use a macro to handle a complex multi-borrow
 macro_rules! borrow_update {
     ($self:ident, $alt:ident) => {
         $self.buffer.borrow_update(
@@ -1104,6 +1105,7 @@ macro_rules! borrow_update {
     };
 }
 
+/// Use a macro to handle a complex multi-borrow
 macro_rules! borrow_multi_update {
     ($self:ident, $alt:ident, $matches:ident) => {
         $self.buffer.borrow_multi_update(
@@ -1316,6 +1318,86 @@ impl BufferContext {
         );
 
         self.selection = None;
+    }
+
+    fn set_cursor_selection(&mut self, area: Rect, position: Position) {
+        use ratatui::{
+            layout::{
+                Constraint::{Length, Min},
+                Layout,
+            },
+            widgets::Block,
+        };
+
+        // rebuild layout from BufferWidget
+        let [text_area, _] =
+            Layout::horizontal([Min(0), Length(1)]).areas(Block::bordered().inner(area));
+
+        if !text_area.contains(position) {
+            return;
+        }
+
+        let buffer = self.buffer.borrow();
+        let rope = &buffer.rope;
+        let row = position.y.saturating_sub(text_area.y);
+        let col = position.x.saturating_sub(text_area.x);
+
+        let current_line = rope.try_char_to_line(self.cursor).ok();
+        let viewport_height: usize = text_area.height.into();
+
+        let (viewport_line, top_margin): (usize, usize) = current_line
+            .map(|line| match line.checked_sub(viewport_height / 2) {
+                Some(start) => (start, 0),
+                None => (0, viewport_height / 2 - line),
+            })
+            .unwrap_or_default();
+
+        let line = viewport_line + usize::from(row).saturating_sub(top_margin);
+
+        let starting_col = self
+            .cursor_position()
+            .map(|(_, col)| {
+                col.saturating_sub(
+                    text_area
+                        .width
+                        .saturating_sub(BufferWidget::RIGHT_MARGIN)
+                        .into(),
+                ) as u16
+            })
+            .unwrap_or(0);
+
+        // the column we're aiming for, in onscreen characters
+        let mut desired_col: usize = (starting_col + col).into();
+
+        let col_chars = rope
+            .try_line_to_char(line)
+            .map(|line_start| {
+                rope.chars_at(line_start)
+                    .take_while(|c| {
+                        use unicode_width::UnicodeWidthChar;
+
+                        desired_col = match desired_col.checked_sub(match c {
+                            '\t' => *SPACES_PER_TAB,
+                            c => c.width().unwrap_or(0),
+                        }) {
+                            Some(col) => col,
+                            None => return false,
+                        };
+                        true
+                    })
+                    .count()
+            })
+            .unwrap_or(0);
+
+        // ensure cursor doesn't walk past desired line
+        self.selection = Some(
+            (rope.try_line_to_char(line).unwrap_or(rope.len_chars()) + col_chars).min(
+                rope.try_line_to_char(line + 1)
+                    .unwrap_or(rope.len_chars())
+                    .saturating_sub(1),
+            ),
+        )
+        .filter(|s| *s != self.cursor);
     }
 
     pub fn cursor_up(&mut self, lines: usize, selecting: bool) {
@@ -4704,6 +4786,12 @@ impl BufferList {
     pub fn set_cursor_focus(&mut self, area: Rect, position: Position) {
         if let Some(buf) = self.current_mut() {
             buf.set_cursor_focus(area, position);
+        }
+    }
+
+    pub fn set_cursor_selection(&mut self, area: Rect, position: Position) {
+        if let Some(buf) = self.current_mut() {
+            buf.set_cursor_selection(area, position);
         }
     }
 

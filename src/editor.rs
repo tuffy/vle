@@ -1663,6 +1663,15 @@ impl Editor {
                     b.paste(a, &mut self.cut_buffer);
                 });
             }
+            Event::Mouse(MouseEvent {
+                kind: MouseEventKind::Drag(MouseButton::Left),
+                column,
+                row,
+                ..
+            }) => {
+                self.layout
+                    .set_cursor_selection(area, Position { y: row, x: column });
+            }
             _ => { /* ignore other events */ }
         }
     }
@@ -4087,6 +4096,83 @@ impl Layout {
                 } else if right_area.contains(position) {
                     *active = VerticalPos::Right;
                     right.set_cursor_focus_inner(right_area, position);
+                }
+            }
+        }
+    }
+
+    /// Leaves cursor's position as-is and updates selection position
+    fn set_cursor_selection(&mut self, mut area: Rect, position: Position) {
+        use ratatui::layout::{
+            Constraint::{Length, Min},
+            Layout,
+        };
+
+        if self.selected_buffer_list().tabs().is_some() {
+            let [tabs_area, layout_area] = Layout::vertical([Length(1), Min(0)]).areas(area);
+            area = if tabs_area.contains(position) {
+                return;
+            } else {
+                layout_area
+            };
+        }
+
+        self.set_cursor_selection_inner(area, position);
+    }
+
+    /// set_cursor_selection, but with tabs already accounted for
+    fn set_cursor_selection_inner(&mut self, area: Rect, position: Position) {
+        use ratatui::layout::{Constraint, Layout};
+
+        match self {
+            Self::Single(buffer) => {
+                buffer.set_cursor_selection(area, position);
+            }
+            Self::Horizontal {
+                top,
+                bottom,
+                active,
+                top_fill,
+                bottom_fill,
+            } => {
+                let [top_area, bottom_area] =
+                    Layout::vertical(Constraint::from_fills([*top_fill, *bottom_fill])).areas(area);
+
+                match active {
+                    HorizontalPos::Top => {
+                        if top_area.contains(position) {
+                            top.set_cursor_selection_inner(top_area, position);
+                        }
+                    }
+                    HorizontalPos::Bottom => {
+                        if bottom_area.contains(position) {
+                            bottom.set_cursor_selection_inner(bottom_area, position);
+                        }
+                    }
+                }
+            }
+            Self::Vertical {
+                left,
+                right,
+                active,
+                left_fill,
+                right_fill,
+            } => {
+                let [left_area, right_area] =
+                    Layout::horizontal(Constraint::from_fills([*left_fill, *right_fill]))
+                        .areas(area);
+
+                match active {
+                    VerticalPos::Left => {
+                        if left_area.contains(position) {
+                            left.set_cursor_selection_inner(left_area, position);
+                        }
+                    }
+                    VerticalPos::Right => {
+                        if right_area.contains(position) {
+                            right.set_cursor_selection_inner(right_area, position);
+                        }
+                    }
                 }
             }
         }
