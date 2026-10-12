@@ -657,7 +657,7 @@ impl Editor {
             event => match &mut self.mode {
                 EditorMode::Editing => self.process_normal_event(area, event),
                 EditorMode::MarkSet => {
-                    if let Some(event) = self.process_mark_set_event(event) {
+                    if let Some(event) = self.process_mark_set_event(area, event) {
                         // end mark set
                         self.mode = EditorMode::default();
                         self.process_normal_event(area, event);
@@ -1630,7 +1630,7 @@ impl Editor {
                 ..
             }) => {
                 self.layout
-                    .set_cursor_focus(area, Position { y: row, x: column });
+                    .set_cursor_focus(area, Position { y: row, x: column }, false);
                 if let Some(buf) = self.layout.selected_buffer_list().current() {
                     set_title(buf);
                 }
@@ -1642,7 +1642,7 @@ impl Editor {
                 ..
             }) => {
                 self.layout
-                    .set_cursor_focus(area, Position { y: row, x: column });
+                    .set_cursor_focus(area, Position { y: row, x: column }, false);
                 if let Some(buf) = self.layout.selected_buffer_list().current() {
                     set_title(buf);
                 }
@@ -1655,7 +1655,7 @@ impl Editor {
                 ..
             }) => {
                 self.layout
-                    .set_cursor_focus(area, Position { y: row, x: column });
+                    .set_cursor_focus(area, Position { y: row, x: column }, false);
                 if let Some(buf) = self.layout.selected_buffer_list().current() {
                     set_title(buf);
                 }
@@ -1676,9 +1676,10 @@ impl Editor {
         }
     }
 
-    pub fn process_mark_set_event(&mut self, event: Event) -> Option<Event> {
+    pub fn process_mark_set_event(&mut self, area: Rect, event: Event) -> Option<Event> {
         use crossterm::event::{
-            Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
+            Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent,
+            MouseEventKind,
         };
 
         match event {
@@ -1767,6 +1768,23 @@ impl Editor {
             }) => {
                 self.update_buffer(|b| b.cursor_end(true));
                 None
+            }
+            Event::Mouse(MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column,
+                row,
+                ..
+            }) => {
+                let position = Position { y: row, x: column };
+                if self.layout.is_active_area(area, position) {
+                    self.layout.set_cursor_focus(area, position, true);
+                    if let Some(buf) = self.layout.selected_buffer_list().current() {
+                        set_title(buf);
+                    }
+                    None
+                } else {
+                    Some(event)
+                }
             }
             ctrl_keybind!(Mark) => {
                 self.mode = EditorMode::default();
@@ -4033,7 +4051,7 @@ impl Layout {
     ///
     /// Given an onscreen row and column, sets focus somewhere
     /// in the editor if possible.
-    fn set_cursor_focus(&mut self, mut area: Rect, position: Position) {
+    fn set_cursor_focus(&mut self, mut area: Rect, position: Position, selecting: bool) {
         use ratatui::layout::{
             Constraint::{Length, Min},
             Layout,
@@ -4062,16 +4080,16 @@ impl Layout {
             area = layout_area;
         }
 
-        self.set_cursor_focus_inner(area, position);
+        self.set_cursor_focus_inner(area, position, selecting);
     }
 
     /// set_cursor_focus, but with tabs already accounted for
-    fn set_cursor_focus_inner(&mut self, area: Rect, position: Position) {
+    fn set_cursor_focus_inner(&mut self, area: Rect, position: Position, selecting: bool) {
         use ratatui::layout::{Constraint, Layout};
 
         match self {
             Self::Single(buffer) => {
-                buffer.set_cursor_focus(area, position);
+                buffer.set_cursor_focus(area, position, selecting);
             }
             Self::Horizontal {
                 top,
@@ -4085,10 +4103,10 @@ impl Layout {
 
                 if top_area.contains(position) {
                     *active = HorizontalPos::Top;
-                    top.set_cursor_focus_inner(top_area, position);
+                    top.set_cursor_focus_inner(top_area, position, selecting);
                 } else if bottom_area.contains(position) {
                     *active = HorizontalPos::Bottom;
-                    bottom.set_cursor_focus_inner(bottom_area, position);
+                    bottom.set_cursor_focus_inner(bottom_area, position, selecting);
                 }
             }
             Self::Vertical {
@@ -4104,10 +4122,105 @@ impl Layout {
 
                 if left_area.contains(position) {
                     *active = VerticalPos::Left;
-                    left.set_cursor_focus_inner(left_area, position);
+                    left.set_cursor_focus_inner(left_area, position, selecting);
                 } else if right_area.contains(position) {
                     *active = VerticalPos::Right;
-                    right.set_cursor_focus_inner(right_area, position);
+                    right.set_cursor_focus_inner(right_area, position, selecting);
+                }
+            }
+        }
+    }
+
+    /// Returns true if position is within the currently active pane
+    fn is_active_area(&self, mut area: Rect, position: Position) -> bool {
+        use ratatui::layout::{
+            Constraint::{Length, Min},
+            Layout,
+        };
+
+        if self.selected_buffer_list().tabs().is_some() {
+            let [tabs_area, layout_area] = Layout::vertical([Length(1), Min(0)]).areas(area);
+            area = if tabs_area.contains(position) {
+                return false;
+            } else {
+                layout_area
+            };
+        }
+
+        self.is_active_area_inner(area, position)
+    }
+
+    fn is_active_area_inner(&self, area: Rect, position: Position) -> bool {
+        use ratatui::layout::{Constraint, Layout};
+
+        match self {
+            Self::Single(_) => {
+                use ratatui::{
+                    layout::{
+                        Constraint::{Length, Min},
+                        Layout,
+                    },
+                    widgets::Block,
+                };
+
+                let [text_area, _] =
+                    Layout::horizontal([Min(0), Length(1)]).areas(Block::bordered().inner(area));
+
+                text_area.contains(position)
+            }
+            Self::Horizontal {
+                top,
+                bottom,
+                active,
+                top_fill,
+                bottom_fill,
+            } => {
+                let [top_area, bottom_area] =
+                    Layout::vertical(Constraint::from_fills([*top_fill, *bottom_fill])).areas(area);
+
+                match active {
+                    HorizontalPos::Top => {
+                        if top_area.contains(position) {
+                            top.is_active_area_inner(top_area, position)
+                        } else {
+                            false
+                        }
+                    }
+                    HorizontalPos::Bottom => {
+                        if bottom_area.contains(position) {
+                            bottom.is_active_area_inner(bottom_area, position)
+                        } else {
+                            false
+                        }
+                    }
+                }
+            }
+            Self::Vertical {
+                left,
+                right,
+                active,
+                left_fill,
+                right_fill,
+            } => {
+                let [left_area, right_area] =
+                    Layout::horizontal(Constraint::from_fills([*left_fill, *right_fill]))
+                        .areas(area);
+
+                match active {
+                    VerticalPos::Left => {
+                        if left_area.contains(position) {
+                            left.is_active_area_inner(left_area, position)
+                        } else {
+                            false
+                        }
+                    }
+                    VerticalPos::Right => {
+                        if right_area.contains(position) {
+                            right.is_active_area_inner(right_area, position)
+                        } else {
+                            false
+                        }
+                    }
                 }
             }
         }

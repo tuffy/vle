@@ -1240,7 +1240,7 @@ impl BufferContext {
     ///
     /// Given some mouse-selected position, attempt to place focus
     /// in the document where the cursor should be.
-    fn set_cursor_focus(&mut self, area: Rect, position: Position) {
+    fn set_cursor_focus(&mut self, area: Rect, position: Position, selecting: bool) {
         use ratatui::{
             layout::{
                 Constraint::{Length, Min},
@@ -1310,6 +1310,10 @@ impl BufferContext {
             })
             .unwrap_or(0);
 
+        if selecting && self.selection.is_none() {
+            self.selection = Some(self.cursor);
+        }
+
         // ensure cursor doesn't walk past desired line
         self.cursor = (rope.try_line_to_char(line).unwrap_or(rope.len_chars()) + col_chars).min(
             rope.try_line_to_char(line + 1)
@@ -1317,7 +1321,9 @@ impl BufferContext {
                 .saturating_sub(1),
         );
 
-        self.selection = None;
+        if !selecting {
+            self.selection = None;
+        }
     }
 
     fn set_cursor_selection(&mut self, area: Rect, position: Position) {
@@ -4783,9 +4789,9 @@ impl BufferList {
             .map(|(_, col)| (viewport_height / 2, col))
     }
 
-    pub fn set_cursor_focus(&mut self, area: Rect, position: Position) {
+    pub fn set_cursor_focus(&mut self, area: Rect, position: Position, selecting: bool) {
         if let Some(buf) = self.current_mut() {
-            buf.set_cursor_focus(area, position);
+            buf.set_cursor_focus(area, position, selecting);
         }
     }
 
