@@ -1677,13 +1677,20 @@ impl Editor {
     }
 
     pub fn process_mark_set_event(&mut self, event: Event) -> Option<Event> {
-        use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+        use crossterm::event::{
+            Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
+        };
 
         match event {
             Event::Key(KeyEvent {
                 code: KeyCode::Up,
                 modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
+                ..
+            })
+            | Event::Mouse(MouseEvent {
+                kind: MouseEventKind::ScrollUp,
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
                 ..
             }) => {
                 self.update_buffer(|b| b.cursor_up(1, true));
@@ -1693,6 +1700,11 @@ impl Editor {
                 code: KeyCode::Down,
                 modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
                 kind: KeyEventKind::Press,
+                ..
+            })
+            | Event::Mouse(MouseEvent {
+                kind: MouseEventKind::ScrollDown,
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
                 ..
             }) => {
                 self.update_buffer(|b| b.cursor_down(1, true));
