@@ -20,7 +20,7 @@ pub enum HtmlToken {
     #[token(">")]
     #[token("/>")]
     TagEnd,
-    #[regex("[[:alpha:]][[:alpha:][:digit:]_]*\\s*=\\s*")]
+    #[regex("[[:alpha:]][[:alpha:][:digit:]_-]*\\s*=\\s*")]
     FieldName,
     #[regex(r#"\"[^\"]*\""#)]
     String,
