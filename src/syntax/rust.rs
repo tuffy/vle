@@ -78,7 +78,7 @@ enum RustToken {
     #[regex("[[:lower:]_]+!")]
     Macro,
 
-    #[regex("[[:upper:]][[:alnum:]]+")]
+    #[regex("[[:upper:]][[:alnum:]_]+")]
     #[token("bool")]
     #[token("char")]
     #[token("f32")]
@@ -132,12 +132,12 @@ impl TryFrom<RustToken> for Highlight {
 #[logos(skip r"[ \t\n]+")]
 enum RustDef {
     #[regex("fn [[:lower:]][[:lower:][:digit:]_]*")]
-    #[regex("struct [[:upper:]][[:alnum:]]+")]
-    #[regex("enum [[:upper:]][[:alnum:]]+")]
-    #[regex("trait [[:upper:]][[:alnum:]]+")]
+    #[regex("struct [[:upper:]][[:alnum:]_]+")]
+    #[regex("enum [[:upper:]][[:alnum:]_]+")]
+    #[regex("trait [[:upper:]][[:alnum:]_]+")]
     #[regex("macro_rules! [[:lower:]][[:lower:][:digit:]_]*")]
     Definition,
-    #[regex("type [[:upper:]][[:alnum:]]+")]
+    #[regex("type [[:upper:]][[:alnum:]_]+")]
     Type,
 }
 
