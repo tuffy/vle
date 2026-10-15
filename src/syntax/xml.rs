@@ -21,7 +21,7 @@ enum XmlToken {
     #[token(">")]
     #[token("/>")]
     TagEnd,
-    #[regex("[[:alpha:]][[:alpha:][:digit:]_]*=")]
+    #[regex("[[:alpha:]][[:alpha:][:digit:]_-]*\\s*=\\s*")]
     FieldName,
     #[regex("&[^;[:space:]]*;")]
     CharRef,
