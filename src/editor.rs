@@ -331,6 +331,7 @@ macro_rules! key {
 pub struct LastSearch {
     plain: Option<TextField>,
     regex: Option<TextField>,
+    type_: SearchType,
 }
 
 impl std::ops::Index<SearchType> for LastSearch {
@@ -861,7 +862,8 @@ impl Editor {
                 EditorMode::SelectInside => self.process_select_inside(event),
                 EditorMode::SelectLine { prompt } => {
                     if let Some(buf) = self.layout.selected_buffer_list_mut().current_mut()
-                        && let Some(new_mode) = process_select_line(buf, prompt, event)
+                        && let Some(new_mode) =
+                            process_select_line(buf, prompt, self.last_search.type_, event)
                     {
                         self.mode = new_mode;
                     }
@@ -891,7 +893,7 @@ impl Editor {
                         && let Some(new_mode) = process_search(
                             buf,
                             self.cut_buffer.as_mut(),
-                            &mut self.last_search[*type_],
+                            &mut self.last_search,
                             prompt,
                             type_,
                             range.as_ref(),
@@ -943,7 +945,7 @@ impl Editor {
                     if let Some(new_mode) = process_search(
                         self.layout.selected_buffer_list_mut(),
                         self.cut_buffer.as_mut(),
-                        &mut self.last_search[*type_],
+                        &mut self.last_search,
                         prompt,
                         type_,
                         (),
@@ -990,8 +992,11 @@ impl Editor {
                     range,
                 } => {
                     if let Some(Some(new_mode)) = self.layout.on_current_at(|b, a| {
-                        process_multi_cursor(b, &mut self.cut_buffer, cursors, event, a)
-                            .and_then(|new_mode| new_mode.into_mode(cursors, b, range))
+                        process_multi_cursor(b, &mut self.cut_buffer, cursors, event, a).and_then(
+                            |new_mode| {
+                                new_mode.into_mode(cursors, b, range, self.last_search.type_)
+                            },
+                        )
                     }) {
                         self.mode = new_mode;
                     }
@@ -1088,7 +1093,7 @@ impl Editor {
                         cursors,
                         event,
                         (),
-                    ) && let Some(new_mode) = new_mode.into_mode(cursors)
+                    ) && let Some(new_mode) = new_mode.into_mode(cursors, self.last_search.type_)
                     {
                         self.mode = new_mode;
                     }
@@ -1215,7 +1220,7 @@ impl Editor {
                             self.mode = EditorMode::SearchAll {
                                 search: Search {
                                     prompt: TextField::default(),
-                                    type_: SearchType::default(),
+                                    type_: self.last_search.type_,
                                     mode: SearchMode::Editing,
                                 },
                             };
@@ -1451,6 +1456,7 @@ impl Editor {
                 };
             }
             keybind!(Find) => {
+                let last_search = self.last_search.type_;
                 if let Some(Ok(find)) = self.on_buffer(|b| match b.selection_range() {
                     Some(SelectionType::Term(selection)) => {
                         use crate::buffer::Normalizations;
@@ -1476,7 +1482,7 @@ impl Editor {
                     Some(SelectionType::Range(range)) => Ok(EditorMode::Search {
                         search: Search {
                             prompt: TextField::default(),
-                            type_: SearchType::default(),
+                            type_: last_search,
                             mode: SearchMode::Editing,
                         },
                         range: Some(range),
@@ -1484,7 +1490,7 @@ impl Editor {
                     None => Ok(EditorMode::Search {
                         search: Search {
                             prompt: TextField::default(),
-                            type_: SearchType::default(),
+                            type_: last_search,
                             mode: SearchMode::Editing,
                         },
                         range: None,
@@ -2045,6 +2051,7 @@ impl Editor {
 fn process_select_line(
     buffer: &mut BufferContext,
     prompt: &mut LinePrompt,
+    last_search: SearchType,
     event: Event,
 ) -> Option<EditorMode> {
     use crate::prompt::Digit;
@@ -2119,7 +2126,7 @@ fn process_select_line(
         keybind!(Find) => Some(EditorMode::Search {
             search: Search {
                 prompt: TextField::default(),
-                type_: SearchType::default(),
+                type_: last_search,
                 mode: SearchMode::Editing,
             },
             range: None,
@@ -2346,7 +2353,7 @@ enum NextModeIncremental<M> {
 fn process_search<'s, S: Searchable<'s>>(
     source: &mut S,
     cut_buffer: Option<&mut EditorCutBuffer>,
-    last_search: &mut Option<TextField>,
+    last_search: &mut LastSearch,
     prompt: &mut TextField,
     type_: &mut SearchType,
     range: S::Range,
@@ -2365,7 +2372,8 @@ fn process_search<'s, S: Searchable<'s>>(
                 match Normalizations::try_from(b.as_str().to_string()) {
                     Err(term) => match source.all_multiline_matches(range, term) {
                         Ok((match_idx, matches)) => {
-                            *last_search = Some(std::mem::take(prompt));
+                            last_search[*type_] = Some(std::mem::take(prompt));
+                            last_search.type_ = *type_;
                             Some(NextModeIncremental::Browse { match_idx, matches })
                         }
                         Err(_) => {
@@ -2376,7 +2384,8 @@ fn process_search<'s, S: Searchable<'s>>(
                     Ok(normalizations) => match source.all_multiline_matches(range, normalizations)
                     {
                         Ok((match_idx, matches)) => {
-                            *last_search = Some(std::mem::take(prompt));
+                            last_search[*type_] = Some(std::mem::take(prompt));
+                            last_search.type_ = *type_;
                             Some(NextModeIncremental::Browse { match_idx, matches })
                         }
                         Err(_) => {
@@ -2442,7 +2451,8 @@ fn process_search<'s, S: Searchable<'s>>(
             SearchType::CaseSensitive => match Normalizations::try_from(prompt.value()?) {
                 Err(term) => match source.all_matches(range, term) {
                     Ok((match_idx, matches)) => {
-                        *last_search = Some(std::mem::take(prompt));
+                        last_search[*type_] = Some(std::mem::take(prompt));
+                        last_search.type_ = *type_;
                         Some(NextModeIncremental::Browse { match_idx, matches })
                     }
                     Err(_) => {
@@ -2452,7 +2462,8 @@ fn process_search<'s, S: Searchable<'s>>(
                 },
                 Ok(normalizations) => match source.all_matches(range, normalizations) {
                     Ok((match_idx, matches)) => {
-                        *last_search = Some(std::mem::take(prompt));
+                        last_search[*type_] = Some(std::mem::take(prompt));
+                        last_search.type_ = *type_;
                         Some(NextModeIncremental::Browse { match_idx, matches })
                     }
                     Err(_) => {
@@ -2468,7 +2479,8 @@ fn process_search<'s, S: Searchable<'s>>(
                 {
                     Ok(regex) => match source.all_matches(range, regex) {
                         Ok((match_idx, matches)) => {
-                            *last_search = Some(std::mem::take(prompt));
+                            last_search[*type_] = Some(std::mem::take(prompt));
+                            last_search.type_ = *type_;
                             Some(NextModeIncremental::Browse { match_idx, matches })
                         }
                         Err(_) => {
@@ -2485,7 +2497,8 @@ fn process_search<'s, S: Searchable<'s>>(
                     .all_matches(range, CaseInsensitiveNormalizations::from(normalizations))
                 {
                     Ok((match_idx, matches)) => {
-                        *last_search = Some(std::mem::take(prompt));
+                        last_search[*type_] = Some(std::mem::take(prompt));
+                        last_search.type_ = *type_;
                         Some(NextModeIncremental::Browse { match_idx, matches })
                     }
                     Err(_) => {
@@ -2497,7 +2510,8 @@ fn process_search<'s, S: Searchable<'s>>(
             SearchType::Regex => match prompt.value()?.parse::<fancy_regex::Regex>() {
                 Ok(regex) => match source.all_matches(range, regex) {
                     Ok((match_idx, matches)) => {
-                        *last_search = Some(std::mem::take(prompt));
+                        last_search[*type_] = Some(std::mem::take(prompt));
+                        last_search.type_ = *type_;
                         Some(NextModeIncremental::Browse { match_idx, matches })
                     }
                     Err(_) => {
@@ -2514,7 +2528,7 @@ fn process_search<'s, S: Searchable<'s>>(
         keybind!(GotoLine) => Some(NextModeIncremental::SelectLine),
         keybind!(Find) => {
             if prompt.is_empty()
-                && let Some(last) = last_search
+                && let Some(last) = &last_search[*type_]
             {
                 *prompt = last.clone();
             } else {
@@ -2555,13 +2569,14 @@ impl NextMultiCursorMode<Vec<usize>> {
         }: &mut MultiCursors<Vec<MultiCursor>, Vec<usize>>,
         buffer: &mut BufferContext,
         range: &mut SingleBufferRange,
+        last_search: SearchType,
     ) -> Option<EditorMode> {
         match self {
             Self::Default => Some(EditorMode::default()),
             Self::Find => Some(EditorMode::Search {
                 search: Search {
                     prompt: TextField::default(),
-                    type_: SearchType::default(),
+                    type_: last_search,
                     mode: SearchMode::Editing,
                 },
                 range: std::mem::take(range).into(),
@@ -2628,13 +2643,14 @@ impl NextMultiCursorMode<BTreeMap<usize, Vec<usize>>> {
             BTreeMap<usize, Vec<MultiCursor>>,
             BTreeMap<usize, Vec<usize>>,
         >,
+        last_search: SearchType,
     ) -> Option<EditorMode> {
         match self {
             Self::Default => Some(EditorMode::default()),
             Self::Find => Some(EditorMode::SearchAll {
                 search: Search {
                     prompt: TextField::default(),
-                    type_: SearchType::default(),
+                    type_: last_search,
                     mode: SearchMode::Editing,
                 },
             }),
