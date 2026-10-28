@@ -264,11 +264,11 @@ pub enum MultiSource {
 }
 
 impl MultiSource {
-    pub fn local() -> Self {
+    pub fn local(active: LocalTarget) -> Self {
         Self::Local {
             local: LocalSource,
             scratch: ScratchSource,
-            active: LocalTarget::Local,
+            active,
         }
     }
 

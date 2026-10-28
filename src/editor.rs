@@ -1242,6 +1242,7 @@ impl Editor {
 
     fn process_normal_event(&mut self, area: Rect, event: Event) {
         use crate::buffer::SelectionType;
+        use crate::files::LocalTarget;
         use crossterm::event::{
             Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent,
             MouseEventKind,
@@ -1502,7 +1503,10 @@ impl Editor {
             #[cfg(not(feature = "ssh"))]
             keybind!(Open) => {
                 match FileChooserState::new(
-                    MultiSource::local(),
+                    MultiSource::local(match self.open_dir.last {
+                        None | Some(DirTarget::Local) => LocalTarget::Local,
+                        Some(DirTarget::Scratch) => LocalTarget::Scratch,
+                    }),
                     self.layout.selected_buffer_list().scratch_buffers(),
                     self.open_dir[DirTarget::Local].clone(),
                 ) {
@@ -1519,7 +1523,10 @@ impl Editor {
             #[cfg(feature = "ssh")]
             keybind!(Open) => match self.remote.as_ref() {
                 None => match FileChooserState::new(
-                    MultiSource::local(),
+                    MultiSource::local(match self.open_dir.last {
+                        None | Some(DirTarget::Local | DirTarget::Ssh) => LocalTarget::Local,
+                        Some(DirTarget::Scratch) => LocalTarget::Scratch,
+                    }),
                     self.layout.selected_buffer_list().scratch_buffers(),
                     self.open_dir[DirTarget::Local].clone(),
                 ) {
